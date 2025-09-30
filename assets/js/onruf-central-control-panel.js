@@ -16,7 +16,7 @@ function buildPermissionCatalog() {
 
     sectionMenus.forEach(menuItem => {
         const sectionId = menuItem.dataset.section;
-        if (!sectionId) {
+        if (!sectionId || sectionId === 'users') {
             return;
         }
 
