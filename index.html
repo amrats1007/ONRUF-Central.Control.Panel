@@ -1,0 +1,1084 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OnRuf Central Control Panel</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="assets/css/onruf-central-control-panel.css">
+</head>
+<body>
+    <div class="app-shell">
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <div class="brand-mark">OR</div>
+                <div class="brand-text">OnRuf Control</div>
+            </div>
+            <nav class="sidebar-menu">
+                <a href="#dashboard" class="menu-item active" data-section="dashboard">
+                    <i class="fas fa-chart-pie"></i>
+                    <span class="menu-text">Dashboard</span>
+                </a>
+                <a href="#users" class="menu-item" data-section="users">
+                    <i class="fas fa-users"></i>
+                    <span class="menu-text">Users</span>
+                </a>
+                <a href="#settings" class="menu-item" data-section="settings">
+                    <i class="fas fa-sliders-h"></i>
+                    <span class="menu-text">Settings</span>
+                </a>
+                <a href="#reports" class="menu-item" data-section="reports">
+                    <i class="fas fa-chart-line"></i>
+                    <span class="menu-text">Reports</span>
+                </a>
+                <a href="#packages" class="menu-item" data-section="packages">
+                    <i class="fas fa-box-open"></i>
+                    <span class="menu-text">Packages</span>
+                </a>
+                <a href="#products" class="menu-item" data-section="products">
+                    <i class="fas fa-store"></i>
+                    <span class="menu-text">Products</span>
+                </a>
+            </nav>
+            <div class="sidebar-footer">
+                <div class="support-card">
+                    <h4>Need help?</h4>
+                    <p>Our support team is available 24/7.</p>
+                    <button type="button" onclick="openSupport()">Contact</button>
+                </div>
+            </div>
+        </aside>
+
+        <main class="main-content">
+            <header class="topbar">
+                <div class="topbar-left">
+                    <button class="icon-btn" id="menuToggle" aria-label="Toggle menu">
+                        <i class="fas fa-bars"></i>
+                    </button>
+                    <nav class="breadcrumb" aria-label="Breadcrumb">
+                        <span id="breadcrumbTrail">Control Panel / Dashboard / App 1</span>
+                    </nav>
+                </div>
+                <div class="topbar-right">
+                    <div class="search-field">
+                        <i class="fas fa-search"></i>
+                        <input type="text" placeholder="Search platform" id="topSearch" />
+                    </div>
+                    <button class="icon-btn" id="themeToggle" aria-label="Toggle theme">
+                        <i class="fas fa-moon"></i>
+                    </button>
+                    <div class="user-chip">
+                        <i class="fas fa-user-shield"></i>
+                        <span>Central Admin</span>
+                    </div>
+                </div>
+            </header>
+
+            <div class="content-scroll">
+                <section id="dashboard" class="section-content active">
+                    <div class="section-header">
+                        <h1 class="section-title">Executive Dashboard</h1>
+                        <p class="section-subtitle">Monitor platform operations, workforce performance, and customer engagement.</p>
+                    </div>
+                    <div class="sub-apps-nav">
+                        <button class="sub-app-btn active" data-target="dashboard-app1" data-label="App 1">
+                            <span>App 1</span>
+                            <span>Executive Overview</span>
+                        </button>
+                        <button class="sub-app-btn" data-target="dashboard-app2" data-label="App 2">
+                            <span>App 2</span>
+                            <span>Operational Insights</span>
+                        </button>
+                    </div>
+
+                    <div id="dashboard-app1" class="sub-app active">
+                        <div class="stats-grid">
+                            <div class="stat-card">
+                                <div class="stat-heading">
+                                    <span>Total Users</span>
+                                    <i class="fas fa-users"></i>
+                                </div>
+                                <div class="stat-value" id="totalUsersStat">0</div>
+                                <div class="stat-delta positive" id="totalUsersDelta">
+                                    <i class="fas fa-arrow-trend-up"></i>
+                                    +8.4% this month
+                                </div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-heading">
+                                    <span>Active Accounts</span>
+                                    <i class="fas fa-building"></i>
+                                </div>
+                                <div class="stat-value" id="activeUsersStat">0</div>
+                                <div class="stat-delta positive">
+                                    <i class="fas fa-arrow-trend-up"></i>
+                                    +3.1% new activations
+                                </div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-heading">
+                                    <span>Roles</span>
+                                    <i class="fas fa-user-shield"></i>
+                                </div>
+                                <div class="stat-value" id="totalRolesStat">0</div>
+                                <div class="stat-delta">
+                                    <i class="fas fa-gauge-high"></i>
+                                    100% coverage
+                                </div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-heading">
+                                    <span>SLA Compliance</span>
+                                    <i class="fas fa-bolt"></i>
+                                </div>
+                                <div class="stat-value" id="complianceStat">0%</div>
+                                <div class="stat-delta positive">
+                                    <i class="fas fa-arrow-trend-up"></i>
+                                    +1.6% vs last week
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="charts-row">
+                            <div class="chart-card">
+                                <div class="chart-header">
+                                    <div class="chart-title">Engagement Trend</div>
+                                    <div class="period-buttons">
+                                        <button class="period-btn active" data-period="monthly">Monthly</button>
+                                        <button class="period-btn" data-period="quarterly">Quarterly</button>
+                                        <button class="period-btn" data-period="yearly">Yearly</button>
+                                    </div>
+                                </div>
+                                <canvas id="performanceChart" height="260"></canvas>
+                            </div>
+                            <div class="activity-feed" id="activityFeed">
+                                <!-- Activity entries injected by script -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="dashboard-app2" class="sub-app">
+                        <div class="operations-grid">
+                            <div class="operation-card">
+                                <div class="operation-header">
+                                    <h3>Field Teams</h3>
+                                    <span class="status-pill success">Operational</span>
+                                </div>
+                                <div class="operation-metric" id="fieldTeamsMetric">37</div>
+                                <p>Active inspection crews deployed across municipalities.</p>
+                                <div class="operation-footer">
+                                    <span><i class="fas fa-location-dot"></i> 12 regions</span>
+                                    <span><i class="fas fa-clock"></i> Updated 5 mins ago</span>
+                                </div>
+                            </div>
+                            <div class="operation-card">
+                                <div class="operation-header">
+                                    <h3>Service Level Compliance</h3>
+                                    <span class="status-pill warning">Monitor</span>
+                                </div>
+                                <div class="operation-metric">92.4%</div>
+                                <p>Average SLA compliance across premium inspection services.</p>
+                                <div class="operation-footer">
+                                    <span><i class="fas fa-triangle-exclamation"></i> 4 risks</span>
+                                    <span><i class="fas fa-arrow-trend-up"></i> +2.1% vs last week</span>
+                                </div>
+                            </div>
+                            <div class="operation-card">
+                                <div class="operation-header">
+                                    <h3>Regional Performance</h3>
+                                    <span class="status-pill info">Balanced</span>
+                                </div>
+                                <div class="operation-metric">Top 3</div>
+                                <ul class="operation-list">
+                                    <li><span>Riyadh</span><strong>97%</strong></li>
+                                    <li><span>Jeddah</span><strong>94%</strong></li>
+                                    <li><span>Dammam</span><strong>92%</strong></li>
+                                </ul>
+                                <div class="operation-footer">
+                                    <span><i class="fas fa-arrows-rotate"></i> Weekly refresh</span>
+                                    <span><i class="fas fa-chart-line"></i> Stable trend</span>
+                                </div>
+                            </div>
+                            <div class="operation-card">
+                                <div class="operation-header">
+                                    <h3>Inspection Backlog</h3>
+                                    <span class="status-pill danger">Action</span>
+                                </div>
+                                <div class="operation-metric">126</div>
+                                <p>Pending inspections awaiting dispatch prioritisation.</p>
+                                <div class="operation-footer">
+                                    <span><i class="fas fa-calendar-day"></i> Avg 3.2 days</span>
+                                    <span><i class="fas fa-bolt"></i> 18 urgent</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <section id="users" class="section-content">
+                    <div class="section-header">
+                        <h1 class="section-title">Users & Roles</h1>
+                        <p class="section-subtitle">Control access across business, individual, and operational personas.</p>
+                    </div>
+                    <div class="sub-apps-nav">
+                        <button class="sub-app-btn active" data-target="users-app1" data-label="User Roles">
+                            <span>User Roles</span>
+                        </button>
+                        <button class="sub-app-btn" data-target="users-app2" data-label="Users Management">
+                            <span>Users Management</span>
+                        </button>
+                    </div>
+
+                    <div id="users-app1" class="sub-app active">
+                        <div class="roles-actions">
+                            <button class="btn btn-primary" id="addRoleBtn">
+                                <i class="fas fa-plus"></i>
+                                Add New Role
+                            </button>
+                        </div>
+                        <div class="search-box" id="roleSearchContainer">
+                            <i class="fas fa-search"></i>
+                            <input type="text" id="roleSearchInput" placeholder="Search by role name or description" />
+                            <button class="btn btn-outline" id="roleSearchBtn">Search</button>
+                        </div>
+                        <div class="notification-area" id="roleNotificationArea" aria-live="polite"></div>
+                        <div id="roleDirectoryView">
+                            <div class="table-shell">
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>Role</th>
+                                            <th>Description</th>
+                                            <th>Users</th>
+                                            <th>Permissions</th>
+                                            <th>Status</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="rolesTableBody">
+                                        <!-- roles injected by script -->
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="pagination" id="rolesPagination"></div>
+                        </div>
+
+                        <div id="roleBuilderView" class="role-builder hidden">
+                            <div class="form-card">
+                                <div style="display:flex; justify-content: space-between; align-items:center;">
+                                    <div>
+                                        <h3 id="roleFormTitle" style="margin:0 0 4px;">Add New Role</h3>
+                                        <p id="roleFormSubtitle" class="section-subtitle" style="margin:0;">Define permissions and assign default usage limits.</p>
+                                    </div>
+                                </div>
+                                <form id="roleForm" class="form-grid">
+                                    <div class="form-group">
+                                        <label class="form-label" for="roleNameArabicInput">Role Name (Arabic)</label>
+                                        <input type="text" class="form-input" id="roleNameArabicInput" placeholder="مثال: مشرف إقليمي" required />
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label" for="roleNameEnglishInput">Role Name (English)</label>
+                                        <input type="text" class="form-input" id="roleNameEnglishInput" placeholder="e.g. Regional Supervisor" required />
+                                    </div>
+                                    <div class="form-group" style="grid-column: 1 / -1;">
+                                        <label class="form-label" for="roleDescriptionInput">Role Description (optional)</label>
+                                        <textarea id="roleDescriptionInput" placeholder="Outline the responsibilities for this role (optional)"></textarea>
+                                    </div>
+                                    <div class="form-group" style="grid-column: 1 / -1;">
+                                        <label class="form-label">Permissions</label>
+                                        <div id="permissionMatrix"></div>
+                                    </div>
+                                    <div style="grid-column: 1 / -1; display:flex; justify-content:flex-end; gap:12px;">
+                                        <button type="button" class="btn btn-outline" id="cancelRoleFormBtn">
+                                            <i class="fas fa-xmark"></i>
+                                            Cancel
+                                        </button>
+                                        <button type="submit" class="btn btn-primary" id="roleFormSubmitBtn">
+                                            <i class="fas fa-plus" id="roleFormSubmitIcon"></i>
+                                            <span id="roleFormSubmitLabel">Add</span>
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                        <div id="roleConfirmOverlay" class="confirm-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="roleConfirmMessage">
+                            <div class="confirm-dialog">
+                                <p id="roleConfirmMessage">Are you sure?</p>
+                                <div class="confirm-actions">
+                                    <button type="button" class="btn btn-outline" id="roleConfirmCancel">Cancel</button>
+                                    <button type="button" class="btn btn-primary" id="roleConfirmOk">Confirm</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="roleDetailOverlay" class="role-detail-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="roleDetailTitle">
+                            <div class="role-detail-modal" role="document">
+                                <header>
+                                    <div>
+                                        <h3 id="roleDetailTitle">Role Permissions</h3>
+                                        <p id="roleDetailSubtitle" class="section-subtitle" style="margin:6px 0 0;">Review permission coverage and metadata for this role.</p>
+                                    </div>
+                                    <button type="button" class="modal-close-btn" id="roleDetailCloseBtn" aria-label="Close role details">
+                                        <i class="fas fa-xmark"></i>
+                                    </button>
+                                </header>
+                                <div id="roleDetailContent" class="role-detail-content">
+                                    <p class="role-detail-placeholder">Use the eye icon in the roles table to inspect a role&rsquo;s permissions here.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="users-app2" class="sub-app">
+                        <div class="users-actions">
+                            <button class="btn btn-primary" id="addUserBtn">
+                                <i class="fas fa-user-plus"></i>
+                                Invite User
+                            </button>
+                            <button class="btn btn-outline" id="exportUsersBtn">
+                                <i class="fas fa-file-export"></i>
+                                Export CSV
+                            </button>
+                            <button class="btn btn-outline" id="importUsersBtn">
+                                <i class="fas fa-file-import"></i>
+                                Import
+                            </button>
+                        </div>
+                        <div class="search-box">
+                            <i class="fas fa-search"></i>
+                            <input type="text" id="userSearch" placeholder="Search by name, email, role, or status" />
+                        </div>
+                        <div class="table-shell">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>User</th>
+                                        <th>Role</th>
+                                        <th>Status</th>
+                                        <th>Last Login</th>
+                                        <th>Created</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="usersTableBody">
+                                    <!-- users injected by script -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                </section>
+
+                <section id="settings" class="section-content">
+                    <div class="section-header">
+                        <h1 class="section-title">Platform Settings</h1>
+                        <p class="section-subtitle">Configure tenancy defaults, security controls, and system automations.</p>
+                    </div>
+                    <div class="sub-apps-nav">
+                        <button class="sub-app-btn active" data-target="settings-app1" data-label="App 1">
+                            <span>App 1</span>
+                            <span>Configuration</span>
+                        </button>
+                        <button class="sub-app-btn" data-target="settings-app2" data-label="App 2">
+                            <span>App 2</span>
+                            <span>Integrations</span>
+                        </button>
+                    </div>
+
+                    <div id="settings-app1" class="sub-app active">
+                        <div class="form-grid">
+                            <div class="form-card">
+                                <h3 style="margin:0;">General</h3>
+                                <div class="form-group">
+                                    <label class="form-label" for="platformName">Platform Name</label>
+                                    <input type="text" class="form-input" id="platformName" value="OnRuf Platform" />
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label" for="supportEmail">Support Email</label>
+                                    <input type="email" class="form-input" id="supportEmail" value="support@onruf.com" />
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label" for="maintenanceMode">Maintenance Mode</label>
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" id="maintenanceMode">
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="form-card">
+                                <h3 style="margin:0;">Security</h3>
+                                <div class="form-group">
+                                    <label class="form-label" for="sessionTimeout">Session Timeout (minutes)</label>
+                                    <input type="number" class="form-input" id="sessionTimeout" value="60" min="15" />
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Two-Factor Authentication</label>
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" id="twoFactorAuth" checked>
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label" for="passwordPolicy">Password Policy</label>
+                                    <select id="passwordPolicy" class="form-select">
+                                        <option value="basic">Basic</option>
+                                        <option value="medium" selected>Medium</option>
+                                        <option value="strong">Strong</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-card">
+                                <h3 style="margin:0;">Notifications</h3>
+                                <div class="form-group">
+                                    <label class="form-label">Email Alerts</label>
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" id="emailNotifications" checked>
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">SMS Alerts</label>
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" id="smsNotifications">
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Push Notifications</label>
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" id="pushNotifications" checked>
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="form-card">
+                                <h3 style="margin:0;">API & Access</h3>
+                                <div class="form-group">
+                                    <label class="form-label" for="apiRateLimit">API Rate Limit (req/min)</label>
+                                    <input type="number" class="form-input" id="apiRateLimit" value="1000" min="100" />
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label" for="apiExpiration">API Key Expiration (days)</label>
+                                    <input type="number" class="form-input" id="apiExpiration" value="365" min="30" />
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">CORS Enabled</label>
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" id="corsEnabled" checked>
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                        <div style="margin-top: 24px; display:flex; justify-content:flex-end;">
+                            <button class="btn btn-primary" id="saveSettingsBtn">
+                                <i class="fas fa-save"></i>
+                                Save Changes
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="settings-app2" class="sub-app">
+                        <div class="integration-grid">
+                            <div class="integration-card">
+                                <div class="integration-header">
+                                    <h3 class="integration-name">Elm Inspection Sync</h3>
+                                    <span class="integration-status active">Connected</span>
+                                </div>
+                                <p class="integration-description">Synchronise inspection assignments, violation outcomes, and compliance statuses with Elm systems.</p>
+                                <ul class="integration-list">
+                                    <li><i class="fas fa-check-circle"></i> Real-time task dispatch</li>
+                                    <li><i class="fas fa-check-circle"></i> Evidence archiving every 15 minutes</li>
+                                    <li><i class="fas fa-check-circle"></i> Automatic status reconciliation</li>
+                                </ul>
+                                <div class="integration-footer">
+                                    <button type="button" onclick="manageIntegration('elm-inspection')">
+                                        <i class="fas fa-sliders-h"></i>
+                                        Manage
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="integration-card">
+                                <div class="integration-header">
+                                    <h3 class="integration-name">Municipality Services</h3>
+                                    <span class="integration-status pending">Pending</span>
+                                </div>
+                                <p class="integration-description">Push inspection certificates, violation escalations, and payment updates into municipal service backbones.</p>
+                                <ul class="integration-list">
+                                    <li><i class="fas fa-circle-notch"></i> Data residency review</li>
+                                    <li><i class="fas fa-circle-notch"></i> Pilot with Riyadh municipality</li>
+                                    <li><i class="fas fa-circle-notch"></i> Weekly interoperability meetings</li>
+                                </ul>
+                                <div class="integration-footer">
+                                    <button type="button" onclick="viewIntegrationRoadmap()">
+                                        <i class="fas fa-road"></i>
+                                        View Roadmap
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="integration-card">
+                                <div class="integration-header">
+                                    <h3 class="integration-name">Financial Clearing</h3>
+                                    <span class="integration-status draft">Draft</span>
+                                </div>
+                                <p class="integration-description">Automate settlement of inspection fees, invoicing, and refunds through certified financial gateways.</p>
+                                <ul class="integration-list">
+                                    <li><i class="fas fa-circle-notch"></i> STCPay certification</li>
+                                    <li><i class="fas fa-circle-notch"></i> Settlement rule simulation</li>
+                                    <li><i class="fas fa-circle-notch"></i> Daily reconciliation exports</li>
+                                </ul>
+                                <div class="integration-footer">
+                                    <button type="button" onclick="scheduleIntegrationWorkshop()">
+                                        <i class="fas fa-calendar-check"></i>
+                                        Schedule Workshop
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <section id="reports" class="section-content">
+                    <div class="section-header">
+                        <h1 class="section-title">Reports & Intelligence</h1>
+                        <p class="section-subtitle">Deliver actionable analytics across inspections, finances, and customer sentiment.</p>
+                    </div>
+                    <div class="sub-apps-nav">
+                        <button class="sub-app-btn active" data-target="reports-app1" data-label="App 1">
+                            <span>App 1</span>
+                            <span>Executive Reports</span>
+                        </button>
+                        <button class="sub-app-btn" data-target="reports-app2" data-label="App 2">
+                            <span>App 2</span>
+                            <span>Compliance Library</span>
+                        </button>
+                        <button class="sub-app-btn" data-target="reports-app3" data-label="App 3">
+                            <span>App 3</span>
+                            <span>Distribution Schedules</span>
+                        </button>
+                    </div>
+
+                    <div id="reports-app1" class="sub-app active">
+                        <div class="report-summary-grid">
+                            <div class="report-card">
+                                <div class="report-card-header">
+                                    <span>Inspection Coverage</span>
+                                    <i class="fas fa-clipboard-check"></i>
+                                </div>
+                                <div class="report-card-value">96.2%</div>
+                                <div class="report-card-trend positive">
+                                    <i class="fas fa-arrow-trend-up"></i> +2.4% vs last quarter
+                                </div>
+                            </div>
+                            <div class="report-card">
+                                <div class="report-card-header">
+                                    <span>Revenue Impact</span>
+                                    <i class="fas fa-sack-dollar"></i>
+                                </div>
+                                <div class="report-card-value">SAR 4.8M</div>
+                                <div class="report-card-trend positive">
+                                    <i class="fas fa-arrow-trend-up"></i> +11.3% YoY
+                                </div>
+                            </div>
+                            <div class="report-card">
+                                <div class="report-card-header">
+                                    <span>Customer Satisfaction</span>
+                                    <i class="fas fa-face-smile"></i>
+                                </div>
+                                <div class="report-card-value">4.6 / 5</div>
+                                <div class="report-card-trend neutral">
+                                    <i class="fas fa-minus"></i> Stable vs last month
+                                </div>
+                            </div>
+                            <div class="report-card">
+                                <div class="report-card-header">
+                                    <span>Violation Recovery</span>
+                                    <i class="fas fa-scale-balanced"></i>
+                                </div>
+                                <div class="report-card-value">SAR 820K</div>
+                                <div class="report-card-trend positive">
+                                    <i class="fas fa-arrow-trend-up"></i> +7.8% QoQ
+                                </div>
+                            </div>
+                        </div>
+                        <div class="table-shell" style="margin-top:24px;">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Report Name</th>
+                                        <th>Scope</th>
+                                        <th>Frequency</th>
+                                        <th>Owner</th>
+                                        <th>Last Refresh</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>Executive Inspection Pulse</td>
+                                        <td>Nationwide</td>
+                                        <td>Weekly</td>
+                                        <td>Strategy Office</td>
+                                        <td>Today 06:10</td>
+                                        <td><span class="status-badge status-active">Active</span></td>
+                                    </tr>
+                                    <tr>
+                                        <td>Financial Performance Digest</td>
+                                        <td>Top 20 Accounts</td>
+                                        <td>Monthly</td>
+                                        <td>Finance Bureau</td>
+                                        <td>Sep 25</td>
+                                        <td><span class="status-badge status-active">Active</span></td>
+                                    </tr>
+                                    <tr>
+                                        <td>Violation Heatmap Insights</td>
+                                        <td>Western Region</td>
+                                        <td>Weekly</td>
+                                        <td>Compliance Unit</td>
+                                        <td>Sep 27</td>
+                                        <td><span class="status-badge status-active">Active</span></td>
+                                    </tr>
+                                    <tr>
+                                        <td>Customer Sentiment Tracker</td>
+                                        <td>Digital Channels</td>
+                                        <td>Daily</td>
+                                        <td>Experience Lab</td>
+                                        <td>Today 04:20</td>
+                                        <td><span class="status-badge status-active">Active</span></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div id="reports-app2" class="sub-app">
+                        <div class="compliance-library">
+                            <div class="compliance-card">
+                                <div class="compliance-header">
+                                    <h3>Food Safety Compliance Pack</h3>
+                                    <span class="status-badge status-active">Current</span>
+                                </div>
+                                <p>All reports required by Food & Drug Authority audits including violations, remediation workflows, and photographic evidence.</p>
+                                <ul class="compliance-items">
+                                    <li><i class="fas fa-file-pdf"></i> Daily Inspection Summary</li>
+                                    <li><i class="fas fa-file-alt"></i> Corrective Action Register</li>
+                                    <li><i class="fas fa-image"></i> Evidence Attachment Pack</li>
+                                </ul>
+                                <div class="compliance-footer">
+                                    <button class="btn btn-outline" type="button">Download Bundle</button>
+                                    <button class="btn btn-primary" type="button">Start Audit Mode</button>
+                                </div>
+                            </div>
+                            <div class="compliance-card">
+                                <div class="compliance-header">
+                                    <h3>Environmental Compliance Suite</h3>
+                                    <span class="status-badge status-pending">Updating</span>
+                                </div>
+                                <p>Emission monitoring, waste management, and sustainability maturity dashboards compiled for green compliance reviews.</p>
+                                <ul class="compliance-items">
+                                    <li><i class="fas fa-chart-area"></i> Emission Footprint Trend</li>
+                                    <li><i class="fas fa-recycle"></i> Recycling Performance Ledger</li>
+                                    <li><i class="fas fa-leaf"></i> Sustainability Scorecard</li>
+                                </ul>
+                                <div class="compliance-footer">
+                                    <button class="btn btn-outline" type="button">Preview Pack</button>
+                                    <button class="btn btn-primary" type="button">Notify Stakeholders</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="reports-app3" class="sub-app">
+                        <div class="distribution-schedule">
+                            <div class="schedule-card">
+                                <div class="schedule-header">
+                                    <div>
+                                        <h3>Executive Board Digest</h3>
+                                        <span class="schedule-meta">Email + Teams Channel</span>
+                                    </div>
+                                    <span class="schedule-frequency">Every Monday 08:00</span>
+                                </div>
+                                <div class="schedule-body">
+                                    <div>
+                                        <strong>Recipients</strong>
+                                        <p>12 stakeholders</p>
+                                    </div>
+                                    <div>
+                                        <strong>Included Reports</strong>
+                                        <p>Executive Pulse, Revenue Digest, SLA Tracker</p>
+                                    </div>
+                                    <div>
+                                        <strong>Last Sent</strong>
+                                        <p>Sep 29, 2025</p>
+                                    </div>
+                                </div>
+                                <div class="schedule-actions">
+                                    <button class="btn btn-outline" type="button">Pause</button>
+                                    <button class="btn btn-primary" type="button">Send Now</button>
+                                </div>
+                            </div>
+                            <div class="schedule-card">
+                                <div class="schedule-header">
+                                    <div>
+                                        <h3>Municipality Compliance Bundle</h3>
+                                        <span class="schedule-meta">Secure SFTP</span>
+                                    </div>
+                                    <span class="schedule-frequency">1st business day monthly</span>
+                                </div>
+                                <div class="schedule-body">
+                                    <div>
+                                        <strong>Recipients</strong>
+                                        <p>4 municipal offices</p>
+                                    </div>
+                                    <div>
+                                        <strong>Included Reports</strong>
+                                        <p>Environmental Suite, Violation Ledger</p>
+                                    </div>
+                                    <div>
+                                        <strong>Last Sent</strong>
+                                        <p>Sep 02, 2025</p>
+                                    </div>
+                                </div>
+                                <div class="schedule-actions">
+                                    <button class="btn btn-outline" type="button">Edit Recipients</button>
+                                    <button class="btn btn-primary" type="button">Generate Preview</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <section id="packages" class="section-content">
+                    <div class="section-header">
+                        <h1 class="section-title">Service Packages</h1>
+                        <p class="section-subtitle">Design, price, and monitor the value proposition across subscription tiers.</p>
+                    </div>
+                    <div class="sub-apps-nav">
+                        <button class="sub-app-btn active" data-target="packages-app1" data-label="App 1">
+                            <span>App 1</span>
+                            <span>Package Catalog</span>
+                        </button>
+                        <button class="sub-app-btn" data-target="packages-app2" data-label="App 2">
+                            <span>App 2</span>
+                            <span>Performance Metrics</span>
+                        </button>
+                        <button class="sub-app-btn" data-target="packages-app3" data-label="App 3">
+                            <span>App 3</span>
+                            <span>Bundle Builder</span>
+                        </button>
+                    </div>
+
+                    <div id="packages-app1" class="sub-app active">
+                        <div class="package-grid">
+                            <div class="package-card premium">
+                                <div class="package-tier">Premium</div>
+                                <h3>Elite Compliance Suite</h3>
+                                <div class="package-price">SAR 5,499<span>/month</span></div>
+                                <ul class="package-features">
+                                    <li><i class="fas fa-check"></i> Unlimited inspections</li>
+                                    <li><i class="fas fa-check"></i> 24/7 live coaching</li>
+                                    <li><i class="fas fa-check"></i> Automated evidence archiving</li>
+                                    <li><i class="fas fa-check"></i> Priority integrations</li>
+                                </ul>
+                                <div class="package-footer">
+                                    <span class="package-adoption positive"><i class="fas fa-arrow-trend-up"></i> +14% adoption</span>
+                                    <button class="btn btn-primary" type="button">View Details</button>
+                                </div>
+                            </div>
+                            <div class="package-card popular">
+                                <div class="package-tier">Standard</div>
+                                <h3>Operational Excellence</h3>
+                                <div class="package-price">SAR 2,999<span>/month</span></div>
+                                <ul class="package-features">
+                                    <li><i class="fas fa-check"></i> 300 inspections/mo</li>
+                                    <li><i class="fas fa-check"></i> SLA monitoring</li>
+                                    <li><i class="fas fa-check"></i> Analytics dashboards</li>
+                                    <li><i class="fas fa-check"></i> Dedicated customer success</li>
+                                </ul>
+                                <div class="package-footer">
+                                    <span class="package-adoption neutral"><i class="fas fa-circle"></i> Stable demand</span>
+                                    <button class="btn btn-primary" type="button">View Details</button>
+                                </div>
+                            </div>
+                            <div class="package-card">
+                                <div class="package-tier">Starter</div>
+                                <h3>Launch Essentials</h3>
+                                <div class="package-price">SAR 1,199<span>/month</span></div>
+                                <ul class="package-features">
+                                    <li><i class="fas fa-check"></i> 80 inspections/mo</li>
+                                    <li><i class="fas fa-check"></i> Self-service training</li>
+                                    <li><i class="fas fa-check"></i> Core analytics</li>
+                                    <li><i class="fas fa-check"></i> Email support</li>
+                                </ul>
+                                <div class="package-footer">
+                                    <span class="package-adoption positive"><i class="fas fa-arrow-trend-up"></i> +5% signups</span>
+                                    <button class="btn btn-outline" type="button">Compare</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="packages-app2" class="sub-app">
+                        <div class="table-shell">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Tier</th>
+                                        <th>Active Accounts</th>
+                                        <th>Avg Contract Value</th>
+                                        <th>Renewal Rate</th>
+                                        <th>Upsell Potential</th>
+                                        <th>Trend</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>Premium</td>
+                                        <td>54</td>
+                                        <td>SAR 71K</td>
+                                        <td>97%</td>
+                                        <td>High</td>
+                                        <td><span class="package-trend positive"><i class="fas fa-arrow-trend-up"></i> +9.4%</span></td>
+                                    </tr>
+                                    <tr>
+                                        <td>Standard</td>
+                                        <td>218</td>
+                                        <td>SAR 32K</td>
+                                        <td>91%</td>
+                                        <td>Medium</td>
+                                        <td><span class="package-trend neutral"><i class="fas fa-circle"></i> +0.8%</span></td>
+                                    </tr>
+                                    <tr>
+                                        <td>Starter</td>
+                                        <td>407</td>
+                                        <td>SAR 12K</td>
+                                        <td>84%</td>
+                                        <td>Low</td>
+                                        <td><span class="package-trend negative"><i class="fas fa-arrow-trend-down"></i> -1.7%</span></td>
+                                    </tr>
+                                    <tr>
+                                        <td>Enterprise Custom</td>
+                                        <td>12</td>
+                                        <td>SAR 180K</td>
+                                        <td>100%</td>
+                                        <td>Very High</td>
+                                        <td><span class="package-trend positive"><i class="fas fa-arrow-trend-up"></i> +15.2%</span></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div id="packages-app3" class="sub-app">
+                        <div class="bundle-builder">
+                            <div class="form-card">
+                                <h3 style="margin:0 0 12px;">Create Bundle Offer</h3>
+                                <div class="form-group">
+                                    <label class="form-label" for="bundleName">Bundle Name</label>
+                                    <input class="form-input" id="bundleName" placeholder="e.g. Smart City Accelerator" />
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label" for="bundleBaseTier">Base Tier</label>
+                                    <select id="bundleBaseTier" class="form-select">
+                                        <option>Premium</option>
+                                        <option>Standard</option>
+                                        <option>Starter</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label" for="bundleInclusions">Additional Inclusions</label>
+                                    <textarea id="bundleInclusions" placeholder="Describe added services, integrations, or consulting hours"></textarea>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label" for="bundleDiscount">Introductory Discount (%)</label>
+                                    <input class="form-input" id="bundleDiscount" type="number" min="0" max="100" value="15" />
+                                </div>
+                                <div style="display:flex; justify-content:flex-end; gap:12px;">
+                                    <button class="btn btn-outline" type="button">Preview Pricing</button>
+                                    <button class="btn btn-primary" type="button">Generate Proposal</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <section id="products" class="section-content">
+                    <div class="section-header">
+                        <h1 class="section-title">Marketplace Products</h1>
+                        <p class="section-subtitle">Curate field devices, accessories, and software plugins that power inspectors on-site.</p>
+                    </div>
+                    <div class="sub-apps-nav">
+                        <button class="sub-app-btn active" data-target="products-app1" data-label="App 1">
+                            <span>App 1</span>
+                            <span>Catalog</span>
+                        </button>
+                        <button class="sub-app-btn" data-target="products-app2" data-label="App 2">
+                            <span>App 2</span>
+                            <span>Inventory & SLAs</span>
+                        </button>
+                        <button class="sub-app-btn" data-target="products-app3" data-label="App 3">
+                            <span>App 3</span>
+                            <span>Supplier Matrix</span>
+                        </button>
+                    </div>
+
+                    <div id="products-app1" class="sub-app active">
+                        <div class="product-grid">
+                            <div class="product-card">
+                                <div class="product-thumb"><i class="fas fa-mobile-alt"></i></div>
+                                <h3>Rugged Inspector Tablet</h3>
+                                <p>IP68-certified tablet with offline sync and thermal imaging support.</p>
+                                <div class="product-meta">
+                                    <span><i class="fas fa-warehouse"></i> Stock: 48</span>
+                                    <span><i class="fas fa-badge-check"></i> Warranty: 24 mo</span>
+                                </div>
+                                <div class="product-footer">
+                                    <span class="product-price">SAR 3,250</span>
+                                    <button class="btn btn-primary" type="button">Add to Bundle</button>
+                                </div>
+                            </div>
+                            <div class="product-card">
+                                <div class="product-thumb"><i class="fas fa-camera"></i></div>
+                                <h3>Evidence Capture Kit</h3>
+                                <p>High-resolution body camera with automatic cloud upload and geo-tagging.</p>
+                                <div class="product-meta">
+                                    <span><i class="fas fa-warehouse"></i> Stock: 112</span>
+                                    <span><i class="fas fa-clock"></i> SLA: 2 hrs replacement</span>
+                                </div>
+                                <div class="product-footer">
+                                    <span class="product-price">SAR 1,180</span>
+                                    <button class="btn btn-outline" type="button">View Specs</button>
+                                </div>
+                            </div>
+                            <div class="product-card">
+                                <div class="product-thumb"><i class="fas fa-vr-cardboard"></i></div>
+                                <h3>Immersive Training Module</h3>
+                                <p>VR-based training for new inspectors with scenario scoring and heatmaps.</p>
+                                <div class="product-meta">
+                                    <span><i class="fas fa-warehouse"></i> Stock: 20</span>
+                                    <span><i class="fas fa-sync"></i> Auto updates</span>
+                                </div>
+                                <div class="product-footer">
+                                    <span class="product-price">SAR 8,750</span>
+                                    <button class="btn btn-primary" type="button">Launch Demo</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="products-app2" class="sub-app">
+                        <div class="table-shell">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>SKU</th>
+                                        <th>Product</th>
+                                        <th>Supplier</th>
+                                        <th>On-hand</th>
+                                        <th>Reserved</th>
+                                        <th>Reorder Point</th>
+                                        <th>SLA Breaches (30d)</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>INSP-TAB-01</td>
+                                        <td>Rugged Inspector Tablet</td>
+                                        <td>Tech4Field</td>
+                                        <td>48</td>
+                                        <td>12</td>
+                                        <td>30</td>
+                                        <td><span class="status-badge status-active">0</span></td>
+                                    </tr>
+                                    <tr>
+                                        <td>CAP-KIT-11</td>
+                                        <td>Evidence Capture Kit</td>
+                                        <td>Safeguard Optics</td>
+                                        <td>112</td>
+                                        <td>40</td>
+                                        <td>60</td>
+                                        <td><span class="status-badge status-active">1</span></td>
+                                    </tr>
+                                    <tr>
+                                        <td>VR-TRAIN-07</td>
+                                        <td>Immersive Training Module</td>
+                                        <td>VirtuaSense</td>
+                                        <td>20</td>
+                                        <td>4</td>
+                                        <td>10</td>
+                                        <td><span class="status-badge status-pending">2</span></td>
+                                    </tr>
+                                    <tr>
+                                        <td>AI-ASSIST-03</td>
+                                        <td>AI Anomaly Detection</td>
+                                        <td>Insight Labs</td>
+                                        <td>Unlimited</td>
+                                        <td>-</td>
+                                        <td>-</td>
+                                        <td><span class="status-badge status-active">0</span></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div id="products-app3" class="sub-app">
+                        <div class="supplier-matrix">
+                            <div class="supplier-card">
+                                <div class="supplier-header">
+                                    <h3>Tech4Field</h3>
+                                    <span class="supplier-rating positive"><i class="fas fa-star"></i> 4.8</span>
+                                </div>
+                                <p>Primary supplier for ruggedised devices and field sensors across the GCC.</p>
+                                <ul class="supplier-tags">
+                                    <li><i class="fas fa-globe"></i> Global coverage</li>
+                                    <li><i class="fas fa-truck"></i> 24h dispatch</li>
+                                    <li><i class="fas fa-shield-halved"></i> 3-year warranty</li>
+                                </ul>
+                                <div class="supplier-actions">
+                                    <button class="btn btn-outline" type="button">View Contracts</button>
+                                    <button class="btn btn-primary" type="button">Raise Ticket</button>
+                                </div>
+                            </div>
+                            <div class="supplier-card">
+                                <div class="supplier-header">
+                                    <h3>Insight Labs</h3>
+                                    <span class="supplier-rating neutral"><i class="fas fa-star"></i> 4.2</span>
+                                </div>
+                                <p>Delivers AI-driven analytics, anomaly detection plugins, and predictive maintenance insights.</p>
+                                <ul class="supplier-tags">
+                                    <li><i class="fas fa-robot"></i> AI partner</li>
+                                    <li><i class="fas fa-code"></i> API-first</li>
+                                    <li><i class="fas fa-cloud"></i> SaaS delivery</li>
+                                </ul>
+                                <div class="supplier-actions">
+                                    <button class="btn btn-outline" type="button">Usage Stats</button>
+                                    <button class="btn btn-primary" type="button">Schedule QBR</button>
+                                </div>
+                            </div>
+                            <div class="supplier-card">
+                                <div class="supplier-header">
+                                    <h3>Safeguard Optics</h3>
+                                    <span class="supplier-rating positive"><i class="fas fa-star"></i> 4.7</span>
+                                </div>
+                                <p>Specialists in high-fidelity cameras, smart sensors, and secure evidence handling services.</p>
+                                <ul class="supplier-tags">
+                                    <li><i class="fas fa-shield"></i> Gov certified</li>
+                                    <li><i class="fas fa-lock"></i> Secure chain</li>
+                                    <li><i class="fas fa-headset"></i> 24/7 support</li>
+                                </ul>
+                                <div class="supplier-actions">
+                                    <button class="btn btn-outline" type="button">Compliance Docs</button>
+                                    <button class="btn btn-primary" type="button">Open Case</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </main>
+    </div>
+
+    <script src="assets/js/onruf-central-control-panel.js" defer></script>
+</body>
+</html>
