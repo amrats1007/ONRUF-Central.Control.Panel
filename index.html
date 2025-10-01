@@ -75,6 +75,8 @@
                 </div>
             </header>
 
+            <div class="notification-area" id="globalNotificationArea" aria-live="polite"></div>
+
             <div class="content-scroll">
                 <section id="dashboard" class="section-content active">
                     <div class="section-header">
@@ -217,30 +219,29 @@
                 </section>
 
                 <section id="users" class="section-content">
-                    <div class="section-header">
-                        <h1 class="section-title">Users & Roles</h1>
-                        <p class="section-subtitle">Control access across business, individual, and operational personas.</p>
-                    </div>
                     <div class="sub-apps-nav">
                         <button class="sub-app-btn active" data-target="users-app1" data-label="User Roles">
                             <span>User Roles</span>
+                            <span class="count" id="userRolesCount">#0 Roles</span>
                         </button>
                         <button class="sub-app-btn" data-target="users-app2" data-label="Users Management">
                             <span>Users Management</span>
+                            <span class="count" id="usersManagementCount">#0 Users</span>
                         </button>
                     </div>
 
                     <div id="users-app1" class="sub-app active">
-                        <div class="roles-actions">
-                            <button class="btn btn-primary" id="addRoleBtn">
-                                <i class="fas fa-plus"></i>
-                                Add New Role
-                            </button>
-                        </div>
-                        <div class="search-box" id="roleSearchContainer">
-                            <i class="fas fa-search"></i>
-                            <input type="text" id="roleSearchInput" placeholder="Search by role name or description" />
-                            <button class="btn btn-outline" id="roleSearchBtn">Search</button>
+                        <div class="roles-header">
+                            <div class="search-box" id="roleSearchContainer">
+                                <i class="fas fa-search"></i>
+                                <input type="text" id="roleSearchInput" placeholder="Search by role name or description" />
+                            </div>
+                            <div class="roles-actions">
+                                <button class="btn btn-primary" id="addRoleBtn">
+                                    <i class="fas fa-plus"></i>
+                                    Add User Role
+                                </button>
+                            </div>
                         </div>
                         <div class="notification-area" id="roleNotificationArea" aria-live="polite"></div>
                         <div id="roleDirectoryView">
@@ -248,13 +249,14 @@
                                 <table>
                                     <thead>
                                         <tr>
-                                            <th>Role</th>
+                                            <th>ID</th>
+                                            <th class="role-column">Role</th>
                                             <th>Description</th>
                                             <th>Users</th>
                                             <th>Permissions</th>
                                             <th>Status</th>
                                             <th>Actions</th>
-                                        </tr>
+                                        <td class="role-column">
                                     </thead>
                                     <tbody id="rolesTableBody">
                                         <!-- roles injected by script -->
@@ -311,6 +313,14 @@
                                 </div>
                             </div>
                         </div>
+                        <div id="roleAlertOverlay" class="confirm-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="roleAlertMessage">
+                            <div class="confirm-dialog" role="document">
+                                <p id="roleAlertMessage">Notification</p>
+                                <div class="confirm-actions single">
+                                    <button type="button" class="btn btn-primary" id="roleAlertOk">OK</button>
+                                </div>
+                            </div>
+                        </div>
                         <div id="roleDetailOverlay" class="role-detail-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="roleDetailTitle">
                             <div class="role-detail-modal" role="document">
                                 <header>
@@ -330,40 +340,170 @@
                     </div>
 
                     <div id="users-app2" class="sub-app">
-                        <div class="users-actions">
-                            <button class="btn btn-primary" id="addUserBtn">
-                                <i class="fas fa-user-plus"></i>
-                                Invite User
-                            </button>
-                            <button class="btn btn-outline" id="exportUsersBtn">
-                                <i class="fas fa-file-export"></i>
-                                Export CSV
-                            </button>
-                            <button class="btn btn-outline" id="importUsersBtn">
-                                <i class="fas fa-file-import"></i>
-                                Import
-                            </button>
+                        <div id="usersListView">
+                            <div class="users-header">
+                                <div class="search-box">
+                                    <i class="fas fa-search"></i>
+                                    <input type="text" id="userSearch" placeholder="Search by name, email, role, or status" />
+                                </div>
+                                <div class="users-actions">
+                                    <button class="btn btn-primary" id="addUserBtn">
+                                        <i class="fas fa-user-plus"></i>
+                                        Add User
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="table-shell">
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>ID</th>
+                                            <th>User</th>
+                                            <th>Role</th>
+                                            <th>Status</th>
+                                            <th>Last Login</th>
+                                            <th>Created</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="usersTableBody">
+                                        <!-- users injected by script -->
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="pagination" id="usersPagination"></div>
                         </div>
-                        <div class="search-box">
-                            <i class="fas fa-search"></i>
-                            <input type="text" id="userSearch" placeholder="Search by name, email, role, or status" />
+
+                        <div id="userConfirmOverlay" class="confirm-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="userConfirmMessage">
+                            <div class="confirm-dialog">
+                                <p id="userConfirmMessage">Are you sure?</p>
+                                <div class="confirm-actions">
+                                    <button type="button" class="btn btn-outline" id="userConfirmCancel">Cancel</button>
+                                    <button type="button" class="btn btn-primary" id="userConfirmOk">Confirm</button>
+                                </div>
+                            </div>
                         </div>
-                        <div class="table-shell">
-                            <table>
-                                <thead>
-                                    <tr>
-                                        <th>User</th>
-                                        <th>Role</th>
-                                        <th>Status</th>
-                                        <th>Last Login</th>
-                                        <th>Created</th>
-                                        <th>Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="usersTableBody">
-                                    <!-- users injected by script -->
-                                </tbody>
-                            </table>
+
+                        <div id="userAlertOverlay" class="confirm-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="userAlertMessage">
+                            <div class="confirm-dialog" role="document">
+                                <p id="userAlertMessage">Notification</p>
+                                <div class="confirm-actions single">
+                                    <button type="button" class="btn btn-primary" id="userAlertOk">OK</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="userFormPage" class="user-form-page hidden" aria-labelledby="userFormTitle">
+                            <div class="form-card user-form-card">
+                                <div class="user-form-header">
+                                    <div>
+                                        <h3 id="userFormTitle">Add New User</h3>
+                                        <p id="userFormSubtitle" class="section-subtitle" style="margin:6px 0 0;">Enter user details to create a new account.</p>
+                                    </div>
+                                </div>
+
+                                <div class="user-form-body">
+                                    <ol class="user-form-progress" id="userFormProgress" role="list">
+                                        <li class="step active" data-step="1">
+                                            <span class="step-number">1</span>
+                                            <div>
+                                                <div class="step-title">Email Verification</div>
+                                                <div class="step-caption">Confirm platform account</div>
+                                            </div>
+                                        </li>
+                                        <li class="step" data-step="2">
+                                            <span class="step-number">2</span>
+                                            <div>
+                                                <div class="step-title">User Information</div>
+                                                <div class="step-caption">Review imported details</div>
+                                            </div>
+                                        </li>
+                                        <li class="step" data-step="3">
+                                            <span class="step-number">3</span>
+                                            <div>
+                                                <div class="step-title">Account Setup</div>
+                                                <div class="step-caption">Assign dashboard access</div>
+                                            </div>
+                                        </li>
+                                    </ol>
+
+                                    <form id="userForm" class="user-form-content">
+                                    <section class="user-form-step active" data-step="1">
+                                        <div class="form-group">
+                                            <label class="form-label" for="userEmail">OnRuf Platform Email</label>
+                                            <div class="verification-row">
+                                                <input type="email" class="form-input" id="userEmail" placeholder="e.g. ahmed.hassan@onruf.com" required />
+                                                <button type="button" class="btn btn-primary" id="userVerifyBtn">
+                                                    <i class="fas fa-check-circle"></i>
+                                                    Check
+                                                </button>
+                                            </div>
+                                            <p class="helper-text">Enter the email address used on the OnRuf platform. The system will verify it before you can proceed.</p>
+                                        </div>
+                                        <div class="info-banner hidden" id="userVerificationBanner" role="status"></div>
+                                    </section>
+
+                                    <section class="user-form-step" data-step="2">
+                                        <p class="step-intro">We imported the platform profile. Confirm the details before registering the account.</p>
+                                        <div class="form-grid form-grid-half">
+                                            <div class="form-group">
+                                                <label class="form-label" for="userName">Full Name</label>
+                                                <input type="text" class="form-input" id="userName" placeholder="e.g. Ahmed Hassan" required />
+                                            </div>
+                                            <div class="form-group">
+                                                <label class="form-label" for="userPhone">Mobile Number</label>
+                                                <input type="tel" class="form-input" id="userPhone" placeholder="e.g. +9665XXXXXXX" required />
+                                            </div>
+                                            <div class="form-group">
+                                                <label class="form-label" for="userEmailConfirmed">Verified Email</label>
+                                                <input type="email" class="form-input" id="userEmailConfirmed" readonly />
+                                            </div>
+                                            <div class="form-group">
+                                                <label class="form-label" for="userDepartment">Department / Team</label>
+                                                <input type="text" class="form-input" id="userDepartment" placeholder="e.g. Malqaa Field Operations" />
+                                            </div>
+                                        </div>
+                                    </section>
+
+                                    <section class="user-form-step" data-step="3">
+                                        <div class="form-group">
+                                            <label class="form-label">Account Type</label>
+                                            <div class="account-type-selector" id="userAccountTypeSelector">
+                                                <label class="account-type-card">
+                                                    <input type="radio" name="userAccountType" value="system-administrator">
+                                                    <span class="card-title">System Administrator</span>
+                                                    <span class="card-caption">Full access to all dashboard modules.</span>
+                                                </label>
+                                                <label class="account-type-card">
+                                                    <input type="radio" name="userAccountType" value="platform-administrator">
+                                                    <span class="card-title">Platform Administrator</span>
+                                                    <span class="card-caption">Requires selecting a registered role.</span>
+                                                </label>
+                                            </div>
+                                        </div>
+                                        <div class="form-group" id="userRoleGroup">
+                                            <label class="form-label" for="userRole">User Role</label>
+                                            <select class="form-input" id="userRole" disabled>
+                                                <option value="">Select a role</option>
+                                            </select>
+                                        </div>
+                                        <div class="info-banner neutral" id="userPermissionsSummary">
+                                            Select an account type to see the assigned permissions.
+                                        </div>
+                                        <div class="info-banner neutral" id="userWelcomeInfo">
+                                            <i class="fas fa-envelope-open-text"></i>
+                                            The system will send an email with access details once the user is added.
+                                        </div>
+                                    </section>
+
+                                    <div class="form-actions">
+                                        <button type="button" class="btn btn-outline" id="userFormBackStepBtn">Back</button>
+                                        <span class="form-actions-spacer"></span>
+                                        <button type="button" class="btn btn-outline" id="userFormCancelBtn">Cancel</button>
+                                        <button type="submit" class="btn btn-primary hidden" id="userFormSubmitBtn">Add User</button>
+                                    </div>
+                                </form>
+                            </div>
                         </div>
                     </div>
 
