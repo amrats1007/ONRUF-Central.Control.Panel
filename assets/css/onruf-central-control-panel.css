@@ -483,9 +483,11 @@ body.dark-mode .permission-section {
 
 .permission-section-header {
     display: flex;
-    justify-content: space-between;
     align-items: center;
+    justify-content: flex-start;
+    gap: 12px;
     padding: 16px 20px;
+    flex-wrap: wrap;
 }
 
 .permission-section-toggle {
@@ -527,6 +529,38 @@ body.dark-mode .permission-section-toggle span {
     display: flex;
     flex-direction: column;
     gap: 10px;
+}
+
+.notification-area:empty {
+    margin-bottom: 0;
+}
+
+#globalNotificationArea {
+    position: fixed;
+    top: 140px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: min(520px, calc(100% - 32px));
+    margin: 0;
+    z-index: 600;
+    pointer-events: none;
+}
+
+#globalNotificationArea .notification {
+    pointer-events: auto;
+    box-shadow: 0 18px 40px rgba(15, 23, 42, 0.18);
+    animation: toast-slide-in 0.28s ease-out;
+}
+
+@keyframes toast-slide-in {
+    from {
+        opacity: 0;
+        transform: translateY(-12px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 .notification {
@@ -1157,10 +1191,17 @@ body.dark-mode .user-meta {
     overflow-wrap: anywhere;
     line-height: 1.4;
     max-height: calc(1.4em * 2);
+    line-clamp: 2;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+
+#roleDirectoryView table th:first-child,
+#roleDirectoryView table td:first-child {
+    min-width: 68px;
+    width: 68px;
 }
 
 #roleDirectoryView table th:nth-child(4),
@@ -1185,6 +1226,12 @@ body.dark-mode .user-meta {
 #roleDirectoryView table td:nth-child(7) {
     min-width: 160px;
     width: 160px;
+}
+
+#usersListView table th:nth-child(2),
+#usersListView table td:nth-child(2) {
+    min-width: 340px;
+    width: 340px;
 }
 
 @media (max-width: 1024px) {
@@ -1587,6 +1634,25 @@ body.dark-mode .role-detail-permissions tbody tr.legacy-permission-row td {
     font-weight: 600;
 }
 
+.role-detail-permissions.compact th,
+.role-detail-permissions.compact td {
+    padding: 10px 12px;
+    font-size: 13px;
+}
+
+.role-permissions-table-wrapper {
+    width: 100%;
+    overflow-x: auto;
+}
+
+.role-permissions-table-wrapper table {
+    min-width: 100%;
+}
+
+.permissions-preview .role-permissions-table-wrapper {
+    margin-top: 4px;
+}
+
 .role-detail-empty,
 .role-detail-placeholder {
     color: var(--muted-light);
@@ -1647,6 +1713,184 @@ body.dark-mode .role-detail-placeholder {
     display: grid;
 }
 
+.user-form-step[data-step="2"].active {
+    display: block;
+}
+
+.user-review-card {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    padding: 24px;
+    border: 1px solid var(--border-light);
+    border-radius: 16px;
+    background: rgba(15, 23, 42, 0.02);
+    box-shadow: 0 18px 34px rgba(15, 23, 42, 0.08);
+}
+
+body.dark-mode .user-review-card {
+    border-color: var(--border-dark);
+    background: rgba(15, 23, 42, 0.65);
+    box-shadow: 0 18px 34px rgba(2, 6, 23, 0.55);
+}
+
+.user-review-identity {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+}
+
+.user-review-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.user-review-field {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+}
+
+.user-review-label {
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted-light);
+    font-weight: 600;
+}
+
+.user-review-value {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-light);
+}
+
+.user-review-avatar {
+    width: 80px;
+    height: 80px;
+    border-radius: 22px;
+    object-fit: cover;
+    border: 3px solid rgba(37, 99, 235, 0.15);
+    background: rgba(37, 99, 235, 0.08);
+}
+
+.user-review-name {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text-light);
+}
+
+.user-review-email {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-light);
+    word-break: break-word;
+}
+
+body.dark-mode .user-review-label {
+    color: var(--muted-dark);
+}
+
+body.dark-mode .user-review-value {
+    color: var(--text-dark);
+}
+
+body.dark-mode .user-review-name {
+    color: var(--text-dark);
+}
+
+body.dark-mode .user-review-email {
+    color: var(--text-dark);
+}
+
+.step-inline-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.permissions-preview {
+    border: 1px solid var(--border-light);
+    border-radius: 16px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    background: rgba(15, 23, 42, 0.02);
+}
+
+body.dark-mode .permissions-preview {
+    border-color: var(--border-dark);
+    background: rgba(15, 23, 42, 0.65);
+}
+
+.permissions-preview-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 600;
+    color: var(--text-light);
+}
+
+.permissions-preview-header i {
+    color: var(--primary);
+}
+
+body.dark-mode .permissions-preview-header {
+    color: var(--text-dark);
+}
+
+.permissions-preview-body {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.permissions-preview-placeholder {
+    margin: 0;
+    font-size: 13px;
+    color: var(--muted-light);
+}
+
+.permissions-preview-item {
+    display: grid;
+    grid-template-columns: minmax(140px, 1fr) minmax(160px, 1fr) minmax(120px, auto);
+    gap: 12px;
+    padding: 12px 14px;
+    border-radius: 12px;
+    background: rgba(37, 99, 235, 0.06);
+    font-size: 13px;
+    align-items: flex-start;
+}
+
+.permissions-preview-item strong {
+    font-size: 13px;
+    color: var(--text-light);
+}
+
+.permissions-preview-item span {
+    color: var(--muted-light);
+}
+
+body.dark-mode .permissions-preview-item {
+    background: rgba(165, 180, 252, 0.12);
+}
+
+body.dark-mode .permissions-preview-item strong {
+    color: var(--text-dark);
+}
+
+body.dark-mode .permissions-preview-item span {
+    color: var(--muted-dark);
+}
+
+.permissions-preview-item .permission-actions {
+    font-weight: 600;
+    color: var(--primary);
+}
+
 .user-form-content .form-group {
     display: flex;
     flex-direction: column;
@@ -1661,15 +1905,28 @@ body.dark-mode .role-detail-placeholder {
 
 .verification-row {
     display: flex;
-    align-items: center;
-    gap: 12px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
 }
 
 .verification-row .form-input {
-    flex: 1;
+    width: 100%;
+    max-width: 480px;
 }
 
-.verification-row .btn {
+.verification-row .helper-text {
+    max-width: 480px;
+    margin: 0;
+}
+
+.verification-actions {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.verification-actions .btn {
     white-space: nowrap;
 }
 
@@ -1741,94 +1998,235 @@ body.dark-mode .step-intro {
     color: var(--muted-dark);
 }
 
-.account-type-selector {
-    display: grid;
-    gap: 16px;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-}
-
-.account-type-card {
-    position: relative;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    padding: 18px;
-    border-radius: 14px;
-    border: 1px solid var(--border-light);
-    cursor: pointer;
-    transition: border-color 0.2s ease, box-shadow 0.2s ease;
-    background: rgba(15, 23, 42, 0.02);
-}
-
-.account-type-card input {
-    position: absolute;
-    inset: 0;
-    opacity: 0;
-    cursor: pointer;
-}
-
-.account-type-card .card-title {
-    font-weight: 600;
-    font-size: 15px;
-    color: var(--text-light);
-}
-
-.account-type-card .card-caption {
-    font-size: 13px;
-    color: var(--muted-light);
-    line-height: 1.4;
-}
-
-.account-type-card.active {
-    border-color: rgba(37, 99, 235, 0.65);
-    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
-    background: rgba(37, 99, 235, 0.08);
-}
-
-.account-type-card:focus-within {
-    border-color: rgba(37, 99, 235, 0.75);
-    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.18);
-}
-
-body.dark-mode .account-type-card {
-    border-color: var(--border-dark);
-    background: rgba(148, 163, 184, 0.08);
-}
-
-body.dark-mode .account-type-card .card-title {
-    color: var(--text-dark);
-}
-
-body.dark-mode .account-type-card .card-caption {
-    color: var(--muted-dark);
-}
-
-body.dark-mode .account-type-card.active {
-    border-color: rgba(165, 180, 252, 0.6);
-    box-shadow: 0 0 0 3px rgba(165, 180, 252, 0.16);
-    background: rgba(165, 180, 252, 0.12);
-}
-
-body.dark-mode .account-type-card:focus-within {
-    border-color: rgba(165, 180, 252, 0.75);
-    box-shadow: 0 0 0 3px rgba(165, 180, 252, 0.22);
-}
-
-.account-type-card input:focus-visible + .card-title,
-.account-type-card input:focus-visible + .card-caption {
-    outline: 2px solid var(--primary);
-    outline-offset: 4px;
-}
-
-.account-type-selector:focus-within .account-type-card {
-    border-color: rgba(37, 99, 235, 0.4);
-}
-
 .user-form-content .form-actions {
     display: flex;
     align-items: center;
     gap: 12px;
     justify-content: flex-end;
+}
+
+.account-edit-grid {
+    display: grid;
+    gap: 24px;
+    grid-template-columns: minmax(0, 320px) minmax(0, 1fr);
+    align-items: start;
+}
+
+.account-edit-grid.no-summary {
+    grid-template-columns: 1fr;
+}
+
+@media (max-width: 1080px) {
+    .account-edit-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.user-edit-summary {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+}
+
+.user-edit-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+    padding: 28px 24px;
+    border-radius: 20px;
+    border: 1px solid var(--border-light);
+    background: linear-gradient(180deg, rgba(37, 99, 235, 0.12), rgba(255, 255, 255, 0.95));
+    box-shadow: 0 24px 42px rgba(15, 23, 42, 0.12);
+}
+
+.user-edit-summary.summary-empty .user-edit-card {
+    opacity: 0.6;
+}
+
+body.dark-mode .user-edit-card {
+    border-color: var(--border-dark);
+    background: linear-gradient(180deg, rgba(148, 163, 184, 0.18), rgba(15, 23, 42, 0.8));
+    box-shadow: 0 24px 42px rgba(2, 6, 23, 0.55);
+}
+
+.user-edit-avatar {
+    width: 120px;
+    height: 120px;
+    border-radius: 28px;
+    background: rgba(37, 99, 235, 0.08);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+
+.user-edit-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 28px;
+    border: 4px solid rgba(37, 99, 235, 0.14);
+}
+
+.user-edit-card-body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    text-align: center;
+    width: 100%;
+}
+
+.user-edit-name {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--text-light);
+}
+
+body.dark-mode .user-edit-name {
+    color: var(--text-dark);
+}
+
+.user-edit-card-fields {
+    width: 100%;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    align-items: center;
+}
+
+.user-edit-card-field {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-light);
+    word-break: break-word;
+}
+
+body.dark-mode .user-edit-card-field {
+    color: var(--text-dark);
+}
+
+.account-edit-card {
+    background: #ffffff;
+    border: 1px solid var(--border-light);
+    border-radius: 18px;
+    padding: 22px;
+    box-shadow: 0 22px 45px rgba(15, 23, 42, 0.06);
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    width: 100%;
+    align-self: stretch;
+}
+
+.account-edit-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
+}
+
+.account-edit-title {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-light);
+}
+
+.account-edit-subtitle {
+    margin: 6px 0 0;
+    font-size: 13px;
+    color: var(--muted-light);
+}
+
+.account-edit-section {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+}
+
+.input-with-icon {
+    position: relative;
+}
+
+.input-with-icon .form-input {
+    padding-right: 40px;
+}
+
+.input-with-icon .input-icon {
+    position: absolute;
+    top: 50%;
+    right: 14px;
+    transform: translateY(-50%);
+    color: var(--muted-light);
+    pointer-events: none;
+}
+
+.account-edit-card .info-banner {
+    margin: 0;
+}
+
+.account-edit-card .permissions-preview {
+    margin: 0;
+    border-radius: 14px;
+}
+
+.account-edit-card .permissions-preview-header {
+    padding: 0 0 8px;
+}
+
+.account-edit-card .permissions-preview-body {
+    padding: 0;
+}
+
+body.dark-mode .account-edit-card {
+    background: rgba(15, 23, 42, 0.65);
+    border-color: rgba(148, 163, 184, 0.25);
+}
+
+body.dark-mode .account-edit-subtitle {
+    color: var(--muted-dark);
+}
+
+.account-edit-fields {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    width: 100%;
+}
+
+.user-form-page.editing-mode .user-form-body {
+    grid-template-columns: minmax(0, 1fr);
+}
+
+.user-form-page.editing-mode .user-form-progress {
+    display: none;
+}
+
+.user-form-page.editing-mode .user-form-card {
+    max-width: none;
+    width: 100%;
+}
+
+.user-form-page.editing-mode .account-edit-grid {
+    grid-template-columns: minmax(260px, 360px) minmax(0, 1fr);
+}
+
+.user-form-page.editing-mode .account-edit-grid.no-summary {
+    grid-template-columns: 1fr;
+}
+
+@media (max-width: 960px) {
+    .user-form-page.editing-mode .account-edit-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .user-edit-card {
+        align-items: center;
+    }
 }
 
 .user-form-card .section-subtitle {
@@ -2121,6 +2519,11 @@ body.dark-mode .form-card {
     text-transform: uppercase;
     letter-spacing: 0.08em;
     color: var(--muted-light);
+}
+
+.form-label.required::after {
+    content: ' *';
+    color: var(--danger);
 }
 
 body.dark-mode .form-label {

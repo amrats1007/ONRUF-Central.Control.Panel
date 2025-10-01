@@ -6,6 +6,7 @@ const state = {
     usersPerPage: 10,
     currentPeriod: 'monthly',
     roleSearchTerm: '',
+    userSearchTerm: '',
     roleBuilderMode: 'create',
     editingRoleId: null,
     editingUserId: null,
@@ -16,261 +17,194 @@ const state = {
     userVerification: null
 };
 
-function buildPermissionCatalog() {
-    const catalog = [];
-    const sectionMenus = document.querySelectorAll('.menu-item[data-section]');
-
-    sectionMenus.forEach(menuItem => {
-        const sectionId = menuItem.dataset.section;
-        if (!sectionId || sectionId === 'users') {
-            return;
-        }
-
-        const sectionEl = document.getElementById(sectionId);
-        if (!sectionEl) {
-            return;
-        }
-
-        const apps = Array.from(sectionEl.querySelectorAll('.sub-apps-nav .sub-app-btn'))
-            .map(button => {
-                const appId = button.dataset.target;
-                if (!appId) return null;
-
-                const labelSpans = button.querySelectorAll('span');
-                let appLabel = '';
-                if (labelSpans.length > 1) {
-                    appLabel = labelSpans[labelSpans.length - 1].textContent.trim();
-                } else if (button.dataset.label) {
-                    appLabel = button.dataset.label.trim();
-                } else {
-                    appLabel = button.textContent.trim();
-                }
-
-                return {
-                    id: appId,
-                    label: appLabel || appId
-                };
-            })
-            .filter(Boolean);
-
-        if (!apps.length) {
-            return;
-        }
-
-        const sectionLabel = menuItem.querySelector('.menu-text')
-            ? menuItem.querySelector('.menu-text').textContent.trim()
-            : menuItem.textContent.trim();
-
-        catalog.push({
-            id: sectionId,
-            label: sectionLabel || sectionId,
-            apps
-        });
-    });
-
-    return catalog;
-}
-
 const permissionActions = [
-    { id: 'read', label: 'Read' },
-    { id: 'enter', label: 'Enter' },
-    { id: 'edit', label: 'Edit' },
-    { id: 'delete', label: 'Delete' }
+    { id: 'view', label: 'View only' },
+    { id: 'manage', label: 'Manage records' },
+    { id: 'admin', label: 'Admin & configure' }
 ];
 
-const initialPermissionCatalog = buildPermissionCatalog();
-state.permissionCatalog = initialPermissionCatalog.slice();
+const permissionSectionsTemplate = [
+    {
+        id: 'platform-oversight',
+        label: 'Platform Oversight',
+        description: 'Monitor cross-tenant platform health and compliance.',
+        apps: [
+            {
+                id: 'operations-console',
+                label: 'Operations Console',
+                description: 'Daily operations feed, incidents, and live status widgets.',
+                defaultAction: 'manage'
+            },
+            {
+                id: 'sustainability-dashboard',
+                label: 'Sustainability Dashboard',
+                description: 'Environmental KPIs, emission footprints, and waste targets.',
+                defaultAction: 'view'
+            },
+            {
+                id: 'governance-insights',
+                label: 'Governance Insights',
+                description: 'Audit trails, policy adherence, and exception reporting.',
+                defaultAction: 'admin'
+            }
+        ]
+    },
+    {
+        id: 'tenant-operations',
+        label: 'Tenant Operations',
+        description: 'Coordinate onboarding, inspections, and violation case work.',
+        apps: [
+            {
+                id: 'tenant-directory',
+                label: 'Tenant Directory',
+                description: 'Primary tenant records, health status, and contact references.',
+                defaultAction: 'manage'
+            },
+            {
+                id: 'inspection-scheduler',
+                label: 'Inspection Scheduler',
+                description: 'Plan field visits, assign inspectors, and monitor progress.',
+                defaultAction: 'manage'
+            },
+            {
+                id: 'violation-workbench',
+                label: 'Violation Workbench',
+                description: 'Casework, appeals, evidence, and escalation handling.',
+                defaultAction: 'admin'
+            }
+        ]
+    },
+    {
+        id: 'business-performance',
+        label: 'Business Performance',
+        description: 'Track revenue, adoption, and SLA outcomes across segments.',
+        apps: [
+            {
+                id: 'revenue-analytics',
+                label: 'Revenue Analytics',
+                description: 'Recurring revenue, renewals, and growth pacing dashboards.',
+                defaultAction: 'manage'
+            },
+            {
+                id: 'engagement-hub',
+                label: 'Engagement Hub',
+                description: 'Tenant usage, satisfaction surveys, and playbooks.',
+                defaultAction: 'manage'
+            },
+            {
+                id: 'sla-monitor',
+                label: 'SLA Monitor',
+                description: 'Real-time SLA alerts, root causes, and mitigation history.',
+                defaultAction: 'view'
+            }
+        ]
+    },
+    {
+        id: 'platform-administration',
+        label: 'Platform Administration',
+        description: 'Configure roles, automations, and API integrations.',
+        apps: [
+            {
+                id: 'role-governance',
+                label: 'Role Governance',
+                description: 'Role templates, permission guardrails, and audits.',
+                defaultAction: 'admin'
+            },
+            {
+                id: 'automation-studio',
+                label: 'Automation Studio',
+                description: 'Workflow builders, triggers, and orchestration.',
+                defaultAction: 'manage'
+            },
+            {
+                id: 'integration-hub',
+                label: 'Integration Hub',
+                description: 'API credentials, partner connectors, and sync policies.',
+                defaultAction: 'admin'
+            }
+        ]
+    }
+];
 
-function createPermissionEntries(entries, defaultAction = 'read') {
-    return entries
-        .map(({ sectionId, appId, action }) => {
-            const section = initialPermissionCatalog.find(item => item.id === sectionId);
-            if (!section) return null;
-            const app = section.apps.find(item => item.id === appId);
-            if (!app) return null;
-            const requestedAction = action || defaultAction;
-            const validAction = permissionActions.some(item => item.id === requestedAction)
-                ? requestedAction
-                : defaultAction;
-            return {
-                sectionId: section.id,
-                sectionLabel: section.label,
-                appId: app.id,
-                appLabel: app.label,
-                actions: [validAction]
-            };
-        })
-        .filter(Boolean);
+function buildPermissionCatalog() {
+    return permissionSectionsTemplate.map(section => ({
+        ...section,
+        apps: section.apps.map(app => ({ ...app }))
+    }));
 }
 
-const platformAdminPermissions = initialPermissionCatalog.flatMap(section =>
-    section.apps.map(app => ({
-        sectionId: section.id,
-        sectionLabel: section.label,
-        appId: app.id,
-        appLabel: app.label,
-        actions: ['edit']
-    }))
-);
+const viewerPermissions = [
+    { sectionId: 'platform-oversight', appId: 'operations-console', actions: ['view'] },
+    { sectionId: 'business-performance', appId: 'sla-monitor', actions: ['view'] }
+];
 
-const businessOwnerPermissions = createPermissionEntries([
-    { sectionId: 'dashboard', appId: 'dashboard-app1', action: 'enter' },
-    { sectionId: 'reports', appId: 'reports-app1', action: 'enter' },
-    { sectionId: 'reports', appId: 'reports-app3', action: 'enter' },
-    { sectionId: 'packages', appId: 'packages-app1', action: 'edit' },
-    { sectionId: 'packages', appId: 'packages-app2', action: 'edit' },
-    { sectionId: 'products', appId: 'products-app1', action: 'read' },
-    { sectionId: 'products', appId: 'products-app2', action: 'read' }
-], 'read');
+const marketingTeamPermissions = [
+    { sectionId: 'business-performance', appId: 'engagement-hub', actions: ['manage'] },
+    { sectionId: 'business-performance', appId: 'revenue-analytics', actions: ['manage'] },
+    { sectionId: 'tenant-operations', appId: 'tenant-directory', actions: ['view'] }
+];
 
-const businessManagerPermissions = createPermissionEntries([
-    { sectionId: 'dashboard', appId: 'dashboard-app2', action: 'enter' },
-    { sectionId: 'users', appId: 'users-app2', action: 'edit' },
-    { sectionId: 'reports', appId: 'reports-app2', action: 'enter' },
-    { sectionId: 'reports', appId: 'reports-app3', action: 'enter' },
-    { sectionId: 'packages', appId: 'packages-app2', action: 'edit' },
-    { sectionId: 'packages', appId: 'packages-app3', action: 'edit' },
-    { sectionId: 'products', appId: 'products-app2', action: 'edit' },
-    { sectionId: 'products', appId: 'products-app3', action: 'edit' }
-], 'enter');
+const salesTeamPermissions = [
+    { sectionId: 'tenant-operations', appId: 'tenant-directory', actions: ['manage'] },
+    { sectionId: 'tenant-operations', appId: 'inspection-scheduler', actions: ['manage'] },
+    { sectionId: 'business-performance', appId: 'revenue-analytics', actions: ['manage'] }
+];
 
-const inspectorPermissions = createPermissionEntries([
-    { sectionId: 'dashboard', appId: 'dashboard-app2', action: 'enter' },
-    { sectionId: 'reports', appId: 'reports-app2', action: 'enter' },
-    { sectionId: 'reports', appId: 'reports-app3', action: 'read' },
-    { sectionId: 'products', appId: 'products-app1', action: 'enter' },
-    { sectionId: 'products', appId: 'products-app3', action: 'read' }
-], 'enter');
+const complianceOfficerPermissions = [
+    { sectionId: 'tenant-operations', appId: 'violation-workbench', actions: ['admin'] },
+    { sectionId: 'tenant-operations', appId: 'inspection-scheduler', actions: ['manage'] },
+    { sectionId: 'platform-oversight', appId: 'governance-insights', actions: ['admin'] }
+];
 
-const viewerPermissions = createPermissionEntries([
-    { sectionId: 'dashboard', appId: 'dashboard-app1', action: 'read' },
-    { sectionId: 'reports', appId: 'reports-app1', action: 'read' },
-    { sectionId: 'reports', appId: 'reports-app2', action: 'read' },
-    { sectionId: 'packages', appId: 'packages-app1', action: 'read' }
-], 'read');
+const customerSuccessPermissions = [
+    { sectionId: 'tenant-operations', appId: 'tenant-directory', actions: ['manage'] },
+    { sectionId: 'business-performance', appId: 'engagement-hub', actions: ['manage'] },
+    { sectionId: 'platform-oversight', appId: 'operations-console', actions: ['view'] }
+];
 
-const marketingTeamPermissions = createPermissionEntries([
-    { sectionId: 'dashboard', appId: 'dashboard-app1', action: 'enter' },
-    { sectionId: 'dashboard', appId: 'dashboard-app2', action: 'read' },
-    { sectionId: 'reports', appId: 'reports-app1', action: 'enter' },
-    { sectionId: 'reports', appId: 'reports-app3', action: 'read' },
-    { sectionId: 'packages', appId: 'packages-app1', action: 'edit' }
-], 'read');
+const itSupportPermissions = [
+    { sectionId: 'platform-administration', appId: 'integration-hub', actions: ['admin'] },
+    { sectionId: 'platform-administration', appId: 'automation-studio', actions: ['manage'] },
+    { sectionId: 'platform-administration', appId: 'role-governance', actions: ['manage'] }
+];
 
-const salesTeamPermissions = createPermissionEntries([
-    { sectionId: 'dashboard', appId: 'dashboard-app2', action: 'enter' },
-    { sectionId: 'packages', appId: 'packages-app2', action: 'edit' },
-    { sectionId: 'packages', appId: 'packages-app3', action: 'edit' },
-    { sectionId: 'products', appId: 'products-app2', action: 'enter' },
-    { sectionId: 'products', appId: 'products-app3', action: 'edit' }
-], 'enter');
+const riskAnalystPermissions = [
+    { sectionId: 'platform-oversight', appId: 'governance-insights', actions: ['manage'] },
+    { sectionId: 'business-performance', appId: 'sla-monitor', actions: ['manage'] },
+    { sectionId: 'business-performance', appId: 'revenue-analytics', actions: ['view'] }
+];
 
-const complianceOfficerPermissions = createPermissionEntries([
-    { sectionId: 'dashboard', appId: 'dashboard-app1', action: 'read' },
-    { sectionId: 'reports', appId: 'reports-app2', action: 'enter' },
-    { sectionId: 'reports', appId: 'reports-app3', action: 'enter' },
-    { sectionId: 'packages', appId: 'packages-app3', action: 'read' }
-], 'read');
+const financeControllerPermissions = [
+    { sectionId: 'business-performance', appId: 'revenue-analytics', actions: ['admin'] },
+    { sectionId: 'business-performance', appId: 'engagement-hub', actions: ['manage'] },
+    { sectionId: 'platform-administration', appId: 'integration-hub', actions: ['manage'] }
+];
 
-const customerSuccessPermissions = createPermissionEntries([
-    { sectionId: 'dashboard', appId: 'dashboard-app1', action: 'read' },
-    { sectionId: 'dashboard', appId: 'dashboard-app2', action: 'enter' },
-    { sectionId: 'reports', appId: 'reports-app1', action: 'read' },
-    { sectionId: 'products', appId: 'products-app1', action: 'enter' },
-    { sectionId: 'products', appId: 'products-app2', action: 'read' }
-], 'read');
+const vendorManagerPermissions = [
+    { sectionId: 'tenant-operations', appId: 'tenant-directory', actions: ['manage'] },
+    { sectionId: 'tenant-operations', appId: 'violation-workbench', actions: ['manage'] },
+    { sectionId: 'platform-administration', appId: 'automation-studio', actions: ['manage'] }
+];
 
-const itSupportPermissions = createPermissionEntries([
-    { sectionId: 'dashboard', appId: 'dashboard-app2', action: 'enter' },
-    { sectionId: 'reports', appId: 'reports-app2', action: 'enter' },
-    { sectionId: 'reports', appId: 'reports-app3', action: 'read' },
-    { sectionId: 'packages', appId: 'packages-app1', action: 'read' },
-    { sectionId: 'products', appId: 'products-app1', action: 'read' }
-], 'enter');
+const trainingCoordinatorPermissions = [
+    { sectionId: 'tenant-operations', appId: 'inspection-scheduler', actions: ['manage'] },
+    { sectionId: 'business-performance', appId: 'engagement-hub', actions: ['view'] },
+    { sectionId: 'platform-oversight', appId: 'operations-console', actions: ['view'] }
+];
 
-const riskAnalystPermissions = createPermissionEntries([
-    { sectionId: 'dashboard', appId: 'dashboard-app1', action: 'read' },
-    { sectionId: 'reports', appId: 'reports-app2', action: 'enter' },
-    { sectionId: 'reports', appId: 'reports-app3', action: 'enter' },
-    { sectionId: 'packages', appId: 'packages-app3', action: 'read' }
-], 'read');
-
-const financeControllerPermissions = createPermissionEntries([
-    { sectionId: 'dashboard', appId: 'dashboard-app2', action: 'enter' },
-    { sectionId: 'reports', appId: 'reports-app1', action: 'enter' },
-    { sectionId: 'reports', appId: 'reports-app3', action: 'enter' },
-    { sectionId: 'packages', appId: 'packages-app1', action: 'edit' },
-    { sectionId: 'packages', appId: 'packages-app2', action: 'edit' }
-], 'enter');
-
-const vendorManagerPermissions = createPermissionEntries([
-    { sectionId: 'dashboard', appId: 'dashboard-app1', action: 'enter' },
-    { sectionId: 'packages', appId: 'packages-app2', action: 'edit' },
-    { sectionId: 'products', appId: 'products-app1', action: 'enter' },
-    { sectionId: 'products', appId: 'products-app2', action: 'edit' }
-], 'enter');
-
-const trainingCoordinatorPermissions = createPermissionEntries([
-    { sectionId: 'dashboard', appId: 'dashboard-app1', action: 'read' },
-    { sectionId: 'dashboard', appId: 'dashboard-app2', action: 'enter' },
-    { sectionId: 'reports', appId: 'reports-app1', action: 'read' },
-    { sectionId: 'products', appId: 'products-app3', action: 'read' }
-], 'read');
-
-const logisticsSupervisorPermissions = createPermissionEntries([
-    { sectionId: 'dashboard', appId: 'dashboard-app2', action: 'enter' },
-    { sectionId: 'reports', appId: 'reports-app2', action: 'enter' },
-    { sectionId: 'packages', appId: 'packages-app3', action: 'edit' },
-    { sectionId: 'products', appId: 'products-app1', action: 'enter' }
-], 'enter');
+const logisticsSupervisorPermissions = [
+    { sectionId: 'tenant-operations', appId: 'inspection-scheduler', actions: ['manage'] },
+    { sectionId: 'tenant-operations', appId: 'violation-workbench', actions: ['manage'] },
+    { sectionId: 'platform-oversight', appId: 'operations-console', actions: ['manage'] }
+];
 
 const defaultRoles = [
     {
-        id: 'platform-admin',
-        name: 'Platform Admin',
-        nameArabic: 'مسؤول المنصة',
-        description: 'Configures system defaults, integrations, and tenant preferences.',
-        users: 6,
-        permissions: platformAdminPermissions,
-        status: 'active',
-        lastUpdated: 'Updated yesterday'
-    },
-    {
-        id: 'business-owner',
-        name: 'Business Owner',
-        nameArabic: 'مالك النشاط التجاري',
-        description: 'Controls business account data, payments, and team licensing.',
-        users: 58,
-        permissions: businessOwnerPermissions,
-        status: 'active',
-        lastUpdated: 'Updated 4 days ago'
-    },
-    {
-        id: 'business-manager',
-        name: 'Business Manager',
-        nameArabic: 'مدير النشاط التجاري',
-        description: 'Handles day-to-day operations, inspections, and evidence uploads.',
-        users: 132,
-        permissions: businessManagerPermissions,
-        status: 'active',
-        lastUpdated: 'Updated 1 week ago'
-    },
-    {
-        id: 'inspector',
-        name: 'Inspector',
-        nameArabic: 'مفتش',
-        description: 'Executes inspection tasks and submits compliance reports.',
-        users: 214,
-        permissions: inspectorPermissions,
-        status: 'active',
-        lastUpdated: 'Updated 2 weeks ago'
-    },
-    {
         id: 'viewer',
-        name: 'Read-Only Viewer',
-        nameArabic: 'مطلع فقط',
-        description: 'Reviews reports, dashboards, and invoices without edit rights.',
-        users: 39,
+        name: 'Executive Viewer',
+        nameArabic: 'المشاهد التنفيذي',
+        description: 'Provides read-only dashboards for leadership visibility.',
+        users: 8,
         permissions: viewerPermissions,
         status: 'inactive',
         lastUpdated: 'Deactivated 5 days ago'
@@ -546,6 +480,33 @@ function normalizeRolePayload(role) {
     };
 }
 
+function normalizeUserPayload(user, index = 0) {
+    if (!user || typeof user !== 'object') return null;
+
+    const numericId = Number.isInteger(user.id) ? user.id : index + 1;
+    const safeName = typeof user.name === 'string' && user.name.trim() ? user.name.trim() : `User ${numericId}`;
+    const rawEmail = typeof user.email === 'string' ? user.email.trim() : '';
+    const email = rawEmail || `user${numericId}@onruf.com`;
+    const rawStatus = typeof user.status === 'string' ? user.status.trim().toLowerCase() : 'active';
+    const normalizedStatus = rawStatus === 'inactive' ? 'Inactive' : 'Active';
+    const accountType = user.accountType === 'system-administrator' ? 'system-administrator' : 'platform-administrator';
+
+    return {
+        id: numericId,
+        name: safeName,
+        email,
+    role: user.role || 'Admin',
+        accountType,
+        status: normalizedStatus,
+        lastLogin: user.lastLogin || 'Never',
+        created: user.created || new Date().toLocaleDateString(),
+        phone: user.phone || '',
+        department: user.department || '',
+        permissionSummary: user.permissionSummary || '',
+        expiresOn: user.expiresOn || ''
+    };
+}
+
 function loadRolesFromStorage() {
     try {
         const raw = localStorage.getItem(ROLES_STORAGE_KEY);
@@ -562,53 +523,6 @@ function loadRolesFromStorage() {
     }
 }
 
-function saveRolesToStorage() {
-    try {
-        localStorage.setItem(ROLES_STORAGE_KEY, JSON.stringify(roles));
-    } catch (error) {
-        console.warn('Unable to save roles to storage:', error);
-    }
-}
-
-function normalizeUserPayload(user) {
-    if (!user || typeof user !== 'object') {
-        return null;
-    }
-
-    const parsedId = Number.parseInt(user.id, 10);
-    if (!Number.isFinite(parsedId)) {
-        return null;
-    }
-
-    const normalizedStatus = (user.status || 'Active').toString().trim().toLowerCase();
-    const status = normalizedStatus === 'inactive' ? 'Inactive' : 'Active';
-
-    let accountType = null;
-    if (typeof user.accountType === 'string' && user.accountType.trim()) {
-        const lowered = user.accountType.trim().toLowerCase();
-        if (lowered === 'system-administrator') {
-            accountType = 'system-administrator';
-        } else if (lowered === 'platform-administrator') {
-            accountType = 'platform-administrator';
-        } else {
-            accountType = user.accountType.trim();
-        }
-    }
-
-    return {
-        id: parsedId,
-        name: (user.name || '').toString().trim(),
-        email: (user.email || '').toString().trim(),
-        role: (user.role || '').toString().trim(),
-        accountType,
-        status,
-        lastLogin: user.lastLogin || '',
-        created: user.created || '',
-        phone: user.phone || '',
-        department: user.department || ''
-    };
-}
-
 function loadUsersFromStorage() {
     try {
         const raw = localStorage.getItem(USERS_STORAGE_KEY);
@@ -616,12 +530,20 @@ function loadUsersFromStorage() {
         const parsed = JSON.parse(raw);
         if (!Array.isArray(parsed) || !parsed.length) return null;
         const normalized = parsed
-            .map(normalizeUserPayload)
+            .map((user, index) => normalizeUserPayload(user, index))
             .filter(Boolean);
         return normalized.length ? normalized : null;
     } catch (error) {
         console.warn('Unable to load users from storage:', error);
         return null;
+    }
+}
+
+function saveRolesToStorage() {
+    try {
+        localStorage.setItem(ROLES_STORAGE_KEY, JSON.stringify(roles));
+    } catch (error) {
+        console.warn('Unable to save roles to storage:', error);
     }
 }
 
@@ -631,194 +553,6 @@ function saveUsersToStorage() {
     } catch (error) {
         console.warn('Unable to save users to storage:', error);
     }
-}
-
-function updateUserRolesCount() {
-    const countEl = document.getElementById('userRolesCount');
-    if (countEl) {
-        const count = roles.length;
-        const text = count === 1 ? `#${count} Role` : `#${count} Roles`;
-        countEl.textContent = text;
-    }
-}
-
-function updateUsersManagementCount() {
-    const countEl = document.getElementById('usersManagementCount');
-    if (countEl) {
-        const count = users.length;
-        const text = count === 1 ? `#${count} User` : `#${count} Users`;
-        countEl.textContent = text;
-    }
-}
-
-function initializeRoles() {
-    const normalizedDefaults = defaultRoles.map(role => normalizeRolePayload(role)).filter(Boolean);
-    const storedRoles = loadRolesFromStorage();
-
-    if (storedRoles && storedRoles.length) {
-        const mergedRoles = [...storedRoles];
-        const existingIds = new Set(storedRoles.map(role => role.id));
-
-        normalizedDefaults.forEach(defaultRole => {
-            if (!existingIds.has(defaultRole.id)) {
-                mergedRoles.push(defaultRole);
-            }
-        });
-
-        roles = mergedRoles;
-        saveRolesToStorage();
-        return;
-    }
-
-    roles = normalizedDefaults;
-    saveRolesToStorage();
-}
-
-function initializeUsers() {
-    const normalizedDefaults = defaultUsers.map(user => normalizeUserPayload(user)).filter(Boolean);
-    const storedUsers = loadUsersFromStorage();
-
-    if (storedUsers && storedUsers.length) {
-        const mergedUsers = [...storedUsers];
-        const existingIds = new Set(storedUsers.map(user => user.id));
-
-        normalizedDefaults.forEach(defaultUser => {
-            if (!existingIds.has(defaultUser.id)) {
-                mergedUsers.push(defaultUser);
-            }
-        });
-
-        users = mergedUsers;
-        saveUsersToStorage();
-        return;
-    }
-
-    users = normalizedDefaults;
-    saveUsersToStorage();
-}
-
-initializeRoles();
-initializeUsers();
-updateUserRolesCount();
-updateUsersManagementCount();
-
-document.addEventListener('DOMContentLoaded', initializeApp);
-
-function renderPermissionMatrix() {
-    const container = document.getElementById('permissionMatrix');
-    if (!container) return;
-
-    const catalog = buildPermissionCatalog();
-    state.permissionCatalog = catalog;
-
-    if (!catalog.length) {
-        container.innerHTML = '<div class="permission-empty">No panel sections available.</div>';
-        return;
-    }
-
-    const matrix = document.createElement('div');
-    matrix.className = 'permission-matrix';
-
-    catalog.forEach(section => {
-        const sectionCard = document.createElement('div');
-        sectionCard.className = 'permission-section';
-        sectionCard.dataset.section = section.id;
-
-        const header = document.createElement('div');
-        header.className = 'permission-section-header';
-
-        const toggleLabel = document.createElement('label');
-        toggleLabel.className = 'permission-section-toggle';
-
-        const sectionCheckbox = document.createElement('input');
-        sectionCheckbox.type = 'checkbox';
-        sectionCheckbox.className = 'permission-section-checkbox';
-        sectionCheckbox.dataset.section = section.id;
-
-        const toggleText = document.createElement('span');
-        toggleText.textContent = section.label;
-
-        toggleLabel.appendChild(sectionCheckbox);
-        toggleLabel.appendChild(toggleText);
-
-        const sectionMeta = document.createElement('span');
-        sectionMeta.className = 'permission-section-meta';
-        const appCount = section.apps.length;
-        sectionMeta.textContent = `${appCount} ${appCount === 1 ? 'app' : 'apps'}`;
-
-        header.appendChild(toggleLabel);
-        header.appendChild(sectionMeta);
-        sectionCard.appendChild(header);
-
-        const appsContainer = document.createElement('div');
-        appsContainer.className = 'permission-apps';
-
-        section.apps.forEach(app => {
-            const row = document.createElement('div');
-            row.className = 'permission-app-row';
-            row.dataset.app = app.id;
-            row.dataset.section = section.id;
-
-            const info = document.createElement('div');
-            info.className = 'permission-app-info';
-
-            const toggleId = `perm-${section.id}-${app.id}`;
-            const toggle = document.createElement('input');
-            toggle.type = 'checkbox';
-            toggle.id = toggleId;
-            toggle.className = 'permission-app-checkbox';
-            toggle.dataset.app = app.id;
-            toggle.dataset.section = section.id;
-
-                    const label = document.createElement('label');
-                    label.setAttribute('for', toggleId);
-                    label.title = app.id;
-
-                    const labelText = document.createElement('span');
-                    labelText.className = 'permission-app-name';
-                    labelText.textContent = app.label;
-
-                    label.appendChild(labelText);
-
-            info.appendChild(toggle);
-            info.appendChild(label);
-            row.appendChild(info);
-
-            const actions = document.createElement('div');
-            actions.className = 'permission-actions';
-
-            const selectWrapper = document.createElement('div');
-            selectWrapper.className = 'permission-action-select';
-
-            const actionSelect = document.createElement('select');
-            actionSelect.className = 'permission-action-ddl';
-            actionSelect.dataset.app = app.id;
-            actionSelect.dataset.section = section.id;
-            actionSelect.disabled = true;
-
-            permissionActions.forEach(action => {
-                const option = document.createElement('option');
-                option.value = action.id;
-                option.textContent = action.label;
-                actionSelect.appendChild(option);
-            });
-
-            actionSelect.value = permissionActions[0]?.id || '';
-            selectWrapper.appendChild(actionSelect);
-            actions.appendChild(selectWrapper);
-
-            row.appendChild(actions);
-            appsContainer.appendChild(row);
-        });
-
-        sectionCard.appendChild(appsContainer);
-        matrix.appendChild(sectionCard);
-    });
-
-    container.innerHTML = '';
-    container.appendChild(matrix);
-    setupPermissionMatrixInteractions(container);
-    resetPermissionMatrix();
 }
 
 function syncAppPermissionRow(appCheckbox) {
@@ -909,6 +643,115 @@ function collectPermissionSelections() {
     return selections;
 }
 
+function renderPermissionMatrix() {
+    const container = document.getElementById('permissionMatrix');
+    if (!container) return;
+
+    const catalog = buildPermissionCatalog();
+    state.permissionCatalog = catalog.map(section => ({
+        ...section,
+        apps: section.apps.map(app => ({ ...app }))
+    }));
+
+    const matrix = document.createElement('div');
+    matrix.className = 'permission-matrix';
+
+    catalog.forEach(section => {
+        const sectionCard = document.createElement('div');
+        sectionCard.className = 'permission-section';
+        sectionCard.dataset.section = section.id;
+
+        const header = document.createElement('div');
+        header.className = 'permission-section-header';
+
+        const toggle = document.createElement('label');
+        toggle.className = 'permission-section-toggle';
+
+        const sectionCheckbox = document.createElement('input');
+        sectionCheckbox.type = 'checkbox';
+        sectionCheckbox.className = 'permission-section-checkbox';
+        sectionCheckbox.dataset.section = section.id;
+
+        const sectionTitle = document.createElement('span');
+        sectionTitle.textContent = section.label;
+
+        toggle.appendChild(sectionCheckbox);
+        toggle.appendChild(sectionTitle);
+
+        header.appendChild(toggle);
+        sectionCard.appendChild(header);
+
+        const appsContainer = document.createElement('div');
+        appsContainer.className = 'permission-apps';
+
+        section.apps.forEach(app => {
+            const row = document.createElement('div');
+            row.className = 'permission-app-row';
+
+            const info = document.createElement('div');
+            info.className = 'permission-app-info';
+
+            const appCheckbox = document.createElement('input');
+            appCheckbox.type = 'checkbox';
+            appCheckbox.className = 'permission-app-checkbox';
+            appCheckbox.dataset.section = section.id;
+            appCheckbox.dataset.app = app.id;
+            appCheckbox.id = `${section.id}-${app.id}`;
+
+            const label = document.createElement('label');
+            label.setAttribute('for', appCheckbox.id);
+            label.className = 'permission-app-name';
+
+            const nameSpan = document.createElement('span');
+            nameSpan.textContent = app.label;
+            label.appendChild(nameSpan);
+
+            info.appendChild(appCheckbox);
+            info.appendChild(label);
+            row.appendChild(info);
+
+            const actions = document.createElement('div');
+            actions.className = 'permission-actions';
+
+            const selectWrapper = document.createElement('div');
+            selectWrapper.className = 'permission-action-select';
+
+            const actionSelect = document.createElement('select');
+            actionSelect.className = 'permission-action-ddl';
+            actionSelect.dataset.section = section.id;
+            actionSelect.dataset.app = app.id;
+            actionSelect.disabled = true;
+
+            permissionActions.forEach(action => {
+                const option = document.createElement('option');
+                option.value = action.id;
+                option.textContent = action.label;
+                actionSelect.appendChild(option);
+            });
+
+            if (app.defaultAction && actionSelect.querySelector(`option[value="${app.defaultAction}"]`)) {
+                actionSelect.value = app.defaultAction;
+            } else if (permissionActions.length) {
+                actionSelect.value = permissionActions[0].id;
+            }
+
+            selectWrapper.appendChild(actionSelect);
+            actions.appendChild(selectWrapper);
+            row.appendChild(actions);
+
+            appsContainer.appendChild(row);
+        });
+
+        sectionCard.appendChild(appsContainer);
+        matrix.appendChild(sectionCard);
+    });
+
+    container.innerHTML = '';
+    container.appendChild(matrix);
+    setupPermissionMatrixInteractions(container);
+    resetPermissionMatrix();
+}
+
 function resetPermissionMatrix() {
     const container = document.getElementById('permissionMatrix');
     if (!container) return;
@@ -942,8 +785,7 @@ function setRoleBuilderMode(mode = 'create', role = null) {
                     titleEl.textContent = 'Edit User Role';
         }
         if (subtitleEl) {
-            const displayName = role.name || role.nameEnglish || 'this role';
-            subtitleEl.textContent = `Modify permissions and details for ${displayName}.`;
+            subtitleEl.textContent = '';
         }
         if (submitIconEl) {
             submitIconEl.className = 'fas fa-save';
@@ -956,7 +798,7 @@ function setRoleBuilderMode(mode = 'create', role = null) {
             titleEl.textContent = 'Add New Role';
         }
         if (subtitleEl) {
-            subtitleEl.textContent = 'Define permissions and assign default usage limits.';
+            subtitleEl.textContent = '';
         }
         if (submitIconEl) {
             submitIconEl.className = 'fas fa-plus';
@@ -1080,6 +922,23 @@ function hideRoleBuilder() {
 
 function initializeApp() {
     renderPermissionMatrix();
+
+    const storedRoles = loadRolesFromStorage();
+    if (storedRoles && storedRoles.length) {
+        roles = storedRoles;
+    } else {
+        roles = defaultRoles.map(normalizeRolePayload).filter(Boolean);
+        saveRolesToStorage();
+    }
+
+    const storedUsers = loadUsersFromStorage();
+    if (storedUsers && storedUsers.length) {
+        users = storedUsers;
+    } else {
+        users = defaultUsers.map((user, index) => normalizeUserPayload(user, index)).filter(Boolean);
+        saveUsersToStorage();
+    }
+
     setupEventListeners();
     renderStats();
     renderChart();
@@ -1093,13 +952,20 @@ function initializeApp() {
 
     const roleSearchInput = document.getElementById('roleSearchInput');
     if (roleSearchInput) {
-        roleSearchInput.value = state.roleSearchTerm;
+        roleSearchInput.value = state.roleSearchTerm || '';
+    }
+
+    const userSearchInput = document.getElementById('userSearch');
+    if (userSearchInput) {
+        userSearchInput.value = state.userSearchTerm || '';
     }
 
     setupRoleConfirmOverlay();
     setupUserConfirmOverlay();
     setupRoleAlertOverlay();
     setupUserAlertOverlay();
+
+    syncAccountEditLayout();
 }
 
 function setupEventListeners() {
@@ -1164,6 +1030,10 @@ function setupEventListeners() {
 
     const roleSearchInput = document.getElementById('roleSearchInput');
     if (roleSearchInput) {
+        roleSearchInput.addEventListener('input', () => {
+            handleRoleSearch();
+        });
+        roleSearchInput.addEventListener('search', handleRoleSearch);
         roleSearchInput.addEventListener('keydown', event => {
             if (event.key === 'Enter') {
                 event.preventDefault();
@@ -1175,6 +1045,9 @@ function setupEventListeners() {
     const userSearch = document.getElementById('userSearch');
     if (userSearch) {
         userSearch.addEventListener('input', event => {
+            renderUsersTable(event.target.value);
+        });
+        userSearch.addEventListener('search', event => {
             renderUsersTable(event.target.value);
         });
     }
@@ -1250,49 +1123,51 @@ function setupEventListeners() {
 
     // User form event listeners
     const userFormPage = document.getElementById('userFormPage');
-    const userFormCancelBtn = document.getElementById('userFormCancelBtn');
-    const userFormBackStepBtn = document.getElementById('userFormBackStepBtn');
+    const userReviewRegisterBtn = document.getElementById('userReviewRegisterBtn');
+    const userReviewCancelBtn = document.getElementById('userReviewCancelBtn');
     const userForm = document.getElementById('userForm');
     const userVerifyBtn = document.getElementById('userVerifyBtn');
+    const userVerificationCancelBtn = document.getElementById('userVerificationCancelBtn');
     const userEmailInput = document.getElementById('userEmail');
     const userRoleSelect = document.getElementById('userRole');
-    const accountTypeRadios = document.querySelectorAll('input[name="userAccountType"]');
+    const accountTypeSelect = document.getElementById('userAccountType');
     const userFormProgress = document.getElementById('userFormProgress');
-    const userNameInput = document.getElementById('userName');
-    const userPhoneInput = document.getElementById('userPhone');
-    const userDepartmentInput = document.getElementById('userDepartment');
+    const userExpirationInput = document.getElementById('userExpirationDate');
+    const userFormCancelStep3Btn = document.getElementById('userFormCancelStep3Btn');
 
-    if (userFormCancelBtn) {
-        userFormCancelBtn.addEventListener('click', hideUserForm);
+    if (userReviewCancelBtn) {
+        userReviewCancelBtn.addEventListener('click', () => {
+            revertToEmailVerification();
+        });
     }
-    if (userFormBackStepBtn) {
-        userFormBackStepBtn.addEventListener('click', handleUserFormBackStep);
+    if (userReviewRegisterBtn) {
+        userReviewRegisterBtn.addEventListener('click', handleUserFormNext);
     }
     if (userVerifyBtn) {
         userVerifyBtn.addEventListener('click', handleUserEmailVerification);
     }
+    if (userVerificationCancelBtn) {
+        userVerificationCancelBtn.addEventListener('click', handleUserVerificationCancel);
+    }
     if (userEmailInput) {
         userEmailInput.addEventListener('input', handleUserEmailInputChange);
     }
-    accountTypeRadios.forEach(radio => {
-        radio.addEventListener('change', handleAccountTypeChange);
-    });
+    if (accountTypeSelect) {
+        accountTypeSelect.addEventListener('change', handleAccountTypeChange);
+    }
     if (userRoleSelect) {
         userRoleSelect.addEventListener('change', handleRoleSelectionChange);
     }
-    if (userNameInput) {
-        userNameInput.addEventListener('input', handleUserInfoInputChange);
+    if (userExpirationInput) {
+        userExpirationInput.addEventListener('change', handleExpirationDateChange);
     }
-    if (userPhoneInput) {
-        userPhoneInput.addEventListener('input', handleUserInfoInputChange);
-    }
-    if (userDepartmentInput) {
-        userDepartmentInput.addEventListener('input', handleUserInfoInputChange);
+    if (userFormCancelStep3Btn) {
+        userFormCancelStep3Btn.addEventListener('click', handleUserFormStepThreeCancel);
     }
     if (userForm) {
         userForm.addEventListener('submit', handleUserFormSubmit);
         userForm.addEventListener('keydown', event => {
-            if (event.key === 'Enter' && state.userFormStep !== 3 && !event.shiftKey) {
+            if (event.key === 'Enter' && state.userFormStep === 2 && !event.shiftKey) {
                 event.preventDefault();
                 handleUserFormNext();
             }
@@ -1305,6 +1180,18 @@ function setupEventListeners() {
             }
             const targetStep = Number(stepItem.dataset.step || 0);
             if (!targetStep || targetStep === state.userFormStep) {
+                return;
+            }
+            if (state.userFormStep === 2 && targetStep === 1) {
+                return;
+            }
+            if (state.userFormStep === 2 && targetStep === 3) {
+                return;
+            }
+            if (state.userFormStep === 3 && targetStep === 2) {
+                return;
+            }
+            if (state.userFormStep === 3 && targetStep === 1) {
                 return;
             }
             if (targetStep > state.userFormStep) {
@@ -1397,7 +1284,7 @@ function updateBreadcrumb(sectionId = state.currentSection) {
 
     const sectionNames = {
         dashboard: 'Dashboard',
-        users: 'Users & Roles',
+        users: 'Users',
         settings: 'Settings',
         reports: 'Reports',
         packages: 'Packages',
@@ -1410,15 +1297,24 @@ function updateBreadcrumb(sectionId = state.currentSection) {
     if (section) {
         const activeAppButton = section.querySelector('.sub-app-btn.active');
         if (activeAppButton) {
-            const appName = activeAppButton.querySelector('span:last-child');
-            appLabel = appName ? appName.textContent.trim() : (activeAppButton.dataset.label || 'App 1');
+            if (activeAppButton.dataset && activeAppButton.dataset.label) {
+                appLabel = activeAppButton.dataset.label;
+            } else {
+                const primarySpan = activeAppButton.querySelector('span:first-child');
+                if (primarySpan) {
+                    appLabel = primarySpan.textContent.trim();
+                } else {
+                    const fallbackText = activeAppButton.textContent ? activeAppButton.textContent.trim() : '';
+                    appLabel = fallbackText || appLabel;
+                }
+            }
         }
     }
 
     if (sectionId === 'users') {
         const builder = document.getElementById('roleBuilderView');
         if (builder && !builder.classList.contains('hidden')) {
-            appLabel = state.roleBuilderMode === 'edit' ? 'Edit User Role' : 'Create Role';
+            appLabel = state.roleBuilderMode === 'edit' ? 'Edit User Role' : 'Add New Role';
         }
         const userFormPage = document.getElementById('userFormPage');
         if (userFormPage && !userFormPage.classList.contains('hidden')) {
@@ -1442,6 +1338,24 @@ function renderStats() {
     }
     if (totalRolesStat) totalRolesStat.textContent = roles.length;
     if (complianceStat) complianceStat.textContent = '94.2%';
+}
+
+function updateUserRolesCount() {
+    const badge = document.getElementById('userRolesCount');
+    if (!badge) return;
+
+    const total = Array.isArray(roles) ? roles.length : 0;
+    const label = total === 1 ? 'Role' : 'Roles';
+    badge.textContent = `#${total} ${label}`;
+}
+
+function updateUsersManagementCount() {
+    const badge = document.getElementById('usersManagementCount');
+    if (!badge) return;
+
+    const total = Array.isArray(users) ? users.length : 0;
+    const label = total === 1 ? 'User' : 'Users';
+    badge.textContent = `#${total} ${label}`;
 }
 
 function renderChart() {
@@ -1554,6 +1468,14 @@ function renderRolesTable(page = state.currentRolePage) {
     const tbody = document.getElementById('rolesTableBody');
     if (!tbody) return;
 
+    const roleSearchInput = document.getElementById('roleSearchInput');
+    if (roleSearchInput) {
+        const desiredValue = state.roleSearchTerm || '';
+        if (roleSearchInput.value !== desiredValue) {
+            roleSearchInput.value = desiredValue;
+        }
+    }
+
     const searchTerm = (state.roleSearchTerm || '').toLowerCase();
     const filteredRoles = searchTerm
         ? roles.filter(role => {
@@ -1657,7 +1579,7 @@ function renderUsersPagination(totalPages, totalItems) {
         if (disabled) button.disabled = true;
         if (active) button.classList.add('active');
         button.addEventListener('click', () => {
-            renderUsersTable('', page);
+            renderUsersTable(state.userSearchTerm, page);
         });
         return button;
     };
@@ -1674,7 +1596,11 @@ function renderUsersPagination(totalPages, totalItems) {
 function handleRoleSearch() {
     const input = document.getElementById('roleSearchInput');
     if (!input) return;
-    state.roleSearchTerm = input.value.trim();
+    const trimmed = input.value.trim();
+    state.roleSearchTerm = trimmed;
+    if (input.value !== trimmed) {
+        input.value = trimmed;
+    }
     state.currentRolePage = 1;
     renderRolesTable(1);
 }
@@ -1722,6 +1648,44 @@ function showNotification(type, message, timeout = 4000, areaId = null) {
 
 function normalizeEmail(value) {
     return typeof value === 'string' ? value.trim().toLowerCase() : '';
+}
+
+function formatStatusLabel(status) {
+    if (!status && status !== 0) {
+        return '—';
+    }
+    const value = String(status).trim();
+    if (!value) {
+        return '—';
+    }
+    return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+function mapStatusPillClass(status) {
+    const normalized = typeof status === 'string' ? status.trim().toLowerCase() : '';
+    if (normalized === 'active') return 'status-pill success';
+    if (normalized === 'inactive') return 'status-pill danger';
+    if (normalized === 'pending') return 'status-pill warning';
+    return 'status-pill info';
+}
+
+function findExistingUserByEmail(email, excludeUserId = null) {
+    const normalized = normalizeEmail(email);
+    if (!normalized) {
+        return null;
+    }
+
+    const candidate = users.find(user => {
+        if (!user || !user.email) {
+            return false;
+        }
+        if (excludeUserId !== null && user.id === excludeUserId) {
+            return false;
+        }
+        return normalizeEmail(user.email) === normalized;
+    });
+
+    return candidate || null;
 }
 
 function escapeAttribute(value) {
@@ -1773,7 +1737,7 @@ function lookupPlatformAccount(email) {
         return { ...directoryAccount };
     }
 
-    const existingUser = users.find(user => normalizeEmail(user.email) === normalized);
+    const existingUser = findExistingUserByEmail(normalized);
     if (!existingUser) {
         return null;
     }
@@ -1818,6 +1782,69 @@ function setVerificationBanner(status, message) {
     }
 }
 
+function getUserAvatarUrl(email) {
+    const identifier = email ? encodeURIComponent(email.trim().toLowerCase()) : 'onrev-user';
+    return `https://i.pravatar.cc/160?u=${identifier}`;
+}
+
+function updateUserInfoSummary(account) {
+    const nameEl = document.getElementById('userPreviewName');
+    const emailEl = document.getElementById('userPreviewEmail');
+    const phoneEl = document.getElementById('userPreviewPhone');
+    const photoEl = document.getElementById('userPreviewPhoto');
+    const editPanel = document.getElementById('userEditSummaryPanel');
+    const editNameEl = document.getElementById('userEditPreviewName');
+    const editEmailEl = document.getElementById('userEditPreviewEmail');
+    const editPhoneEl = document.getElementById('userEditPreviewPhone');
+    const editDepartmentEl = document.getElementById('userEditPreviewDepartment');
+    const editPhotoEl = document.getElementById('userEditPreviewPhoto');
+    const editStatusEl = document.getElementById('userEditPreviewStatus');
+    const editLastLoginEl = document.getElementById('userEditPreviewLastLogin');
+    const editCreatedEl = document.getElementById('userEditPreviewCreated');
+
+    const nameValue = account && account.name ? account.name : '—';
+    const emailValue = account && account.email ? account.email : '—';
+    const phoneValue = account && account.phone ? account.phone : '—';
+    const departmentValue = account && account.department ? account.department : '—';
+    const statusValue = account && account.status ? formatStatusLabel(account.status) : '—';
+    const lastLoginValue = account && account.lastLogin ? account.lastLogin : '—';
+    const createdValue = account && account.created ? account.created : '—';
+    const avatarUrl = account && account.email ? getUserAvatarUrl(account.email) : getUserAvatarUrl('placeholder');
+
+    if (nameEl) nameEl.textContent = nameValue;
+    if (emailEl) emailEl.textContent = emailValue;
+    if (phoneEl) phoneEl.textContent = phoneValue;
+    if (photoEl) photoEl.src = avatarUrl;
+
+    if (editNameEl) editNameEl.textContent = nameValue;
+    if (editEmailEl) editEmailEl.textContent = emailValue;
+    if (editPhoneEl) editPhoneEl.textContent = phoneValue;
+    if (editDepartmentEl) editDepartmentEl.textContent = departmentValue;
+    if (editPhotoEl) editPhotoEl.src = avatarUrl;
+    if (editStatusEl) {
+        editStatusEl.textContent = statusValue;
+        editStatusEl.className = mapStatusPillClass(account && account.status);
+    }
+    if (editLastLoginEl) editLastLoginEl.textContent = lastLoginValue;
+    if (editCreatedEl) editCreatedEl.textContent = createdValue;
+
+    if (editPanel && account && account.name) {
+        editPanel.classList.remove('summary-empty');
+    } else if (editPanel) {
+        editPanel.classList.add('summary-empty');
+    }
+
+    syncAccountEditLayout();
+}
+
+function syncAccountEditLayout() {
+    document.querySelectorAll('.account-edit-grid').forEach(grid => {
+        const summary = grid.querySelector('.user-edit-summary');
+        const summaryVisible = summary && !summary.classList.contains('hidden');
+        grid.classList.toggle('no-summary', !summaryVisible);
+    });
+}
+
 function resetUserVerification(clearDraft = true) {
     state.userVerification = null;
     setVerificationBanner(null, '');
@@ -1827,22 +1854,15 @@ function resetUserVerification(clearDraft = true) {
         confirmedInput.value = '';
     }
 
-    if (clearDraft) {
-        const nameInput = document.getElementById('userName');
-        const phoneInput = document.getElementById('userPhone');
-        const departmentInput = document.getElementById('userDepartment');
-
-        if (nameInput) nameInput.value = '';
-        if (phoneInput) phoneInput.value = '';
-        if (departmentInput) departmentInput.value = '';
-
-        if (state.userDraft) {
-            state.userDraft.name = '';
-            state.userDraft.phone = '';
-            state.userDraft.department = '';
-        }
+    if (clearDraft && state.userDraft) {
+        state.userDraft.name = '';
+        state.userDraft.phone = '';
+        state.userDraft.department = '';
+        state.userDraft.email = '';
+        state.userDraft.photoUrl = '';
     }
 
+    updateUserInfoSummary(null);
     updateUserFormProgressState();
 }
 
@@ -1863,33 +1883,20 @@ function applyVerificationAccount(account) {
     if (confirmedInput) {
         confirmedInput.value = account.email;
     }
-
-    const nameInput = document.getElementById('userName');
-    if (nameInput) {
-        nameInput.value = account.name || nameInput.value || '';
-    }
-
-    const phoneInput = document.getElementById('userPhone');
-    if (phoneInput) {
-        phoneInput.value = account.phone || phoneInput.value || '';
-    }
-
-    const departmentInput = document.getElementById('userDepartment');
-    if (departmentInput) {
-        departmentInput.value = account.department || departmentInput.value || '';
-    }
-
     state.userDraft = {
         ...(state.userDraft || {}),
         email: account.email,
         name: account.name || (state.userDraft ? state.userDraft.name : ''),
         phone: account.phone || (state.userDraft ? state.userDraft.phone : ''),
         department: account.department || (state.userDraft ? state.userDraft.department : ''),
-        status: (state.userDraft && state.userDraft.status) || 'Active'
+        status: (state.userDraft && state.userDraft.status) || 'Active',
+        photoUrl: getUserAvatarUrl(account.email)
     };
 
-    setVerificationBanner('success', 'INF010: OnRuf platform account verified. Details imported successfully.');
-    showNotification('info', 'INF010: Platform account verified and synced.', 5000);
+    updateUserInfoSummary(account);
+
+    setVerificationBanner('success', 'INF010: Onrev platform account verified. Details imported successfully.');
+    showNotification('info', 'This User is Available for Registration.', 5000);
 
     setUserFormStep(2);
     focusUserFormStep(2);
@@ -1904,21 +1911,41 @@ async function handleUserEmailVerification() {
     const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
     if (!emailPattern.test(email)) {
-        showNotification('error', 'Please enter a valid OnRuf platform email before checking.', 5000);
-        await showUserAlert('Please enter a valid OnRuf platform email before checking.');
+        showNotification('error', 'Please enter a valid Onrev platform email before verifying.', 5000);
+        await showUserAlert('Please enter a valid Onrev platform email before verifying.');
+        emailInput.focus();
+        return;
+    }
+
+    const normalizedEmail = normalizeEmail(email);
+    const excludeUserId = state.editingUserId || null;
+    const duplicateUser = findExistingUserByEmail(email, excludeUserId);
+
+    if (duplicateUser) {
+        resetUserVerification(false);
+        state.userVerification = {
+            status: 'duplicate',
+            email: normalizedEmail,
+            existingUserId: duplicateUser.id
+        };
+
+        const duplicateName = duplicateUser.name || duplicateUser.email;
+        setVerificationBanner('error', 'This user already has an ONRUF Control Panel account. Use the edit action to update access.');
+        showNotification('error', `${duplicateName} is already registered in Users Management. Use the edit action to manage their account.`, 6500);
+        updateUserFormProgressState();
         emailInput.focus();
         return;
     }
 
     const cachedVerification = state.userVerification;
-    if (cachedVerification && cachedVerification.status === 'verified' && cachedVerification.email === normalizeEmail(email)) {
+    if (cachedVerification && cachedVerification.status === 'verified' && cachedVerification.email === normalizedEmail) {
         setVerificationBanner('success', 'The platform account is already verified for this email address.');
         updateUserFormProgressState();
         return;
     }
 
     resetUserVerification(false);
-    state.userVerification = { status: 'checking', email: normalizeEmail(email) };
+    state.userVerification = { status: 'checking', email: normalizedEmail };
 
     const originalLabel = verifyBtn.innerHTML;
     verifyBtn.disabled = true;
@@ -1929,15 +1956,15 @@ async function handleUserEmailVerification() {
     const account = lookupPlatformAccount(email);
 
     if (!account) {
-        state.userVerification = { status: 'not-found', email: normalizeEmail(email) };
-        setVerificationBanner('error', 'No active OnRuf platform account was found for this email.');
-        await showUserAlert('No active OnRuf platform account was found for this email.');
+        state.userVerification = { status: 'not-found', email: normalizedEmail };
+        setVerificationBanner('error', 'No active Onrev platform account was found for this email.');
+        await showUserAlert('No active Onrev platform account was found for this email.');
         updateUserFormProgressState();
     } else if (account.status !== 'active') {
-        state.userVerification = { status: account.status, email: normalizeEmail(email), account };
+        state.userVerification = { status: account.status, email: normalizedEmail, account };
         const statusLabel = account.status === 'pending' ? 'pending activation' : 'inactive';
-        setVerificationBanner('error', `The linked OnRuf platform account is ${statusLabel}. Complete activation on the OnRuf platform before proceeding.`);
-        showNotification('error', `The OnRuf platform account for ${account.email} is ${statusLabel}. Activate it before adding the user to the control panel.`, 6500);
+        setVerificationBanner('error', `The linked Onrev platform account is ${statusLabel}. Complete activation on the Onrev platform before proceeding.`);
+        showNotification('error', `The Onrev platform account for ${account.email} is ${statusLabel}. Activate it before adding the user to the control panel.`, 6500);
         updateUserFormProgressState();
     } else {
         applyVerificationAccount(account);
@@ -1969,18 +1996,35 @@ function handleUserEmailInputChange() {
     state.userDraft.email = emailInput.value.trim();
 }
 
-function handleAccountTypeChange(event) {
-    const value = event.target ? event.target.value : null;
-    if (!value) return;
+function handleUserVerificationCancel() {
+    const shouldCloseForm =
+        state.editingUserId !== null
+        || state.userFormStep <= 1 && (!state.userVerification || state.userVerification.status !== 'verified');
 
-    state.userDraft = {
+    if (shouldCloseForm) {
+        hideUserForm();
+        return;
+    }
+
+    revertToEmailVerification();
+}
+
+function handleAccountTypeChange(event) {
+    const value = event && event.target ? event.target.value : '';
+    const draft = {
         ...(state.userDraft || {}),
-        accountType: value
+        accountType: value || null
     };
 
     if (value === 'system-administrator') {
-        state.userDraft.role = 'System Administrator';
+        draft.role = 'Super Admin';
+    } else if (value === 'platform-administrator') {
+        draft.role = draft.role && draft.role !== 'Super Admin' ? draft.role : '';
+    } else {
+        draft.role = '';
     }
+
+    state.userDraft = draft;
 
     updateAccountTypeUI();
     updateUserFormProgressState();
@@ -1988,6 +2032,7 @@ function handleAccountTypeChange(event) {
 
 function handleRoleSelectionChange(event) {
     const value = event.target ? event.target.value : '';
+
     state.userDraft = {
         ...(state.userDraft || {}),
         role: value
@@ -1996,55 +2041,114 @@ function handleRoleSelectionChange(event) {
     updateUserFormProgressState();
 }
 
+function revertToEmailVerification() {
+    const emailInput = document.getElementById('userEmail');
+    const verifyBtn = document.getElementById('userVerifyBtn');
+    const registerBtn = document.getElementById('userReviewRegisterBtn');
+    const confirmedInput = document.getElementById('userEmailConfirmed');
+
+    resetUserVerification(true);
+
+    if (confirmedInput) {
+        confirmedInput.value = '';
+    }
+
+    if (emailInput) {
+        emailInput.readOnly = false;
+        emailInput.focus();
+    }
+
+    if (verifyBtn) {
+        verifyBtn.disabled = false;
+        verifyBtn.innerHTML = '<i class="fas fa-check-circle"></i> Verify';
+    }
+
+    if (registerBtn) {
+        registerBtn.disabled = true;
+    }
+
+    setUserFormStep(1);
+    focusUserFormStep(1);
+    updateUserFormProgressState();
+}
+
+function handleExpirationDateChange(event) {
+    const value = event && event.target ? event.target.value : '';
+    state.userDraft = {
+        ...(state.userDraft || {}),
+        expiresOn: value || ''
+    };
+}
+
 function updateAccountTypeUI() {
-    const selector = document.getElementById('userAccountTypeSelector');
+    const accountTypeSelect = document.getElementById('userAccountType');
     const roleSelect = document.getElementById('userRole');
     const summary = document.getElementById('userPermissionsSummary');
+    const accountTypeLabel = document.getElementById('userAccountTypeLabel');
+    const roleLabel = document.getElementById('userRoleLabel');
 
-    let selectedValue = state.userDraft && state.userDraft.accountType ? state.userDraft.accountType : null;
+    const storedAccountType = state.userDraft && state.userDraft.accountType ? state.userDraft.accountType : '';
+    let selectedValue = storedAccountType;
 
-    if (selector) {
-        const radios = selector.querySelectorAll('input[name="userAccountType"]');
-        radios.forEach(radio => {
-            if (radio.checked) {
-                selectedValue = radio.value;
-            }
-            const card = radio.closest('.account-type-card');
-            if (card) {
-                card.classList.toggle('active', radio.checked);
-            }
-        });
+    if (accountTypeSelect) {
+        accountTypeSelect.value = storedAccountType || '';
+        accountTypeSelect.required = true;
+        accountTypeSelect.setAttribute('aria-required', 'true');
+        selectedValue = accountTypeSelect.value;
+    }
+
+    if (accountTypeLabel) {
+        accountTypeLabel.classList.add('required');
     }
 
     if (roleSelect) {
-        if (selectedValue === 'platform-administrator') {
-            roleSelect.disabled = false;
-            if (state.userDraft && state.userDraft.role) {
+        const shouldEnableRole = selectedValue === 'platform-administrator';
+        roleSelect.disabled = !shouldEnableRole;
+        if (shouldEnableRole) {
+            roleSelect.required = true;
+            roleSelect.setAttribute('aria-required', 'true');
+        } else {
+            roleSelect.required = false;
+            roleSelect.removeAttribute('aria-required');
+        }
+
+        if (shouldEnableRole) {
+            if (state.userDraft && state.userDraft.role && state.userDraft.role !== 'Super Admin') {
                 roleSelect.value = state.userDraft.role;
+            } else {
+                roleSelect.value = '';
             }
         } else {
-            roleSelect.disabled = true;
             roleSelect.value = '';
+        }
+
+        if (roleLabel) {
+            roleLabel.classList.toggle('required', shouldEnableRole);
         }
     }
 
     let summaryText = 'Select an account type to see the assigned permissions.';
 
     if (selectedValue === 'system-administrator') {
-        summaryText = 'System Administrators receive full access to all modules within the central control panel.';
+        summaryText = 'Super Admins receive full access to all modules within the central control panel.';
         if (state.userDraft) {
             state.userDraft.accountType = 'system-administrator';
-            state.userDraft.role = 'System Administrator';
+            state.userDraft.role = 'Super Admin';
+            state.userDraft.permissionSummary = 'Full access to all modules.';
         }
+        renderRolePermissionsPreview(null);
     } else if (selectedValue === 'platform-administrator') {
         const roleName = roleSelect ? roleSelect.value : '';
         summaryText = roleName
-            ? `Platform Administrators inherit the permissions defined for the “${roleName}” role.`
-            : 'Select a registered role to apply the relevant permission set for this platform administrator.';
+            ? `Admins inherit the permissions defined for the “${roleName}” role.`
+            : 'Select a registered role to apply the relevant permission set for this admin.';
         if (state.userDraft) {
             state.userDraft.accountType = 'platform-administrator';
             state.userDraft.role = roleName || '';
         }
+        renderRolePermissionsPreview(roleName || null);
+    } else {
+        renderRolePermissionsPreview(null);
     }
 
     if (summary) {
@@ -2052,10 +2156,128 @@ function updateAccountTypeUI() {
     }
 }
 
+function renderRolePermissionsPreview(roleName) {
+    const container = document.getElementById('userRolePermissionsPreview');
+    const list = document.getElementById('userRolePermissionsList');
+
+    if (!container || !list) {
+        return;
+    }
+
+    list.innerHTML = '';
+
+    if (!roleName) {
+        container.classList.add('hidden');
+        if (state.userDraft) {
+            state.userDraft.permissionSummary = '';
+        }
+        return;
+    }
+
+    const role = roles.find(item => item.name === roleName || item.id === roleName);
+    const permissions = role && Array.isArray(role.permissions) ? role.permissions : [];
+
+    container.classList.remove('hidden');
+
+    if (!permissions.length) {
+        list.innerHTML = '<p class="permissions-preview-placeholder">No structured permissions are defined for this role yet.</p>';
+    } else {
+        const tableHtml = buildRolePermissionsTableHtml(permissions, { compact: true });
+        list.innerHTML = `<div class="role-permissions-table-wrapper">${tableHtml}</div>`;
+    }
+
+    if (state.userDraft) {
+        state.userDraft.permissionSummary = `Inherits permissions from “${roleName}”.`;
+    }
+}
+
 function mapPermissionActionLabel(actionId) {
     if (!actionId) return 'Read';
     const action = permissionActions.find(item => item.id === actionId);
     return action ? action.label : actionId;
+}
+
+function buildRolePermissionRows(permissions) {
+    if (!Array.isArray(permissions) || !permissions.length) {
+        return '';
+    }
+
+    const sectionOrder = new Map();
+    let sectionCounter = 0;
+    let lastSectionKey = null;
+
+    return permissions.map(permission => {
+        if (!permission) {
+            return '';
+        }
+
+        if (typeof permission === 'string') {
+            lastSectionKey = null;
+            return `
+                <tr class="legacy-permission-row">
+                    <td colspan="2" class="legacy-label">${permission}</td>
+                    <td class="actions-cell">Legacy</td>
+                </tr>
+            `;
+        }
+
+        const sectionLabel = permission.sectionLabel || permission.sectionId || 'Section';
+        const rawSectionKey = (permission.sectionId || sectionLabel || `section-${sectionCounter + 1}`).toString();
+        const normalizedSectionKey = rawSectionKey.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-') || `section-${sectionCounter + 1}`;
+
+        if (!sectionOrder.has(normalizedSectionKey)) {
+            sectionCounter += 1;
+            sectionOrder.set(normalizedSectionKey, sectionCounter);
+        }
+
+        const sectionIndex = sectionOrder.get(normalizedSectionKey);
+        const sectionClass = sectionIndex % 2 === 0 ? 'role-section-even' : 'role-section-odd';
+        const displaySectionLabel = normalizedSectionKey === lastSectionKey ? '' : sectionLabel;
+        lastSectionKey = normalizedSectionKey;
+
+        const appLabel = permission.appLabel || permission.appId || 'App';
+        const actions = Array.isArray(permission.actions) && permission.actions.length
+            ? permission.actions.map(mapPermissionActionLabel).join(', ')
+            : mapPermissionActionLabel('read');
+
+        return `
+            <tr class="${sectionClass}" data-section="${normalizedSectionKey}">
+                <td>${displaySectionLabel}</td>
+                <td>${appLabel}</td>
+                <td class="actions-cell">${actions}</td>
+            </tr>
+        `;
+    }).filter(Boolean).join('');
+}
+
+function buildRolePermissionsTableHtml(permissions, options = {}) {
+    const { compact = false } = options;
+    const rows = buildRolePermissionRows(permissions);
+    const hasRows = Boolean(rows && rows.trim());
+    const tableClass = compact ? 'role-detail-permissions compact' : 'role-detail-permissions';
+
+    const bodyContent = hasRows
+        ? rows
+        : `
+            <tr>
+                <td colspan="3" class="role-detail-empty">No permissions assigned yet.</td>
+            </tr>
+        `;
+
+    return `
+        <table class="${tableClass}">
+            <thead>
+                <tr>
+                    <th>Section</th>
+                    <th>Application</th>
+                    <th>Permission</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${bodyContent}
+            </tbody>
+        </table>
+    `;
 }
 
 function showRoleDetailForRole(role) {
@@ -2073,80 +2295,14 @@ function showRoleDetailForRole(role) {
     const primaryName = role.name || role.nameEnglish || 'Role Permissions';
     titleEl.textContent = primaryName;
 
-    subtitleEl.textContent = 'Review permission coverage for this role.';
+    subtitleEl.textContent = '';
 
     const permissions = Array.isArray(role.permissions) ? role.permissions : [];
-
-    let permissionRows = '';
-    if (permissions.length) {
-        const sectionOrder = new Map();
-        let sectionCounter = 0;
-        let lastSectionKey = null;
-        permissionRows = permissions
-            .map(permission => {
-                if (!permission) return '';
-                if (typeof permission === 'string') {
-                    lastSectionKey = null;
-                    return `
-                        <tr class="legacy-permission-row">
-                            <td colspan="2" class="legacy-label">${permission}</td>
-                            <td class="actions-cell">Legacy</td>
-                        </tr>
-                    `;
-                }
-
-                const sectionLabel = permission.sectionLabel || permission.sectionId || 'Section';
-                const rawSectionKey = (permission.sectionId || sectionLabel || `section-${sectionCounter + 1}`).toString();
-                const normalizedSectionKey = rawSectionKey.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-') || `section-${sectionCounter + 1}`;
-
-                if (!sectionOrder.has(normalizedSectionKey)) {
-                    sectionCounter += 1;
-                    sectionOrder.set(normalizedSectionKey, sectionCounter);
-                }
-
-                const sectionIndex = sectionOrder.get(normalizedSectionKey);
-                const sectionClass = sectionIndex % 2 === 0 ? 'role-section-even' : 'role-section-odd';
-                const displaySectionLabel = normalizedSectionKey === lastSectionKey ? '' : sectionLabel;
-                lastSectionKey = normalizedSectionKey;
-                const appLabel = permission.appLabel || permission.appId || 'App';
-                const actions = Array.isArray(permission.actions) && permission.actions.length
-                    ? permission.actions.map(mapPermissionActionLabel).join(', ')
-                    : mapPermissionActionLabel('read');
-
-                return `
-                    <tr class="${sectionClass}" data-section="${normalizedSectionKey}">
-                        <td>${displaySectionLabel}</td>
-                        <td>${appLabel}</td>
-                        <td class="actions-cell">${actions}</td>
-                    </tr>
-                `;
-            })
-            .filter(Boolean)
-            .join('');
-    }
-
-    if (!permissionRows.trim()) {
-        permissionRows = `
-            <tr>
-                <td colspan="3" class="role-detail-empty">No permissions assigned yet.</td>
-            </tr>
-        `;
-    }
+    const tableHtml = buildRolePermissionsTableHtml(permissions);
 
     contentEl.innerHTML = `
-        <div>
-            <table class="role-detail-permissions">
-                <thead>
-                    <tr>
-                        <th>Section</th>
-                        <th>Application</th>
-                        <th>Permission</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${permissionRows}
-                </tbody>
-            </table>
+        <div class="role-permissions-table-wrapper">
+            ${tableHtml}
         </div>
     `;
 
@@ -2447,33 +2603,41 @@ function setUserFormStep(step) {
 
     updateUserFormProgressState();
 
-    const backBtn = document.getElementById('userFormBackStepBtn');
-    if (backBtn) {
-        backBtn.classList.toggle('hidden', nextStep === 1);
-    }
-
     const submitBtn = document.getElementById('userFormSubmitBtn');
     if (submitBtn) {
         submitBtn.classList.toggle('hidden', nextStep !== maxStep);
-        submitBtn.textContent = state.editingUserId ? 'Save Changes' : 'Add User';
+        submitBtn.textContent = state.editingUserId ? 'Save' : 'Add User';
+    }
+
+    const cancelStep3Btn = document.getElementById('userFormCancelStep3Btn');
+    if (cancelStep3Btn) {
+        const shouldShowCancel = nextStep === maxStep;
+        cancelStep3Btn.classList.toggle('hidden', !shouldShowCancel);
+        cancelStep3Btn.textContent = state.editingUserId ? 'Cancel' : 'Cancel';
     }
 
     updateAccountTypeUI();
     updateBreadcrumb();
+    syncAccountEditLayout();
 }
 
 function isUserInformationComplete() {
-    const confirmedInput = document.getElementById('userEmailConfirmed');
-    const nameInput = document.getElementById('userName');
-    const phoneInput = document.getElementById('userPhone');
-    if (!confirmedInput || !nameInput || !phoneInput) {
+    const verification = state.userVerification;
+    const draft = state.userDraft || {};
+
+    if (!verification || verification.status !== 'verified') {
         return false;
     }
 
+    const verifiedEmail = verification.email || '';
+    const draftEmail = normalizeEmail(draft.email);
+
     return Boolean(
-        confirmedInput.value.trim()
-        && nameInput.value.trim()
-        && phoneInput.value.trim()
+        verifiedEmail
+        && draftEmail
+        && normalizeEmail(verifiedEmail) === draftEmail
+        && draft.name
+        && draft.phone
     );
 }
 
@@ -2502,7 +2666,8 @@ function updateUserFormProgressState() {
         if (!stepNumber) {
             return;
         }
-        const unlocked = isUserFormStepUnlocked(stepNumber);
+        const forcedDisable = state.userFormStep === 3 && (stepNumber === 1 || stepNumber === 2);
+        const unlocked = isUserFormStepUnlocked(stepNumber) && !forcedDisable;
         if (!item.hasAttribute('role')) {
             item.setAttribute('role', 'button');
         }
@@ -2510,21 +2675,11 @@ function updateUserFormProgressState() {
         item.setAttribute('aria-disabled', unlocked ? 'false' : 'true');
         item.tabIndex = unlocked ? 0 : -1;
     });
-}
 
-function handleUserInfoInputChange() {
-    const nameInput = document.getElementById('userName');
-    const phoneInput = document.getElementById('userPhone');
-    const departmentInput = document.getElementById('userDepartment');
-
-    state.userDraft = {
-        ...(state.userDraft || {}),
-        name: nameInput ? nameInput.value.trim() : (state.userDraft ? state.userDraft.name : ''),
-        phone: phoneInput ? phoneInput.value.trim() : (state.userDraft ? state.userDraft.phone : ''),
-        department: departmentInput ? departmentInput.value.trim() : (state.userDraft ? state.userDraft.department : '')
-    };
-
-    updateUserFormProgressState();
+    const registerBtn = document.getElementById('userReviewRegisterBtn');
+    if (registerBtn) {
+        registerBtn.disabled = !isUserFormStepUnlocked(3);
+    }
 }
 
 function collectUserFormStepData(step) {
@@ -2557,29 +2712,32 @@ function collectUserFormStepData(step) {
     }
 
     if (step === 2) {
-        const nameInput = document.getElementById('userName');
-        const phoneInput = document.getElementById('userPhone');
-        const departmentInput = document.getElementById('userDepartment');
+        const verification = state.userVerification;
         const confirmedEmail = document.getElementById('userEmailConfirmed');
 
-        if (!nameInput || !phoneInput || !departmentInput || !confirmedEmail) {
+        if (!verification || verification.status !== 'verified' || !verification.account) {
+            showNotification('warning', 'Verify an active Onrev platform account before registering.');
             return false;
         }
 
-        const name = nameInput.value.trim();
-        const phone = phoneInput.value.trim();
-        const department = departmentInput.value.trim();
+        const account = verification.account;
+        const name = (account.name || (state.userDraft ? state.userDraft.name : '') || '').trim();
+        const phone = (account.phone || (state.userDraft ? state.userDraft.phone : '') || '').trim();
+        const department = account.department || (state.userDraft ? state.userDraft.department : '');
+        const email = account.email || (state.userDraft ? state.userDraft.email : '');
 
         if (!name) {
-            showNotification('error', 'Please confirm the user\'s full name before registering.');
-            nameInput.focus();
+            showNotification('error', 'The Onrev profile is missing a name. Update it on the platform before registering.');
             return false;
         }
 
         if (!phone) {
-            showNotification('error', 'Please confirm or enter the mobile number before registering.');
-            phoneInput.focus();
+            showNotification('error', 'The Onrev profile is missing a phone number. Update it on the platform before registering.');
             return false;
+        }
+
+        if (confirmedEmail) {
+            confirmedEmail.value = email;
         }
 
         state.userDraft = {
@@ -2587,27 +2745,33 @@ function collectUserFormStepData(step) {
             name,
             phone,
             department,
-            email: confirmedEmail.value.trim() || (state.userDraft ? state.userDraft.email : '')
+            email,
+            photoUrl: getUserAvatarUrl(email)
         };
+
         return true;
     }
 
     if (step === 3) {
-        const accountTypeRadio = document.querySelector('input[name="userAccountType"]:checked');
+        const accountTypeSelect = document.getElementById('userAccountType');
         const roleSelect = document.getElementById('userRole');
         const permissionsSummary = document.getElementById('userPermissionsSummary');
+        const expirationInput = document.getElementById('userExpirationDate');
 
-        if (!accountTypeRadio) {
+        if (!accountTypeSelect || !accountTypeSelect.value) {
             showNotification('error', 'Please select an account type before adding the user.');
+            if (accountTypeSelect) {
+                accountTypeSelect.focus();
+            }
             return false;
         }
 
-        const accountType = accountTypeRadio.value;
-        let role = 'System Administrator';
+        const accountType = accountTypeSelect.value;
+        let role = 'Super Admin';
 
         if (accountType === 'platform-administrator') {
             if (!roleSelect || !roleSelect.value) {
-                showNotification('error', 'Select a registered role for platform administrators.');
+                showNotification('error', 'Select a registered role for admins.');
                 if (roleSelect) {
                     roleSelect.focus();
                 }
@@ -2616,12 +2780,31 @@ function collectUserFormStepData(step) {
             role = roleSelect.value;
         }
 
+        let expiresOn = '';
+        if (expirationInput && expirationInput.value) {
+            const parsed = new Date(`${expirationInput.value}T00:00:00`);
+            if (Number.isNaN(parsed.getTime())) {
+                showNotification('error', 'Enter a valid expiration date or leave it blank.');
+                expirationInput.focus();
+                return false;
+            }
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            if (parsed < today) {
+                showNotification('error', 'The expiration date cannot be in the past.');
+                expirationInput.focus();
+                return false;
+            }
+            expiresOn = expirationInput.value;
+        }
+
         state.userDraft = {
             ...(state.userDraft || {}),
             accountType,
             role,
             status: (state.userDraft && state.userDraft.status) || 'Active',
-            permissionSummary: permissionsSummary ? permissionsSummary.textContent.trim() : ''
+            permissionSummary: permissionsSummary ? permissionsSummary.textContent.trim() : '',
+            expiresOn
         };
         return true;
     }
@@ -2642,13 +2825,16 @@ function handleUserFormNext() {
     focusUserFormStep(nextStep);
 }
 
-function handleUserFormBackStep() {
-    if (state.userFormStep <= 1) {
+function handleUserFormStepThreeCancel() {
+    if (state.userFormStep !== 3) {
         return;
     }
-    const previousStep = state.userFormStep - 1;
-    setUserFormStep(previousStep);
-    focusUserFormStep(previousStep);
+    if (state.editingUserId) {
+        hideUserForm();
+        return;
+    }
+    setUserFormStep(2);
+    focusUserFormStep(2);
 }
 
 function showUserForm(mode, userId = null) {
@@ -2659,13 +2845,14 @@ function showUserForm(mode, userId = null) {
     const form = document.getElementById('userForm');
     const emailInput = document.getElementById('userEmail');
     const emailConfirmedInput = document.getElementById('userEmailConfirmed');
-    const nameInput = document.getElementById('userName');
-    const phoneInput = document.getElementById('userPhone');
-    const departmentInput = document.getElementById('userDepartment');
     const roleSelect = document.getElementById('userRole');
     const submitBtn = document.getElementById('userFormSubmitBtn');
     const verifyBtn = document.getElementById('userVerifyBtn');
-    const accountTypeSelector = document.getElementById('userAccountTypeSelector');
+    const accountTypeSelect = document.getElementById('userAccountType');
+    const registerBtn = document.getElementById('userReviewRegisterBtn');
+    const expirationInput = document.getElementById('userExpirationDate');
+    const permissionsSummary = document.getElementById('userPermissionsSummary');
+    const editSummaryPanel = document.getElementById('userEditSummaryPanel');
 
     if (
         !formPage ||
@@ -2673,18 +2860,17 @@ function showUserForm(mode, userId = null) {
         !form ||
         !emailInput ||
         !emailConfirmedInput ||
-        !nameInput ||
-        !phoneInput ||
-        !departmentInput ||
         !roleSelect ||
         !submitBtn ||
         !titleEl ||
         !subtitleEl ||
         !verifyBtn ||
-        !accountTypeSelector
+        !accountTypeSelect
     ) {
         return;
     }
+
+    formPage.classList.toggle('editing-mode', mode === 'edit');
 
     roleSelect.innerHTML = '<option value="">Select a role</option>';
     roles.forEach(role => {
@@ -2694,10 +2880,17 @@ function showUserForm(mode, userId = null) {
         roleSelect.appendChild(option);
     });
 
-    const accountTypeRadios = accountTypeSelector.querySelectorAll('input[name="userAccountType"]');
-    accountTypeRadios.forEach(radio => {
-        radio.checked = false;
-    });
+    accountTypeSelect.value = '';
+
+    if (editSummaryPanel) {
+        editSummaryPanel.classList.add('hidden');
+    }
+
+    if (permissionsSummary) {
+        permissionsSummary.textContent = '';
+    }
+
+    syncAccountEditLayout();
 
     const defaultDraft = {
         name: '',
@@ -2707,7 +2900,9 @@ function showUserForm(mode, userId = null) {
         accountType: null,
         role: '',
         status: 'Active',
-        permissionSummary: ''
+        permissionSummary: '',
+        photoUrl: '',
+        expiresOn: ''
     };
 
     state.editingUserId = null;
@@ -2715,12 +2910,28 @@ function showUserForm(mode, userId = null) {
 
     form.reset();
     resetUserVerification(true);
+    updateUserInfoSummary(null);
+
+    emailInput.value = '';
     emailInput.readOnly = false;
     emailConfirmedInput.value = '';
-    verifyBtn.disabled = false;
-    verifyBtn.innerHTML = '<i class="fas fa-check-circle"></i> Check';
 
-    if (mode === 'edit' && userId) {
+    verifyBtn.disabled = false;
+    verifyBtn.innerHTML = '<i class="fas fa-check-circle"></i> Verify';
+
+    if (registerBtn) {
+        registerBtn.disabled = true;
+    }
+
+    if (expirationInput) {
+        expirationInput.value = '';
+    }
+
+    roleSelect.disabled = true;
+
+    let initialStep = 1;
+
+    if (mode === 'edit' && typeof userId === 'number') {
         const user = users.find(u => u.id === userId);
         if (!user) {
             return;
@@ -2728,10 +2939,10 @@ function showUserForm(mode, userId = null) {
 
         state.editingUserId = userId;
 
-        const fallbackPhone = user.phone || `+96650${user.id.toString().padStart(6, '0')}`;
+        const fallbackPhone = user.phone || `+96650${String(user.id).padStart(6, '0')}`;
         const inferredAccountType = user.accountType
             ? user.accountType
-            : (user.role === 'System Administrator' ? 'system-administrator' : 'platform-administrator');
+            : (user.role === 'Super Admin' ? 'system-administrator' : 'platform-administrator');
 
         const draft = {
             name: user.name || '',
@@ -2739,8 +2950,11 @@ function showUserForm(mode, userId = null) {
             phone: fallbackPhone,
             department: user.department || '',
             accountType: inferredAccountType,
-            role: inferredAccountType === 'system-administrator' ? 'System Administrator' : (user.role || ''),
-            status: user.status || 'Active'
+            role: inferredAccountType === 'system-administrator' ? 'Super Admin' : (user.role || ''),
+            status: user.status || 'Active',
+            permissionSummary: user.permissionSummary || '',
+            photoUrl: getUserAvatarUrl(user.email || `user-${userId}`),
+            expiresOn: user.expiresOn || ''
         };
 
         state.userDraft = { ...defaultDraft, ...draft };
@@ -2748,22 +2962,43 @@ function showUserForm(mode, userId = null) {
         emailInput.value = draft.email;
         emailInput.readOnly = true;
         emailConfirmedInput.value = draft.email;
-        nameInput.value = draft.name;
-        phoneInput.value = draft.phone;
-        departmentInput.value = draft.department;
 
-        const hasRoleOption = Array.from(roleSelect.options).some(option => option.value === draft.role);
-        if (!hasRoleOption && draft.role && draft.role !== 'System Administrator') {
-            const fallbackOption = document.createElement('option');
-            fallbackOption.value = draft.role;
-            fallbackOption.textContent = draft.role;
-            roleSelect.appendChild(fallbackOption);
-        }
-        roleSelect.value = inferredAccountType === 'platform-administrator' ? draft.role : '';
-
-        accountTypeRadios.forEach(radio => {
-            radio.checked = radio.value === inferredAccountType;
+        updateUserInfoSummary({
+            email: draft.email,
+            name: draft.name,
+            phone: draft.phone,
+            department: draft.department
         });
+
+        if (editSummaryPanel) {
+            editSummaryPanel.classList.remove('hidden');
+            syncAccountEditLayout();
+        }
+
+        if (permissionsSummary) {
+            permissionsSummary.textContent = draft.permissionSummary || '';
+        }
+
+        if (expirationInput && draft.expiresOn) {
+            expirationInput.value = draft.expiresOn;
+        }
+
+        accountTypeSelect.value = inferredAccountType;
+
+        if (inferredAccountType === 'platform-administrator') {
+            roleSelect.disabled = false;
+            const hasRoleOption = Array.from(roleSelect.options).some(option => option.value === draft.role);
+            if (!hasRoleOption && draft.role && draft.role !== 'Super Admin') {
+                const fallbackOption = document.createElement('option');
+                fallbackOption.value = draft.role;
+                fallbackOption.textContent = draft.role;
+                roleSelect.appendChild(fallbackOption);
+            }
+            roleSelect.value = draft.role;
+        } else {
+            roleSelect.disabled = true;
+            roleSelect.value = '';
+        }
 
         const platformAccount = lookupPlatformAccount(draft.email) || {
             email: draft.email,
@@ -2783,91 +3018,124 @@ function showUserForm(mode, userId = null) {
         verifyBtn.disabled = true;
         verifyBtn.innerHTML = '<i class="fas fa-circle-check"></i> Verified';
 
+        if (registerBtn) {
+            registerBtn.disabled = false;
+        }
+
+        if (submitBtn) {
+            submitBtn.textContent = 'Update User';
+        }
+
         titleEl.textContent = 'Edit User Account';
-        subtitleEl.textContent = 'Update user details and account settings.';
+    subtitleEl.textContent = '';
+
+        initialStep = 3;
     } else {
-        titleEl.textContent = 'Add New User';
-        subtitleEl.textContent = 'Verify the OnRuf platform email to begin registration.';
+        if (submitBtn) {
+            submitBtn.textContent = 'Add User';
+        }
+    titleEl.textContent = 'Add New User';
+    subtitleEl.textContent = '';
+    if (editSummaryPanel) {
+        editSummaryPanel.classList.add('hidden');
+    }
+    syncAccountEditLayout();
     }
 
     listView.classList.add('hidden');
     formPage.classList.remove('hidden');
 
-    state.userFormStep = 1;
-    setUserFormStep(1);
-    focusUserFormStep(1);
+    state.userFormStep = initialStep;
+    setUserFormStep(initialStep);
+    focusUserFormStep(initialStep);
     updateAccountTypeUI();
+    updateUserFormProgressState();
+    updateBreadcrumb();
+
+    if (initialStep === 1) {
+        emailInput.focus();
+    }
 }
 
 function hideUserForm() {
     const formPage = document.getElementById('userFormPage');
     const listView = document.getElementById('usersListView');
     const form = document.getElementById('userForm');
-    const titleEl = document.getElementById('userFormTitle');
-    const subtitleEl = document.getElementById('userFormSubtitle');
-    const submitBtn = document.getElementById('userFormSubmitBtn');
-    const verifyBtn = document.getElementById('userVerifyBtn');
     const emailInput = document.getElementById('userEmail');
     const emailConfirmedInput = document.getElementById('userEmailConfirmed');
-    const accountTypeSelector = document.getElementById('userAccountTypeSelector');
     const roleSelect = document.getElementById('userRole');
+    const verifyBtn = document.getElementById('userVerifyBtn');
+    const submitBtn = document.getElementById('userFormSubmitBtn');
+    const registerBtn = document.getElementById('userReviewRegisterBtn');
+    const accountTypeSelect = document.getElementById('userAccountType');
+    const expirationInput = document.getElementById('userExpirationDate');
+    const titleEl = document.getElementById('userFormTitle');
+    const subtitleEl = document.getElementById('userFormSubtitle');
+    const editSummaryPanel = document.getElementById('userEditSummaryPanel');
 
     if (form) {
         form.reset();
     }
 
     resetUserVerification(true);
-    setVerificationBanner(null, '');
+    updateUserInfoSummary(null);
+    renderRolePermissionsPreview(null);
 
     if (emailInput) {
         emailInput.value = '';
         emailInput.readOnly = false;
     }
-
     if (emailConfirmedInput) {
         emailConfirmedInput.value = '';
     }
-
-    if (accountTypeSelector) {
-        const radios = accountTypeSelector.querySelectorAll('input[name="userAccountType"]');
-        radios.forEach(radio => {
-            radio.checked = false;
-        });
+    if (verifyBtn) {
+        verifyBtn.disabled = false;
+        verifyBtn.innerHTML = '<i class="fas fa-check-circle"></i> Verify';
     }
-
+    if (registerBtn) {
+        registerBtn.disabled = true;
+    }
+    if (accountTypeSelect) {
+        accountTypeSelect.value = '';
+    }
     if (roleSelect) {
         roleSelect.disabled = true;
         roleSelect.value = '';
     }
-
-    if (verifyBtn) {
-        verifyBtn.disabled = false;
-        verifyBtn.innerHTML = '<i class="fas fa-check-circle"></i> Check';
+    if (expirationInput) {
+        expirationInput.value = '';
     }
-
-    if (formPage) {
-        formPage.classList.add('hidden');
-    }
-    if (listView) {
-        listView.classList.remove('hidden');
+    if (submitBtn) {
+        submitBtn.textContent = 'Add User';
     }
     if (titleEl) {
         titleEl.textContent = 'Add New User';
     }
     if (subtitleEl) {
-        subtitleEl.textContent = 'Verify the OnRuf platform email to begin registration.';
+        subtitleEl.textContent = '';
     }
-    if (submitBtn) {
-        submitBtn.textContent = 'Add User';
+    if (editSummaryPanel) {
+        editSummaryPanel.classList.add('hidden');
     }
+
+    syncAccountEditLayout();
 
     state.userDraft = null;
     state.userVerification = null;
     state.editingUserId = null;
     state.userFormStep = 1;
+
     updateAccountTypeUI();
-    updateBreadcrumb();
     updateUserFormProgressState();
+    updateBreadcrumb();
+
+    if (formPage) {
+        formPage.classList.remove('editing-mode');
+        formPage.classList.add('hidden');
+    }
+    if (listView) {
+        listView.classList.remove('hidden');
+    }
 }
 
 function handleUserFormSubmit(event) {
@@ -2884,11 +3152,10 @@ function handleUserFormSubmit(event) {
         return;
     }
 
-    const normalizedEmail = normalizeEmail(draft.email);
     const isEditing = Boolean(state.editingUserId);
 
     if (!isEditing) {
-        const existingUser = users.find(user => normalizeEmail(user.email) === normalizedEmail);
+        const existingUser = findExistingUserByEmail(draft.email);
         if (existingUser) {
             showNotification('warning', 'This email already has an account in Users Management. Use the edit action instead.');
             return;
@@ -2905,6 +3172,8 @@ function handleUserFormSubmit(event) {
             user.role = draft.role;
             user.accountType = draft.accountType;
             user.status = draft.status || user.status || 'Active';
+            user.permissionSummary = draft.permissionSummary || '';
+            user.expiresOn = draft.expiresOn || '';
             showNotification('success', 'User account updated successfully.');
         }
     } else {
@@ -2920,7 +3189,9 @@ function handleUserFormSubmit(event) {
             accountType: draft.accountType,
             status: draft.status || 'Active',
             lastLogin: 'Never',
-            created: new Date().toLocaleDateString()
+            created: new Date().toLocaleDateString(),
+            permissionSummary: draft.permissionSummary || '',
+            expiresOn: draft.expiresOn || ''
         };
         users.unshift(newUser);
         showNotification('success', 'INF009: User account created and access email sent to the verified address.', 6000);
@@ -2931,14 +3202,9 @@ function handleUserFormSubmit(event) {
     updateUsersManagementCount();
     renderStats();
 
-    const searchInput = document.getElementById('userSearch');
     if (isEditing) {
-        const activeSearch = searchInput ? searchInput.value : '';
-        renderUsersTable(activeSearch, state.currentUserPage);
+        renderUsersTable(state.userSearchTerm, state.currentUserPage);
     } else {
-        if (searchInput) {
-            searchInput.value = '';
-        }
         renderUsersTable('', 1);
     }
 
@@ -2981,8 +3247,7 @@ async function toggleRoleStatus(roleId) {
 async function toggleUserStatus(userId) {
     const user = users.find(item => item.id === userId);
     if (!user) return;
-    const searchInput = document.getElementById('userSearch');
-    const activeSearch = searchInput ? searchInput.value : '';
+    const activeSearch = state.userSearchTerm || '';
 
     if (user.status === 'Active') {
         const confirmed = await showUserConfirm(
@@ -3103,32 +3368,45 @@ function handleRoleSubmit(event) {
     showNotification('success', 'User Role created successfully and appears in User Roles.');
 }
 
-function renderUsersTable(searchTerm = '', page = state.currentUserPage) {
+function renderUsersTable(searchTerm = state.userSearchTerm, page = state.currentUserPage) {
     const tbody = document.getElementById('usersTableBody');
     if (!tbody) return;
-    const term = searchTerm.trim().toLowerCase();
-    const filtered = term
-        ? users.filter(user => `${user.name} ${user.email} ${user.role} ${user.status} ${user.phone || ''} ${user.department || ''}`.toLowerCase().includes(term))
+    const rawTerm = typeof searchTerm === 'string' ? searchTerm : '';
+    const trimmedTerm = rawTerm.trim();
+    const normalizedTerm = trimmedTerm.toLowerCase();
+
+    let targetPage = page;
+    if (state.userSearchTerm !== trimmedTerm) {
+        targetPage = 1;
+    }
+    state.userSearchTerm = trimmedTerm;
+
+    const searchInput = document.getElementById('userSearch');
+    if (searchInput && searchInput.value !== trimmedTerm) {
+        searchInput.value = trimmedTerm;
+    }
+
+    const filtered = normalizedTerm
+        ? users.filter(user => `${user.name} ${user.email} ${user.role} ${user.status} ${user.phone || ''} ${user.department || ''}`.toLowerCase().includes(normalizedTerm))
         : users;
 
     const totalPages = Math.max(1, Math.ceil(filtered.length / state.usersPerPage));
-    state.currentUserPage = Math.min(Math.max(page, 1), totalPages);
+    state.currentUserPage = Math.min(Math.max(targetPage, 1), totalPages);
     const startIndex = (state.currentUserPage - 1) * state.usersPerPage;
     const visibleUsers = filtered.slice(startIndex, startIndex + state.usersPerPage);
 
     if (!visibleUsers.length) {
-        tbody.innerHTML = '<tr><td colspan="7">No users match the current search filter.</td></tr>';
-        return;
-    }
-
-    let index = startIndex + 1;
-    tbody.innerHTML = visibleUsers.map(user => {
+        tbody.innerHTML = '<tr><td colspan="8">No users match the current search filter.</td></tr>';
+    } else {
+        let index = startIndex + 1;
+        tbody.innerHTML = visibleUsers.map(user => {
         const rawStatus = (user.status || 'Active').toLowerCase();
         const isActive = rawStatus === 'active';
         const displayStatus = isActive ? 'Active' : 'Inactive';
         const accountType = resolveUserAccountType(user);
         const accountTypeLabel = mapAccountTypeLabel(accountType);
         const accountTypeClass = mapAccountTypeClass(accountType);
+        const expirationLabel = user.expiresOn ? formatDateForDisplay(user.expiresOn) : '—';
         return `
         <tr>
             <td>${index++}</td>
@@ -3150,6 +3428,7 @@ function renderUsersTable(searchTerm = '', page = state.currentUserPage) {
             <td><span class="status-badge status-${isActive ? 'active' : 'inactive'}">${displayStatus}</span></td>
             <td>${user.lastLogin}</td>
             <td>${user.created}</td>
+            <td>${expirationLabel}</td>
             <td>
                 <div class="action-group">
                     <button class="action-btn edit" onclick="showUserForm('edit', ${user.id})"><i class="fas fa-pen"></i></button>
@@ -3160,13 +3439,22 @@ function renderUsersTable(searchTerm = '', page = state.currentUserPage) {
             </td>
         </tr>
     `}).join('');
+    }
     renderUsersPagination(totalPages, filtered.length);
 }
 
 function exportUsers() {
     const rows = [
-        ['Name', 'Email', 'Role', 'Status', 'Last Login', 'Created'],
-        ...users.map(user => [user.name, user.email, user.role, user.status, user.lastLogin, user.created])
+        ['Name', 'Email', 'Role', 'Status', 'Last Login', 'Created', 'Account Expiration'],
+        ...users.map(user => [
+            user.name,
+            user.email,
+            user.role,
+            user.status,
+            user.lastLogin,
+            user.created,
+            user.expiresOn || ''
+        ])
     ];
     const csv = rows.map(row => row.join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -3209,4 +3497,6 @@ function viewIntegrationRoadmap() {
 function scheduleIntegrationWorkshop() {
     alert('Scheduling workshop with finance stakeholders.');
 }
+
+document.addEventListener('DOMContentLoaded', initializeApp);
 

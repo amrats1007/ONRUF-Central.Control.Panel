@@ -256,7 +256,7 @@
                                             <th>Permissions</th>
                                             <th>Status</th>
                                             <th>Actions</th>
-                                        <td class="role-column">
+                                        </tr>
                                     </thead>
                                     <tbody id="rolesTableBody">
                                         <!-- roles injected by script -->
@@ -271,7 +271,7 @@
                                 <div style="display:flex; justify-content: space-between; align-items:center;">
                                     <div>
                                         <h3 id="roleFormTitle" style="margin:0 0 4px;">Add New Role</h3>
-                                        <p id="roleFormSubtitle" class="section-subtitle" style="margin:0;">Define permissions and assign default usage limits.</p>
+                                        <p id="roleFormSubtitle" class="section-subtitle" style="margin:0;"></p>
                                     </div>
                                 </div>
                                 <form id="roleForm" class="form-grid">
@@ -363,6 +363,7 @@
                                             <th>Status</th>
                                             <th>Last Login</th>
                                             <th>Created</th>
+                                            <th>Account Expiration</th>
                                             <th>Actions</th>
                                         </tr>
                                     </thead>
@@ -398,7 +399,7 @@
                                 <div class="user-form-header">
                                     <div>
                                         <h3 id="userFormTitle">Add New User</h3>
-                                        <p id="userFormSubtitle" class="section-subtitle" style="margin:6px 0 0;">Enter user details to create a new account.</p>
+                                        <p id="userFormSubtitle" class="section-subtitle" style="margin:6px 0 0;"></p>
                                     </div>
                                 </div>
 
@@ -408,21 +409,21 @@
                                             <span class="step-number">1</span>
                                             <div>
                                                 <div class="step-title">Email Verification</div>
-                                                <div class="step-caption">Confirm platform account</div>
+                                                <div class="step-caption">Confirm ONRUF Account</div>
                                             </div>
                                         </li>
                                         <li class="step" data-step="2">
                                             <span class="step-number">2</span>
                                             <div>
                                                 <div class="step-title">User Information</div>
-                                                <div class="step-caption">Review imported details</div>
+                                                <div class="step-caption">Review User Info</div>
                                             </div>
                                         </li>
                                         <li class="step" data-step="3">
                                             <span class="step-number">3</span>
                                             <div>
                                                 <div class="step-title">Account Setup</div>
-                                                <div class="step-caption">Assign dashboard access</div>
+                                                <div class="step-caption">Assign Dashboard Access</div>
                                             </div>
                                         </li>
                                     </ol>
@@ -430,76 +431,124 @@
                                     <form id="userForm" class="user-form-content">
                                     <section class="user-form-step active" data-step="1">
                                         <div class="form-group">
-                                            <label class="form-label" for="userEmail">OnRuf Platform Email</label>
+                                            <label class="form-label required" for="userEmail">ONRUF Account Email</label>
                                             <div class="verification-row">
-                                                <input type="email" class="form-input" id="userEmail" placeholder="e.g. ahmed.hassan@onruf.com" required />
-                                                <button type="button" class="btn btn-primary" id="userVerifyBtn">
-                                                    <i class="fas fa-check-circle"></i>
-                                                    Check
-                                                </button>
+                                                <input type="email" class="form-input" id="userEmail" placeholder="e.g. ahmed.hassan@onrev.com" required aria-required="true" />
+                                                <p class="helper-text">Enter the email address used on the ONRUF. The system must verify it before you can continue.</p>
+                                                <div class="verification-actions">
+                                                    <button type="button" class="btn btn-outline" id="userVerificationCancelBtn">
+                                                        <i class="fas fa-xmark"></i>
+                                                        Cancel
+                                                    </button>
+                                                    <button type="button" class="btn btn-primary" id="userVerifyBtn">
+                                                        <i class="fas fa-check-circle"></i>
+                                                        Verify
+                                                    </button>
+                                                </div>
                                             </div>
-                                            <p class="helper-text">Enter the email address used on the OnRuf platform. The system will verify it before you can proceed.</p>
                                         </div>
                                         <div class="info-banner hidden" id="userVerificationBanner" role="status"></div>
                                     </section>
 
                                     <section class="user-form-step" data-step="2">
-                                        <p class="step-intro">We imported the platform profile. Confirm the details before registering the account.</p>
-                                        <div class="form-grid form-grid-half">
-                                            <div class="form-group">
-                                                <label class="form-label" for="userName">Full Name</label>
-                                                <input type="text" class="form-input" id="userName" placeholder="e.g. Ahmed Hassan" required />
+                                        <input type="hidden" id="userEmailConfirmed" />
+                                        <div class="user-review-card" aria-live="polite">
+                                            <div class="user-review-identity">
+                                                <img id="userPreviewPhoto" src="https://i.pravatar.cc/120?u=placeholder" alt="User avatar" class="user-review-avatar" />
+                                                <div class="user-review-meta">
+                                                    <div class="user-review-field">
+                                                        <span class="user-review-label">Name:</span>
+                                                        <span class="user-review-value user-review-name" id="userPreviewName">—</span>
+                                                    </div>
+                                                    <div class="user-review-field">
+                                                        <span class="user-review-label">Email:</span>
+                                                        <span class="user-review-value user-review-email" id="userPreviewEmail">—</span>
+                                                    </div>
+                                                    <div class="user-review-field">
+                                                        <span class="user-review-label">Phone:</span>
+                                                        <span class="user-review-value" id="userPreviewPhone">—</span>
+                                                    </div>
+                                                </div>
                                             </div>
-                                            <div class="form-group">
-                                                <label class="form-label" for="userPhone">Mobile Number</label>
-                                                <input type="tel" class="form-input" id="userPhone" placeholder="e.g. +9665XXXXXXX" required />
-                                            </div>
-                                            <div class="form-group">
-                                                <label class="form-label" for="userEmailConfirmed">Verified Email</label>
-                                                <input type="email" class="form-input" id="userEmailConfirmed" readonly />
-                                            </div>
-                                            <div class="form-group">
-                                                <label class="form-label" for="userDepartment">Department / Team</label>
-                                                <input type="text" class="form-input" id="userDepartment" placeholder="e.g. Malqaa Field Operations" />
+                                            <div class="step-inline-actions">
+                                                <button type="button" class="btn btn-outline" id="userReviewCancelBtn">Cancel</button>
+                                                <button type="button" class="btn btn-primary" id="userReviewRegisterBtn">
+                                                    <i class="fas fa-id-card"></i>
+                                                    Register
+                                                </button>
                                             </div>
                                         </div>
                                     </section>
 
                                     <section class="user-form-step" data-step="3">
-                                        <div class="form-group">
-                                            <label class="form-label">Account Type</label>
-                                            <div class="account-type-selector" id="userAccountTypeSelector">
-                                                <label class="account-type-card">
-                                                    <input type="radio" name="userAccountType" value="system-administrator">
-                                                    <span class="card-title">System Administrator</span>
-                                                    <span class="card-caption">Full access to all dashboard modules.</span>
-                                                </label>
-                                                <label class="account-type-card">
-                                                    <input type="radio" name="userAccountType" value="platform-administrator">
-                                                    <span class="card-title">Platform Administrator</span>
-                                                    <span class="card-caption">Requires selecting a registered role.</span>
-                                                </label>
+                                        <div class="account-edit-grid no-summary">
+                                            <aside class="user-edit-summary hidden" id="userEditSummaryPanel" aria-label="Current user profile">
+                                                <div class="user-edit-card" aria-live="polite">
+                                                    <div class="user-edit-avatar">
+                                                        <img id="userEditPreviewPhoto" src="https://i.pravatar.cc/120?u=placeholder" alt="User avatar" />
+                                                    </div>
+                                                    <div class="user-edit-card-body">
+                                                        <h4 class="user-edit-name" id="userEditPreviewName">—</h4>
+                                                        <div class="user-edit-card-fields">
+                                                            <span class="user-edit-card-field" id="userEditPreviewEmail">—</span>
+                                                            <span class="user-edit-card-field" id="userEditPreviewPhone">—</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </aside>
+
+                                            <div class="account-edit-fields">
+                                                <div class="account-edit-card">
+                                                    <div class="account-edit-card-header">
+                                                        <div>
+                                                            <h4 class="account-edit-title">Account Info</h4>
+                                                        </div>
+                                                    </div>
+                                                    <div class="account-edit-section">
+                                                        <div class="form-group">
+                                                            <label class="form-label required" for="userAccountType" id="userAccountTypeLabel">Account Type</label>
+                                                            <select class="form-input" id="userAccountType" required aria-required="true">
+                                                                <option value="">Select account type</option>
+                                                                <option value="system-administrator">Super Admin</option>
+                                                                <option value="platform-administrator">Admin</option>
+                                                            </select>
+                                                        </div>
+                                                        <div class="form-group" id="userRoleGroup">
+                                                            <label class="form-label" for="userRole" id="userRoleLabel">User Role</label>
+                                                            <select class="form-input" id="userRole" disabled>
+                                                                <option value="">Select a role</option>
+                                                            </select>
+                                                        </div>
+                                                        <div class="form-group" id="userExpirationGroup">
+                                                            <label class="form-label" for="userExpirationDate">Account Expiration</label>
+                                                            <div class="input-with-icon">
+                                                                <input type="date" class="form-input" id="userExpirationDate" />
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div class="account-edit-card">
+                                                    <h4 class="account-edit-title">Role Permissions Preview</h4>
+                                                    <div class="info-banner neutral" id="userPermissionsSummary">
+                                                        Select an account type to see the assigned permissions.
+                                                    </div>
+                                                    <div class="permissions-preview hidden" id="userRolePermissionsPreview">
+                                                        <div class="permissions-preview-header">
+                                                            <i class="fas fa-shield-check"></i>
+                                                            <span>Role Permissions</span>
+                                                        </div>
+                                                        <div class="permissions-preview-body" id="userRolePermissionsList">
+                                                            <p class="permissions-preview-placeholder">Choose a role to preview its permissions. Permissions cannot be edited here.</p>
+                                                        </div>
+                                                    </div>
+                                                </div>
                                             </div>
-                                        </div>
-                                        <div class="form-group" id="userRoleGroup">
-                                            <label class="form-label" for="userRole">User Role</label>
-                                            <select class="form-input" id="userRole" disabled>
-                                                <option value="">Select a role</option>
-                                            </select>
-                                        </div>
-                                        <div class="info-banner neutral" id="userPermissionsSummary">
-                                            Select an account type to see the assigned permissions.
-                                        </div>
-                                        <div class="info-banner neutral" id="userWelcomeInfo">
-                                            <i class="fas fa-envelope-open-text"></i>
-                                            The system will send an email with access details once the user is added.
                                         </div>
                                     </section>
 
-                                    <div class="form-actions">
-                                        <button type="button" class="btn btn-outline" id="userFormBackStepBtn">Back</button>
-                                        <span class="form-actions-spacer"></span>
-                                        <button type="button" class="btn btn-outline" id="userFormCancelBtn">Cancel</button>
+                                    <div class="form-actions" id="userFormActions">
+                                        <button type="button" class="btn btn-outline hidden" id="userFormCancelStep3Btn">Cancel</button>
                                         <button type="submit" class="btn btn-primary hidden" id="userFormSubmitBtn">Add User</button>
                                     </div>
                                 </form>
