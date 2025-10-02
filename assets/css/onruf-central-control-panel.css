@@ -1033,6 +1033,7 @@ body.dark-mode .operation-card {
 
 .roles-header .search-box {
     flex: 2;
+    margin-bottom: 0;
 }
 
 .users-header {
@@ -1049,6 +1050,7 @@ body.dark-mode .operation-card {
 
 .users-header .search-box {
     flex: 2;
+    margin-bottom: 0;
 }
 
 .roles-actions,
@@ -1500,11 +1502,6 @@ body.dark-mode .role-detail-modal {
     justify-content: space-between;
     align-items: flex-start;
     gap: 18px;
-    border-bottom: 1px solid var(--border-light);
-}
-
-body.dark-mode .role-detail-modal header {
-    border-bottom-color: var(--border-dark);
 }
 
 .role-detail-modal header h3 {

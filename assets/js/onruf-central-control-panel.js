@@ -965,7 +965,19 @@ function initializeApp() {
     setupRoleAlertOverlay();
     setupUserAlertOverlay();
 
+    applyRequiredFieldIndicators();
     syncAccountEditLayout();
+}
+
+function applyRequiredFieldIndicators() {
+    const requiredFields = document.querySelectorAll('input[required], select[required], textarea[required]');
+    requiredFields.forEach(field => {
+        const explicitLabel = field.id ? document.querySelector(`label[for="${field.id}"]`) : null;
+        const candidateLabel = explicitLabel || field.closest('label');
+        if (candidateLabel && !candidateLabel.classList.contains('required')) {
+            candidateLabel.classList.add('required');
+        }
+    });
 }
 
 function setupEventListeners() {
@@ -1491,7 +1503,7 @@ function renderRolesTable(page = state.currentRolePage) {
 
     if (!visibleRoles.length) {
         tbody.innerHTML = state.roleSearchTerm
-            ? '<tr><td colspan="7">No roles match the current search.</td></tr>'
+            ? '<tr><td colspan="7">There is no Data Available</td></tr>'
             : '<tr><td colspan="7">No roles found. Use the "Add New Role" button to create one.</td></tr>';
     } else {
         let index = (state.currentRolePage - 1) * state.rolesPerPage + 1;
@@ -1911,8 +1923,7 @@ async function handleUserEmailVerification() {
     const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
     if (!emailPattern.test(email)) {
-        showNotification('error', 'Please enter a valid Onrev platform email before verifying.', 5000);
-        await showUserAlert('Please enter a valid Onrev platform email before verifying.');
+        showNotification('error', 'Please Enter a Valid ONRUF Account Email Before Verifying.', 5000);
         emailInput.focus();
         return;
     }
@@ -1930,8 +1941,7 @@ async function handleUserEmailVerification() {
         };
 
         const duplicateName = duplicateUser.name || duplicateUser.email;
-        setVerificationBanner('error', 'This user already has an ONRUF Control Panel account. Use the edit action to update access.');
-        showNotification('error', `${duplicateName} is already registered in Users Management. Use the edit action to manage their account.`, 6500);
+        showNotification('error', 'Email Already Registered', 6500);
         updateUserFormProgressState();
         emailInput.focus();
         return;
@@ -1957,8 +1967,7 @@ async function handleUserEmailVerification() {
 
     if (!account) {
         state.userVerification = { status: 'not-found', email: normalizedEmail };
-        setVerificationBanner('error', 'No active Onrev platform account was found for this email.');
-        await showUserAlert('No active Onrev platform account was found for this email.');
+    showNotification('error', 'Email not Associated with an Active ONRUF Account', 6500);
         updateUserFormProgressState();
     } else if (account.status !== 'active') {
         state.userVerification = { status: account.status, email: normalizedEmail, account };
@@ -2873,7 +2882,8 @@ function showUserForm(mode, userId = null) {
     formPage.classList.toggle('editing-mode', mode === 'edit');
 
     roleSelect.innerHTML = '<option value="">Select a role</option>';
-    roles.forEach(role => {
+    const activeRoles = roles.filter(role => (role.status || 'active').toLowerCase() === 'active');
+    activeRoles.forEach(role => {
         const option = document.createElement('option');
         option.value = role.name;
         option.textContent = role.name;
@@ -3194,7 +3204,7 @@ function handleUserFormSubmit(event) {
             expiresOn: draft.expiresOn || ''
         };
         users.unshift(newUser);
-        showNotification('success', 'INF009: User account created and access email sent to the verified address.', 6000);
+    showNotification('success', 'User Account Created Successfully', 6000);
     }
 
     saveUsersToStorage();
@@ -3227,7 +3237,6 @@ async function toggleRoleStatus(roleId) {
         saveRolesToStorage();
         renderRolesTable(state.currentRolePage);
         showNotification('success', 'User Role Disabled Successfully');
-        await showRoleAlert('User Role Disabled Successfully');
     } else {
         const confirmed = await showRoleConfirm(
             'Are You Sure You Want to Enable the User Role Again?',
@@ -3240,7 +3249,6 @@ async function toggleRoleStatus(roleId) {
         saveRolesToStorage();
         renderRolesTable(state.currentRolePage);
         showNotification('success', 'User Role has been Successfully Enabled');
-        await showRoleAlert('User Role has been Successfully Enabled');
     }
 }
 
@@ -3261,7 +3269,6 @@ async function toggleUserStatus(userId) {
         renderUsersTable(activeSearch, state.currentUserPage);
         renderStats();
         showNotification('success', 'User Account Deactivated Successfully');
-        await showUserAlert('User Account Deactivated Successfully');
     } else {
         const confirmed = await showUserConfirm(
             'Are You Sure You Want to Activate the User Account?',
@@ -3274,7 +3281,6 @@ async function toggleUserStatus(userId) {
         renderUsersTable(activeSearch, state.currentUserPage);
         renderStats();
         showNotification('success', 'User Account Activated Successfully');
-        await showUserAlert('User Account Activated Successfully');
     }
 }
 
@@ -3365,7 +3371,7 @@ function handleRoleSubmit(event) {
     updateUserRolesCount();
     renderRolesTable(1);
     hideRoleBuilder();
-    showNotification('success', 'User Role created successfully and appears in User Roles.');
+    showNotification('success', 'User Role Added Successfully');
 }
 
 function renderUsersTable(searchTerm = state.userSearchTerm, page = state.currentUserPage) {
@@ -3396,7 +3402,7 @@ function renderUsersTable(searchTerm = state.userSearchTerm, page = state.curren
     const visibleUsers = filtered.slice(startIndex, startIndex + state.usersPerPage);
 
     if (!visibleUsers.length) {
-        tbody.innerHTML = '<tr><td colspan="8">No users match the current search filter.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8">There is no Data Available</td></tr>';
     } else {
         let index = startIndex + 1;
         tbody.innerHTML = visibleUsers.map(user => {
