@@ -11,6 +11,15 @@
 
 Open `index.html` in a modern browser. The page now pulls styling and behaviour from the files in `assets/`, so keep the relative directory structure intact when hosting or sharing the project.
 
+### Default credentials
+
+After the initial seed reset completes, the environment provides a super-administrator account you can use to sign in immediately:
+
+- **Email:** `superadmin@onruf.com`
+- **Password:** `Admin@123`
+
+Once signed in you can update the profile or create additional users through the control panel.
+
 ## Data persistence
 
 - Roles you create, edit, or toggle are saved locally in the browser via `localStorage`. Refreshing the page will retain your latest role directory.

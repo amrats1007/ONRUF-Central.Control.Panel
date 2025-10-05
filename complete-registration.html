@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Complete Your OnRuf Registration</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" integrity="sha512-ol1rVnz04ZuBsCMcNac1P0gN5LkJx+4gt749axO+jYti7zHPg5jaAQEDnJWrt6n0ela0Fz0UlYJU8m0Iw2nDNw==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <link rel="stylesheet" href="assets/css/onruf-auth.css">
+</head>
+<body class="auth-body" data-auth-page="registration">
+    <div class="auth-shell registration-wrapper">
+        <div class="registration-card" aria-live="polite">
+            <header class="registration-headline">
+                <div class="status-pill" id="registrationStatusPill">
+                    <i class="fas fa-paper-plane"></i>
+                    Invitation received
+                </div>
+                <h2>Welcome to OnRuf Central Control</h2>
+                <p id="registrationHeadline">Verify your account details to activate your access to the control panel.</p>
+            </header>
+
+            <div id="registrationAlertContainer" class="hidden"></div>
+
+            <div class="registration-layout">
+                <section class="registration-form" aria-labelledby="accountInfoHeading">
+                    <div id="registrationStepAccount">
+                        <h3 id="accountInfoHeading">Step 1 · Confirm account information</h3>
+                        <form id="registrationAccountForm" class="registration-form" novalidate>
+                            <fieldset>
+                                <legend class="sr-only">Personal details</legend>
+                                <div class="registration-grid">
+                                    <div class="form-group">
+                                        <label for="registrationFirstName" class="form-label">First name</label>
+                                        <input type="text" id="registrationFirstName" class="form-input" autocomplete="given-name" required aria-required="true" placeholder="Sara">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="registrationLastName" class="form-label">Last name</label>
+                                        <input type="text" id="registrationLastName" class="form-input" autocomplete="family-name" required aria-required="true" placeholder="Al-Qahtani">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="registrationPhone" class="form-label">Phone number</label>
+                                        <input type="tel" id="registrationPhone" class="form-input" autocomplete="tel" required aria-required="true" placeholder="+9665XXXXXXXX">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="registrationEmailDisplay" class="form-label">Email address</label>
+                                        <input type="email" id="registrationEmailDisplay" class="form-input" readonly>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="registrationPassword" class="form-label">Create password</label>
+                                        <div class="input-with-toggle">
+                                            <input type="password" id="registrationPassword" class="form-input" autocomplete="new-password" required aria-required="true" placeholder="Minimum 8 characters">
+                                            <button type="button" class="input-toggle" data-toggle-target="registrationPassword" aria-label="Show password">
+                                                <i class="fas fa-eye"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="registrationPasswordConfirm" class="form-label">Confirm password</label>
+                                        <div class="input-with-toggle">
+                                            <input type="password" id="registrationPasswordConfirm" class="form-input" autocomplete="new-password" required aria-required="true" placeholder="Repeat your password">
+                                            <button type="button" class="input-toggle" data-toggle-target="registrationPasswordConfirm" aria-label="Show password">
+                                                <i class="fas fa-eye"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label for="registrationDepartment" class="form-label">Department (optional)</label>
+                                    <input type="text" id="registrationDepartment" class="form-input" placeholder="e.g. Municipal Compliance">
+                                </div>
+                            </fieldset>
+                            <button type="submit" class="btn btn-primary" id="registrationAccountSubmit">
+                                <span>Submit details &amp; send OTP</span>
+                                <i class="fas fa-paper-plane"></i>
+                            </button>
+                        </form>
+                    </div>
+
+                    <div id="registrationStepOtp" class="hidden">
+                        <h3>Step 2 · Verify with one-time password</h3>
+                        <div class="otp-panel" role="group" aria-labelledby="otpHeading">
+                            <h3 id="otpHeading">Enter the six-digit verification code</h3>
+                            <p id="otpDescription">We've sent a code to <strong id="otpEmailLabel">user@email.com</strong>. Enter it below to activate your access.</p>
+                            <form id="registrationOtpForm" class="otp-group" novalidate>
+                                <div class="otp-inputs" id="otpInputGroup">
+                                    <input type="text" inputmode="numeric" pattern="\d" maxlength="1" aria-label="Digit 1" required>
+                                    <input type="text" inputmode="numeric" pattern="\d" maxlength="1" aria-label="Digit 2" required>
+                                    <input type="text" inputmode="numeric" pattern="\d" maxlength="1" aria-label="Digit 3" required>
+                                    <input type="text" inputmode="numeric" pattern="\d" maxlength="1" aria-label="Digit 4" required>
+                                    <input type="text" inputmode="numeric" pattern="\d" maxlength="1" aria-label="Digit 5" required>
+                                    <input type="text" inputmode="numeric" pattern="\d" maxlength="1" aria-label="Digit 6" required>
+                                </div>
+                                <div class="otp-actions">
+                                    <button type="button" class="resend-btn" id="registrationResendOtp">
+                                        <i class="fas fa-envelope-open-text"></i>
+                                        Resend code
+                                    </button>
+                                </div>
+                                <button type="submit" class="btn btn-primary" id="registrationOtpSubmit">
+                                    <span>Verify &amp; activate</span>
+                                    <i class="fas fa-circle-check"></i>
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+
+                    <div id="registrationStepSuccess" class="hidden">
+                        <div class="registration-success">
+                            <i class="fas fa-check-circle"></i>
+                            <h3>You're all set!</h3>
+                            <p>Your OnRuf Control account is now active. Use your new credentials to sign in.</p>
+                            <a href="login.html" class="btn btn-primary" id="registrationSuccessLogin">
+                                <span>Proceed to sign in</span>
+                                <i class="fas fa-arrow-right"></i>
+                            </a>
+                        </div>
+                    </div>
+                </section>
+
+                <aside class="registration-summary" aria-live="polite" id="registrationSummary">
+                    <h3>Invitation summary</h3>
+                    <div class="summary-row">
+                        <span>Invitation for</span>
+                        <strong id="summaryName">—</strong>
+                    </div>
+                    <div class="summary-row">
+                        <span>Email</span>
+                        <strong id="summaryEmail">—</strong>
+                    </div>
+                    <div class="summary-row">
+                        <span>Organization</span>
+                        <strong>OnRuf Control</strong>
+                    </div>
+                    <div class="summary-row">
+                        <span>Access level</span>
+                        <strong id="summaryRole">Pending role</strong>
+                    </div>
+                    <div class="summary-row">
+                        <span>Invitation sent</span>
+                        <strong id="summarySentAt">—</strong>
+                    </div>
+                    <div class="summary-row">
+                        <span>OTP status</span>
+                        <strong id="summaryOtpStatus">Awaiting submission</strong>
+                    </div>
+                </aside>
+            </div>
+        </div>
+    </div>
+
+    <div class="auth-toast hidden" id="authToast" role="alert" aria-live="assertive"></div>
+
+    <script src="assets/js/onruf-auth.js" defer></script>
+</body>
+</html>

@@ -459,10 +459,6 @@ body.dark-mode .sub-app.active {
     display: none !important;
 }
 
-.role-builder {
-    margin-top: 16px;
-}
-
 .permission-matrix {
     display: flex;
     flex-direction: column;
@@ -537,7 +533,7 @@ body.dark-mode .permission-section-toggle span {
 
 #globalNotificationArea {
     position: fixed;
-    top: 140px;
+    top: 72px;
     left: 50%;
     transform: translateX(-50%);
     width: min(520px, calc(100% - 32px));
@@ -628,6 +624,36 @@ body.dark-mode .confirm-dialog {
     margin: 0 0 20px;
     font-size: 16px;
     font-weight: 500;
+}
+
+.confirm-dialog .confirm-input {
+    width: 100%;
+    padding: 10px 12px;
+    border-radius: 10px;
+    border: 1px solid var(--border-light);
+    font-size: 15px;
+    margin: 0 0 16px;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.confirm-dialog .prompt-error {
+    margin: -4px 0 16px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--danger);
+    letter-spacing: 0.02em;
+}
+
+.confirm-dialog .confirm-input:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+    outline: none;
+}
+
+body.dark-mode .confirm-dialog .confirm-input {
+    border-color: rgba(148, 163, 184, 0.4);
+    background: rgba(15, 23, 42, 0.35);
+    color: inherit;
 }
 
 .confirm-actions {
@@ -1097,9 +1123,28 @@ body.dark-mode .operation-card {
     color: var(--muted-light);
 }
 
+.topbar-signout {
+    height: 40px;
+    padding: 0 18px;
+    border-radius: 12px;
+    transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
+.topbar-signout:hover {
+    color: var(--primary);
+    border-color: rgba(37, 99, 235, 0.5);
+    background: rgba(37, 99, 235, 0.08);
+}
+
 body.dark-mode .btn-outline {
     border-color: var(--border-dark);
     color: var(--muted-dark);
+}
+
+body.dark-mode .topbar-signout:hover {
+    color: var(--primary-dark);
+    border-color: rgba(96, 165, 250, 0.6);
+    background: rgba(96, 165, 250, 0.12);
 }
 
 #roleSearchBtn {
@@ -1425,6 +1470,19 @@ body.dark-mode .role-alt-name {
 .action-btn.activate {
     background: rgba(16, 185, 129, 0.15);
     color: var(--success);
+}
+
+.action-btn.delete {
+    background: rgba(239, 68, 68, 0.16);
+    color: #ef4444;
+    box-shadow: 0 4px 14px rgba(239, 68, 68, 0.18);
+}
+
+.action-btn.delete:hover,
+.action-btn.delete:focus-visible {
+    transform: translateY(-1px);
+    box-shadow: 0 8px 20px rgba(239, 68, 68, 0.28);
+    outline: none;
 }
 
 .permission-cell {
@@ -2521,6 +2579,24 @@ body.dark-mode .form-card {
 .form-label.required::after {
     content: ' *';
     color: var(--danger);
+}
+
+.form-label-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.form-label-row .form-label {
+    margin: 0;
+}
+
+.form-validation-error {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--danger);
+    letter-spacing: 0.02em;
 }
 
 body.dark-mode .form-label {

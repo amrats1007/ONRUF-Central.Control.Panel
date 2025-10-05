@@ -14,113 +14,198 @@ const state = {
     userDraft: null,
     activeRoleDetailId: null,
     permissionCatalog: [],
-    userVerification: null
+    registrationFlow: {
+        otp: null,
+        userId: null,
+        expiresAt: null,
+        token: null,
+        stage: 'prepared',
+        link: null
+    },
+    activeSession: null
 };
 
 const permissionActions = [
-    { id: 'view', label: 'View only' },
-    { id: 'manage', label: 'Manage records' },
-    { id: 'admin', label: 'Admin & configure' }
+    { id: 'view', label: 'View' },
+    { id: 'enter', label: 'Enter' },
+    { id: 'modify', label: 'Modify' },
+    { id: 'delete', label: 'Delete' }
 ];
 
 const permissionSectionsTemplate = [
     {
-        id: 'platform-oversight',
-        label: 'Platform Oversight',
-        description: 'Monitor cross-tenant platform health and compliance.',
+        id: 'dashboard',
+        label: 'Dashboard',
+        description: 'Executive KPIs and operational monitoring for the platform.',
         apps: [
             {
-                id: 'operations-console',
-                label: 'Operations Console',
-                description: 'Daily operations feed, incidents, and live status widgets.',
-                defaultAction: 'manage'
-            },
-            {
-                id: 'sustainability-dashboard',
-                label: 'Sustainability Dashboard',
-                description: 'Environmental KPIs, emission footprints, and waste targets.',
+                id: 'dashboard-executive',
+                label: 'Executive Overview',
+                description: 'Top-line performance tiles and leadership scorecards.',
                 defaultAction: 'view'
             },
             {
-                id: 'governance-insights',
-                label: 'Governance Insights',
-                description: 'Audit trails, policy adherence, and exception reporting.',
-                defaultAction: 'admin'
-            }
-        ]
-    },
-    {
-        id: 'tenant-operations',
-        label: 'Tenant Operations',
-        description: 'Coordinate onboarding, inspections, and violation case work.',
-        apps: [
-            {
-                id: 'tenant-directory',
-                label: 'Tenant Directory',
-                description: 'Primary tenant records, health status, and contact references.',
-                defaultAction: 'manage'
-            },
-            {
-                id: 'inspection-scheduler',
-                label: 'Inspection Scheduler',
-                description: 'Plan field visits, assign inspectors, and monitor progress.',
-                defaultAction: 'manage'
-            },
-            {
-                id: 'violation-workbench',
-                label: 'Violation Workbench',
-                description: 'Casework, appeals, evidence, and escalation handling.',
-                defaultAction: 'admin'
-            }
-        ]
-    },
-    {
-        id: 'business-performance',
-        label: 'Business Performance',
-        description: 'Track revenue, adoption, and SLA outcomes across segments.',
-        apps: [
-            {
-                id: 'revenue-analytics',
-                label: 'Revenue Analytics',
-                description: 'Recurring revenue, renewals, and growth pacing dashboards.',
-                defaultAction: 'manage'
-            },
-            {
-                id: 'engagement-hub',
-                label: 'Engagement Hub',
-                description: 'Tenant usage, satisfaction surveys, and playbooks.',
-                defaultAction: 'manage'
-            },
-            {
-                id: 'sla-monitor',
-                label: 'SLA Monitor',
-                description: 'Real-time SLA alerts, root causes, and mitigation history.',
+                id: 'dashboard-operations',
+                label: 'Operational Insights',
+                description: 'Field team utilisation, SLA status, and backlog trends.',
                 defaultAction: 'view'
             }
         ]
     },
     {
-        id: 'platform-administration',
-        label: 'Platform Administration',
-        description: 'Configure roles, automations, and API integrations.',
+        id: 'users',
+        label: 'Users',
+        description: 'Role templates and access provisioning for platform staff.',
         apps: [
             {
-                id: 'role-governance',
-                label: 'Role Governance',
-                description: 'Role templates, permission guardrails, and audits.',
-                defaultAction: 'admin'
+                id: 'users-roles',
+                label: 'User Roles',
+                description: 'Create, edit, and audit system role definitions.',
+                defaultAction: 'modify'
             },
             {
-                id: 'automation-studio',
-                label: 'Automation Studio',
-                description: 'Workflow builders, triggers, and orchestration.',
-                defaultAction: 'manage'
+                id: 'users-management',
+                label: 'Users Management',
+                description: 'Onboard, suspend, and maintain user accounts.',
+                defaultAction: 'enter'
+            }
+        ]
+    },
+    {
+        id: 'settings',
+        label: 'Settings',
+        description: 'Tenant defaults, security controls, and integration setup.',
+        apps: [
+            {
+                id: 'settings-configuration',
+                label: 'Configuration',
+                description: 'General settings, notifications, and API access.',
+                defaultAction: 'delete'
             },
             {
-                id: 'integration-hub',
-                label: 'Integration Hub',
-                description: 'API credentials, partner connectors, and sync policies.',
-                defaultAction: 'admin'
+                id: 'settings-integrations',
+                label: 'Integrations',
+                description: 'Third-party connections and data exchange management.',
+                defaultAction: 'delete'
+            }
+        ]
+    },
+    {
+        id: 'reports',
+        label: 'Reports',
+        description: 'Analytics, compliance artefacts, and report distribution.',
+        apps: [
+            {
+                id: 'reports-executive',
+                label: 'Executive Reports',
+                description: 'Inspection coverage, revenue impact, and satisfaction KPIs.',
+                defaultAction: 'view'
+            },
+            {
+                id: 'reports-compliance',
+                label: 'Compliance Library',
+                description: 'Regulatory artefacts, audit packs, and evidence exports.',
+                defaultAction: 'modify'
+            },
+            {
+                id: 'reports-distribution',
+                label: 'Distribution Schedules',
+                description: 'Report scheduling, recipient lists, and delivery tracking.',
+                defaultAction: 'modify'
+            }
+        ]
+    },
+    {
+        id: 'packages',
+        label: 'Packages',
+        description: 'Subscription tiers, pricing, and performance metrics.',
+        apps: [
+            {
+                id: 'packages-catalog',
+                label: 'Package Catalog',
+                description: 'Tier definitions, benefits, and pricing structures.',
+                defaultAction: 'modify'
+            },
+            {
+                id: 'packages-performance',
+                label: 'Performance Metrics',
+                description: 'Adoption, renewal rate, and upsell indicators.',
+                defaultAction: 'view'
+            },
+            {
+                id: 'packages-bundles',
+                label: 'Bundle Builder',
+                description: 'Compose bespoke bundles and generate proposals.',
+                defaultAction: 'modify'
+            }
+        ]
+    },
+    {
+        id: 'products',
+        label: 'Products',
+        description: 'Marketplace catalogue, inventories, and supplier governance.',
+        apps: [
+            {
+                id: 'products-catalog',
+                label: 'Catalog',
+                description: 'Manage product listings, pricing, and merchandising.',
+                defaultAction: 'modify'
+            },
+            {
+                id: 'products-inventory',
+                label: 'Inventory & SLAs',
+                description: 'Stock levels, service agreements, and alerts.',
+                defaultAction: 'modify'
+            },
+            {
+                id: 'products-suppliers',
+                label: 'Supplier Matrix',
+                description: 'Vendor performance, contracts, and escalation workflows.',
+                defaultAction: 'view'
+            }
+        ]
+    },
+    {
+        id: 'onruf-users',
+        label: 'ONRUF Users',
+        description: 'Customer lifecycle management and engagement analytics.',
+        apps: [
+            {
+                id: 'onruf-directory',
+                label: 'Directory Overview',
+                description: 'Account segments, activation status, and sync history.',
+                defaultAction: 'view'
+            },
+            {
+                id: 'onruf-verification',
+                label: 'Verification Queue',
+                description: 'Identity reviews, escalations, and field confirmations.',
+                defaultAction: 'modify'
+            },
+            {
+                id: 'onruf-engagement',
+                label: 'Engagement Insights',
+                description: 'Usage signals, churn watchlists, and success KPIs.',
+                defaultAction: 'view'
+            }
+        ]
+    },
+    {
+        id: 'advertisments',
+        label: 'Advertisments',
+        description: 'Campaign planning, creative assets, and performance tracking.',
+        apps: [
+            {
+                id: 'advertising-planner',
+                label: 'Campaign Planner',
+                description: 'Plan programmes, budgets, and rollout timelines.',
+                defaultAction: 'modify'
+            },
+            {
+                id: 'advertising-assets',
+                label: 'Creative Assets',
+                description: 'Manage media kits, templates, and approvals.',
+                defaultAction: 'modify'
             }
         ]
     }
@@ -134,216 +219,101 @@ function buildPermissionCatalog() {
 }
 
 const viewerPermissions = [
-    { sectionId: 'platform-oversight', appId: 'operations-console', actions: ['view'] },
-    { sectionId: 'business-performance', appId: 'sla-monitor', actions: ['view'] }
+    { sectionId: 'dashboard', appId: 'dashboard-executive', actions: ['view'] },
+    { sectionId: 'reports', appId: 'reports-executive', actions: ['view'] }
 ];
 
 const marketingTeamPermissions = [
-    { sectionId: 'business-performance', appId: 'engagement-hub', actions: ['manage'] },
-    { sectionId: 'business-performance', appId: 'revenue-analytics', actions: ['manage'] },
-    { sectionId: 'tenant-operations', appId: 'tenant-directory', actions: ['view'] }
+    { sectionId: 'advertisments', appId: 'advertising-planner', actions: ['modify'] },
+    { sectionId: 'advertisments', appId: 'advertising-assets', actions: ['enter'] },
+    { sectionId: 'reports', appId: 'reports-distribution', actions: ['view'] }
 ];
 
 const salesTeamPermissions = [
-    { sectionId: 'tenant-operations', appId: 'tenant-directory', actions: ['manage'] },
-    { sectionId: 'tenant-operations', appId: 'inspection-scheduler', actions: ['manage'] },
-    { sectionId: 'business-performance', appId: 'revenue-analytics', actions: ['manage'] }
+    { sectionId: 'packages', appId: 'packages-catalog', actions: ['modify'] },
+    { sectionId: 'products', appId: 'products-catalog', actions: ['enter'] },
+    { sectionId: 'reports', appId: 'reports-executive', actions: ['view'] }
 ];
 
 const complianceOfficerPermissions = [
-    { sectionId: 'tenant-operations', appId: 'violation-workbench', actions: ['admin'] },
-    { sectionId: 'tenant-operations', appId: 'inspection-scheduler', actions: ['manage'] },
-    { sectionId: 'platform-oversight', appId: 'governance-insights', actions: ['admin'] }
+    { sectionId: 'users', appId: 'users-management', actions: ['modify'] },
+    { sectionId: 'settings', appId: 'settings-configuration', actions: ['delete'] },
+    { sectionId: 'reports', appId: 'reports-compliance', actions: ['modify'] }
 ];
 
 const customerSuccessPermissions = [
-    { sectionId: 'tenant-operations', appId: 'tenant-directory', actions: ['manage'] },
-    { sectionId: 'business-performance', appId: 'engagement-hub', actions: ['manage'] },
-    { sectionId: 'platform-oversight', appId: 'operations-console', actions: ['view'] }
+    { sectionId: 'onruf-users', appId: 'onruf-engagement', actions: ['modify'] },
+    { sectionId: 'onruf-users', appId: 'onruf-directory', actions: ['view'] },
+    { sectionId: 'users', appId: 'users-management', actions: ['enter'] }
 ];
 
 const itSupportPermissions = [
-    { sectionId: 'platform-administration', appId: 'integration-hub', actions: ['admin'] },
-    { sectionId: 'platform-administration', appId: 'automation-studio', actions: ['manage'] },
-    { sectionId: 'platform-administration', appId: 'role-governance', actions: ['manage'] }
+    { sectionId: 'settings', appId: 'settings-integrations', actions: ['modify'] },
+    { sectionId: 'products', appId: 'products-inventory', actions: ['modify'] },
+    { sectionId: 'users', appId: 'users-roles', actions: ['enter'] }
 ];
 
 const riskAnalystPermissions = [
-    { sectionId: 'platform-oversight', appId: 'governance-insights', actions: ['manage'] },
-    { sectionId: 'business-performance', appId: 'sla-monitor', actions: ['manage'] },
-    { sectionId: 'business-performance', appId: 'revenue-analytics', actions: ['view'] }
+    { sectionId: 'dashboard', appId: 'dashboard-operations', actions: ['view'] },
+    { sectionId: 'reports', appId: 'reports-compliance', actions: ['modify'] },
+    { sectionId: 'packages', appId: 'packages-performance', actions: ['view'] }
 ];
 
 const financeControllerPermissions = [
-    { sectionId: 'business-performance', appId: 'revenue-analytics', actions: ['admin'] },
-    { sectionId: 'business-performance', appId: 'engagement-hub', actions: ['manage'] },
-    { sectionId: 'platform-administration', appId: 'integration-hub', actions: ['manage'] }
+    { sectionId: 'packages', appId: 'packages-performance', actions: ['modify'] },
+    { sectionId: 'reports', appId: 'reports-executive', actions: ['view'] },
+    { sectionId: 'products', appId: 'products-inventory', actions: ['enter'] }
 ];
 
 const vendorManagerPermissions = [
-    { sectionId: 'tenant-operations', appId: 'tenant-directory', actions: ['manage'] },
-    { sectionId: 'tenant-operations', appId: 'violation-workbench', actions: ['manage'] },
-    { sectionId: 'platform-administration', appId: 'automation-studio', actions: ['manage'] }
+    { sectionId: 'products', appId: 'products-suppliers', actions: ['modify'] },
+    { sectionId: 'packages', appId: 'packages-bundles', actions: ['modify'] },
+    { sectionId: 'advertisments', appId: 'advertising-planner', actions: ['view'] }
 ];
 
 const trainingCoordinatorPermissions = [
-    { sectionId: 'tenant-operations', appId: 'inspection-scheduler', actions: ['manage'] },
-    { sectionId: 'business-performance', appId: 'engagement-hub', actions: ['view'] },
-    { sectionId: 'platform-oversight', appId: 'operations-console', actions: ['view'] }
+    { sectionId: 'onruf-users', appId: 'onruf-directory', actions: ['view'] },
+    { sectionId: 'products', appId: 'products-suppliers', actions: ['view'] },
+    { sectionId: 'dashboard', appId: 'dashboard-executive', actions: ['view'] }
 ];
 
 const logisticsSupervisorPermissions = [
-    { sectionId: 'tenant-operations', appId: 'inspection-scheduler', actions: ['manage'] },
-    { sectionId: 'tenant-operations', appId: 'violation-workbench', actions: ['manage'] },
-    { sectionId: 'platform-oversight', appId: 'operations-console', actions: ['manage'] }
+    { sectionId: 'onruf-users', appId: 'onruf-verification', actions: ['modify'] },
+    { sectionId: 'dashboard', appId: 'dashboard-operations', actions: ['modify'] },
+    { sectionId: 'reports', appId: 'reports-distribution', actions: ['enter'] }
 ];
 
-const defaultRoles = [
-    {
-        id: 'viewer',
-        name: 'Executive Viewer',
-        nameArabic: 'المشاهد التنفيذي',
-        description: 'Provides read-only dashboards for leadership visibility.',
-        users: 8,
-        permissions: viewerPermissions,
-        status: 'inactive',
-        lastUpdated: 'Deactivated 5 days ago'
-    },
-    {
-        id: 'marketing-team',
-        name: 'Marketing Team',
-        nameArabic: 'فريق التسويق',
-        description: 'Plans campaigns and monitors engagement across business accounts.',
-        users: 24,
-        permissions: marketingTeamPermissions,
-        status: 'active',
-        lastUpdated: 'Updated 3 days ago'
-    },
-    {
-        id: 'sales-team',
-        name: 'Sales Team',
-        nameArabic: 'فريق المبيعات',
-        description: 'Manages commercial offers, renewals, and partner onboarding.',
-        users: 41,
-        permissions: salesTeamPermissions,
-        status: 'active',
-        lastUpdated: 'Updated 6 days ago'
-    },
-    {
-        id: 'compliance-officer',
-        name: 'Compliance Officer',
-        nameArabic: 'مسؤول الامتثال',
-        description: 'Tracks inspection evidence and ensures adherence to governance rules.',
-        users: 17,
-        permissions: complianceOfficerPermissions,
-        status: 'active',
-        lastUpdated: 'Updated 2 days ago'
-    },
-    {
-        id: 'customer-success',
-        name: 'Customer Success',
-        nameArabic: 'نجاح العملاء',
-        description: 'Supports tenants and follows up on activation and satisfaction metrics.',
-        users: 29,
-        permissions: customerSuccessPermissions,
-        status: 'active',
-        lastUpdated: 'Updated 1 week ago'
-    },
-    {
-        id: 'it-support',
-        name: 'IT Support',
-        nameArabic: 'دعم تقنية المعلومات',
-        description: 'Provides technical assistance and maintains platform access health.',
-        users: 12,
-        permissions: itSupportPermissions,
-        status: 'active',
-        lastUpdated: 'Updated yesterday'
-    },
-    {
-        id: 'risk-analyst',
-        name: 'Risk Analyst',
-        nameArabic: 'محلل المخاطر',
-        description: 'Monitors operational risk indicators and highlights anomalies.',
-        users: 14,
-        permissions: riskAnalystPermissions,
-        status: 'active',
-        lastUpdated: 'Updated 2 days ago'
-    },
-    {
-        id: 'finance-controller',
-        name: 'Finance Controller',
-        nameArabic: 'المراقب المالي',
-        description: 'Oversees billing cycles, credit notes, and revenue alignment.',
-        users: 21,
-        permissions: financeControllerPermissions,
-        status: 'active',
-        lastUpdated: 'Updated yesterday'
-    },
-    {
-        id: 'vendor-manager',
-        name: 'Vendor Manager',
-        nameArabic: 'مدير المورّدين',
-        description: 'Coordinates partner onboarding and supplier performance reviews.',
-        users: 19,
-        permissions: vendorManagerPermissions,
-        status: 'active',
-        lastUpdated: 'Updated 5 days ago'
-    },
-    {
-        id: 'training-coordinator',
-        name: 'Training Coordinator',
-        nameArabic: 'منسق التدريب',
-        description: 'Plans onboarding workshops and tracks certification status.',
-        users: 11,
-        permissions: trainingCoordinatorPermissions,
-        status: 'active',
-        lastUpdated: 'Updated 4 days ago'
-    },
-    {
-        id: 'logistics-supervisor',
-        name: 'Logistics Supervisor',
-        nameArabic: 'مشرف اللوجستيات',
-        description: 'Manages field deployment schedules and inventory movements.',
-        users: 16,
-        permissions: logisticsSupervisorPermissions,
-        status: 'active',
-        lastUpdated: 'Updated today'
-    }
-];
+const defaultRoles = [];
 
 let roles = [];
 
 const defaultUsers = [
-    { id: 1, name: 'Ahmed Hassan', email: 'ahmed.hassan@onruf.com', role: 'Business Owner', accountType: 'system-administrator', status: 'Active', lastLogin: '2 hours ago', created: 'Jan 12, 2024' },
-    { id: 2, name: 'Sarah Mohammed', email: 'sarah.mohammed@onruf.com', role: 'Platform Admin', accountType: 'system-administrator', status: 'Active', lastLogin: '38 minutes ago', created: 'Feb 01, 2024' },
-    { id: 3, name: 'Omar Ali', email: 'omar.ali@onruf.com', role: 'Inspector', status: 'Active', lastLogin: 'Today 07:12', created: 'Mar 08, 2024' },
-    { id: 4, name: 'Fatima Khalil', email: 'fatima.khalil@onruf.com', role: 'Inspector', status: 'Inactive', lastLogin: '3 weeks ago', created: 'Dec 22, 2023' },
-    { id: 5, name: 'Khalid Ibrahim', email: 'khalid.ibrahim@onruf.com', role: 'Business Manager', status: 'Inactive', lastLogin: 'Never', created: 'Mar 20, 2024' },
-    { id: 6, name: 'Noor Abdel', email: 'noor.abdel@onruf.com', role: 'Business Manager', status: 'Active', lastLogin: 'Yesterday 21:44', created: 'Jan 29, 2024' },
-    { id: 7, name: 'Yusuf Nasser', email: 'yusuf.nasser@onruf.com', role: 'Inspector', status: 'Active', lastLogin: '4 hours ago', created: 'Feb 14, 2024' },
-    { id: 8, name: 'Layla Mahmoud', email: 'layla.mahmoud@onruf.com', role: 'Reader', status: 'Inactive', lastLogin: '1 month ago', created: 'Nov 30, 2023' },
-    { id: 9, name: 'Huda Salem', email: 'huda.salem@onruf.com', role: 'Business Owner', status: 'Active', lastLogin: '5 hours ago', created: 'Mar 02, 2024' },
-    { id: 10, name: 'Nasser Al-Qahtani', email: 'nasser.qahtani@onruf.com', role: 'Platform Admin', status: 'Active', lastLogin: 'Yesterday', created: 'Feb 17, 2024' },
-    { id: 11, name: 'Amira Hassan', email: 'amira.hassan@onruf.com', role: 'Inspector', status: 'Active', lastLogin: '1 hour ago', created: 'Apr 05, 2024' },
-    { id: 12, name: 'Mohammed Saleh', email: 'mohammed.saleh@onruf.com', role: 'Business Manager', status: 'Active', lastLogin: '6 hours ago', created: 'Jan 15, 2024' },
-    { id: 13, name: 'Reem Al-Farsi', email: 'reem.alfarsi@onruf.com', role: 'Reader', status: 'Inactive', lastLogin: '2 weeks ago', created: 'Oct 10, 2023' },
-    { id: 14, name: 'Tariq Al-Mansoori', email: 'tariq.almansoori@onruf.com', role: 'Business Owner', status: 'Active', lastLogin: 'Today 14:30', created: 'Feb 28, 2024' },
-    { id: 15, name: 'Lina Al-Zahra', email: 'lina.alzahra@onruf.com', role: 'Platform Admin', status: 'Active', lastLogin: 'Yesterday 18:45', created: 'Mar 15, 2024' },
-    { id: 16, name: 'Sultan Al-Rashid', email: 'sultan.alrashid@onruf.com', role: 'Inspector', status: 'Active', lastLogin: '7 hours ago', created: 'Jan 08, 2024' },
-    { id: 17, name: 'Maha Al-Khalifa', email: 'maha.alkhalifa@onruf.com', role: 'Business Manager', status: 'Inactive', lastLogin: '5 days ago', created: 'Dec 05, 2023' },
-    { id: 18, name: 'Fahad Al-Saud', email: 'fahad.alsaud@onruf.com', role: 'Inspector', status: 'Active', lastLogin: 'Today 09:15', created: 'Apr 12, 2024' },
-    { id: 19, name: 'Nadia Al-Mahmoud', email: 'nadia.almahmoud@onruf.com', role: 'Reader', status: 'Active', lastLogin: '3 hours ago', created: 'Feb 20, 2024' },
-    { id: 20, name: 'Rashid Al-Hamad', email: 'rashid.alhamad@onruf.com', role: 'Business Owner', status: 'Active', lastLogin: 'Yesterday 12:00', created: 'Mar 25, 2024' },
-    { id: 21, name: 'Aisha Al-Dosari', email: 'aisha.aldosari@onruf.com', role: 'Platform Admin', status: 'Active', lastLogin: '2 hours ago', created: 'Jan 30, 2024' },
-    { id: 22, name: 'Hamad Al-Thani', email: 'hamad.althani@onruf.com', role: 'Inspector', status: 'Inactive', lastLogin: '1 week ago', created: 'Nov 18, 2023' },
-    { id: 23, name: 'Zahra Al-Mansouri', email: 'zahra.almansouri@onruf.com', role: 'Business Manager', status: 'Active', lastLogin: 'Today 16:20', created: 'Apr 01, 2024' },
-    { id: 24, name: 'Othman Al-Jaber', email: 'othman.aljaber@onruf.com', role: 'Reader', status: 'Active', lastLogin: '4 hours ago', created: 'Feb 10, 2024' },
-    { id: 25, name: 'Salma Al-Kuwaiti', email: 'salma.alkuwaiti@onruf.com', role: 'Business Owner', status: 'Active', lastLogin: 'Yesterday 08:30', created: 'Mar 18, 2024' },
-    { id: 26, name: 'Bandar Al-Otaibi', email: 'bandar.alotaibi@onruf.com', role: 'Platform Admin', status: 'Active', lastLogin: '5 hours ago', created: 'Jan 22, 2024' },
-    { id: 27, name: 'Rana Al-Sabah', email: 'rana.alsabah@onruf.com', role: 'Inspector', status: 'Inactive', lastLogin: '3 weeks ago', created: 'Dec 15, 2023' },
-    { id: 28, name: 'Jassem Al-Muhannadi', email: 'jassem.almuhannadi@onruf.com', role: 'Business Manager', status: 'Active', lastLogin: 'Today 11:45', created: 'Apr 08, 2024' },
-    { id: 29, name: 'Hessa Al-Rumaihi', email: 'hessa.alrumaihi@onruf.com', role: 'Reader', status: 'Active', lastLogin: '1 hour ago', created: 'Feb 05, 2024' },
-    { id: 30, name: 'Saad Al-Shammari', email: 'saad.alshammari@onruf.com', role: 'Business Owner', status: 'Active', lastLogin: 'Yesterday 15:20', created: 'Mar 10, 2024' }
+    {
+        id: 1,
+        name: 'Central Super Admin',
+        firstName: 'Central',
+        lastName: 'Admin',
+        email: 'superadmin@onruf.com',
+        role: 'Super Administrator',
+        accountType: 'platform-administrator',
+        status: 'active',
+        department: 'Central Governance',
+        phone: '+966500000001',
+        employeeId: 'CSA-001',
+        permissionSummary: 'Full platform access',
+        created: '2025-10-05',
+        lastLogin: 'Never',
+        auth: {
+            passwordHash: 'QWRtaW5AMTIz',
+            lastUpdated: '2025-10-05T00:00:00.000Z'
+        },
+        invitation: {
+            token: 'reg-super-admin-seed',
+            sentAt: '2025-10-05T00:00:00.000Z',
+            completedAt: '2025-10-05T00:00:00.000Z',
+            verifiedAt: '2025-10-05T00:00:00.000Z'
+        }
+    }
 ];
 
 let users = [];
@@ -439,6 +409,238 @@ const monthlyPerformance = [
 
 const ROLES_STORAGE_KEY = 'onruf_roles_v1';
 const USERS_STORAGE_KEY = 'onruf_users_v1';
+const SESSION_STORAGE_KEY = 'onruf_active_session_v1';
+const DATA_RESET_VERSION = '20241005-super-admin-seed';
+const DATA_RESET_KEY = 'onruf_data_reset_version';
+
+function generateRegistrationToken() {
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+        return crypto.randomUUID();
+    }
+    const random = Math.floor(Math.random() * 1_000_000)
+        .toString(36)
+        .padStart(4, '0');
+    return `reg-${Date.now().toString(36)}-${random}`;
+}
+
+function hashPasswordValue(value) {
+    if (typeof value !== 'string' || !value) {
+        return '';
+    }
+    const encoder = typeof TextEncoder !== 'undefined' ? new TextEncoder() : null;
+    if (encoder) {
+        const bytes = encoder.encode(value.normalize('NFKC'));
+        let binary = '';
+        bytes.forEach(byte => {
+            binary += String.fromCharCode(byte);
+        });
+        return btoa(binary);
+    }
+    try {
+        return btoa(unescape(encodeURIComponent(value)));
+    } catch (error) {
+        console.warn('Unable to hash password value', error);
+        return '';
+    }
+}
+
+function normalizeAuthPayload(auth) {
+    if (!auth || typeof auth !== 'object') {
+        return {
+            passwordHash: '',
+            lastUpdated: null
+        };
+    }
+    return {
+        passwordHash: typeof auth.passwordHash === 'string' ? auth.passwordHash : '',
+        lastUpdated: auth.lastUpdated || null
+    };
+}
+
+function normalizeInvitationPayload(invitation) {
+    const normalized = invitation && typeof invitation === 'object' ? { ...invitation } : {};
+    const otp = normalized.otp ? String(normalized.otp).replace(/[^0-9]/g, '').padStart(6, '0').slice(-6) : null;
+    const token = typeof normalized.token === 'string' && normalized.token.trim()
+        ? normalized.token.trim()
+        : generateRegistrationToken();
+
+    return {
+        otp,
+        token,
+        sentAt: normalized.sentAt || null,
+        completedAt: normalized.completedAt || null,
+        verifiedAt: normalized.verifiedAt || null,
+        lastOtpSentAt: normalized.lastOtpSentAt || null
+    };
+}
+
+function ensureUserAuthRecord(user) {
+    if (!user) return;
+    if (!user.auth) {
+        user.auth = {
+            passwordHash: '',
+            lastUpdated: null
+        };
+    }
+}
+
+function ensureUserInvitationRecord(user) {
+    if (!user) return;
+    if (!user.invitation || typeof user.invitation !== 'object') {
+        user.invitation = {};
+    }
+    if (!user.invitation.token) {
+        user.invitation.token = generateRegistrationToken();
+    }
+}
+
+function getLoginPageUrl() {
+    return 'login.html';
+}
+
+function buildRegistrationCompletionUrl(token) {
+    if (!token) {
+        return 'complete-registration.html';
+    }
+    return `complete-registration.html?token=${encodeURIComponent(token)}`;
+}
+
+function updateRegistrationLinkDisplay(tokenOverride = null) {
+    const wrapper = document.getElementById('registrationFlowLinkWrapper');
+    const linkEl = document.getElementById('registrationFlowLink');
+    const token = tokenOverride || state.registrationFlow.token || null;
+
+    if (!wrapper || !linkEl) {
+        return;
+    }
+
+    if (!token) {
+        wrapper.classList.add('hidden');
+        linkEl.removeAttribute('href');
+        linkEl.textContent = 'complete-registration.html';
+        state.registrationFlow.link = null;
+        return;
+    }
+
+    const url = buildRegistrationCompletionUrl(token);
+    linkEl.href = url;
+    linkEl.textContent = url;
+    wrapper.classList.remove('hidden');
+    state.registrationFlow.link = url;
+}
+
+function loadActiveSession() {
+    try {
+        const raw = sessionStorage.getItem(SESSION_STORAGE_KEY);
+        if (!raw) {
+            return null;
+        }
+        const parsed = JSON.parse(raw);
+        if (!parsed || typeof parsed !== 'object') {
+            return null;
+        }
+        const session = {
+            userId: parsed.userId ?? null,
+            email: typeof parsed.email === 'string' ? parsed.email : '',
+            signedInAt: parsed.signedInAt || null
+        };
+        return session;
+    } catch (error) {
+        console.warn('Unable to load active session payload.', error);
+        return null;
+    }
+}
+
+function clearActiveSession() {
+    try {
+        sessionStorage.removeItem(SESSION_STORAGE_KEY);
+    } catch (error) {
+        console.warn('Unable to clear active session.', error);
+    }
+}
+
+function redirectToLogin() {
+    const loginUrl = getLoginPageUrl();
+    try {
+        clearActiveSession();
+    } catch (error) {
+        console.warn('Unable to reset active session before redirect.', error);
+    }
+    if (!loginUrl) {
+        console.warn('Login page URL is not defined.');
+        return false;
+    }
+    window.location.replace(loginUrl);
+    return true;
+}
+
+function enforceActiveSession() {
+    const session = loadActiveSession();
+    if (!session) {
+        redirectToLogin();
+        return false;
+    }
+    state.activeSession = session;
+    return true;
+}
+
+function ensureSessionUserIsActive() {
+    const session = state.activeSession;
+    if (!session) {
+        return false;
+    }
+
+    const normalizedEmail = session.email ? session.email.trim().toLowerCase() : '';
+    let matchedUser = null;
+
+    if (session.userId !== undefined && session.userId !== null) {
+        matchedUser = users.find(user => user && String(user.id) === String(session.userId));
+    }
+    if (!matchedUser && normalizedEmail) {
+        matchedUser = users.find(user => normalizeEmail(user.email) === normalizedEmail);
+    }
+
+    if (!matchedUser) {
+        redirectToLogin();
+        return false;
+    }
+
+    const status = (matchedUser.status || '').toLowerCase();
+    if (status !== 'active') {
+        redirectToLogin();
+        return false;
+    }
+
+    if (matchedUser.sessionExpiresAt) {
+        const expiry = new Date(matchedUser.sessionExpiresAt).getTime();
+        if (Number.isFinite(expiry) && Date.now() > expiry) {
+            redirectToLogin();
+            return false;
+        }
+    }
+
+    state.activeSession.user = matchedUser;
+    return true;
+}
+
+function updateActiveUserChip(user) {
+    if (!user) {
+        return;
+    }
+    const chip = document.querySelector('.topbar-right .user-chip span');
+    if (!chip) {
+        return;
+    }
+    const name = user.name || [user.firstName, user.lastName].filter(Boolean).join(' ') || user.email || 'User';
+    chip.textContent = name;
+}
+
+function handleSignOut(event) {
+    if (event && typeof event.preventDefault === 'function') {
+        event.preventDefault();
+    }
+    redirectToLogin();
+}
 
 function clonePermissionEntry(entry) {
     if (!entry || typeof entry !== 'object') {
@@ -473,7 +675,7 @@ function normalizeRolePayload(role) {
         nameEnglish: englishName || fallbackName,
         nameArabic: role.nameArabic || '',
         description: role.description || '',
-        users: role.users ?? '—',
+        users: typeof role.users === 'number' ? role.users : 0,
         permissions,
         status: role.status === 'inactive' ? 'inactive' : 'active',
         lastUpdated: role.lastUpdated || 'Imported'
@@ -488,22 +690,45 @@ function normalizeUserPayload(user, index = 0) {
     const rawEmail = typeof user.email === 'string' ? user.email.trim() : '';
     const email = rawEmail || `user${numericId}@onruf.com`;
     const rawStatus = typeof user.status === 'string' ? user.status.trim().toLowerCase() : 'active';
-    const normalizedStatus = rawStatus === 'inactive' ? 'Inactive' : 'Active';
-    const accountType = user.accountType === 'system-administrator' ? 'system-administrator' : 'platform-administrator';
+    let normalizedStatus = 'Active';
+    if (rawStatus === 'inactive') {
+        normalizedStatus = 'Inactive';
+    } else if (rawStatus === 'pending') {
+        normalizedStatus = 'Pending';
+    }
+
+    const invitation = normalizeInvitationPayload(user.invitation);
+    const auth = normalizeAuthPayload(user.auth);
+
+    const accountType = user.accountType
+        ? user.accountType
+        : normalizedStatus === 'Pending'
+            ? 'pending-invite'
+            : 'platform-administrator';
+
+    const firstName = typeof user.firstName === 'string' ? user.firstName.trim() : '';
+    const lastName = typeof user.lastName === 'string' ? user.lastName.trim() : '';
+    const employeeId = typeof user.employeeId === 'string' ? user.employeeId.trim() : '';
 
     return {
         id: numericId,
         name: safeName,
         email,
-    role: user.role || 'Admin',
+        role: user.role || 'Admin',
         accountType,
         status: normalizedStatus,
+        firstName,
+        lastName,
+        employeeId,
         lastLogin: user.lastLogin || 'Never',
         created: user.created || new Date().toLocaleDateString(),
         phone: user.phone || '',
         department: user.department || '',
         permissionSummary: user.permissionSummary || '',
-        expiresOn: user.expiresOn || ''
+        expiresOn: user.expiresOn || '',
+        sessionExpiresAt: user.sessionExpiresAt || null,
+        invitation,
+        auth
     };
 }
 
@@ -601,6 +826,7 @@ function setupPermissionMatrixInteractions(root) {
             syncAppPermissionRow(appCheckbox);
             const sectionCard = appCheckbox.closest('.permission-section');
             refreshSectionCheckboxState(sectionCard);
+            setRolePermissionsError('');
         });
     });
 
@@ -617,6 +843,7 @@ function setupPermissionMatrixInteractions(root) {
                 syncAppPermissionRow(appCheckbox);
             });
             refreshSectionCheckboxState(sectionCard);
+            setRolePermissionsError('');
         });
     });
 }
@@ -769,6 +996,20 @@ function resetPermissionMatrix() {
     container.querySelectorAll('.permission-section').forEach(sectionCard => {
         refreshSectionCheckboxState(sectionCard);
     });
+    setRolePermissionsError('');
+}
+
+function setRolePermissionsError(message = '') {
+    const errorEl = document.getElementById('rolePermissionsError');
+    if (!errorEl) return;
+    const text = message ? String(message).trim() : '';
+    if (text) {
+        errorEl.textContent = text;
+        errorEl.classList.remove('hidden');
+    } else {
+        errorEl.textContent = '';
+        errorEl.classList.add('hidden');
+    }
 }
 
 function setRoleBuilderMode(mode = 'create', role = null) {
@@ -795,7 +1036,7 @@ function setRoleBuilderMode(mode = 'create', role = null) {
         }
     } else {
         if (titleEl) {
-            titleEl.textContent = 'Add New Role';
+            titleEl.textContent = 'Add New User Role';
         }
         if (subtitleEl) {
             subtitleEl.textContent = '';
@@ -920,7 +1161,25 @@ function hideRoleBuilder() {
     updateBreadcrumb('users');
 }
 
+function ensureSeedDataReset() {
+    try {
+        const recordedVersion = localStorage.getItem(DATA_RESET_KEY);
+        if (recordedVersion !== DATA_RESET_VERSION) {
+            localStorage.removeItem(ROLES_STORAGE_KEY);
+            localStorage.removeItem(USERS_STORAGE_KEY);
+            localStorage.setItem(DATA_RESET_KEY, DATA_RESET_VERSION);
+        }
+    } catch (error) {
+        console.warn('Unable to reset stored datasets:', error);
+    }
+}
+
 function initializeApp() {
+    if (!enforceActiveSession()) {
+        return;
+    }
+
+    ensureSeedDataReset();
     renderPermissionMatrix();
 
     const storedRoles = loadRolesFromStorage();
@@ -939,7 +1198,16 @@ function initializeApp() {
         saveUsersToStorage();
     }
 
+    if (!ensureSessionUserIsActive()) {
+        return;
+    }
+    updateActiveUserChip(state.activeSession.user);
+
+    syncRoleUserCounts();
+    saveRolesToStorage();
+
     setupEventListeners();
+    updateRegistrationLinkDisplay(null);
     renderStats();
     renderChart();
     renderActivity();
@@ -961,6 +1229,7 @@ function initializeApp() {
     }
 
     setupRoleConfirmOverlay();
+    setupRolePromptOverlay();
     setupUserConfirmOverlay();
     setupRoleAlertOverlay();
     setupUserAlertOverlay();
@@ -1093,6 +1362,11 @@ function setupEventListeners() {
         themeToggle.addEventListener('click', toggleTheme);
     }
 
+    const signOutBtn = document.getElementById('signOutBtn');
+    if (signOutBtn) {
+        signOutBtn.addEventListener('click', handleSignOut);
+    }
+
     const menuToggle = document.getElementById('menuToggle');
     if (menuToggle) {
         menuToggle.addEventListener('click', toggleSidebar);
@@ -1100,7 +1374,7 @@ function setupEventListeners() {
 
     const rolesTableBody = document.getElementById('rolesTableBody');
     if (rolesTableBody) {
-        rolesTableBody.addEventListener('click', event => {
+        rolesTableBody.addEventListener('click', async event => {
             const button = event.target.closest('.action-btn');
             if (!button) return;
             const roleId = button.dataset.role;
@@ -1110,7 +1384,9 @@ function setupEventListeners() {
             } else if (button.dataset.action === 'edit') {
                 editRole(roleId);
             } else if (button.dataset.action === 'toggle') {
-                toggleRoleStatus(roleId);
+                await toggleRoleStatus(roleId);
+            } else if (button.dataset.action === 'delete') {
+                await deleteRole(roleId);
             }
         });
     }
@@ -1135,55 +1411,35 @@ function setupEventListeners() {
 
     // User form event listeners
     const userFormPage = document.getElementById('userFormPage');
-    const userReviewRegisterBtn = document.getElementById('userReviewRegisterBtn');
-    const userReviewCancelBtn = document.getElementById('userReviewCancelBtn');
     const userForm = document.getElementById('userForm');
-    const userVerifyBtn = document.getElementById('userVerifyBtn');
-    const userVerificationCancelBtn = document.getElementById('userVerificationCancelBtn');
-    const userEmailInput = document.getElementById('userEmail');
-    const userRoleSelect = document.getElementById('userRole');
-    const accountTypeSelect = document.getElementById('userAccountType');
     const userFormProgress = document.getElementById('userFormProgress');
-    const userExpirationInput = document.getElementById('userExpirationDate');
-    const userFormCancelStep3Btn = document.getElementById('userFormCancelStep3Btn');
+    const userInfoNextBtn = document.getElementById('userInfoNextBtn');
+    const userInfoCancelBtn = document.getElementById('userInfoCancelBtn');
+    const userFormBackBtn = document.getElementById('userFormBackBtn');
 
-    if (userReviewCancelBtn) {
-        userReviewCancelBtn.addEventListener('click', () => {
-            revertToEmailVerification();
+    const registrationFlowOverlay = document.getElementById('registrationFlowOverlay');
+    const registrationFlowCloseBtn = document.getElementById('registrationFlowCloseBtn');
+    const registrationCompletionForm = document.getElementById('registrationCompletionForm');
+    const registrationOtpForm = document.getElementById('registrationOtpForm');
+    const registrationFlowResendBtn = document.getElementById('registrationFlowResendBtn');
+    const registrationFlowDoneBtn = document.getElementById('registrationFlowDoneBtn');
+
+    if (userInfoNextBtn) {
+        userInfoNextBtn.addEventListener('click', handleUserInfoStep);
+    }
+    if (userInfoCancelBtn) {
+        userInfoCancelBtn.addEventListener('click', () => {
+            hideUserForm();
         });
     }
-    if (userReviewRegisterBtn) {
-        userReviewRegisterBtn.addEventListener('click', handleUserFormNext);
-    }
-    if (userVerifyBtn) {
-        userVerifyBtn.addEventListener('click', handleUserEmailVerification);
-    }
-    if (userVerificationCancelBtn) {
-        userVerificationCancelBtn.addEventListener('click', handleUserVerificationCancel);
-    }
-    if (userEmailInput) {
-        userEmailInput.addEventListener('input', handleUserEmailInputChange);
-    }
-    if (accountTypeSelect) {
-        accountTypeSelect.addEventListener('change', handleAccountTypeChange);
-    }
-    if (userRoleSelect) {
-        userRoleSelect.addEventListener('change', handleRoleSelectionChange);
-    }
-    if (userExpirationInput) {
-        userExpirationInput.addEventListener('change', handleExpirationDateChange);
-    }
-    if (userFormCancelStep3Btn) {
-        userFormCancelStep3Btn.addEventListener('click', handleUserFormStepThreeCancel);
+    if (userFormBackBtn) {
+        userFormBackBtn.addEventListener('click', () => {
+            setUserFormStep(1);
+            focusUserFormStep(1);
+        });
     }
     if (userForm) {
         userForm.addEventListener('submit', handleUserFormSubmit);
-        userForm.addEventListener('keydown', event => {
-            if (event.key === 'Enter' && state.userFormStep === 2 && !event.shiftKey) {
-                event.preventDefault();
-                handleUserFormNext();
-            }
-        });
     }
     if (userFormProgress) {
         const activateStep = stepItem => {
@@ -1192,18 +1448,6 @@ function setupEventListeners() {
             }
             const targetStep = Number(stepItem.dataset.step || 0);
             if (!targetStep || targetStep === state.userFormStep) {
-                return;
-            }
-            if (state.userFormStep === 2 && targetStep === 1) {
-                return;
-            }
-            if (state.userFormStep === 2 && targetStep === 3) {
-                return;
-            }
-            if (state.userFormStep === 3 && targetStep === 2) {
-                return;
-            }
-            if (state.userFormStep === 3 && targetStep === 1) {
                 return;
             }
             if (targetStep > state.userFormStep) {
@@ -1232,9 +1476,38 @@ function setupEventListeners() {
             activateStep(stepItem);
         });
     }
+
+    if (registrationCompletionForm) {
+        registrationCompletionForm.addEventListener('submit', handleRegistrationCompletionSubmit);
+    }
+    if (registrationOtpForm) {
+        registrationOtpForm.addEventListener('submit', handleRegistrationOtpSubmit);
+    }
+    if (registrationFlowCloseBtn) {
+        registrationFlowCloseBtn.addEventListener('click', closeRegistrationFlow);
+    }
+    if (registrationFlowOverlay) {
+        registrationFlowOverlay.addEventListener('click', event => {
+            if (event.target === registrationFlowOverlay) {
+                closeRegistrationFlow();
+            }
+        });
+    }
+    if (registrationFlowResendBtn) {
+        registrationFlowResendBtn.addEventListener('click', handleRegistrationFlowResend);
+    }
+    if (registrationFlowDoneBtn) {
+        registrationFlowDoneBtn.addEventListener('click', closeRegistrationFlow);
+    }
+
     document.addEventListener('keydown', event => {
-        if (event.key === 'Escape' && userFormPage && !userFormPage.classList.contains('hidden')) {
-            hideUserForm();
+        const overlayVisible = registrationFlowOverlay && !registrationFlowOverlay.classList.contains('hidden');
+        if (event.key === 'Escape') {
+            if (overlayVisible) {
+                closeRegistrationFlow();
+            } else if (userFormPage && !userFormPage.classList.contains('hidden')) {
+                hideUserForm();
+            }
         }
     });
 }
@@ -1300,7 +1573,9 @@ function updateBreadcrumb(sectionId = state.currentSection) {
         settings: 'Settings',
         reports: 'Reports',
         packages: 'Packages',
-        products: 'Products'
+        products: 'Products',
+        'onruf-users': 'ONRUF Users',
+        advertisments: 'Advertisments'
     };
 
     const sectionLabel = sectionNames[sectionId] || 'Dashboard';
@@ -1326,7 +1601,7 @@ function updateBreadcrumb(sectionId = state.currentSection) {
     if (sectionId === 'users') {
         const builder = document.getElementById('roleBuilderView');
         if (builder && !builder.classList.contains('hidden')) {
-            appLabel = state.roleBuilderMode === 'edit' ? 'Edit User Role' : 'Add New Role';
+            appLabel = state.roleBuilderMode === 'edit' ? 'Edit User Role' : 'Add New User Role';
         }
         const userFormPage = document.getElementById('userFormPage');
         if (userFormPage && !userFormPage.classList.contains('hidden')) {
@@ -1504,11 +1779,12 @@ function renderRolesTable(page = state.currentRolePage) {
     if (!visibleRoles.length) {
         tbody.innerHTML = state.roleSearchTerm
             ? '<tr><td colspan="7">There is no Data Available</td></tr>'
-            : '<tr><td colspan="7">No roles found. Use the "Add New Role" button to create one.</td></tr>';
+            : '<tr><td colspan="7">There is no Data Available</td></tr>';
     } else {
         let index = (state.currentRolePage - 1) * state.rolesPerPage + 1;
         tbody.innerHTML = visibleRoles.map(role => {
             const permissionCount = Array.isArray(role.permissions) ? role.permissions.length : 0;
+            const userCount = updateRoleUserCount(role);
             const rawDescription = role.description && role.description.trim() ? role.description.trim() : '—';
             const descriptionTitleAttr = rawDescription !== '—' ? ` title="${escapeAttribute(rawDescription)}"` : '';
             return `
@@ -1523,7 +1799,7 @@ function renderRolesTable(page = state.currentRolePage) {
                 <td class="role-description-cell">
                     <div class="role-description-text"${descriptionTitleAttr}>${rawDescription}</div>
                 </td>
-                <td>${role.users ?? '—'}</td>
+                <td>${userCount}</td>
                 <td>
                     <div class="permission-cell">
                         <span class="permission-count">${permissionCount} ${permissionCount === 1 ? 'app' : 'apps'}</span>
@@ -1540,6 +1816,9 @@ function renderRolesTable(page = state.currentRolePage) {
                         <button class="action-btn edit" data-action="edit" data-role="${role.id}"><i class="fas fa-pen"></i></button>
                         <button class="action-btn ${role.status === 'active' ? 'deactivate' : 'activate'}" data-action="toggle" data-role="${role.id}">
                             <i class="fas ${role.status === 'active' ? 'fa-power-off' : 'fa-rotate-right'}"></i>
+                        </button>
+                        <button class="action-btn delete" data-action="delete" data-role="${role.id}" title="Delete role">
+                            <i class="fas fa-trash"></i>
                         </button>
                     </div>
                 </td>
@@ -2359,6 +2638,8 @@ let roleConfirmResolver = null;
 let userConfirmResolver = null;
 let userAlertResolver = null;
 let roleAlertResolver = null;
+let rolePromptResolver = null;
+let rolePromptValidator = null;
 
 function setupRoleConfirmOverlay() {
     const overlay = document.getElementById('roleConfirmOverlay');
@@ -2542,6 +2823,147 @@ function showRoleAlert(message) {
     });
 }
 
+function setupRolePromptOverlay() {
+    const overlay = document.getElementById('rolePromptOverlay');
+    const confirmBtn = document.getElementById('rolePromptConfirm');
+    const cancelBtn = document.getElementById('rolePromptCancel');
+    const input = document.getElementById('rolePromptInput');
+    const errorEl = document.getElementById('rolePromptError');
+    if (!overlay || !confirmBtn || !cancelBtn || !input) return;
+
+    const setPromptError = message => {
+        if (!errorEl) return;
+        const text = message || '';
+        errorEl.textContent = text;
+        if (text) {
+            errorEl.classList.remove('hidden');
+            input.setAttribute('aria-invalid', 'true');
+        } else {
+            errorEl.classList.add('hidden');
+            input.removeAttribute('aria-invalid');
+        }
+    };
+
+    const resetPromptState = () => {
+        input.value = '';
+        setPromptError('');
+        rolePromptValidator = null;
+    };
+
+    const complete = result => {
+        if (!rolePromptResolver) {
+            return;
+        }
+        const resolver = rolePromptResolver;
+        rolePromptResolver = null;
+        resetPromptState();
+        overlay.classList.add('hidden');
+        resolver(result);
+    };
+
+    const attemptConfirm = () => {
+        if (rolePromptValidator) {
+            const validation = rolePromptValidator(input.value);
+            if (!validation.valid) {
+                setPromptError(validation.message);
+                return;
+            }
+        }
+        complete({ confirmed: true, value: input.value });
+    };
+
+    confirmBtn.addEventListener('click', attemptConfirm);
+
+    cancelBtn.addEventListener('click', () => {
+        complete({ confirmed: false, value: '' });
+    });
+
+    overlay.addEventListener('click', event => {
+        if (event.target === overlay) {
+            complete({ confirmed: false, value: '' });
+        }
+    });
+
+    document.addEventListener('keydown', event => {
+        if (event.key === 'Escape' && rolePromptResolver) {
+            complete({ confirmed: false, value: '' });
+        }
+        if (event.key === 'Enter' && rolePromptResolver && document.activeElement === input) {
+            event.preventDefault();
+            attemptConfirm();
+        }
+    });
+
+    input.addEventListener('input', () => {
+        setPromptError('');
+    });
+}
+
+function showRolePrompt(message, confirmLabel = 'Confirm', cancelLabel = 'Cancel', placeholder = '', options = {}) {
+    const overlay = document.getElementById('rolePromptOverlay');
+    const messageEl = document.getElementById('rolePromptMessage');
+    const confirmBtn = document.getElementById('rolePromptConfirm');
+    const cancelBtn = document.getElementById('rolePromptCancel');
+    const input = document.getElementById('rolePromptInput');
+    const errorEl = document.getElementById('rolePromptError');
+    if (!overlay || !messageEl || !confirmBtn || !cancelBtn || !input) {
+        return Promise.resolve({ confirmed: false, value: '' });
+    }
+
+    const { validate, errorMessage = '' } = options || {};
+
+    messageEl.textContent = message;
+    confirmBtn.textContent = confirmLabel;
+    cancelBtn.textContent = cancelLabel;
+    input.placeholder = placeholder || '';
+    input.value = '';
+
+    if (errorEl) {
+        errorEl.textContent = errorMessage || '';
+        if (errorMessage) {
+            errorEl.classList.remove('hidden');
+            input.setAttribute('aria-invalid', 'true');
+        } else {
+            errorEl.classList.add('hidden');
+            input.removeAttribute('aria-invalid');
+        }
+    } else {
+        input.removeAttribute('aria-invalid');
+    }
+
+    if (typeof validate === 'function') {
+        rolePromptValidator = value => {
+            const validation = validate(value);
+            if (typeof validation === 'boolean') {
+                return {
+                    valid: validation,
+                    message: validation ? '' : errorMessage
+                };
+            }
+            if (validation && typeof validation === 'object') {
+                return {
+                    valid: validation.valid !== false,
+                    message: validation.message || errorMessage
+                };
+            }
+            return { valid: true, message: '' };
+        };
+    } else {
+        rolePromptValidator = null;
+    }
+
+    overlay.classList.remove('hidden');
+
+    setTimeout(() => {
+        input.focus();
+        input.select();
+    }, 0);
+
+    return new Promise(resolve => {
+        rolePromptResolver = resolve;
+    });
+}
+
 function setElementText(id, text) {
     const el = document.getElementById(id);
     if (el) {
@@ -2578,6 +3000,10 @@ function buildAccessWindowLabel(start, end) {
     return 'Immediately';
 }
 
+function generateRegistrationOtp() {
+    return String(Math.floor(100000 + Math.random() * 900000));
+}
+
 function focusUserFormStep(step) {
     const section = document.querySelector(`.user-form-step[data-step="${step}"]`);
     if (!section) return;
@@ -2588,7 +3014,7 @@ function focusUserFormStep(step) {
 }
 
 function setUserFormStep(step) {
-    const maxStep = 3;
+    const maxStep = 2;
     const nextStep = Math.min(Math.max(step, 1), maxStep);
     state.userFormStep = nextStep;
 
@@ -2610,236 +3036,221 @@ function setUserFormStep(step) {
         });
     }
 
-    updateUserFormProgressState();
+    if (nextStep === 1) {
+        state.registrationFlow.stage = 'prepared';
+    } else if (nextStep === 2) {
+        state.registrationFlow.stage = 'account-info';
+    }
 
     const submitBtn = document.getElementById('userFormSubmitBtn');
     if (submitBtn) {
-        submitBtn.classList.toggle('hidden', nextStep !== maxStep);
-        submitBtn.textContent = state.editingUserId ? 'Save' : 'Add User';
+        submitBtn.textContent = state.editingUserId ? 'Save' : 'Add';
     }
 
-    const cancelStep3Btn = document.getElementById('userFormCancelStep3Btn');
-    if (cancelStep3Btn) {
-        const shouldShowCancel = nextStep === maxStep;
-        cancelStep3Btn.classList.toggle('hidden', !shouldShowCancel);
-        cancelStep3Btn.textContent = state.editingUserId ? 'Cancel' : 'Cancel';
+    const backBtn = document.getElementById('userFormBackBtn');
+    if (backBtn) {
+        backBtn.classList.toggle('hidden', nextStep === 1 && !state.editingUserId);
     }
 
-    updateAccountTypeUI();
+    updateUserFormProgressState();
+    updateInvitationTimeline();
     updateBreadcrumb();
-    syncAccountEditLayout();
 }
 
-function isUserInformationComplete() {
-    const verification = state.userVerification;
+function isUserInfoStepComplete() {
     const draft = state.userDraft || {};
-
-    if (!verification || verification.status !== 'verified') {
-        return false;
-    }
-
-    const verifiedEmail = verification.email || '';
-    const draftEmail = normalizeEmail(draft.email);
-
+    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     return Boolean(
-        verifiedEmail
-        && draftEmail
-        && normalizeEmail(verifiedEmail) === draftEmail
-        && draft.name
-        && draft.phone
+        emailPattern.test(draft.email || '')
+        && draft.department
+        && draft.employeeId
     );
 }
 
-function isUserFormStepUnlocked(step) {
-    if (step <= 1) {
-        return true;
+function isAccountStepComplete() {
+    const draft = state.userDraft || {};
+    const hasNames = Boolean((draft.firstName || '').trim() && (draft.lastName || '').trim());
+    const hasPhone = Boolean((draft.phone || '').trim());
+    const editing = Boolean(state.editingUserId);
+
+    if (!hasNames || !hasPhone) {
+        return false;
     }
 
-    if (step === 2) {
-        return Boolean(state.userVerification && state.userVerification.status === 'verified');
+    if (editing) {
+        if (!draft.password && !draft.passwordConfirm) {
+            return true;
+        }
     }
 
-    if (step === 3) {
-        return Boolean(state.userVerification && state.userVerification.status === 'verified' && isUserInformationComplete());
-    }
-
-    return false;
+    return Boolean(
+        (draft.password || '').length >= 8
+        && draft.password === draft.passwordConfirm
+    );
 }
 
 function updateUserFormProgressState() {
     const progress = document.getElementById('userFormProgress');
-    if (!progress) return;
+    if (progress) {
+        progress.querySelectorAll('.step').forEach(item => {
+            const stepNumber = Number(item.dataset.step || 0);
+            if (!item.hasAttribute('role')) {
+                item.setAttribute('role', 'button');
+            }
+            const unlocked = stepNumber === 1 || (stepNumber === 2 && isUserInfoStepComplete());
+            item.classList.toggle('disabled', !unlocked);
+            item.setAttribute('aria-disabled', unlocked ? 'false' : 'true');
+            item.tabIndex = unlocked ? 0 : -1;
+        });
+    }
 
-    progress.querySelectorAll('.step').forEach(item => {
-        const stepNumber = Number(item.dataset.step || 0);
-        if (!stepNumber) {
-            return;
-        }
-        const forcedDisable = state.userFormStep === 3 && (stepNumber === 1 || stepNumber === 2);
-        const unlocked = isUserFormStepUnlocked(stepNumber) && !forcedDisable;
-        if (!item.hasAttribute('role')) {
-            item.setAttribute('role', 'button');
-        }
-        item.classList.toggle('disabled', !unlocked);
-        item.setAttribute('aria-disabled', unlocked ? 'false' : 'true');
-        item.tabIndex = unlocked ? 0 : -1;
-    });
-
-    const registerBtn = document.getElementById('userReviewRegisterBtn');
-    if (registerBtn) {
-        registerBtn.disabled = !isUserFormStepUnlocked(3);
+    const submitBtn = document.getElementById('userFormSubmitBtn');
+    if (submitBtn) {
+        submitBtn.disabled = state.userFormStep !== 2 || !isAccountStepComplete();
     }
 }
 
+const invitationStageOrder = ['prepared', 'account-info', 'otp', 'activated'];
+
+function updateInvitationTimeline() {
+    const timeline = document.getElementById('invitationTimeline');
+    if (!timeline) {
+        return;
+    }
+
+    const stageIndex = invitationStageOrder.indexOf(state.registrationFlow.stage);
+    const activeIndex = stageIndex >= 0 ? stageIndex : 0;
+
+    timeline.querySelectorAll('li').forEach((item, index) => {
+        item.classList.toggle('active', index === activeIndex);
+        item.classList.toggle('completed', index < activeIndex);
+    });
+}
+
+function setInvitationStage(stage) {
+    if (!invitationStageOrder.includes(stage)) {
+        return;
+    }
+    state.registrationFlow.stage = stage;
+    updateInvitationTimeline();
+}
+
 function collectUserFormStepData(step) {
+    const draft = { ...(state.userDraft || {}) };
+
     if (step === 1) {
         const emailInput = document.getElementById('userEmail');
-        if (!emailInput) {
+        const departmentInput = document.getElementById('userDepartment');
+        const employeeIdInput = document.getElementById('userEmployeeId');
+        if (!emailInput || !departmentInput || !employeeIdInput) {
             return false;
         }
 
         const email = emailInput.value.trim();
+        const department = departmentInput.value.trim();
+        const employeeId = employeeIdInput.value.trim();
         const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
         if (!emailPattern.test(email)) {
-            showNotification('error', 'Enter a valid email address before continuing.');
+            showNotification('error', 'Please enter a valid email address.');
             emailInput.focus();
             return false;
         }
-
-        const verification = state.userVerification;
-        if (!verification || verification.status !== 'verified' || verification.email !== normalizeEmail(email)) {
-            showNotification('warning', 'Please verify the email with the "Check" button before proceeding.');
-            emailInput.focus();
+        if (!department) {
+            showNotification('error', 'Department is required.');
+            departmentInput.focus();
+            return false;
+        }
+        if (!employeeId) {
+            showNotification('error', 'Employee ID is required.');
+            employeeIdInput.focus();
             return false;
         }
 
-        state.userDraft = {
-            ...(state.userDraft || {}),
-            email
-        };
+        draft.email = email;
+        draft.department = department;
+        draft.employeeId = employeeId;
+
+        const emailDisplay = document.getElementById('registrationEmail');
+        if (emailDisplay) {
+            emailDisplay.value = email;
+        }
+
+        state.userDraft = draft;
+        updateUserFormProgressState();
         return true;
     }
 
     if (step === 2) {
-        const verification = state.userVerification;
-        const confirmedEmail = document.getElementById('userEmailConfirmed');
+        const firstNameInput = document.getElementById('registrationFirstName');
+        const lastNameInput = document.getElementById('registrationLastName');
+        const phoneInput = document.getElementById('registrationPhone');
+        const passwordInput = document.getElementById('registrationPassword');
+        const confirmInput = document.getElementById('registrationPasswordConfirm');
+        const photoInput = document.getElementById('registrationPhoto');
 
-        if (!verification || verification.status !== 'verified' || !verification.account) {
-            showNotification('warning', 'Verify an active Onrev platform account before registering.');
+        if (!firstNameInput || !lastNameInput || !phoneInput || !passwordInput || !confirmInput) {
             return false;
         }
 
-        const account = verification.account;
-        const name = (account.name || (state.userDraft ? state.userDraft.name : '') || '').trim();
-        const phone = (account.phone || (state.userDraft ? state.userDraft.phone : '') || '').trim();
-        const department = account.department || (state.userDraft ? state.userDraft.department : '');
-        const email = account.email || (state.userDraft ? state.userDraft.email : '');
+        const firstName = firstNameInput.value.trim();
+        const lastName = lastNameInput.value.trim();
+        const phone = phoneInput.value.trim();
+        const password = passwordInput.value;
+        const confirm = confirmInput.value;
+        const editing = Boolean(state.editingUserId);
 
-        if (!name) {
-            showNotification('error', 'The Onrev profile is missing a name. Update it on the platform before registering.');
+        if (!firstName) {
+            showNotification('error', 'First name is required.');
+            firstNameInput.focus();
             return false;
         }
-
+        if (!lastName) {
+            showNotification('error', 'Last name is required.');
+            lastNameInput.focus();
+            return false;
+        }
         if (!phone) {
-            showNotification('error', 'The Onrev profile is missing a phone number. Update it on the platform before registering.');
+            showNotification('error', 'Phone number is required.');
+            phoneInput.focus();
             return false;
         }
 
-        if (confirmedEmail) {
-            confirmedEmail.value = email;
-        }
-
-        state.userDraft = {
-            ...(state.userDraft || {}),
-            name,
-            phone,
-            department,
-            email,
-            photoUrl: getUserAvatarUrl(email)
-        };
-
-        return true;
-    }
-
-    if (step === 3) {
-        const accountTypeSelect = document.getElementById('userAccountType');
-        const roleSelect = document.getElementById('userRole');
-        const permissionsSummary = document.getElementById('userPermissionsSummary');
-        const expirationInput = document.getElementById('userExpirationDate');
-
-        if (!accountTypeSelect || !accountTypeSelect.value) {
-            showNotification('error', 'Please select an account type before adding the user.');
-            if (accountTypeSelect) {
-                accountTypeSelect.focus();
-            }
-            return false;
-        }
-
-        const accountType = accountTypeSelect.value;
-        let role = 'Super Admin';
-
-        if (accountType === 'platform-administrator') {
-            if (!roleSelect || !roleSelect.value) {
-                showNotification('error', 'Select a registered role for admins.');
-                if (roleSelect) {
-                    roleSelect.focus();
-                }
+        if (!editing || password || confirm) {
+            if (password.length < 8) {
+                showNotification('error', 'Password must be at least 8 characters long.');
+                passwordInput.focus();
                 return false;
             }
-            role = roleSelect.value;
-        }
-
-        let expiresOn = '';
-        if (expirationInput && expirationInput.value) {
-            const parsed = new Date(`${expirationInput.value}T00:00:00`);
-            if (Number.isNaN(parsed.getTime())) {
-                showNotification('error', 'Enter a valid expiration date or leave it blank.');
-                expirationInput.focus();
+            if (password !== confirm) {
+                showNotification('error', 'Password confirmation does not match.');
+                confirmInput.focus();
                 return false;
             }
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            if (parsed < today) {
-                showNotification('error', 'The expiration date cannot be in the past.');
-                expirationInput.focus();
-                return false;
-            }
-            expiresOn = expirationInput.value;
         }
 
-        state.userDraft = {
-            ...(state.userDraft || {}),
-            accountType,
-            role,
-            status: (state.userDraft && state.userDraft.status) || 'Active',
-            permissionSummary: permissionsSummary ? permissionsSummary.textContent.trim() : '',
-            expiresOn
-        };
+        draft.firstName = firstName;
+        draft.lastName = lastName;
+        draft.phone = phone;
+        draft.password = password;
+        draft.passwordConfirm = confirm;
+
+        if (photoInput && photoInput.files && photoInput.files[0]) {
+            draft.photoFileName = photoInput.files[0].name;
+        } else {
+            draft.photoFileName = draft.photoFileName || '';
+        }
+
+        state.userDraft = draft;
+        updateUserFormProgressState();
         return true;
     }
 
     return true;
 }
 
-function handleUserFormNext() {
-    if (state.userFormStep >= 3) {
-        return;
-    }
-    const currentStep = state.userFormStep;
-    if (!collectUserFormStepData(currentStep)) {
-        return;
-    }
-    const nextStep = currentStep + 1;
-    setUserFormStep(nextStep);
-    focusUserFormStep(nextStep);
-}
-
-function handleUserFormStepThreeCancel() {
-    if (state.userFormStep !== 3) {
-        return;
-    }
-    if (state.editingUserId) {
-        hideUserForm();
+function handleUserInfoStep() {
+    if (!collectUserFormStepData(1)) {
         return;
     }
     setUserFormStep(2);
@@ -2853,93 +3264,52 @@ function showUserForm(mode, userId = null) {
     const subtitleEl = document.getElementById('userFormSubtitle');
     const form = document.getElementById('userForm');
     const emailInput = document.getElementById('userEmail');
-    const emailConfirmedInput = document.getElementById('userEmailConfirmed');
-    const roleSelect = document.getElementById('userRole');
+    const departmentInput = document.getElementById('userDepartment');
+    const employeeIdInput = document.getElementById('userEmployeeId');
+    const firstNameInput = document.getElementById('registrationFirstName');
+    const lastNameInput = document.getElementById('registrationLastName');
+    const phoneInput = document.getElementById('registrationPhone');
+    const passwordInput = document.getElementById('registrationPassword');
+    const confirmInput = document.getElementById('registrationPasswordConfirm');
+    const emailDisplay = document.getElementById('registrationEmail');
+    const photoInput = document.getElementById('registrationPhoto');
     const submitBtn = document.getElementById('userFormSubmitBtn');
-    const verifyBtn = document.getElementById('userVerifyBtn');
-    const accountTypeSelect = document.getElementById('userAccountType');
-    const registerBtn = document.getElementById('userReviewRegisterBtn');
-    const expirationInput = document.getElementById('userExpirationDate');
-    const permissionsSummary = document.getElementById('userPermissionsSummary');
-    const editSummaryPanel = document.getElementById('userEditSummaryPanel');
 
-    if (
-        !formPage ||
-        !listView ||
-        !form ||
-        !emailInput ||
-        !emailConfirmedInput ||
-        !roleSelect ||
-        !submitBtn ||
-        !titleEl ||
-        !subtitleEl ||
-        !verifyBtn ||
-        !accountTypeSelect
-    ) {
+    if (!formPage || !listView || !form || !emailInput || !departmentInput || !employeeIdInput || !firstNameInput || !lastNameInput || !phoneInput || !passwordInput || !confirmInput || !emailDisplay || !submitBtn) {
         return;
     }
 
-    formPage.classList.toggle('editing-mode', mode === 'edit');
-
-    roleSelect.innerHTML = '<option value="">Select a role</option>';
-    const activeRoles = roles.filter(role => (role.status || 'active').toLowerCase() === 'active');
-    activeRoles.forEach(role => {
-        const option = document.createElement('option');
-        option.value = role.name;
-        option.textContent = role.name;
-        roleSelect.appendChild(option);
-    });
-
-    accountTypeSelect.value = '';
-
-    if (editSummaryPanel) {
-        editSummaryPanel.classList.add('hidden');
+    form.reset();
+    if (photoInput) {
+        photoInput.value = '';
     }
-
-    if (permissionsSummary) {
-        permissionsSummary.textContent = '';
-    }
-
-    syncAccountEditLayout();
 
     const defaultDraft = {
-        name: '',
         email: '',
-        phone: '',
         department: '',
-        accountType: null,
-        role: '',
-        status: 'Active',
-        permissionSummary: '',
-        photoUrl: '',
-        expiresOn: ''
+        employeeId: '',
+        firstName: '',
+        lastName: '',
+        phone: '',
+        password: '',
+        passwordConfirm: '',
+        status: 'Pending',
+        photoFileName: ''
     };
 
-    state.editingUserId = null;
     state.userDraft = { ...defaultDraft };
-
-    form.reset();
-    resetUserVerification(true);
-    updateUserInfoSummary(null);
-
-    emailInput.value = '';
-    emailInput.readOnly = false;
-    emailConfirmedInput.value = '';
-
-    verifyBtn.disabled = false;
-    verifyBtn.innerHTML = '<i class="fas fa-check-circle"></i> Verify';
-
-    if (registerBtn) {
-        registerBtn.disabled = true;
-    }
-
-    if (expirationInput) {
-        expirationInput.value = '';
-    }
-
-    roleSelect.disabled = true;
+    state.editingUserId = null;
+    state.registrationFlow = {
+        otp: null,
+        userId: null,
+        expiresAt: null,
+        token: null,
+        stage: 'prepared'
+    };
 
     let initialStep = 1;
+    submitBtn.textContent = 'Add';
+    emailInput.readOnly = false;
 
     if (mode === 'edit' && typeof userId === 'number') {
         const user = users.find(u => u.id === userId);
@@ -2949,121 +3319,69 @@ function showUserForm(mode, userId = null) {
 
         state.editingUserId = userId;
 
-        const fallbackPhone = user.phone || `+96650${String(user.id).padStart(6, '0')}`;
-        const inferredAccountType = user.accountType
-            ? user.accountType
-            : (user.role === 'Super Admin' ? 'system-administrator' : 'platform-administrator');
+        const firstName = user.firstName || (user.name ? user.name.split(' ')[0] : '');
+        const lastName = user.lastName || (user.name ? user.name.split(' ').slice(1).join(' ') : '');
+        const phone = user.phone || `+96650${String(user.id).padStart(6, '0')}`;
 
-        const draft = {
-            name: user.name || '',
-            email: user.email || '',
-            phone: fallbackPhone,
-            department: user.department || '',
-            accountType: inferredAccountType,
-            role: inferredAccountType === 'system-administrator' ? 'Super Admin' : (user.role || ''),
-            status: user.status || 'Active',
-            permissionSummary: user.permissionSummary || '',
-            photoUrl: getUserAvatarUrl(user.email || `user-${userId}`),
-            expiresOn: user.expiresOn || ''
-        };
-
-        state.userDraft = { ...defaultDraft, ...draft };
-
-        emailInput.value = draft.email;
+        emailInput.value = user.email || '';
         emailInput.readOnly = true;
-        emailConfirmedInput.value = draft.email;
+        departmentInput.value = user.department || '';
+        employeeIdInput.value = user.employeeId || '';
+        firstNameInput.value = firstName;
+        lastNameInput.value = lastName;
+        phoneInput.value = phone;
+        passwordInput.value = '';
+        confirmInput.value = '';
+        emailDisplay.value = user.email || '';
 
-        updateUserInfoSummary({
-            email: draft.email,
-            name: draft.name,
-            phone: draft.phone,
-            department: draft.department
-        });
-
-        if (editSummaryPanel) {
-            editSummaryPanel.classList.remove('hidden');
-            syncAccountEditLayout();
-        }
-
-        if (permissionsSummary) {
-            permissionsSummary.textContent = draft.permissionSummary || '';
-        }
-
-        if (expirationInput && draft.expiresOn) {
-            expirationInput.value = draft.expiresOn;
-        }
-
-        accountTypeSelect.value = inferredAccountType;
-
-        if (inferredAccountType === 'platform-administrator') {
-            roleSelect.disabled = false;
-            const hasRoleOption = Array.from(roleSelect.options).some(option => option.value === draft.role);
-            if (!hasRoleOption && draft.role && draft.role !== 'Super Admin') {
-                const fallbackOption = document.createElement('option');
-                fallbackOption.value = draft.role;
-                fallbackOption.textContent = draft.role;
-                roleSelect.appendChild(fallbackOption);
-            }
-            roleSelect.value = draft.role;
-        } else {
-            roleSelect.disabled = true;
-            roleSelect.value = '';
-        }
-
-        const platformAccount = lookupPlatformAccount(draft.email) || {
-            email: draft.email,
-            name: draft.name,
-            phone: draft.phone,
-            department: draft.department,
-            status: 'active'
+        state.userDraft = {
+            ...defaultDraft,
+            email: user.email || '',
+            department: user.department || '',
+            employeeId: user.employeeId || '',
+            firstName,
+            lastName,
+            phone,
+            password: '',
+            passwordConfirm: '',
+            status: user.status || 'Pending',
+            photoFileName: user.photoFileName || ''
         };
 
-        state.userVerification = {
-            status: 'verified',
-            email: normalizeEmail(draft.email),
-            account: platformAccount
-        };
-
-        setVerificationBanner('success', 'This account was previously verified. You can proceed with updates.');
-        verifyBtn.disabled = true;
-        verifyBtn.innerHTML = '<i class="fas fa-circle-check"></i> Verified';
-
-        if (registerBtn) {
-            registerBtn.disabled = false;
-        }
-
-        if (submitBtn) {
-            submitBtn.textContent = 'Update User';
-        }
-
-        titleEl.textContent = 'Edit User Account';
-    subtitleEl.textContent = '';
-
-        initialStep = 3;
+        submitBtn.textContent = 'Save';
+        initialStep = 2;
     } else {
-        if (submitBtn) {
-            submitBtn.textContent = 'Add User';
-        }
-    titleEl.textContent = 'Add New User';
-    subtitleEl.textContent = '';
-    if (editSummaryPanel) {
-        editSummaryPanel.classList.add('hidden');
+        emailInput.value = '';
+        departmentInput.value = '';
+        employeeIdInput.value = '';
+        firstNameInput.value = '';
+        lastNameInput.value = '';
+        phoneInput.value = '';
+        passwordInput.value = '';
+        confirmInput.value = '';
+        emailDisplay.value = '';
     }
-    syncAccountEditLayout();
+
+    if (titleEl) {
+        titleEl.textContent = state.editingUserId ? 'Edit User' : 'Add New User';
+    }
+    if (subtitleEl) {
+        subtitleEl.textContent = state.editingUserId ? 'Update profile or resend invitation details.' : 'Invite a new user to the control panel.';
     }
 
     listView.classList.add('hidden');
     formPage.classList.remove('hidden');
 
-    state.userFormStep = initialStep;
     setUserFormStep(initialStep);
     focusUserFormStep(initialStep);
-    updateAccountTypeUI();
     updateUserFormProgressState();
     updateBreadcrumb();
+    updateInvitationTimeline();
 
     if (initialStep === 1) {
         emailInput.focus();
+    } else {
+        firstNameInput.focus();
     }
 }
 
@@ -3072,75 +3390,35 @@ function hideUserForm() {
     const listView = document.getElementById('usersListView');
     const form = document.getElementById('userForm');
     const emailInput = document.getElementById('userEmail');
-    const emailConfirmedInput = document.getElementById('userEmailConfirmed');
-    const roleSelect = document.getElementById('userRole');
-    const verifyBtn = document.getElementById('userVerifyBtn');
-    const submitBtn = document.getElementById('userFormSubmitBtn');
-    const registerBtn = document.getElementById('userReviewRegisterBtn');
-    const accountTypeSelect = document.getElementById('userAccountType');
-    const expirationInput = document.getElementById('userExpirationDate');
-    const titleEl = document.getElementById('userFormTitle');
-    const subtitleEl = document.getElementById('userFormSubtitle');
-    const editSummaryPanel = document.getElementById('userEditSummaryPanel');
+    const photoInput = document.getElementById('registrationPhoto');
 
     if (form) {
         form.reset();
     }
-
-    resetUserVerification(true);
-    updateUserInfoSummary(null);
-    renderRolePermissionsPreview(null);
+    if (photoInput) {
+        photoInput.value = '';
+    }
 
     if (emailInput) {
-        emailInput.value = '';
         emailInput.readOnly = false;
     }
-    if (emailConfirmedInput) {
-        emailConfirmedInput.value = '';
-    }
-    if (verifyBtn) {
-        verifyBtn.disabled = false;
-        verifyBtn.innerHTML = '<i class="fas fa-check-circle"></i> Verify';
-    }
-    if (registerBtn) {
-        registerBtn.disabled = true;
-    }
-    if (accountTypeSelect) {
-        accountTypeSelect.value = '';
-    }
-    if (roleSelect) {
-        roleSelect.disabled = true;
-        roleSelect.value = '';
-    }
-    if (expirationInput) {
-        expirationInput.value = '';
-    }
-    if (submitBtn) {
-        submitBtn.textContent = 'Add User';
-    }
-    if (titleEl) {
-        titleEl.textContent = 'Add New User';
-    }
-    if (subtitleEl) {
-        subtitleEl.textContent = '';
-    }
-    if (editSummaryPanel) {
-        editSummaryPanel.classList.add('hidden');
-    }
-
-    syncAccountEditLayout();
 
     state.userDraft = null;
-    state.userVerification = null;
     state.editingUserId = null;
+    state.registrationFlow = {
+        otp: null,
+        userId: null,
+        expiresAt: null,
+        token: null,
+        stage: 'prepared'
+    };
     state.userFormStep = 1;
 
-    updateAccountTypeUI();
     updateUserFormProgressState();
+    updateInvitationTimeline();
     updateBreadcrumb();
 
     if (formPage) {
-        formPage.classList.remove('editing-mode');
         formPage.classList.add('hidden');
     }
     if (listView) {
@@ -3151,14 +3429,19 @@ function hideUserForm() {
 function handleUserFormSubmit(event) {
     event.preventDefault();
 
-    if (!collectUserFormStepData(3)) {
-        setUserFormStep(3);
+    if (!collectUserFormStepData(1)) {
+        setUserFormStep(1);
+        return;
+    }
+
+    if (!collectUserFormStepData(2)) {
+        setUserFormStep(2);
         return;
     }
 
     const draft = state.userDraft;
-    if (!draft || !draft.name || !draft.email || !draft.role || !draft.accountType) {
-        showNotification('error', 'Please complete all registration steps before submitting the user.');
+    if (!draft) {
+        showNotification('error', 'Unable to continue. Please try again.');
         return;
     }
 
@@ -3167,58 +3450,562 @@ function handleUserFormSubmit(event) {
     if (!isEditing) {
         const existingUser = findExistingUserByEmail(draft.email);
         if (existingUser) {
-            showNotification('warning', 'This email already has an account in Users Management. Use the edit action instead.');
+            showNotification('warning', 'This email already exists in Users Management.');
+            setUserFormStep(1);
             return;
         }
     }
 
+    const fullName = `${draft.firstName} ${draft.lastName}`.trim();
+
     if (isEditing) {
         const user = users.find(u => u.id === state.editingUserId);
-        if (user) {
-            user.name = draft.name;
-            user.email = draft.email;
-            user.phone = draft.phone;
-            user.department = draft.department;
-            user.role = draft.role;
-            user.accountType = draft.accountType;
-            user.status = draft.status || user.status || 'Active';
-            user.permissionSummary = draft.permissionSummary || '';
-            user.expiresOn = draft.expiresOn || '';
-            showNotification('success', 'User account updated successfully.');
+        if (!user) {
+            showNotification('error', 'The selected user is no longer available.');
+            hideUserForm();
+            return;
+        }
+
+        user.name = fullName || user.name;
+        user.firstName = draft.firstName;
+        user.lastName = draft.lastName;
+        user.phone = draft.phone;
+        user.department = draft.department;
+        user.employeeId = draft.employeeId;
+        user.email = draft.email;
+        ensureUserAuthRecord(user);
+        if (draft.photoFileName) {
+            user.photoFileName = draft.photoFileName;
+        }
+        if (draft.password) {
+            const updatedAt = new Date().toISOString();
+            user.auth.passwordHash = hashPasswordValue(draft.password);
+            user.auth.lastUpdated = updatedAt;
+            user.passwordUpdatedAt = updatedAt;
+        }
+
+        showNotification('success', 'User details updated successfully.');
+
+        saveUsersToStorage();
+        renderUsersTable(state.userSearchTerm, state.currentUserPage);
+        renderStats();
+        hideUserForm();
+        return;
+    }
+
+    const currentMaxId = users.reduce((max, user) => Math.max(max, user.id), 0);
+    const newId = currentMaxId + 1;
+    const otpCode = generateRegistrationOtp();
+    const invitationToken = generateRegistrationToken();
+    const createdIso = new Date().toISOString();
+    const passwordHash = draft.password ? hashPasswordValue(draft.password) : '';
+    const passwordTimestamp = draft.password ? createdIso : null;
+
+    const newUser = {
+        id: newId,
+        name: fullName,
+        firstName: draft.firstName,
+        lastName: draft.lastName,
+        email: draft.email,
+        department: draft.department,
+        employeeId: draft.employeeId,
+        phone: draft.phone,
+        role: 'Pending Role',
+        accountType: 'pending-invite',
+        status: 'Pending',
+        lastLogin: 'Never',
+        created: new Date().toLocaleDateString(),
+        createdAt: createdIso,
+        invitation: {
+            otp: otpCode,
+            token: invitationToken,
+            sentAt: createdIso,
+            completedAt: null,
+            verifiedAt: null,
+            lastOtpSentAt: null
+        },
+        auth: {
+            passwordHash,
+            lastUpdated: passwordTimestamp
+        },
+        temporaryPasswordSetAt: passwordTimestamp,
+        sessionExpiresAt: null,
+        photoFileName: draft.photoFileName || ''
+    };
+
+    users.unshift(newUser);
+
+    state.registrationFlow.otp = otpCode;
+    state.registrationFlow.userId = newId;
+    state.registrationFlow.expiresAt = Date.now() + 10 * 60 * 1000;
+    state.registrationFlow.token = invitationToken;
+    updateRegistrationLinkDisplay(invitationToken);
+    setInvitationStage('account-info');
+
+    saveUsersToStorage();
+    updateUsersManagementCount();
+    renderUsersTable('', 1);
+    renderStats();
+
+    showNotification('success', `Invitation sent to ${draft.email}. The user is now pending activation.`, 6000);
+
+    hideUserForm();
+    openRegistrationFlow(newId, { autoStart: true });
+}
+
+function showRegistrationFlowStep(step) {
+    document.querySelectorAll('.registration-flow-step').forEach(section => {
+        const sectionStep = section.dataset.step;
+        if (sectionStep === step) {
+            section.classList.remove('hidden');
+            section.classList.add('active');
+        } else {
+            section.classList.add('hidden');
+            section.classList.remove('active');
+        }
+    });
+}
+
+function resetRegistrationFlowForms() {
+    const completionForm = document.getElementById('registrationCompletionForm');
+    const otpForm = document.getElementById('registrationOtpForm');
+    const photoInput = document.getElementById('flowPhoto');
+    const otpInput = document.getElementById('flowOtp');
+    if (completionForm) {
+        completionForm.reset();
+    }
+    if (otpForm) {
+        otpForm.reset();
+    }
+    if (photoInput) {
+        photoInput.value = '';
+    }
+    if (otpInput) {
+        otpInput.value = '';
+    }
+}
+
+function openRegistrationFlow(userId, options = {}) {
+    const overlay = document.getElementById('registrationFlowOverlay');
+    const flowFirstName = document.getElementById('flowFirstName');
+    const flowLastName = document.getElementById('flowLastName');
+    const flowEmail = document.getElementById('flowEmail');
+    const flowPhone = document.getElementById('flowPhone');
+    const flowPassword = document.getElementById('flowPassword');
+    const flowPasswordConfirm = document.getElementById('flowPasswordConfirm');
+    const otpInstructions = document.getElementById('otpInstructions');
+
+    if (!overlay || !flowFirstName || !flowLastName || !flowEmail || !flowPhone || !flowPassword || !flowPasswordConfirm || !otpInstructions) {
+        return;
+    }
+
+    const user = users.find(u => u.id === userId);
+    if (!user) {
+        showNotification('error', 'Unable to load the registration journey for this user.');
+        return;
+    }
+
+    resetRegistrationFlowForms();
+
+    const initialFirstName = user.firstName || (user.name ? user.name.split(' ')[0] : '');
+    const initialLastName = user.lastName || (user.name ? user.name.split(' ').slice(1).join(' ') : '');
+    const initialPhone = user.phone || `+96650${String(user.id).padStart(6, '0')}`;
+
+    flowFirstName.value = initialFirstName;
+    flowLastName.value = initialLastName;
+    flowEmail.value = user.email;
+    flowPhone.value = initialPhone;
+    flowPassword.value = '';
+    flowPasswordConfirm.value = '';
+
+    ensureUserInvitationRecord(user);
+    ensureUserAuthRecord(user);
+
+    if (!user.invitation.sentAt) {
+        user.invitation.sentAt = new Date().toISOString();
+    }
+    if (!user.invitation.otp) {
+        user.invitation.otp = generateRegistrationOtp();
+    }
+
+    state.registrationFlow.userId = userId;
+    state.registrationFlow.otp = user.invitation.otp || generateRegistrationOtp();
+    state.registrationFlow.expiresAt = Date.now() + 10 * 60 * 1000;
+    state.registrationFlow.token = user.invitation.token;
+    updateRegistrationLinkDisplay(state.registrationFlow.token);
+
+    const shouldStartAtOtp = options && options.resumeOtp;
+    if (user.status === 'Active') {
+        setInvitationStage('activated');
+        showRegistrationFlowStep('success');
+    } else if (shouldStartAtOtp) {
+        setInvitationStage('otp');
+        otpInstructions.textContent = `A new one-time password was sent to ${user.email}. Enter the 6-digit code to activate the account.`;
+        showRegistrationFlowStep('otp');
+    } else {
+        setInvitationStage('account-info');
+        showRegistrationFlowStep('account');
+    }
+
+    overlay.classList.remove('hidden');
+    if (shouldStartAtOtp) {
+        const otpInput = document.getElementById('flowOtp');
+        if (otpInput) {
+            otpInput.focus();
         }
     } else {
-        const currentMaxId = users.reduce((max, user) => Math.max(max, user.id), 0);
-        const newId = currentMaxId + 1;
-        const newUser = {
-            id: newId,
-            name: draft.name,
-            email: draft.email,
-            phone: draft.phone,
-            department: draft.department,
-            role: draft.role,
-            accountType: draft.accountType,
-            status: draft.status || 'Active',
-            lastLogin: 'Never',
-            created: new Date().toLocaleDateString(),
-            permissionSummary: draft.permissionSummary || '',
-            expiresOn: draft.expiresOn || ''
-        };
-        users.unshift(newUser);
-    showNotification('success', 'User Account Created Successfully', 6000);
+        flowFirstName.focus();
     }
+}
+
+function closeRegistrationFlow() {
+    const overlay = document.getElementById('registrationFlowOverlay');
+    if (!overlay || overlay.classList.contains('hidden')) {
+        return;
+    }
+
+    const user = state.registrationFlow.userId ? users.find(u => u.id === state.registrationFlow.userId) : null;
+    const stage = user && user.status === 'Active' ? 'activated' : 'account-info';
+    setInvitationStage(stage);
+
+    overlay.classList.add('hidden');
+    resetRegistrationFlowForms();
+    state.registrationFlow.otp = null;
+    state.registrationFlow.userId = null;
+    state.registrationFlow.expiresAt = null;
+    state.registrationFlow.token = null;
+    updateRegistrationLinkDisplay(null);
+}
+
+function handleRegistrationCompletionSubmit(event) {
+    event.preventDefault();
+
+    const flowFirstName = document.getElementById('flowFirstName');
+    const flowLastName = document.getElementById('flowLastName');
+    const flowPhone = document.getElementById('flowPhone');
+    const flowPassword = document.getElementById('flowPassword');
+    const flowPasswordConfirm = document.getElementById('flowPasswordConfirm');
+    const otpInstructions = document.getElementById('otpInstructions');
+
+    if (!flowFirstName || !flowLastName || !flowPhone || !flowPassword || !flowPasswordConfirm || !otpInstructions) {
+        return;
+    }
+
+    const firstName = flowFirstName.value.trim();
+    const lastName = flowLastName.value.trim();
+    const phone = flowPhone.value.trim();
+    const password = flowPassword.value;
+    const confirm = flowPasswordConfirm.value;
+
+    if (!firstName) {
+        showNotification('error', 'First name is required to continue.');
+        flowFirstName.focus();
+        return;
+    }
+    if (!lastName) {
+        showNotification('error', 'Last name is required to continue.');
+        flowLastName.focus();
+        return;
+    }
+    if (!phone) {
+        showNotification('error', 'Phone number is required to continue.');
+        flowPhone.focus();
+        return;
+    }
+    if (password.length < 8) {
+        showNotification('error', 'Password must contain at least 8 characters.');
+        flowPassword.focus();
+        return;
+    }
+    if (password !== confirm) {
+        showNotification('error', 'Password confirmation does not match.');
+        flowPasswordConfirm.focus();
+        return;
+    }
+
+    const userId = state.registrationFlow.userId;
+    const user = userId ? users.find(u => u.id === userId) : null;
+    if (!user) {
+        showNotification('error', 'Unable to continue the registration journey.');
+        closeRegistrationFlow();
+        return;
+    }
+
+    ensureUserAuthRecord(user);
+    ensureUserInvitationRecord(user);
+
+    user.firstName = firstName;
+    user.lastName = lastName;
+    user.name = `${firstName} ${lastName}`.trim();
+    user.phone = phone;
+    user.temporaryPasswordSetAt = new Date().toISOString();
+    user.invitation = user.invitation || {};
+    user.invitation.completedAt = new Date().toISOString();
+
+    user.auth.passwordHash = hashPasswordValue(password);
+    user.auth.lastUpdated = user.temporaryPasswordSetAt;
+
+    const newOtp = generateRegistrationOtp();
+    user.invitation.otp = newOtp;
+    user.invitation.lastOtpSentAt = new Date().toISOString();
+    state.registrationFlow.otp = newOtp;
+    state.registrationFlow.expiresAt = Date.now() + 10 * 60 * 1000;
+    state.registrationFlow.token = user.invitation.token;
+    updateRegistrationLinkDisplay(state.registrationFlow.token);
+
+    otpInstructions.textContent = `A one-time password was sent to ${user.email}. Enter the 6-digit code to activate the account.`;
+    setInvitationStage('otp');
+    showRegistrationFlowStep('otp');
 
     saveUsersToStorage();
 
-    updateUsersManagementCount();
-    renderStats();
+    const otpInput = document.getElementById('flowOtp');
+    if (otpInput) {
+        otpInput.focus();
+        otpInput.value = state.registrationFlow.otp;
+        otpInput.select();
+    }
+}
 
-    if (isEditing) {
-        renderUsersTable(state.userSearchTerm, state.currentUserPage);
-    } else {
-        renderUsersTable('', 1);
+function handleRegistrationOtpSubmit(event) {
+    event.preventDefault();
+
+    const otpInput = document.getElementById('flowOtp');
+    if (!otpInput) {
+        return;
     }
 
-    hideUserForm();
+    const entered = otpInput.value.trim();
+    if (!/^\d{6}$/.test(entered)) {
+        showNotification('error', 'Enter the 6-digit code sent to the user.');
+        otpInput.focus();
+        return;
+    }
+
+    const userId = state.registrationFlow.userId;
+    const user = userId ? users.find(u => u.id === userId) : null;
+    if (!user || !user.invitation) {
+        showNotification('error', 'The invitation for this user is no longer available.');
+        closeRegistrationFlow();
+        return;
+    }
+
+    if (entered !== state.registrationFlow.otp) {
+        showNotification('error', 'The code entered is incorrect. Please try again or resend the OTP.');
+        otpInput.focus();
+        otpInput.select();
+        return;
+    }
+
+    user.status = 'Active';
+    user.accountType = 'platform-user';
+    user.role = user.role === 'Pending Role' ? 'Control Panel User' : user.role;
+    user.lastLogin = 'Awaiting first login';
+    user.invitation.verifiedAt = new Date().toISOString();
+    state.registrationFlow.token = user.invitation.token;
+    updateRegistrationLinkDisplay(state.registrationFlow.token);
+
+    setInvitationStage('activated');
+    showRegistrationFlowStep('success');
+
+    saveUsersToStorage();
+    renderUsersTable(state.userSearchTerm, state.currentUserPage);
+    renderStats();
+    showNotification('success', `${user.email} has completed registration and can now sign in.`);
+
+    const loginTarget = getLoginPageUrl();
+    if (loginTarget) {
+        window.open(loginTarget, '_blank');
+    }
+}
+
+function handleRegistrationFlowResend() {
+    const userId = state.registrationFlow.userId;
+    const user = userId ? users.find(u => u.id === userId) : null;
+    const otpInstructions = document.getElementById('otpInstructions');
+    if (!user || !otpInstructions) {
+        return;
+    }
+
+    ensureUserInvitationRecord(user);
+
+    const newOtp = generateRegistrationOtp();
+    state.registrationFlow.otp = newOtp;
+    state.registrationFlow.expiresAt = Date.now() + 10 * 60 * 1000;
+    state.registrationFlow.token = user.invitation.token;
+    updateRegistrationLinkDisplay(state.registrationFlow.token);
+
+    user.invitation.otp = newOtp;
+    user.invitation.lastOtpSentAt = new Date().toISOString();
+
+    otpInstructions.textContent = `A fresh one-time password was sent to ${user.email}. Use the new code within 10 minutes.`;
+
+    saveUsersToStorage();
+    showNotification('info', `A new OTP was sent to ${user.email}.`, 5000);
+}
+
+function normalizeRoleLookupValue(value) {
+    if (value === null || value === undefined) {
+        return '';
+    }
+    return String(value).trim().toLowerCase();
+}
+
+function getUsersAssignedToRole(role) {
+    if (!role) {
+        return [];
+    }
+
+    const lookupKeys = [role.name, role.nameEnglish, role.nameArabic, role.id]
+        .map(normalizeRoleLookupValue)
+        .filter(Boolean);
+
+    if (!lookupKeys.length) {
+        return [];
+    }
+
+    const lookup = new Set(lookupKeys);
+
+    return users.filter(user => {
+        if (!user) {
+            return false;
+        }
+        const userRoleKey = normalizeRoleLookupValue(user.role);
+        if (userRoleKey && lookup.has(userRoleKey)) {
+            return true;
+        }
+        if (user.roleId) {
+            const userRoleIdKey = normalizeRoleLookupValue(user.roleId);
+            if (userRoleIdKey && lookup.has(userRoleIdKey)) {
+                return true;
+            }
+        }
+        return false;
+    });
+}
+
+function getRoleAssignedUsersCount(role) {
+    return getUsersAssignedToRole(role).length;
+}
+
+function updateRoleUserCount(role) {
+    if (!role) {
+        return 0;
+    }
+    const count = getRoleAssignedUsersCount(role);
+    role.users = count;
+    return count;
+}
+
+function syncRoleUserCounts() {
+    roles.forEach(updateRoleUserCount);
+}
+
+function applyRoleDeletionToUsers(role, assignedUsers, disableAssignedUsers = false) {
+    if (!Array.isArray(assignedUsers) || !assignedUsers.length) {
+        return false;
+    }
+
+    const label = (role.nameEnglish || role.name || role.nameArabic || 'Role').trim();
+    assignedUsers.forEach(user => {
+        if (!user) return;
+        user.roleId = null;
+        user.role = disableAssignedUsers ? `${label} (Disabled)` : 'Unassigned';
+        if (disableAssignedUsers && user.status !== 'Inactive') {
+            user.status = 'Inactive';
+        }
+    });
+
+    return true;
+}
+
+function finalizeRoleRemoval(role, assignedUsers, options = {}) {
+    const { disableAssignedUsers = false } = options;
+    const usersChanged = applyRoleDeletionToUsers(role, assignedUsers, disableAssignedUsers);
+
+    if (usersChanged) {
+        saveUsersToStorage();
+        updateUsersManagementCount();
+        renderUsersTable(state.userSearchTerm, state.currentUserPage);
+    }
+
+    const roleIndex = roles.findIndex(item => item.id === role.id);
+    if (roleIndex !== -1) {
+        roles.splice(roleIndex, 1);
+    }
+
+    if (state.activeRoleDetailId === role.id) {
+        hideRoleDetails();
+    }
+
+    if (state.editingRoleId === role.id) {
+        state.editingRoleId = null;
+        hideRoleBuilder();
+    }
+
+    syncRoleUserCounts();
+    saveRolesToStorage();
+    updateUserRolesCount();
+    renderRolesTable(state.currentRolePage);
+    renderStats();
+}
+
+async function deleteRole(roleId) {
+    const role = roles.find(item => item.id === roleId);
+    if (!role) return;
+
+    const confirmedDelete = await showRoleConfirm(
+        'Are You Sure You Want to Delete the User Role?',
+        'OK',
+        'Cancel'
+    );
+    if (!confirmedDelete) return;
+
+    const assignedUsers = getUsersAssignedToRole(role);
+    const platformAdminAssignments = assignedUsers.filter(user => resolveUserAccountType(user) === 'platform-administrator');
+    const canDeleteImmediately = role.status !== 'active' || platformAdminAssignments.length === 0;
+
+    if (canDeleteImmediately) {
+        finalizeRoleRemoval(role, assignedUsers);
+        showNotification('success', 'User Role Deleted Successfully');
+        return;
+    }
+
+    const warningMessage = `The User Role is Assigned to (${platformAdminAssignments.length}) Users. User Accounts Assigned to This Role Will be Disabled. Are You Sure You Want to proceed?`;
+    const proceed = await showRoleConfirm(warningMessage, 'OK', 'Cancel');
+    if (!proceed) return;
+
+    const roleLabelForPrompt = role.nameEnglish || role.name || role.nameArabic || role.id;
+    const promptMessage = `To Confirm, Type "${roleLabelForPrompt}" in the Box Below`;
+    const expected = normalizeRoleLookupValue(roleLabelForPrompt);
+    const promptResult = await showRolePrompt(
+        promptMessage,
+        'Delete',
+        'Cancel',
+        roleLabelForPrompt,
+        {
+            validate: value => {
+                const trimmed = typeof value === 'string' ? value.trim() : '';
+                if (!trimmed) {
+                    return {
+                        valid: false,
+                        message: 'Field is Required'
+                    };
+                }
+                return { valid: true };
+            }
+        }
+    );
+    if (!promptResult.confirmed) return;
+
+    const provided = normalizeRoleLookupValue(promptResult.value);
+    if (!provided || provided !== expected) {
+        showNotification('error', 'Role Name Did Not Match. User Role Deletion Cancelled');
+        return;
+    }
+
+    finalizeRoleRemoval(role, assignedUsers, { disableAssignedUsers: true });
+    showNotification('success', 'User Role Deleted Successfully');
 }
 
 async function toggleRoleStatus(roleId) {
@@ -3226,16 +4013,51 @@ async function toggleRoleStatus(roleId) {
     if (!role) return;
 
     if (role.status === 'active') {
-        const confirmed = await showRoleConfirm(
+        const confirmedDisable = await showRoleConfirm(
             'Are You Sure You Want to Disable the User Role?',
-            'Disable',
+            'OK',
             'Cancel'
         );
-        if (!confirmed) return;
+        if (!confirmedDisable) return;
+
+        const assignedUsers = getUsersAssignedToRole(role);
+        const totalAssignedUsers = assignedUsers.length;
+        const platformAdminUsers = assignedUsers.filter(user => resolveUserAccountType(user) === 'platform-administrator');
+        const hasPlatformAdminAssignments = platformAdminUsers.length > 0;
+        let userAccountsUpdated = false;
+
+        if (hasPlatformAdminAssignments && totalAssignedUsers > 0) {
+            const warningMessage = `The User Role is Assigned to (${totalAssignedUsers}) Users. User Accounts Assigned to This Role Will be Disabled. Are You Sure You Want to proceed?`;
+            const proceed = await showRoleConfirm(
+                warningMessage,
+                'OK',
+                'Cancel'
+            );
+            if (!proceed) return;
+
+            assignedUsers.forEach(user => {
+                if (user && user.status !== 'Inactive') {
+                    user.status = 'Inactive';
+                    userAccountsUpdated = true;
+                }
+            });
+
+            if (userAccountsUpdated) {
+                saveUsersToStorage();
+            }
+        }
+
         role.status = 'inactive';
         role.lastUpdated = `Deactivated ${new Date().toLocaleDateString()}`;
+        updateRoleUserCount(role);
+
         saveRolesToStorage();
+        updateUserRolesCount();
         renderRolesTable(state.currentRolePage);
+        if (userAccountsUpdated) {
+            renderUsersTable(state.userSearchTerm, state.currentUserPage);
+        }
+        renderStats();
         showNotification('success', 'User Role Disabled Successfully');
     } else {
         const confirmed = await showRoleConfirm(
@@ -3246,8 +4068,11 @@ async function toggleRoleStatus(roleId) {
         if (!confirmed) return;
         role.status = 'active';
         role.lastUpdated = `Reactivated ${new Date().toLocaleDateString()}`;
+        updateRoleUserCount(role);
         saveRolesToStorage();
+        updateUserRolesCount();
         renderRolesTable(state.currentRolePage);
+        renderStats();
         showNotification('success', 'User Role has been Successfully Enabled');
     }
 }
@@ -3310,6 +4135,7 @@ function handleRoleSubmit(event) {
     const nameEnglish = document.getElementById('roleNameEnglishInput').value.trim();
     const description = document.getElementById('roleDescriptionInput').value.trim();
     const permissions = collectPermissionSelections();
+    setRolePermissionsError('');
 
     if (!nameArabic || !nameEnglish) {
         showNotification('warning', 'Arabic name and English name are required.');
@@ -3317,7 +4143,7 @@ function handleRoleSubmit(event) {
     }
 
     if (!permissions.length) {
-        showNotification('warning', 'Select at least one app permission for this role.');
+        setRolePermissionsError('Select at Least One App Permission for this Role');
         return;
     }
 
@@ -3335,6 +4161,7 @@ function handleRoleSubmit(event) {
         role.description = description;
         role.permissions = permissions;
         role.lastUpdated = `Updated ${new Date().toLocaleDateString()}`;
+        updateRoleUserCount(role);
 
     saveRolesToStorage();
         renderRolesTable(state.currentRolePage);
@@ -3360,13 +4187,14 @@ function handleRoleSubmit(event) {
         nameEnglish,
         nameArabic,
         description,
-        users: '—',
+        users: 0,
         permissions,
         status: 'active',
         lastUpdated: `Created ${new Date().toLocaleDateString()}`
     };
 
     roles.unshift(newRole);
+    updateRoleUserCount(newRole);
     saveRolesToStorage();
     updateUserRolesCount();
     renderRolesTable(1);
@@ -3406,46 +4234,53 @@ function renderUsersTable(searchTerm = state.userSearchTerm, page = state.curren
     } else {
         let index = startIndex + 1;
         tbody.innerHTML = visibleUsers.map(user => {
-        const rawStatus = (user.status || 'Active').toLowerCase();
-        const isActive = rawStatus === 'active';
-        const displayStatus = isActive ? 'Active' : 'Inactive';
-        const accountType = resolveUserAccountType(user);
-        const accountTypeLabel = mapAccountTypeLabel(accountType);
-        const accountTypeClass = mapAccountTypeClass(accountType);
-        const expirationLabel = user.expiresOn ? formatDateForDisplay(user.expiresOn) : '—';
-        return `
-        <tr>
-            <td>${index++}</td>
-            <td>
-                <div style="display: flex; align-items: center; gap: 12px;">
-                    <img src="https://picsum.photos/seed/${user.id}/40/40" alt="${user.name}" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover;">
-                    <div>
-                        <div class="user-name-row">
-                            <span class="user-name">${user.name}</span>
-                            <span class="account-type-tag ${accountTypeClass}">${accountTypeLabel}</span>
+            const rawStatus = (user.status || 'Active').toLowerCase();
+            const isActive = rawStatus === 'active';
+            const isPending = rawStatus === 'pending';
+            const displayStatus = isPending ? 'Pending' : isActive ? 'Active' : 'Inactive';
+            const statusClass = isPending ? 'pending' : isActive ? 'active' : 'inactive';
+            const accountType = resolveUserAccountType(user);
+            const accountTypeLabel = mapAccountTypeLabel(accountType);
+            const accountTypeClass = mapAccountTypeClass(accountType);
+            const expirationLabel = user.expiresOn ? formatDateForDisplay(user.expiresOn) : '—';
+
+            const secondaryAction = isPending
+                ? `<button class="action-btn activate" onclick="openRegistrationFlow(${user.id}, { autoStart: true })" title="Simulate registration"><i class="fas fa-envelope-open-text"></i></button>`
+                : `<button class="action-btn ${isActive ? 'deactivate' : 'activate'}" onclick="(async () => await handleUserToggle(${user.id}))()" title="${isActive ? 'Deactivate user' : 'Activate user'}"><i class="fas ${isActive ? 'fa-power-off' : 'fa-rotate-right'}"></i></button>`;
+
+            return `
+                <tr>
+                    <td>${index++}</td>
+                    <td>
+                        <div style="display: flex; align-items: center; gap: 12px;">
+                            <img src="https://picsum.photos/seed/${user.id}/40/40" alt="${user.name}" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover;">
+                            <div>
+                                <div class="user-name-row">
+                                    <span class="user-name">${user.name}</span>
+                                    <span class="account-type-tag ${accountTypeClass}">${accountTypeLabel}</span>
+                                </div>
+                                <div class="user-meta">${user.email}</div>
+                                ${user.department ? `<div class="user-meta">${user.department}</div>` : ''}
+                                <div class="user-meta">${user.phone || '+96650' + user.id.toString().padStart(6, '0')}</div>
+                            </div>
                         </div>
-                        <div class="user-meta">${user.email}</div>
-                        ${user.department ? `<div class="user-meta">${user.department}</div>` : ''}
-                        <div class="user-meta">${user.phone || '+96650' + user.id.toString().padStart(6, '0')}</div>
-                    </div>
-                </div>
-            </td>
-            <td>${user.role}</td>
-            <td><span class="status-badge status-${isActive ? 'active' : 'inactive'}">${displayStatus}</span></td>
-            <td>${user.lastLogin}</td>
-            <td>${user.created}</td>
-            <td>${expirationLabel}</td>
-            <td>
-                <div class="action-group">
-                    <button class="action-btn edit" onclick="showUserForm('edit', ${user.id})"><i class="fas fa-pen"></i></button>
-                    <button class="action-btn ${isActive ? 'deactivate' : 'activate'}" onclick="(async () => await handleUserToggle(${user.id}))()">
-                        <i class="fas ${isActive ? 'fa-power-off' : 'fa-rotate-right'}"></i>
-                    </button>
-                </div>
-            </td>
-        </tr>
-    `}).join('');
+                    </td>
+                    <td>${user.role}</td>
+                    <td><span class="status-badge status-${statusClass}">${displayStatus}</span></td>
+                    <td>${user.lastLogin}</td>
+                    <td>${user.created}</td>
+                    <td>${expirationLabel}</td>
+                    <td>
+                        <div class="action-group">
+                            <button class="action-btn edit" onclick="showUserForm('edit', ${user.id})" title="Edit user"><i class="fas fa-pen"></i></button>
+                            ${secondaryAction}
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }).join('');
     }
+
     renderUsersPagination(totalPages, filtered.length);
 }
 

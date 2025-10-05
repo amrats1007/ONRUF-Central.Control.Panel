@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OnRuf Control – Sign In</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" integrity="sha512-ol1rVnz04ZuBsCMcNac1P0gN5LkJx+4gt749axO+jYti7zHPg5jaAQEDnJWrt6n0ela0Fz0UlYJU8m0Iw2nDNw==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <link rel="stylesheet" href="assets/css/onruf-auth.css">
+</head>
+<body class="auth-body" data-auth-page="login">
+    <div class="auth-shell">
+        <section class="auth-panel" aria-labelledby="loginTitle">
+            <header class="auth-header">
+                <div class="auth-brand">
+                    <div class="brand-mark">OR</div>
+                    <div class="brand-text">
+                        <h1>OnRuf Control</h1>
+                        <p>Central Control Panel</p>
+                    </div>
+                </div>
+                <button type="button" class="auth-help-btn" id="authHelpBtn">
+                    <i class="fas fa-circle-question"></i>
+                    Help
+                </button>
+            </header>
+
+            <main class="auth-main">
+                <h2 id="loginTitle">Welcome back</h2>
+                <p class="auth-subtitle">Sign in to monitor platform operations and manage users securely.</p>
+
+                <form id="loginForm" class="auth-form" novalidate>
+                    <div class="form-group">
+                        <label class="form-label" for="loginEmail">Email address</label>
+                        <input type="email" id="loginEmail" class="form-input" placeholder="name@company.com" autocomplete="email" required aria-required="true">
+                    </div>
+                    <div class="form-group">
+                        <div class="form-label-row">
+                            <label class="form-label" for="loginPassword">Password</label>
+                            <a href="#" class="inline-link" id="forgotPasswordLink">Forgot password?</a>
+                        </div>
+                        <div class="input-with-toggle">
+                            <input type="password" id="loginPassword" class="form-input" placeholder="Enter your password" autocomplete="current-password" required aria-required="true">
+                            <button type="button" class="input-toggle" id="loginPasswordToggle" aria-label="Show password">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="form-group form-checkbox">
+                        <input type="checkbox" id="loginRemember" class="form-checkbox-input" checked>
+                        <label for="loginRemember">Keep me signed in for 14 days</label>
+                    </div>
+                    <button type="submit" class="btn btn-primary" id="loginSubmitBtn">
+                        <span>Sign In</span>
+                        <i class="fas fa-arrow-right"></i>
+                    </button>
+                </form>
+
+                <footer class="auth-footer">
+                    <p>New to OnRuf? <a href="complete-registration.html" class="inline-link">Activate your invitation</a></p>
+                </footer>
+            </main>
+        </section>
+
+        <aside class="auth-aside" aria-label="Operational highlights">
+            <div class="auth-aside-content">
+                <div class="aside-pill">Executive Insights</div>
+                <h2>Monitor every municipality at a glance.</h2>
+                <p>Get real-time visibility into inspections, workforce readiness, and client SLAs with the OnRuf Central Control Panel.</p>
+                <ul class="aside-list">
+                    <li><i class="fas fa-lock"></i> Enterprise-grade security controls</li>
+                    <li><i class="fas fa-chart-line"></i> KPI dashboards built-in</li>
+                    <li><i class="fas fa-bolt"></i> Rapid onboarding for new agencies</li>
+                </ul>
+            </div>
+            <div class="auth-aside-footer">
+                <p class="aside-caption">Trusted by municipal partners across the Kingdom</p>
+                <div class="aside-avatars">
+                    <span class="avatar">RM</span>
+                    <span class="avatar">JD</span>
+                    <span class="avatar">KA</span>
+                    <span class="avatar">SG</span>
+                </div>
+            </div>
+        </aside>
+    </div>
+
+    <div class="auth-toast hidden" id="authToast" role="alert" aria-live="assertive"></div>
+
+    <script src="assets/js/onruf-auth.js" defer></script>
+</body>
+</html>

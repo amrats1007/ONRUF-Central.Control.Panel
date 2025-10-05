@@ -40,6 +40,14 @@
                     <i class="fas fa-store"></i>
                     <span class="menu-text">Products</span>
                 </a>
+                <a href="#onruf-users" class="menu-item" data-section="onruf-users">
+                    <i class="fas fa-user-group"></i>
+                    <span class="menu-text">ONRUF Users</span>
+                </a>
+                <a href="#advertisments" class="menu-item" data-section="advertisments">
+                    <i class="fas fa-bullhorn"></i>
+                    <span class="menu-text">Advertisments</span>
+                </a>
             </nav>
             <div class="sidebar-footer">
                 <div class="support-card">
@@ -72,6 +80,10 @@
                         <i class="fas fa-user-shield"></i>
                         <span>Central Admin</span>
                     </div>
+                    <button class="btn btn-outline topbar-signout" id="signOutBtn">
+                        <i class="fas fa-right-from-bracket"></i>
+                        <span>Sign out</span>
+                    </button>
                 </div>
             </header>
 
@@ -270,7 +282,7 @@
                             <div class="form-card">
                                 <div style="display:flex; justify-content: space-between; align-items:center;">
                                     <div>
-                                        <h3 id="roleFormTitle" style="margin:0 0 4px;">Add New Role</h3>
+                                        <h3 id="roleFormTitle" style="margin:0 0 4px;">Add New User Role</h3>
                                         <p id="roleFormSubtitle" class="section-subtitle" style="margin:0;"></p>
                                     </div>
                                 </div>
@@ -288,7 +300,10 @@
                                         <textarea id="roleDescriptionInput" placeholder="Outline the responsibilities for this role (optional)"></textarea>
                                     </div>
                                     <div class="form-group" style="grid-column: 1 / -1;">
-                                        <label class="form-label">Permissions</label>
+                                        <div class="form-label-row">
+                                            <label class="form-label required">Permissions</label>
+                                            <span id="rolePermissionsError" class="form-validation-error hidden" role="alert"></span>
+                                        </div>
                                         <div id="permissionMatrix"></div>
                                     </div>
                                     <div style="grid-column: 1 / -1; display:flex; justify-content:flex-end; gap:12px;">
@@ -318,6 +333,17 @@
                                 <p id="roleAlertMessage">Notification</p>
                                 <div class="confirm-actions single">
                                     <button type="button" class="btn btn-primary" id="roleAlertOk">OK</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="rolePromptOverlay" class="confirm-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="rolePromptMessage">
+                            <div class="confirm-dialog" role="document">
+                                <p id="rolePromptMessage">To Confirm, Type the Role Name Below</p>
+                                <input type="text" id="rolePromptInput" class="confirm-input" aria-describedby="rolePromptMessage rolePromptError" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" />
+                                <p id="rolePromptError" class="prompt-error hidden" role="alert"></p>
+                                <div class="confirm-actions">
+                                    <button type="button" class="btn btn-outline" id="rolePromptCancel">Cancel</button>
+                                    <button type="button" class="btn btn-primary" id="rolePromptConfirm">Delete</button>
                                 </div>
                             </div>
                         </div>
@@ -389,7 +415,7 @@
                             <div class="confirm-dialog" role="document">
                                 <p id="userAlertMessage">Notification</p>
                                 <div class="confirm-actions single">
-                                    <button type="button" class="btn btn-primary" id="userAlertOk">OK</button>
+             er-                    <button type="button" class="btn btn-primary" id="userAlertOk">OK</button>
                                 </div>
                             </div>
                         </div>
@@ -398,8 +424,8 @@
                             <div class="form-card user-form-card">
                                 <div class="user-form-header">
                                     <div>
-                                        <h3 id="userFormTitle">Add New User</h3>
-                                        <p id="userFormSubtitle" class="section-subtitle" style="margin:6px 0 0;"></p>
+                                        <h3 id="userFormTitle" style="margin: 0 0 4px;">Add New User</h3>
+                                        <p id="userFormSubtitle" class="section-subtitle" style="margin:0;"></p>
                                     </div>
                                 </div>
 
@@ -408,150 +434,208 @@
                                         <li class="step active" data-step="1">
                                             <span class="step-number">1</span>
                                             <div>
-                                                <div class="step-title">Email Verification</div>
-                                                <div class="step-caption">Confirm ONRUF Account</div>
+                                                <div class="step-title">User Information</div>
+                                                <div class="step-caption">Email, Department & Employee ID</div>
                                             </div>
                                         </li>
                                         <li class="step" data-step="2">
                                             <span class="step-number">2</span>
                                             <div>
-                                                <div class="step-title">User Information</div>
-                                                <div class="step-caption">Review User Info</div>
-                                            </div>
-                                        </li>
-                                        <li class="step" data-step="3">
-                                            <span class="step-number">3</span>
-                                            <div>
-                                                <div class="step-title">Account Setup</div>
-                                                <div class="step-caption">Assign Dashboard Access</div>
+                                                <div class="step-title">Account Information</div>
+                                                <div class="step-caption">Invite & Activation</div>
                                             </div>
                                         </li>
                                     </ol>
 
-                                    <form id="userForm" class="user-form-content">
-                                    <section class="user-form-step active" data-step="1">
-                                        <div class="form-group">
-                                            <label class="form-label required" for="userEmail">ONRUF Account Email</label>
-                                            <div class="verification-row">
-                                                <input type="email" class="form-input" id="userEmail" placeholder="e.g. ahmed.hassan@onruf.com" required aria-required="true" />
-                                                <p class="helper-text">Enter the email address used on the ONRUF. The system must verify it before you can continue.</p>
-                                                <div class="verification-actions">
-                                                    <button type="button" class="btn btn-outline" id="userVerificationCancelBtn">
-                                                        <i class="fas fa-xmark"></i>
-                                                        Cancel
-                                                    </button>
-                                                    <button type="button" class="btn btn-primary" id="userVerifyBtn">
-                                                        <i class="fas fa-check-circle"></i>
-                                                        Verify
-                                                    </button>
+                                    <form id="userForm" class="user-form-content" novalidate>
+                                        <section class="user-form-step active" data-step="1">
+                                            <div class="user-info-grid">
+                                                <div class="form-group">
+                                                    <label class="form-label required" for="userEmail">User Email Address</label>
+                                                    <input type="email" class="form-input" id="userEmail" placeholder="e.g. new.user@onruf.com" required aria-required="true" />
+                                                </div>
+                                                <div class="form-group">
+                                                    <label class="form-label required" for="userDepartment">Department</label>
+                                                    <input type="text" class="form-input" id="userDepartment" placeholder="e.g. Business Accounts" required aria-required="true" />
+                                                </div>
+                                                <div class="form-group">
+                                                    <label class="form-label required" for="userEmployeeId">Employee ID</label>
+                                                    <input type="text" class="form-input" id="userEmployeeId" placeholder="e.g. ONR-4521" required aria-required="true" />
                                                 </div>
                                             </div>
-                                        </div>
-                                        <div class="info-banner hidden" id="userVerificationBanner" role="status"></div>
-                                    </section>
-
-                                    <section class="user-form-step" data-step="2">
-                                        <input type="hidden" id="userEmailConfirmed" />
-                                        <div class="user-review-card" aria-live="polite">
-                                            <div class="user-review-identity">
-                                                <img id="userPreviewPhoto" src="https://i.pravatar.cc/120?u=placeholder" alt="User avatar" class="user-review-avatar" />
-                                                <div class="user-review-meta">
-                                                    <div class="user-review-field">
-                                                        <span class="user-review-label">Name:</span>
-                                                        <span class="user-review-value user-review-name" id="userPreviewName">—</span>
-                                                    </div>
-                                                    <div class="user-review-field">
-                                                        <span class="user-review-label">Email:</span>
-                                                        <span class="user-review-value user-review-email" id="userPreviewEmail">—</span>
-                                                    </div>
-                                                    <div class="user-review-field">
-                                                        <span class="user-review-label">Phone:</span>
-                                                        <span class="user-review-value" id="userPreviewPhone">—</span>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <div class="step-inline-actions">
-                                                <button type="button" class="btn btn-outline" id="userReviewCancelBtn">Cancel</button>
-                                                <button type="button" class="btn btn-primary" id="userReviewRegisterBtn">
-                                                    <i class="fas fa-id-card"></i>
+                                            <div class="form-actions">
+                                                <button type="button" class="btn btn-outline" id="userInfoCancelBtn">
+                                                    <i class="fas fa-xmark"></i>
+                                                    Cancel
+                                                </button>
+                                                <button type="button" class="btn btn-primary" id="userInfoNextBtn">
+                                                    <i class="fas fa-arrow-right"></i>
                                                     Register
                                                 </button>
                                             </div>
-                                        </div>
-                                    </section>
+                                        </section>
 
-                                    <section class="user-form-step" data-step="3">
-                                        <div class="account-edit-grid no-summary">
-                                            <aside class="user-edit-summary hidden" id="userEditSummaryPanel" aria-label="Current user profile">
-                                                <div class="user-edit-card" aria-live="polite">
-                                                    <div class="user-edit-avatar">
-                                                        <img id="userEditPreviewPhoto" src="https://i.pravatar.cc/120?u=placeholder" alt="User avatar" />
-                                                    </div>
-                                                    <div class="user-edit-card-body">
-                                                        <h4 class="user-edit-name" id="userEditPreviewName">—</h4>
-                                                        <div class="user-edit-card-fields">
-                                                            <span class="user-edit-card-field" id="userEditPreviewEmail">—</span>
-                                                            <span class="user-edit-card-field" id="userEditPreviewPhone">—</span>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </aside>
-
-                                            <div class="account-edit-fields">
-                                                <div class="account-edit-card">
-                                                    <div class="account-edit-card-header">
-                                                        <div>
-                                                            <h4 class="account-edit-title">Account Info</h4>
-                                                        </div>
-                                                    </div>
-                                                    <div class="account-edit-section">
+                                        <section class="user-form-step" data-step="2">
+                                            <div class="account-info-grid">
+                                                <div class="account-info-card">
+                                                    <h4 class="account-info-title">Account Information</h4>
+                                                    <div class="account-info-fields">
                                                         <div class="form-group">
-                                                            <label class="form-label required" for="userAccountType" id="userAccountTypeLabel">Account Type</label>
-                                                            <select class="form-input" id="userAccountType" required aria-required="true">
-                                                                <option value="">Select account type</option>
-                                                                <option value="system-administrator">Super Admin</option>
-                                                                <option value="platform-administrator">Admin</option>
-                                                            </select>
+                                                            <label class="form-label required" for="registrationFirstName">First Name</label>
+                                                            <input type="text" class="form-input" id="registrationFirstName" placeholder="First name" required aria-required="true" />
                                                         </div>
-                                                        <div class="form-group" id="userRoleGroup">
-                                                            <label class="form-label" for="userRole" id="userRoleLabel">User Role</label>
-                                                            <select class="form-input" id="userRole" disabled>
-                                                                <option value="">Select a role</option>
-                                                            </select>
+                                                        <div class="form-group">
+                                                            <label class="form-label required" for="registrationLastName">Last Name</label>
+                                                            <input type="text" class="form-input" id="registrationLastName" placeholder="Last name" required aria-required="true" />
                                                         </div>
-                                                        <div class="form-group" id="userExpirationGroup">
-                                                            <label class="form-label" for="userExpirationDate">Account Expiration</label>
-                                                            <div class="input-with-icon">
-                                                                <input type="date" class="form-input" id="userExpirationDate" />
-                                                            </div>
+                                                        <div class="form-group">
+                                                            <label class="form-label" for="registrationEmail">Email Address</label>
+                                                            <input type="email" class="form-input" id="registrationEmail" readonly />
+                                                        </div>
+                                                        <div class="form-group">
+                                                            <label class="form-label required" for="registrationPhone">Phone Number</label>
+                                                            <input type="tel" class="form-input" id="registrationPhone" placeholder="+9665XXXXXXXX" required aria-required="true" />
+                                                        </div>
+                                                        <div class="form-group">
+                                                            <label class="form-label" for="registrationPhoto">Profile Photo</label>
+                                                            <input type="file" class="form-input" id="registrationPhoto" accept="image/*" />
+                                                            <p class="helper-text">Optional. Upload a square image up to 2 MB.</p>
+                                                        </div>
+                                                        <div class="form-group">
+                                                            <label class="form-label required" for="registrationPassword">Password</label>
+                                                            <input type="password" class="form-input" id="registrationPassword" placeholder="Create password" required aria-required="true" />
+                                                        </div>
+                                                        <div class="form-group">
+                                                            <label class="form-label required" for="registrationPasswordConfirm">Confirm Password</label>
+                                                            <input type="password" class="form-input" id="registrationPasswordConfirm" placeholder="Repeat password" required aria-required="true" />
                                                         </div>
                                                     </div>
                                                 </div>
+                                                <aside class="invitation-summary" id="invitationSummaryPanel">
+                                                    <h4>Invitation Preview</h4>
+                                                    <p>The user receives an invitation email to complete registration and verify their account.</p>
+                                                    <ul class="invitation-timeline" id="invitationTimeline">
+                                                        <li class="active">
+                                                            <i class="fas fa-paper-plane"></i>
+                                                            Invitation email prepared
+                                                        </li>
+                                                        <li>
+                                                            <i class="fas fa-user-edit"></i>
+                                                            User completes account information
+                                                        </li>
+                                                        <li>
+                                                            <i class="fas fa-shield"></i>
+                                                            6-digit OTP verification
+                                                        </li>
+                                                        <li>
+                                                            <i class="fas fa-circle-check"></i>
+                                                            Account activated & redirect to login
+                                                        </li>
+                                                    </ul>
+                                                </aside>
+                                            </div>
+                                            <div class="form-actions" id="userFormActions">
+                                                <button type="button" class="btn btn-outline" id="userFormBackBtn">
+                                                    <i class="fas fa-arrow-left"></i>
+                                                    Back
+                                                </button>
+                                                <button type="submit" class="btn btn-primary" id="userFormSubmitBtn">
+                                                    <i class="fas fa-user-plus"></i>
+                                                    Add
+                                                </button>
+                                            </div>
+                                        </section>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
 
-                                                <div class="account-edit-card">
-                                                    <h4 class="account-edit-title">Role Permissions Preview</h4>
-                                                    <div class="info-banner neutral" id="userPermissionsSummary">
-                                                        Select an account type to see the assigned permissions.
-                                                    </div>
-                                                    <div class="permissions-preview hidden" id="userRolePermissionsPreview">
-                                                        <div class="permissions-preview-header">
-                                                            <i class="fas fa-shield-check"></i>
-                                                            <span>Role Permissions</span>
-                                                        </div>
-                                                        <div class="permissions-preview-body" id="userRolePermissionsList">
-                                                            <p class="permissions-preview-placeholder">Choose a role to preview its permissions. Permissions cannot be edited here.</p>
-                                                        </div>
-                                                    </div>
+                        <div id="registrationFlowOverlay" class="registration-flow-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="registrationFlowTitle">
+                            <div class="registration-flow-modal" role="document">
+                                <header class="registration-flow-header">
+                                    <div>
+                                        <h3 id="registrationFlowTitle">Complete Registration</h3>
+                                        <p id="registrationFlowSubtitle" class="section-subtitle">Invitation link journey for the user.</p>
+                                        <p id="registrationFlowLinkWrapper" class="registration-flow-link hidden">
+                                            Invitation link:
+                                            <a href="#" id="registrationFlowLink" target="_blank" rel="noopener">complete-registration.html</a>
+                                        </p>
+                                    </div>
+                                    <button type="button" class="modal-close-btn" id="registrationFlowCloseBtn" aria-label="Close registration flow">
+                                        <i class="fas fa-xmark"></i>
+                                    </button>
+                                </header>
+                                <div class="registration-flow-steps">
+                                    <div class="registration-flow-step active" data-step="account">
+                                        <h4>Account Information</h4>
+                                        <form id="registrationCompletionForm" class="registration-flow-form" novalidate>
+                                            <div class="form-grid">
+                                                <div class="form-group">
+                                                    <label class="form-label required" for="flowFirstName">First Name</label>
+                                                    <input type="text" class="form-input" id="flowFirstName" required aria-required="true" />
+                                                </div>
+                                                <div class="form-group">
+                                                    <label class="form-label required" for="flowLastName">Last Name</label>
+                                                    <input type="text" class="form-input" id="flowLastName" required aria-required="true" />
+                                                </div>
+                                                <div class="form-group">
+                                                    <label class="form-label" for="flowEmail">Email Address</label>
+                                                    <input type="email" class="form-input" id="flowEmail" readonly />
+                                                </div>
+                                                <div class="form-group">
+                                                    <label class="form-label required" for="flowPhone">Phone Number</label>
+                                                    <input type="tel" class="form-input" id="flowPhone" required aria-required="true" />
+                                                </div>
+                                                <div class="form-group">
+                                                    <label class="form-label" for="flowPhoto">Profile Photo</label>
+                                                    <input type="file" class="form-input" id="flowPhoto" accept="image/*" />
+                                                </div>
+                                                <div class="form-group">
+                                                    <label class="form-label required" for="flowPassword">Password</label>
+                                                    <input type="password" class="form-input" id="flowPassword" required aria-required="true" />
+                                                </div>
+                                                <div class="form-group">
+                                                    <label class="form-label required" for="flowPasswordConfirm">Confirm Password</label>
+                                                    <input type="password" class="form-input" id="flowPasswordConfirm" required aria-required="true" />
                                                 </div>
                                             </div>
-                                        </div>
-                                    </section>
-
-                                    <div class="form-actions" id="userFormActions">
-                                        <button type="button" class="btn btn-outline hidden" id="userFormCancelStep3Btn">Cancel</button>
-                                        <button type="submit" class="btn btn-primary hidden" id="userFormSubmitBtn">Add User</button>
+                                            <div class="form-actions">
+                                                <button type="submit" class="btn btn-primary" id="registrationFlowAccountBtn">
+                                                    <i class="fas fa-paper-plane"></i>
+                                                    Register &amp; Send OTP
+                                                </button>
+                                            </div>
+                                        </form>
                                     </div>
-                                </form>
+                                    <div class="registration-flow-step hidden" data-step="otp">
+                                        <h4>Enter One-Time Password</h4>
+                                        <p class="helper-text" id="otpInstructions">We sent a 6-digit code to the user's email address.</p>
+                                        <form id="registrationOtpForm" class="registration-flow-form" novalidate>
+                                            <div class="form-group otp-group">
+                                                <label class="form-label required" for="flowOtp">One-Time Password</label>
+                                                <input type="text" class="form-input" id="flowOtp" inputmode="numeric" maxlength="6" pattern="\d{6}" placeholder="123456" required aria-required="true" />
+                                            </div>
+                                            <div class="form-actions">
+                                                <button type="button" class="btn btn-outline" id="registrationFlowResendBtn">
+                                                    <i class="fas fa-envelope-open-text"></i>
+                                                    Resend OTP
+                                                </button>
+                                                <button type="submit" class="btn btn-primary" id="registrationFlowOtpBtn">
+                                                    <i class="fas fa-circle-check"></i>
+                                                    Verify &amp; Activate
+                                                </button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                    <div class="registration-flow-step hidden" data-step="success">
+                                        <div class="registration-flow-success">
+                                            <i class="fas fa-check-circle"></i>
+                                            <h4>Registration Completed</h4>
+                                            <p>The user's account is now active. <a href="login.html" target="_blank" rel="noopener">Open the login page</a> to continue the journey.</p>
+                                            <button type="button" class="btn btn-primary" id="registrationFlowDoneBtn">Close</button>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1264,6 +1348,328 @@
                         </div>
                     </div>
                 </section>
+
+                    <section id="onruf-users" class="section-content">
+                        <div class="section-header">
+                            <h1 class="section-title">ONRUF Users Operations</h1>
+                            <p class="section-subtitle">Oversee tenant onboarding, account health, and engagement signals across the ecosystem.</p>
+                        </div>
+                        <div class="sub-apps-nav">
+                            <button class="sub-app-btn active" data-target="onruf-users-app1" data-label="App 1">
+                                <span>App 1</span>
+                                <span>Directory Overview</span>
+                            </button>
+                            <button class="sub-app-btn" data-target="onruf-users-app2" data-label="App 2">
+                                <span>App 2</span>
+                                <span>Verification Queue</span>
+                            </button>
+                            <button class="sub-app-btn" data-target="onruf-users-app3" data-label="App 3">
+                                <span>App 3</span>
+                                <span>Engagement Insights</span>
+                            </button>
+                        </div>
+
+                        <div id="onruf-users-app1" class="sub-app active">
+                            <div class="table-shell">
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>Segment</th>
+                                            <th>Total Accounts</th>
+                                            <th>Active</th>
+                                            <th>Pending Verification</th>
+                                            <th>Suspended</th>
+                                            <th>Last Sync</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td>Municipality Tenants</td>
+                                            <td>1,284</td>
+                                            <td>1,112</td>
+                                            <td>48</td>
+                                            <td>6</td>
+                                            <td>Today 09:05</td>
+                                        </tr>
+                                        <tr>
+                                            <td>Business Operators</td>
+                                            <td>864</td>
+                                            <td>782</td>
+                                            <td>32</td>
+                                            <td>11</td>
+                                            <td>Today 08:20</td>
+                                        </tr>
+                                        <tr>
+                                            <td>Field Inspectors</td>
+                                            <td>432</td>
+                                            <td>418</td>
+                                            <td>6</td>
+                                            <td>2</td>
+                                            <td>Today 07:45</td>
+                                        </tr>
+                                        <tr>
+                                            <td>Control Center Staff</td>
+                                            <td>196</td>
+                                            <td>188</td>
+                                            <td>4</td>
+                                            <td>1</td>
+                                            <td>Yesterday 22:10</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <div id="onruf-users-app2" class="sub-app">
+                            <div class="integration-grid">
+                                <div class="integration-card">
+                                    <div class="integration-header">
+                                        <h3 class="integration-name">High Priority Reviews</h3>
+                                        <span class="integration-status warning">12 Pending</span>
+                                    </div>
+                                    <p class="integration-description">Accounts flagged for accelerated KYC due to policy escalations or repeated failed logins.</p>
+                                    <ul class="integration-list">
+                                        <li><i class="fas fa-circle-exclamation"></i> 5 require manual document check</li>
+                                        <li><i class="fas fa-id-card"></i> 4 awaiting ID re-upload</li>
+                                        <li><i class="fas fa-comments"></i> 3 waiting for customer response</li>
+                                    </ul>
+                                    <div class="integration-footer">
+                                        <button type="button">
+                                            <i class="fas fa-inbox"></i>
+                                            Open Work Queue
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="integration-card">
+                                    <div class="integration-header">
+                                        <h3 class="integration-name">Auto Approved</h3>
+                                        <span class="integration-status active">27 Today</span>
+                                    </div>
+                                    <p class="integration-description">Accounts cleared via automated verification rules synced with the national digital registry.</p>
+                                    <ul class="integration-list">
+                                        <li><i class="fas fa-check-circle"></i> 89% biometric match rate</li>
+                                        <li><i class="fas fa-shield"></i> Continuous fraud screening active</li>
+                                        <li><i class="fas fa-link"></i> Linked to business CR data</li>
+                                    </ul>
+                                    <div class="integration-footer">
+                                        <button type="button">
+                                            <i class="fas fa-chart-line"></i>
+                                            View Automations
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="integration-card">
+                                    <div class="integration-header">
+                                        <h3 class="integration-name">Pending Field Confirmation</h3>
+                                        <span class="integration-status pending">8 Visits</span>
+                                    </div>
+                                    <p class="integration-description">Accounts needing on-site verification of operating licenses or facility readiness.</p>
+                                    <ul class="integration-list">
+                                        <li><i class="fas fa-clipboard-list"></i> Route sheet generated</li>
+                                        <li><i class="fas fa-truck-fast"></i> Inspector assignments in progress</li>
+                                        <li><i class="fas fa-clock"></i> Target completion: 48 hours</li>
+                                    </ul>
+                                    <div class="integration-footer">
+                                        <button type="button">
+                                            <i class="fas fa-map-location-dot"></i>
+                                            Dispatch Teams
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="onruf-users-app3" class="sub-app">
+                            <div class="stats-grid">
+                                <div class="stat-card">
+                                    <div class="stat-heading">
+                                        <span>Daily Active Accounts</span>
+                                        <i class="fas fa-chart-line"></i>
+                                    </div>
+                                    <div class="stat-value">2,500</div>
+                                    <div class="stat-delta positive">
+                                        <i class="fas fa-arrow-trend-up"></i>
+                                        +5.1% vs last week
+                                    </div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-heading">
+                                        <span>Support Tickets</span>
+                                        <i class="fas fa-headset"></i>
+                                    </div>
+                                    <div class="stat-value">73</div>
+                                    <div class="stat-delta neutral">
+                                        <i class="fas fa-minus"></i>
+                                        Stable volume
+                                    </div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-heading">
+                                        <span>Churn Watchlist</span>
+                                        <i class="fas fa-user-clock"></i>
+                                    </div>
+                                    <div class="stat-value">18</div>
+                                    <div class="stat-delta warning">
+                                        <i class="fas fa-arrow-trend-up"></i>
+                                        Spike detected
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="table-shell" style="margin-top:24px;">
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>Indicator</th>
+                                            <th>Description</th>
+                                            <th>Current Value</th>
+                                            <th>Goal</th>
+                                            <th>Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td>Activation Rate</td>
+                                            <td>Users completing onboarding within 72 hours.</td>
+                                            <td>92%</td>
+                                            <td>90%</td>
+                                            <td><span class="status-badge status-active">On Track</span></td>
+                                        </tr>
+                                        <tr>
+                                            <td>Engaged Tenants</td>
+                                            <td>Accounts with 5+ sessions per week.</td>
+                                            <td>64%</td>
+                                            <td>70%</td>
+                                            <td><span class="status-badge status-pending">Monitor</span></td>
+                                        </tr>
+                                        <tr>
+                                            <td>Dormant Accounts</td>
+                                            <td>No logins in the last 30 days.</td>
+                                            <td>143</td>
+                                            <td>&lt; 100</td>
+                                            <td><span class="status-badge status-warning">Action Needed</span></td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section id="advertisments" class="section-content">
+                        <div class="section-header">
+                            <h1 class="section-title">Advertisments Control Hub</h1>
+                            <p class="section-subtitle">Plan marketplace promotions, track performance, and curate creative assets for upcoming pushes.</p>
+                        </div>
+                        <div class="sub-apps-nav">
+                            <button class="sub-app-btn active" data-target="advertisments-app1" data-label="App 1">
+                                <span>App 1</span>
+                                <span>Campaign Planner</span>
+                            </button>
+                            <button class="sub-app-btn" data-target="advertisments-app2" data-label="App 2">
+                                <span>App 2</span>
+                                <span>Creative Assets</span>
+                            </button>
+                        </div>
+
+                        <div id="advertisments-app1" class="sub-app active">
+                            <div class="table-shell">
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>Campaign</th>
+                                            <th>Channel</th>
+                                            <th>Status</th>
+                                            <th>Budget (SAR)</th>
+                                            <th>Impressions</th>
+                                            <th>CTR</th>
+                                            <th>Owner</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td>Premium Inspector Launch</td>
+                                            <td>Email + In-app</td>
+                                            <td><span class="status-badge status-active">Live</span></td>
+                                            <td>45,000</td>
+                                            <td>1.8M</td>
+                                            <td>3.9%</td>
+                                            <td>Growth Team</td>
+                                        </tr>
+                                        <tr>
+                                            <td>Inspection Safety Week</td>
+                                            <td>Social</td>
+                                            <td><span class="status-badge status-pending">Scheduled</span></td>
+                                            <td>28,000</td>
+                                            <td>--</td>
+                                            <td>--</td>
+                                            <td>Brand Office</td>
+                                        </tr>
+                                        <tr>
+                                            <td>Referral Booster Q4</td>
+                                            <td>SMS + Push</td>
+                                            <td><span class="status-badge status-active">Live</span></td>
+                                            <td>18,500</td>
+                                            <td>740K</td>
+                                            <td>4.6%</td>
+                                            <td>Lifecycle Marketing</td>
+                                        </tr>
+                                        <tr>
+                                            <td>Vendor Spotlight Series</td>
+                                            <td>Marketplace Banner</td>
+                                            <td><span class="status-badge status-draft">Draft</span></td>
+                                            <td>12,000</td>
+                                            <td>--</td>
+                                            <td>--</td>
+                                            <td>Partner Alliances</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <div id="advertisments-app2" class="sub-app">
+                            <div class="product-grid">
+                                <div class="product-card">
+                                    <div class="product-thumb"><i class="fas fa-bullseye"></i></div>
+                                    <h3>Hero Carousel Set</h3>
+                                    <p>Five responsive hero creatives optimised for light and dark themes.</p>
+                                    <div class="product-meta">
+                                        <span><i class="fas fa-image"></i> Formats: JPG, PNG</span>
+                                        <span><i class="fas fa-arrows-rotate"></i> Updated: 2 days ago</span>
+                                    </div>
+                                    <div class="product-footer">
+                                        <span class="product-price">Creative Kit</span>
+                                        <button class="btn btn-primary" type="button">Download</button>
+                                    </div>
+                                </div>
+                                <div class="product-card">
+                                    <div class="product-thumb"><i class="fas fa-video"></i></div>
+                                    <h3>30s Awareness Video</h3>
+                                    <p>High-energy explainer with Arabic voiceover and subtitle variants.</p>
+                                    <div class="product-meta">
+                                        <span><i class="fas fa-photo-film"></i> Formats: MP4, MOV</span>
+                                        <span><i class="fas fa-language"></i> EN &amp; AR captions</span>
+                                    </div>
+                                    <div class="product-footer">
+                                        <span class="product-price">Media Asset</span>
+                                        <button class="btn btn-outline" type="button">Preview</button>
+                                    </div>
+                                </div>
+                                <div class="product-card">
+                                    <div class="product-thumb"><i class="fas fa-envelopes-bulk"></i></div>
+                                    <h3>Retention Email Pack</h3>
+                                    <p>Seven-step nurture journey templates with dynamic content blocks.</p>
+                                    <div class="product-meta">
+                                        <span><i class="fas fa-code"></i> HTML + MJML</span>
+                                        <span><i class="fas fa-user-check"></i> Approved by compliance</span>
+                                    </div>
+                                    <div class="product-footer">
+                                        <span class="product-price">Template Bundle</span>
+                                        <button class="btn btn-primary" type="button">Add to Library</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
             </div>
         </main>
     </div>
