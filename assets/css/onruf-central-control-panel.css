@@ -1444,6 +1444,23 @@ body.dark-mode .role-alt-name {
     transition: transform 0.2s ease;
 }
 
+.action-btn.disabled,
+.action-btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+    transform: none;
+    box-shadow: none !important;
+}
+
+.action-btn.disabled:hover,
+.action-btn.disabled:focus-visible,
+.action-btn:disabled:hover,
+.action-btn:disabled:focus-visible {
+    transform: none;
+    box-shadow: none;
+    outline: none;
+}
+
 .action-btn.view {
     background: rgba(37, 99, 235, 0.12);
     color: var(--primary);
@@ -1762,6 +1779,54 @@ body.dark-mode .role-detail-placeholder {
 
 .user-form-step.active {
     display: grid;
+}
+
+.user-form-step[data-step="1"].active {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+
+.user-info-grid {
+    display: grid;
+    gap: 18px;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.account-type-toggle {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.account-type-toggle .toggle-switch {
+    margin: 0;
+}
+
+.toggle-description {
+    font-size: 13px;
+    color: var(--text-light);
+}
+
+body.dark-mode .toggle-description {
+    color: var(--text-dark);
+}
+
+.user-permissions-wrapper {
+    grid-column: 1 / -1;
+}
+
+.user-permissions-wrapper .permissions-preview {
+    height: 100%;
+}
+
+.user-info-actions {
+    grid-column: 1 / -1;
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    flex-wrap: wrap;
 }
 
 .user-form-step[data-step="3"].active {

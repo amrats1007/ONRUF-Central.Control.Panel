@@ -370,7 +370,7 @@
                             <div class="users-header">
                                 <div class="search-box">
                                     <i class="fas fa-search"></i>
-                                    <input type="text" id="userSearch" placeholder="Search by User Name, Email, Phone, Role, or Status" />
+                                    <input type="text" id="userSearch" placeholder="Search by User Name, Email, Phone, Role, Status, or Department" />
                                 </div>
                                 <div class="users-actions">
                                     <button class="btn btn-primary" id="addUserBtn">
@@ -386,6 +386,7 @@
                                             <th>ID</th>
                                             <th>User</th>
                                             <th>Role</th>
+                                            <th>Department</th>
                                             <th>Status</th>
                                             <th>Last Login</th>
                                             <th>Created</th>
@@ -435,14 +436,12 @@
                                             <span class="step-number">1</span>
                                             <div>
                                                 <div class="step-title">User Information</div>
-                                                <div class="step-caption">Email, Department & Employee ID</div>
                                             </div>
                                         </li>
                                         <li class="step" data-step="2">
                                             <span class="step-number">2</span>
                                             <div>
                                                 <div class="step-title">Account Information</div>
-                                                <div class="step-caption">Invite & Activation</div>
                                             </div>
                                         </li>
                                     </ol>
@@ -451,88 +450,79 @@
                                         <section class="user-form-step active" data-step="1">
                                             <div class="user-info-grid">
                                                 <div class="form-group">
-                                                    <label class="form-label required" for="userEmail">User Email Address</label>
+                                                    <label class="form-label required" for="userEmail">Email</label>
                                                     <input type="email" class="form-input" id="userEmail" placeholder="e.g. new.user@onruf.com" required aria-required="true" />
                                                 </div>
                                                 <div class="form-group">
                                                     <label class="form-label required" for="userDepartment">Department</label>
-                                                    <input type="text" class="form-input" id="userDepartment" placeholder="e.g. Business Accounts" required aria-required="true" />
+                                                    <select class="form-select" id="userDepartment" required aria-required="true">
+                                                        <option value="">Select a department</option>
+                                                        <option value="Central Governance">Central Governance</option>
+                                                        <option value="Business Accounts">Business Accounts</option>
+                                                        <option value="Malqaa Field Operations">Malqaa Field Operations</option>
+                                                        <option value="Inspection Ops">Inspection Ops</option>
+                                                        <option value="Quality Assurance">Quality Assurance</option>
+                                                        <option value="Tenant Success">Tenant Success</option>
+                                                        <option value="Platform Integrations">Platform Integrations</option>
+                                                        <option value="Automated Test Accounts">Automated Test Accounts</option>
+                                                    </select>
                                                 </div>
                                                 <div class="form-group">
-                                                    <label class="form-label required" for="userEmployeeId">Employee ID</label>
+                                                    <label class="form-label required" for="userEmployeeId">ID</label>
                                                     <input type="text" class="form-input" id="userEmployeeId" placeholder="e.g. ONR-4521" required aria-required="true" />
                                                 </div>
-                                            </div>
-                                            <div class="form-actions">
-                                                <button type="button" class="btn btn-outline" id="userInfoCancelBtn">
-                                                    <i class="fas fa-xmark"></i>
-                                                    Cancel
-                                                </button>
-                                                <button type="button" class="btn btn-primary" id="userInfoNextBtn">
-                                                    <i class="fas fa-arrow-right"></i>
-                                                    Register
-                                                </button>
+                                                <div class="form-group-inline">
+                                                    <div>
+                                                        <label class="form-label" for="userSuperAdminToggle">Super Admin</label>
+                                                    </div>
+                                                    <label class="toggle-switch" for="userSuperAdminToggle">
+                                                        <input type="checkbox" id="userSuperAdminToggle" />
+                                                        <span class="toggle-slider"></span>
+                                                    </label>
+                                                </div>
+                                                <div class="form-actions user-info-actions">
+                                                    <button type="button" class="btn btn-outline" id="userInfoCancelBtn">
+                                                        <i class="fas fa-xmark"></i>
+                                                        Cancel
+                                                    </button>
+                                                    <button type="button" class="btn btn-primary" id="userInfoNextBtn">
+                                                        <i class="fas fa-arrow-right"></i>
+                                                        Register
+                                                    </button>
+                                                </div>
                                             </div>
                                         </section>
 
                                         <section class="user-form-step" data-step="2">
                                             <div class="account-info-grid">
-                                                <div class="account-info-card">
-                                                    <h4 class="account-info-title">Account Information</h4>
+                                                <div class="account-info-card account-access-card">
                                                     <div class="account-info-fields">
                                                         <div class="form-group">
-                                                            <label class="form-label required" for="registrationFirstName">First Name</label>
-                                                            <input type="text" class="form-input" id="registrationFirstName" placeholder="First name" required aria-required="true" />
+                                                            <label class="form-label" for="userAccountExpiration">Account Expiration</label>
+                                                            <input type="date" class="form-input" id="userAccountExpiration" />
                                                         </div>
                                                         <div class="form-group">
-                                                            <label class="form-label required" for="registrationLastName">Last Name</label>
-                                                            <input type="text" class="form-input" id="registrationLastName" placeholder="Last name" required aria-required="true" />
+                                                            <label class="form-label" id="userRoleLabel" for="userRole">User Role</label>
+                                                            <select class="form-select" id="userRole" disabled>
+                                                                <option value="">Select a role</option>
+                                                            </select>
                                                         </div>
-                                                        <div class="form-group">
-                                                            <label class="form-label" for="registrationEmail">Email Address</label>
-                                                            <input type="email" class="form-input" id="registrationEmail" readonly />
-                                                        </div>
-                                                        <div class="form-group">
-                                                            <label class="form-label required" for="registrationPhone">Phone Number</label>
-                                                            <input type="tel" class="form-input" id="registrationPhone" placeholder="+9665XXXXXXXX" required aria-required="true" />
-                                                        </div>
-                                                        <div class="form-group">
-                                                            <label class="form-label" for="registrationPhoto">Profile Photo</label>
-                                                            <input type="file" class="form-input" id="registrationPhoto" accept="image/*" />
-                                                            <p class="helper-text">Optional. Upload a square image up to 2 MB.</p>
-                                                        </div>
-                                                        <div class="form-group">
-                                                            <label class="form-label required" for="registrationPassword">Password</label>
-                                                            <input type="password" class="form-input" id="registrationPassword" placeholder="Create password" required aria-required="true" />
-                                                        </div>
-                                                        <div class="form-group">
-                                                            <label class="form-label required" for="registrationPasswordConfirm">Confirm Password</label>
-                                                            <input type="password" class="form-input" id="registrationPasswordConfirm" placeholder="Repeat password" required aria-required="true" />
+                                                        <div class="user-permissions-wrapper">
+                                                            <div class="permissions-preview">
+                                                                <div class="permissions-preview-header">
+                                                                    <i class="fas fa-shield-check"></i>
+                                                                    <div>
+                                                                        <span>Permission Overview</span>
+                                                                    </div>
+                                                                </div>
+                                                                <p class="helper-text" id="userPermissionsSummary">Toggle Super Admin or choose a user role to preview permissions.</p>
+                                                                <div class="permissions-preview-body hidden" id="userRolePermissionsPreview">
+                                                                    <div id="userRolePermissionsList"></div>
+                                                                </div>
+                                                            </div>
                                                         </div>
                                                     </div>
                                                 </div>
-                                                <aside class="invitation-summary" id="invitationSummaryPanel">
-                                                    <h4>Invitation Preview</h4>
-                                                    <p>The user receives an invitation email to complete registration and verify their account.</p>
-                                                    <ul class="invitation-timeline" id="invitationTimeline">
-                                                        <li class="active">
-                                                            <i class="fas fa-paper-plane"></i>
-                                                            Invitation email prepared
-                                                        </li>
-                                                        <li>
-                                                            <i class="fas fa-user-edit"></i>
-                                                            User completes account information
-                                                        </li>
-                                                        <li>
-                                                            <i class="fas fa-shield"></i>
-                                                            6-digit OTP verification
-                                                        </li>
-                                                        <li>
-                                                            <i class="fas fa-circle-check"></i>
-                                                            Account activated & redirect to login
-                                                        </li>
-                                                    </ul>
-                                                </aside>
                                             </div>
                                             <div class="form-actions" id="userFormActions">
                                                 <button type="button" class="btn btn-outline" id="userFormBackBtn">

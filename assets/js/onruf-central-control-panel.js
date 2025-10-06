@@ -218,71 +218,6 @@ function buildPermissionCatalog() {
     }));
 }
 
-const viewerPermissions = [
-    { sectionId: 'dashboard', appId: 'dashboard-executive', actions: ['view'] },
-    { sectionId: 'reports', appId: 'reports-executive', actions: ['view'] }
-];
-
-const marketingTeamPermissions = [
-    { sectionId: 'advertisments', appId: 'advertising-planner', actions: ['modify'] },
-    { sectionId: 'advertisments', appId: 'advertising-assets', actions: ['enter'] },
-    { sectionId: 'reports', appId: 'reports-distribution', actions: ['view'] }
-];
-
-const salesTeamPermissions = [
-    { sectionId: 'packages', appId: 'packages-catalog', actions: ['modify'] },
-    { sectionId: 'products', appId: 'products-catalog', actions: ['enter'] },
-    { sectionId: 'reports', appId: 'reports-executive', actions: ['view'] }
-];
-
-const complianceOfficerPermissions = [
-    { sectionId: 'users', appId: 'users-management', actions: ['modify'] },
-    { sectionId: 'settings', appId: 'settings-configuration', actions: ['delete'] },
-    { sectionId: 'reports', appId: 'reports-compliance', actions: ['modify'] }
-];
-
-const customerSuccessPermissions = [
-    { sectionId: 'onruf-users', appId: 'onruf-engagement', actions: ['modify'] },
-    { sectionId: 'onruf-users', appId: 'onruf-directory', actions: ['view'] },
-    { sectionId: 'users', appId: 'users-management', actions: ['enter'] }
-];
-
-const itSupportPermissions = [
-    { sectionId: 'settings', appId: 'settings-integrations', actions: ['modify'] },
-    { sectionId: 'products', appId: 'products-inventory', actions: ['modify'] },
-    { sectionId: 'users', appId: 'users-roles', actions: ['enter'] }
-];
-
-const riskAnalystPermissions = [
-    { sectionId: 'dashboard', appId: 'dashboard-operations', actions: ['view'] },
-    { sectionId: 'reports', appId: 'reports-compliance', actions: ['modify'] },
-    { sectionId: 'packages', appId: 'packages-performance', actions: ['view'] }
-];
-
-const financeControllerPermissions = [
-    { sectionId: 'packages', appId: 'packages-performance', actions: ['modify'] },
-    { sectionId: 'reports', appId: 'reports-executive', actions: ['view'] },
-    { sectionId: 'products', appId: 'products-inventory', actions: ['enter'] }
-];
-
-const vendorManagerPermissions = [
-    { sectionId: 'products', appId: 'products-suppliers', actions: ['modify'] },
-    { sectionId: 'packages', appId: 'packages-bundles', actions: ['modify'] },
-    { sectionId: 'advertisments', appId: 'advertising-planner', actions: ['view'] }
-];
-
-const trainingCoordinatorPermissions = [
-    { sectionId: 'onruf-users', appId: 'onruf-directory', actions: ['view'] },
-    { sectionId: 'products', appId: 'products-suppliers', actions: ['view'] },
-    { sectionId: 'dashboard', appId: 'dashboard-executive', actions: ['view'] }
-];
-
-const logisticsSupervisorPermissions = [
-    { sectionId: 'onruf-users', appId: 'onruf-verification', actions: ['modify'] },
-    { sectionId: 'dashboard', appId: 'dashboard-operations', actions: ['modify'] },
-    { sectionId: 'reports', appId: 'reports-distribution', actions: ['enter'] }
-];
-
 const defaultRoles = [];
 
 let roles = [];
@@ -505,6 +440,108 @@ function buildRegistrationCompletionUrl(token) {
     return `complete-registration.html?token=${encodeURIComponent(token)}`;
 }
 
+const INVITATION_SERVICE_ENDPOINT_DEFAULT = '/api/invitations/send';
+
+function resolveInvitationServiceUrl() {
+    try {
+        const config = window.__ONRUF_CONFIG__;
+        if (config) {
+            const value = config.invitationServiceUrl;
+            if (typeof value === 'string') {
+                const trimmed = value.trim();
+                if (trimmed.length > 0) {
+                    return trimmed;
+                }
+                return null;
+            }
+            if (value === null) {
+                return null;
+            }
+        }
+    } catch (error) {
+        console.warn('Unable to read window.__ONRUF_CONFIG__.invitationServiceUrl', error);
+    }
+    if (typeof window !== 'undefined' && window.location && window.location.protocol === 'file:') {
+        return null;
+    }
+    return INVITATION_SERVICE_ENDPOINT_DEFAULT;
+}
+
+function buildAbsoluteInvitationLink(token) {
+    const relativePath = buildRegistrationCompletionUrl(token);
+    try {
+        return new URL(relativePath, window.location.href).toString();
+    } catch (error) {
+        console.warn('Unable to construct absolute invitation link, using relative path.', error);
+        return relativePath;
+    }
+}
+
+async function deliverInvitationEmail(user, invitationMeta) {
+    if (!user || !user.email) {
+        return { status: 'skipped', message: 'Missing recipient email.' };
+    }
+
+    const endpoint = resolveInvitationServiceUrl();
+    if (!endpoint) {
+        return { status: 'skipped', message: 'Invitation email service is not configured.' };
+    }
+
+    const payload = {
+        recipientEmail: user.email,
+        recipientName: user.name || `${user.firstName || ''} ${user.lastName || ''}`.trim() || null,
+        invitationLink: buildAbsoluteInvitationLink(invitationMeta.token),
+        otp: invitationMeta.otp || null,
+        expiresAt: invitationMeta.expiresAt || null,
+        invitedBy: invitationMeta.invitedBy || null
+    };
+
+    try {
+        const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+
+        let responseBody = null;
+        try {
+            responseBody = await response.json();
+        } catch (parseError) {
+            responseBody = null;
+        }
+
+        if (!response.ok) {
+            const details = responseBody && (responseBody.error || responseBody.details);
+            const message = details || `Invitation email service returned ${response.status}.`;
+            return { status: 'error', message };
+        }
+
+        return {
+            status: 'sent',
+            messageId: responseBody && responseBody.messageId ? responseBody.messageId : null
+        };
+    } catch (error) {
+        console.error('Failed to reach invitation email service.', error);
+        return { status: 'error', message: error.message };
+    }
+}
+
+function resolveInvitationSenderLabel() {
+    const session = state.activeSession || null;
+    if (!session) {
+        return null;
+    }
+    if (session.user && session.user.name) {
+        return session.user.name;
+    }
+    if (session.email) {
+        return session.email;
+    }
+    return null;
+}
+
 function updateRegistrationLinkDisplay(tokenOverride = null) {
     const wrapper = document.getElementById('registrationFlowLinkWrapper');
     const linkEl = document.getElementById('registrationFlowLink');
@@ -715,6 +752,7 @@ function normalizeUserPayload(user, index = 0) {
         name: safeName,
         email,
         role: user.role || 'Admin',
+        roleId: user.roleId || '',
         accountType,
         status: normalizedStatus,
         firstName,
@@ -1340,6 +1378,21 @@ function setupEventListeners() {
         });
     }
 
+    const userRoleSelect = document.getElementById('userRole');
+    if (userRoleSelect) {
+        userRoleSelect.addEventListener('change', handleRoleSelectionChange);
+    }
+
+    const userAccountExpiration = document.getElementById('userAccountExpiration');
+    if (userAccountExpiration) {
+        userAccountExpiration.addEventListener('change', handleExpirationDateChange);
+    }
+
+    const userSuperAdminToggle = document.getElementById('userSuperAdminToggle');
+    if (userSuperAdminToggle) {
+        userSuperAdminToggle.addEventListener('change', handleSuperAdminToggle);
+    }
+
     const exportUsersBtn = document.getElementById('exportUsersBtn');
     if (exportUsersBtn) {
         exportUsersBtn.addEventListener('click', exportUsers);
@@ -1448,6 +1501,9 @@ function setupEventListeners() {
             }
             const targetStep = Number(stepItem.dataset.step || 0);
             if (!targetStep || targetStep === state.userFormStep) {
+                return;
+            }
+            if (targetStep < state.userFormStep) {
                 return;
             }
             if (targetStep > state.userFormStep) {
@@ -1941,6 +1997,10 @@ function normalizeEmail(value) {
     return typeof value === 'string' ? value.trim().toLowerCase() : '';
 }
 
+function normalizeEmployeeId(value) {
+    return typeof value === 'string' ? value.trim().toUpperCase() : '';
+}
+
 function formatStatusLabel(status) {
     if (!status && status !== 0) {
         return '—';
@@ -1974,6 +2034,25 @@ function findExistingUserByEmail(email, excludeUserId = null) {
             return false;
         }
         return normalizeEmail(user.email) === normalized;
+    });
+
+    return candidate || null;
+}
+
+function findExistingUserByEmployeeId(employeeId, excludeUserId = null) {
+    const normalized = normalizeEmployeeId(employeeId);
+    if (!normalized) {
+        return null;
+    }
+
+    const candidate = users.find(user => {
+        if (!user || !user.employeeId) {
+            return false;
+        }
+        if (excludeUserId !== null && user.id === excludeUserId) {
+            return false;
+        }
+        return normalizeEmployeeId(user.employeeId) === normalized;
     });
 
     return candidate || null;
@@ -2297,33 +2376,25 @@ function handleUserVerificationCancel() {
     revertToEmailVerification();
 }
 
-function handleAccountTypeChange(event) {
-    const value = event && event.target ? event.target.value : '';
-    const draft = {
-        ...(state.userDraft || {}),
-        accountType: value || null
-    };
-
-    if (value === 'system-administrator') {
-        draft.role = 'Super Admin';
-    } else if (value === 'platform-administrator') {
-        draft.role = draft.role && draft.role !== 'Super Admin' ? draft.role : '';
-    } else {
-        draft.role = '';
+function handleSuperAdminToggle(event) {
+    if (event && event.preventDefault) {
+        event.preventDefault();
     }
-
-    state.userDraft = draft;
 
     updateAccountTypeUI();
     updateUserFormProgressState();
 }
 
 function handleRoleSelectionChange(event) {
-    const value = event.target ? event.target.value : '';
+    const select = event.target || event.currentTarget;
+    const value = select ? select.value : '';
+    const selectedOption = select && select.selectedOptions.length ? select.selectedOptions[0] : null;
+    const label = selectedOption ? selectedOption.textContent.trim() : value;
 
     state.userDraft = {
         ...(state.userDraft || {}),
-        role: value
+        roleId: value || '',
+        role: label || ''
     };
     updateAccountTypeUI();
     updateUserFormProgressState();
@@ -2369,78 +2440,76 @@ function handleExpirationDateChange(event) {
 }
 
 function updateAccountTypeUI() {
-    const accountTypeSelect = document.getElementById('userAccountType');
     const roleSelect = document.getElementById('userRole');
     const summary = document.getElementById('userPermissionsSummary');
-    const accountTypeLabel = document.getElementById('userAccountTypeLabel');
     const roleLabel = document.getElementById('userRoleLabel');
+    const superAdminToggle = document.getElementById('userSuperAdminToggle');
 
-    const storedAccountType = state.userDraft && state.userDraft.accountType ? state.userDraft.accountType : '';
-    let selectedValue = storedAccountType;
+    const draft = state.userDraft = {
+        ...(state.userDraft || {})
+    };
 
-    if (accountTypeSelect) {
-        accountTypeSelect.value = storedAccountType || '';
-        accountTypeSelect.required = true;
-        accountTypeSelect.setAttribute('aria-required', 'true');
-        selectedValue = accountTypeSelect.value;
-    }
-
-    if (accountTypeLabel) {
-        accountTypeLabel.classList.add('required');
-    }
+    const isSuperAdmin = superAdminToggle ? superAdminToggle.checked : false;
 
     if (roleSelect) {
-        const shouldEnableRole = selectedValue === 'platform-administrator';
-        roleSelect.disabled = !shouldEnableRole;
-        if (shouldEnableRole) {
-            roleSelect.required = true;
-            roleSelect.setAttribute('aria-required', 'true');
-        } else {
+        populateUserRoleOptions(roleSelect);
+        roleSelect.disabled = isSuperAdmin;
+        if (isSuperAdmin) {
             roleSelect.required = false;
             roleSelect.removeAttribute('aria-required');
+            roleSelect.value = '';
+        } else {
+            roleSelect.required = true;
+            roleSelect.setAttribute('aria-required', 'true');
+
+            const desiredRoleId = draft.roleId || '';
+            const desiredRoleName = (draft.role || '').trim().toLowerCase();
+
+            if (desiredRoleId && Array.from(roleSelect.options).some(option => option.value === desiredRoleId)) {
+                roleSelect.value = desiredRoleId;
+            } else if (desiredRoleName) {
+                const match = Array.from(roleSelect.options).find(option => option.textContent.trim().toLowerCase() === desiredRoleName);
+                if (match) {
+                    roleSelect.value = match.value;
+                }
+            }
         }
 
-        if (shouldEnableRole) {
-            if (state.userDraft && state.userDraft.role && state.userDraft.role !== 'Super Admin') {
-                roleSelect.value = state.userDraft.role;
-            } else {
-                roleSelect.value = '';
-            }
+        if (!isSuperAdmin) {
+            const selectedOption = roleSelect.selectedOptions.length ? roleSelect.selectedOptions[0] : null;
+            draft.roleId = selectedOption ? selectedOption.value : '';
+            draft.role = selectedOption ? selectedOption.textContent.trim() : '';
         } else {
-            roleSelect.value = '';
+            draft.roleId = 'system-administrator';
+            draft.role = 'Super Admin';
         }
 
         if (roleLabel) {
-            roleLabel.classList.toggle('required', shouldEnableRole);
+            roleLabel.classList.toggle('required', !isSuperAdmin);
         }
     }
 
-    let summaryText = 'Select an account type to see the assigned permissions.';
+    draft.accountType = isSuperAdmin ? 'system-administrator' : 'platform-administrator';
 
-    if (selectedValue === 'system-administrator') {
-        summaryText = 'Super Admins receive full access to all modules within the central control panel.';
-        if (state.userDraft) {
-            state.userDraft.accountType = 'system-administrator';
-            state.userDraft.role = 'Super Admin';
-            state.userDraft.permissionSummary = 'Full access to all modules.';
-        }
+    if (isSuperAdmin) {
+        draft.permissionSummary = 'Full access to all modules.';
         renderRolePermissionsPreview(null);
-    } else if (selectedValue === 'platform-administrator') {
-        const roleName = roleSelect ? roleSelect.value : '';
-        summaryText = roleName
-            ? `Admins inherit the permissions defined for the “${roleName}” role.`
-            : 'Select a registered role to apply the relevant permission set for this admin.';
-        if (state.userDraft) {
-            state.userDraft.accountType = 'platform-administrator';
-            state.userDraft.role = roleName || '';
-        }
-        renderRolePermissionsPreview(roleName || null);
+    } else if (draft.roleId) {
+        draft.permissionSummary = draft.role ? `Inherits permissions from “${draft.role}”.` : '';
+        renderRolePermissionsPreview(draft.roleId);
     } else {
+        draft.permissionSummary = '';
         renderRolePermissionsPreview(null);
     }
 
     if (summary) {
-        summary.textContent = summaryText;
+        if (isSuperAdmin) {
+            summary.textContent = 'Super Admins receive full access to all modules within the control panel.';
+        } else if (draft.role) {
+            summary.textContent = '';
+        } else {
+            summary.textContent = 'Select a user role to see the assigned permissions.';
+        }
     }
 }
 
@@ -2462,8 +2531,9 @@ function renderRolePermissionsPreview(roleName) {
         return;
     }
 
-    const role = roles.find(item => item.name === roleName || item.id === roleName);
+    const role = roles.find(item => item.name === roleName || item.id === roleName || item.nameEnglish === roleName);
     const permissions = role && Array.isArray(role.permissions) ? role.permissions : [];
+    const displayLabel = role ? (role.nameEnglish || role.name || role.id) : roleName;
 
     container.classList.remove('hidden');
 
@@ -2475,7 +2545,51 @@ function renderRolePermissionsPreview(roleName) {
     }
 
     if (state.userDraft) {
-        state.userDraft.permissionSummary = `Inherits permissions from “${roleName}”.`;
+        state.userDraft.permissionSummary = displayLabel ? `Inherits permissions from “${displayLabel}”.` : '';
+    }
+}
+
+function populateUserRoleOptions(select) {
+    if (!select) {
+        return;
+    }
+
+    const activeRoles = Array.isArray(roles)
+        ? roles.filter(role => role && role.status !== 'inactive')
+        : [];
+
+    const placeholderOption = '<option value="">Select a role</option>';
+
+    if (!activeRoles.length) {
+        select.innerHTML = `${placeholderOption}<option value="" disabled>No active roles available</option>`;
+        select.value = '';
+        return;
+    }
+
+    const optionsHtml = activeRoles.map(role => {
+        const label = role.nameEnglish || role.name || role.id;
+        return `<option value="${role.id}">${label}</option>`;
+    }).join('');
+
+    select.innerHTML = `${placeholderOption}${optionsHtml}`;
+
+    const desiredRoleId = state.userDraft && state.userDraft.roleId ? state.userDraft.roleId : '';
+    const desiredRoleName = state.userDraft && state.userDraft.role ? state.userDraft.role.trim().toLowerCase() : '';
+
+    let matchedOption = null;
+
+    if (desiredRoleId) {
+        matchedOption = Array.from(select.options).find(option => option.value === desiredRoleId) || null;
+    }
+
+    if (!matchedOption && desiredRoleName) {
+        matchedOption = Array.from(select.options).find(option => option.textContent.trim().toLowerCase() === desiredRoleName) || null;
+    }
+
+    if (matchedOption) {
+        select.value = matchedOption.value;
+    } else {
+        select.value = '';
     }
 }
 
@@ -3069,24 +3183,12 @@ function isUserInfoStepComplete() {
 
 function isAccountStepComplete() {
     const draft = state.userDraft || {};
-    const hasNames = Boolean((draft.firstName || '').trim() && (draft.lastName || '').trim());
-    const hasPhone = Boolean((draft.phone || '').trim());
-    const editing = Boolean(state.editingUserId);
-
-    if (!hasNames || !hasPhone) {
-        return false;
+    const isSuperAdmin = draft.accountType === 'system-administrator';
+    if (isSuperAdmin) {
+        return true;
     }
 
-    if (editing) {
-        if (!draft.password && !draft.passwordConfirm) {
-            return true;
-        }
-    }
-
-    return Boolean(
-        (draft.password || '').length >= 8
-        && draft.password === draft.passwordConfirm
-    );
+    return Boolean((draft.roleId || '').trim());
 }
 
 function updateUserFormProgressState() {
@@ -3106,7 +3208,9 @@ function updateUserFormProgressState() {
 
     const submitBtn = document.getElementById('userFormSubmitBtn');
     if (submitBtn) {
-        submitBtn.disabled = state.userFormStep !== 2 || !isAccountStepComplete();
+        const shouldEnable = state.userFormStep === 2;
+        submitBtn.disabled = !shouldEnable;
+        submitBtn.classList.toggle('disabled', !shouldEnable);
     }
 }
 
@@ -3156,14 +3260,41 @@ function collectUserFormStepData(step) {
             emailInput.focus();
             return false;
         }
+
+        const excludeUserId = Number.isInteger(state.editingUserId) ? state.editingUserId : null;
+        const duplicateUser = findExistingUserByEmail(email, excludeUserId);
+        if (duplicateUser) {
+            showNotification('warning', 'This email already exists in Users Management.');
+            if (state.userFormStep !== 1) {
+                setUserFormStep(1);
+            }
+            emailInput.focus();
+            if (typeof emailInput.select === 'function') {
+                emailInput.select();
+            }
+            return false;
+        }
         if (!department) {
             showNotification('error', 'Department is required.');
             departmentInput.focus();
             return false;
         }
         if (!employeeId) {
-            showNotification('error', 'Employee ID is required.');
+            showNotification('error', 'ID is required.');
             employeeIdInput.focus();
+            return false;
+        }
+
+    const duplicateEmployee = findExistingUserByEmployeeId(employeeId, excludeUserId);
+        if (duplicateEmployee) {
+            showNotification('warning', 'This ID already exists in Users Management.');
+            if (state.userFormStep !== 1) {
+                setUserFormStep(1);
+            }
+            employeeIdInput.focus();
+            if (typeof employeeIdInput.select === 'function') {
+                employeeIdInput.select();
+            }
             return false;
         }
 
@@ -3182,64 +3313,42 @@ function collectUserFormStepData(step) {
     }
 
     if (step === 2) {
-        const firstNameInput = document.getElementById('registrationFirstName');
-        const lastNameInput = document.getElementById('registrationLastName');
-        const phoneInput = document.getElementById('registrationPhone');
-        const passwordInput = document.getElementById('registrationPassword');
-        const confirmInput = document.getElementById('registrationPasswordConfirm');
-        const photoInput = document.getElementById('registrationPhoto');
+        const roleSelect = document.getElementById('userRole');
+        const expirationInput = document.getElementById('userAccountExpiration');
+        const superAdminToggle = document.getElementById('userSuperAdminToggle');
 
-        if (!firstNameInput || !lastNameInput || !phoneInput || !passwordInput || !confirmInput) {
+        if (!roleSelect || !expirationInput || !superAdminToggle) {
             return false;
         }
 
-        const firstName = firstNameInput.value.trim();
-        const lastName = lastNameInput.value.trim();
-        const phone = phoneInput.value.trim();
-        const password = passwordInput.value;
-        const confirm = confirmInput.value;
-        const editing = Boolean(state.editingUserId);
+        const isSuperAdmin = superAdminToggle.checked;
+        const expiresOn = expirationInput.value.trim();
+        const selectedRoleOption = roleSelect.selectedOptions.length ? roleSelect.selectedOptions[0] : null;
+        const roleId = selectedRoleOption ? selectedRoleOption.value : '';
+        const roleLabel = selectedRoleOption ? selectedRoleOption.textContent.trim() : '';
 
-        if (!firstName) {
-            showNotification('error', 'First name is required.');
-            firstNameInput.focus();
-            return false;
-        }
-        if (!lastName) {
-            showNotification('error', 'Last name is required.');
-            lastNameInput.focus();
-            return false;
-        }
-        if (!phone) {
-            showNotification('error', 'Phone number is required.');
-            phoneInput.focus();
+        if (!isSuperAdmin && !roleId) {
+            showNotification('error', 'Select a user role to define permissions.');
+            roleSelect.focus();
             return false;
         }
 
-        if (!editing || password || confirm) {
-            if (password.length < 8) {
-                showNotification('error', 'Password must be at least 8 characters long.');
-                passwordInput.focus();
-                return false;
-            }
-            if (password !== confirm) {
-                showNotification('error', 'Password confirmation does not match.');
-                confirmInput.focus();
+        if (expiresOn) {
+            const expiresDate = new Date(expiresOn);
+            if (Number.isNaN(expiresDate.getTime())) {
+                showNotification('error', 'Enter a valid account expiration date.');
+                expirationInput.focus();
                 return false;
             }
         }
 
-        draft.firstName = firstName;
-        draft.lastName = lastName;
-        draft.phone = phone;
-        draft.password = password;
-        draft.passwordConfirm = confirm;
-
-        if (photoInput && photoInput.files && photoInput.files[0]) {
-            draft.photoFileName = photoInput.files[0].name;
-        } else {
-            draft.photoFileName = draft.photoFileName || '';
-        }
+        draft.accountType = isSuperAdmin ? 'system-administrator' : 'platform-administrator';
+        draft.roleId = isSuperAdmin ? 'system-administrator' : roleId;
+        draft.role = isSuperAdmin ? 'Super Admin' : roleLabel;
+        draft.permissionSummary = isSuperAdmin
+            ? 'Full access to all modules.'
+            : (roleLabel ? `Inherits permissions from “${roleLabel}”.` : '');
+        draft.expiresOn = expiresOn;
 
         state.userDraft = draft;
         updateUserFormProgressState();
@@ -3266,33 +3375,32 @@ function showUserForm(mode, userId = null) {
     const emailInput = document.getElementById('userEmail');
     const departmentInput = document.getElementById('userDepartment');
     const employeeIdInput = document.getElementById('userEmployeeId');
-    const firstNameInput = document.getElementById('registrationFirstName');
-    const lastNameInput = document.getElementById('registrationLastName');
-    const phoneInput = document.getElementById('registrationPhone');
-    const passwordInput = document.getElementById('registrationPassword');
-    const confirmInput = document.getElementById('registrationPasswordConfirm');
-    const emailDisplay = document.getElementById('registrationEmail');
-    const photoInput = document.getElementById('registrationPhoto');
+    const roleSelect = document.getElementById('userRole');
+    const superAdminToggle = document.getElementById('userSuperAdminToggle');
+    const expirationInput = document.getElementById('userAccountExpiration');
     const submitBtn = document.getElementById('userFormSubmitBtn');
+    const permissionsSummary = document.getElementById('userPermissionsSummary');
 
-    if (!formPage || !listView || !form || !emailInput || !departmentInput || !employeeIdInput || !firstNameInput || !lastNameInput || !phoneInput || !passwordInput || !confirmInput || !emailDisplay || !submitBtn) {
+    if (!formPage || !listView || !form || !emailInput || !departmentInput || !employeeIdInput || !roleSelect || !superAdminToggle || !expirationInput || !submitBtn) {
         return;
     }
 
     form.reset();
-    if (photoInput) {
-        photoInput.value = '';
-    }
 
     const defaultDraft = {
         email: '',
         department: '',
         employeeId: '',
+        accountType: '',
+        role: '',
+        roleId: '',
         firstName: '',
         lastName: '',
         phone: '',
         password: '',
         passwordConfirm: '',
+        permissionSummary: '',
+        expiresOn: '',
         status: 'Pending',
         photoFileName: ''
     };
@@ -3307,9 +3415,19 @@ function showUserForm(mode, userId = null) {
         stage: 'prepared'
     };
 
+    if (permissionsSummary) {
+        permissionsSummary.textContent = 'Toggle Super Admin or choose a user role to preview permissions.';
+    }
+
     let initialStep = 1;
     submitBtn.textContent = 'Add';
     emailInput.readOnly = false;
+
+    populateUserRoleOptions(roleSelect);
+
+    roleSelect.value = '';
+    expirationInput.value = '';
+    superAdminToggle.checked = false;
 
     if (mode === 'edit' && typeof userId === 'number') {
         const user = users.find(u => u.id === userId);
@@ -3319,31 +3437,46 @@ function showUserForm(mode, userId = null) {
 
         state.editingUserId = userId;
 
+        const accountType = resolveUserAccountType(user);
+        const roleLabel = user.role || '';
+        const roleId = user.roleId || '';
+        const expiresOn = user.expiresOn || '';
         const firstName = user.firstName || (user.name ? user.name.split(' ')[0] : '');
         const lastName = user.lastName || (user.name ? user.name.split(' ').slice(1).join(' ') : '');
         const phone = user.phone || `+96650${String(user.id).padStart(6, '0')}`;
 
         emailInput.value = user.email || '';
         emailInput.readOnly = true;
-        departmentInput.value = user.department || '';
+        const departmentValue = user.department || '';
+        if (departmentValue) {
+            const optionExists = Array.from(departmentInput.options).some(option => option.value === departmentValue);
+            if (!optionExists) {
+                const customOption = document.createElement('option');
+                customOption.value = departmentValue;
+                customOption.textContent = departmentValue;
+                departmentInput.appendChild(customOption);
+            }
+        }
+        departmentInput.value = departmentValue;
         employeeIdInput.value = user.employeeId || '';
-        firstNameInput.value = firstName;
-        lastNameInput.value = lastName;
-        phoneInput.value = phone;
-        passwordInput.value = '';
-        confirmInput.value = '';
-        emailDisplay.value = user.email || '';
+        expirationInput.value = expiresOn;
+        superAdminToggle.checked = accountType === 'system-administrator';
 
         state.userDraft = {
             ...defaultDraft,
             email: user.email || '',
             department: user.department || '',
             employeeId: user.employeeId || '',
+            accountType,
+            role: accountType === 'system-administrator' ? 'Super Admin' : roleLabel,
+            roleId: accountType === 'system-administrator' ? 'system-administrator' : (roleId || ''),
             firstName,
             lastName,
             phone,
-            password: '',
-            passwordConfirm: '',
+            permissionSummary: user.permissionSummary || (accountType === 'system-administrator'
+                ? 'Full access to all modules.'
+                : (roleLabel ? `Inherits permissions from “${roleLabel}”.` : '')),
+            expiresOn,
             status: user.status || 'Pending',
             photoFileName: user.photoFileName || ''
         };
@@ -3354,19 +3487,18 @@ function showUserForm(mode, userId = null) {
         emailInput.value = '';
         departmentInput.value = '';
         employeeIdInput.value = '';
-        firstNameInput.value = '';
-        lastNameInput.value = '';
-        phoneInput.value = '';
-        passwordInput.value = '';
-        confirmInput.value = '';
-        emailDisplay.value = '';
+        expirationInput.value = '';
+        superAdminToggle.checked = false;
+        roleSelect.value = '';
     }
+
+    updateAccountTypeUI();
 
     if (titleEl) {
         titleEl.textContent = state.editingUserId ? 'Edit User' : 'Add New User';
     }
     if (subtitleEl) {
-        subtitleEl.textContent = state.editingUserId ? 'Update profile or resend invitation details.' : 'Invite a new user to the control panel.';
+        subtitleEl.textContent = state.editingUserId ? 'Update profile or resend invitation details.' : '';
     }
 
     listView.classList.add('hidden');
@@ -3380,8 +3512,10 @@ function showUserForm(mode, userId = null) {
 
     if (initialStep === 1) {
         emailInput.focus();
+    } else if (!superAdminToggle.checked && roleSelect && !roleSelect.disabled) {
+        roleSelect.focus();
     } else {
-        firstNameInput.focus();
+        expirationInput.focus();
     }
 }
 
@@ -3426,7 +3560,7 @@ function hideUserForm() {
     }
 }
 
-function handleUserFormSubmit(event) {
+async function handleUserFormSubmit(event) {
     event.preventDefault();
 
     if (!collectUserFormStepData(1)) {
@@ -3446,6 +3580,20 @@ function handleUserFormSubmit(event) {
     }
 
     const isEditing = Boolean(state.editingUserId);
+
+    const duplicateEmployee = findExistingUserByEmployeeId(draft.employeeId, isEditing ? state.editingUserId : null);
+    if (duplicateEmployee) {
+    showNotification('warning', 'This ID already exists in Users Management.');
+        setUserFormStep(1);
+        const employeeIdInput = document.getElementById('userEmployeeId');
+        if (employeeIdInput) {
+            employeeIdInput.focus();
+            if (typeof employeeIdInput.select === 'function') {
+                employeeIdInput.select();
+            }
+        }
+        return;
+    }
 
     if (!isEditing) {
         const existingUser = findExistingUserByEmail(draft.email);
@@ -3473,6 +3621,17 @@ function handleUserFormSubmit(event) {
         user.department = draft.department;
         user.employeeId = draft.employeeId;
         user.email = draft.email;
+        user.accountType = draft.accountType || user.accountType || 'platform-administrator';
+        if (draft.accountType === 'system-administrator') {
+            user.role = 'Super Admin';
+            user.roleId = 'system-administrator';
+            user.permissionSummary = 'Full access to all modules.';
+        } else {
+            user.role = draft.role || user.role || 'Admin';
+            user.roleId = draft.roleId || user.roleId || '';
+            user.permissionSummary = draft.permissionSummary || user.permissionSummary || '';
+        }
+        user.expiresOn = draft.expiresOn || '';
         ensureUserAuthRecord(user);
         if (draft.photoFileName) {
             user.photoFileName = draft.photoFileName;
@@ -3487,6 +3646,10 @@ function handleUserFormSubmit(event) {
         showNotification('success', 'User details updated successfully.');
 
         saveUsersToStorage();
+        syncRoleUserCounts();
+        saveRolesToStorage();
+        updateUserRolesCount();
+    renderRolesTable(state.currentRolePage);
         renderUsersTable(state.userSearchTerm, state.currentUserPage);
         renderStats();
         hideUserForm();
@@ -3501,6 +3664,14 @@ function handleUserFormSubmit(event) {
     const passwordHash = draft.password ? hashPasswordValue(draft.password) : '';
     const passwordTimestamp = draft.password ? createdIso : null;
 
+    const accountType = draft.accountType === 'system-administrator' ? 'system-administrator' : 'platform-administrator';
+    const roleId = accountType === 'system-administrator' ? 'system-administrator' : (draft.roleId || '');
+    const roleLabel = accountType === 'system-administrator' ? 'Super Admin' : (draft.role || 'Admin');
+    const permissionSummary = accountType === 'system-administrator'
+        ? 'Full access to all modules.'
+        : (draft.permissionSummary || (roleLabel ? `Inherits permissions from “${roleLabel}”.` : ''));
+    const expiresOn = draft.expiresOn || '';
+
     const newUser = {
         id: newId,
         name: fullName,
@@ -3510,8 +3681,9 @@ function handleUserFormSubmit(event) {
         department: draft.department,
         employeeId: draft.employeeId,
         phone: draft.phone,
-        role: 'Pending Role',
-        accountType: 'pending-invite',
+        role: roleLabel,
+        roleId,
+        accountType,
         status: 'Pending',
         lastLogin: 'Never',
         created: new Date().toLocaleDateString(),
@@ -3530,6 +3702,8 @@ function handleUserFormSubmit(event) {
         },
         temporaryPasswordSetAt: passwordTimestamp,
         sessionExpiresAt: null,
+        permissionSummary,
+        expiresOn,
         photoFileName: draft.photoFileName || ''
     };
 
@@ -3543,11 +3717,30 @@ function handleUserFormSubmit(event) {
     setInvitationStage('account-info');
 
     saveUsersToStorage();
+    syncRoleUserCounts();
+    saveRolesToStorage();
+    updateUserRolesCount();
+    renderRolesTable(state.currentRolePage);
     updateUsersManagementCount();
     renderUsersTable('', 1);
     renderStats();
 
-    showNotification('success', `Invitation sent to ${draft.email}. The user is now pending activation.`, 6000);
+    const invitedBy = resolveInvitationSenderLabel();
+
+    const emailResult = await deliverInvitationEmail(newUser, {
+        otp: otpCode,
+        token: invitationToken,
+        expiresAt: state.registrationFlow.expiresAt,
+        invitedBy
+    });
+
+    if (emailResult.status === 'sent') {
+        showNotification('success', `Invitation email sent to ${draft.email}. The user is now pending activation.`, 6000);
+    } else if (emailResult.status === 'skipped') {
+        showNotification('info', `Invitation prepared for ${draft.email}, but no email service is configured. Share the link manually from the registration flow.`, 7000);
+    } else {
+        showNotification('warning', `Invitation created for ${draft.email}, but the email could not be delivered: ${emailResult.message}.`, 8000);
+    }
 
     hideUserForm();
     openRegistrationFlow(newId, { autoStart: true });
@@ -3583,6 +3776,30 @@ function resetRegistrationFlowForms() {
     if (otpInput) {
         otpInput.value = '';
     }
+}
+
+function showUserInvitationLink(userId) {
+    const user = Number.isInteger(userId) ? users.find(item => item.id === userId) : null;
+    if (!user) {
+        showNotification('error', 'Unable to locate an invitation for this user.');
+        return;
+    }
+
+    ensureUserInvitationRecord(user);
+    const token = user.invitation.token || generateRegistrationToken();
+    if (!user.invitation.token) {
+        user.invitation.token = token;
+    }
+
+    const link = buildAbsoluteInvitationLink(token);
+
+    state.registrationFlow.userId = userId;
+    state.registrationFlow.token = token;
+    state.registrationFlow.link = link;
+
+    saveUsersToStorage();
+
+    window.open(link, '_blank', 'noopener');
 }
 
 function openRegistrationFlow(userId, options = {}) {
@@ -3819,7 +4036,7 @@ function handleRegistrationOtpSubmit(event) {
     }
 }
 
-function handleRegistrationFlowResend() {
+async function handleRegistrationFlowResend() {
     const userId = state.registrationFlow.userId;
     const user = userId ? users.find(u => u.id === userId) : null;
     const otpInstructions = document.getElementById('otpInstructions');
@@ -3838,10 +4055,26 @@ function handleRegistrationFlowResend() {
     user.invitation.otp = newOtp;
     user.invitation.lastOtpSentAt = new Date().toISOString();
 
-    otpInstructions.textContent = `A fresh one-time password was sent to ${user.email}. Use the new code within 10 minutes.`;
-
     saveUsersToStorage();
-    showNotification('info', `A new OTP was sent to ${user.email}.`, 5000);
+
+    const invitedBy = resolveInvitationSenderLabel();
+    const emailResult = await deliverInvitationEmail(user, {
+        otp: newOtp,
+        token: user.invitation.token,
+        expiresAt: state.registrationFlow.expiresAt,
+        invitedBy
+    });
+
+    if (emailResult.status === 'sent') {
+        otpInstructions.textContent = `We emailed a new one-time password to ${user.email}. Use the code within 10 minutes.`;
+        showNotification('success', `A new invitation email was sent to ${user.email}.`, 6000);
+    } else if (emailResult.status === 'skipped') {
+        otpInstructions.textContent = `A new one-time password was generated for ${user.email}. Share the code or link manually within 10 minutes.`;
+        showNotification('info', `Email service is not configured. Copy the new code for ${user.email} and share it manually.`, 7000);
+    } else {
+        otpInstructions.textContent = `A new one-time password was generated for ${user.email}, but delivery failed. Share the code manually within 10 minutes.`;
+        showNotification('warning', `Email delivery failed for ${user.email}: ${emailResult.message}.`, 8000);
+    }
 }
 
 function normalizeRoleLookupValue(value) {
@@ -4113,6 +4346,63 @@ async function handleUserToggle(userId) {
     await toggleUserStatus(userId);
 }
 
+async function handleUserDelete(userId) {
+    const user = users.find(item => item.id === userId);
+    if (!user) {
+        showNotification('error', 'We could not locate that user record.');
+        return;
+    }
+
+    const accountType = resolveUserAccountType(user);
+    if (accountType === 'system-administrator') {
+        await showUserAlert('Super Admin accounts cannot be deleted.');
+        return;
+    }
+
+    const isCurrentSessionUser = Boolean(state.activeSession && state.activeSession.user && state.activeSession.user.id === userId);
+    if (isCurrentSessionUser) {
+        await showUserAlert('You cannot delete the account that is currently signed in.');
+        return;
+    }
+
+    const userLabel = user.name || user.email || `User #${user.id}`;
+    const confirmed = await showUserConfirm(
+        `Delete the user account for ${userLabel}? This action cannot be undone.`,
+        'Delete',
+        'Cancel'
+    );
+    if (!confirmed) return;
+
+    const wasEditingTarget = state.editingUserId === userId;
+    const registrationFlowMatches = Boolean(state.registrationFlow && state.registrationFlow.userId === userId);
+
+    users = users.filter(item => item.id !== userId);
+
+    syncRoleUserCounts();
+    saveRolesToStorage();
+    saveUsersToStorage();
+    updateUserRolesCount();
+    updateUsersManagementCount();
+    renderUsersTable(state.userSearchTerm, state.currentUserPage);
+    renderRolesTable(state.currentRolePage);
+    renderStats();
+
+    if (registrationFlowMatches) {
+        closeRegistrationFlow();
+    }
+
+    if (wasEditingTarget) {
+        hideUserForm();
+    }
+
+    if (state.registrationFlow) {
+        state.registrationFlow.stage = 'prepared';
+        state.registrationFlow.link = null;
+    }
+
+    showNotification('success', 'User account deleted successfully.');
+}
+
 function viewRole(roleId) {
     showRoleDetails(roleId);
 }
@@ -4230,7 +4520,7 @@ function renderUsersTable(searchTerm = state.userSearchTerm, page = state.curren
     const visibleUsers = filtered.slice(startIndex, startIndex + state.usersPerPage);
 
     if (!visibleUsers.length) {
-        tbody.innerHTML = '<tr><td colspan="8">There is no Data Available</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9">There is no Data Available</td></tr>';
     } else {
         let index = startIndex + 1;
         tbody.innerHTML = visibleUsers.map(user => {
@@ -4242,10 +4532,30 @@ function renderUsersTable(searchTerm = state.userSearchTerm, page = state.curren
             const accountType = resolveUserAccountType(user);
             const accountTypeLabel = mapAccountTypeLabel(accountType);
             const accountTypeClass = mapAccountTypeClass(accountType);
+            const isSuperAdminAccount = accountType === 'system-administrator';
+            const accountTypeTag = isSuperAdminAccount
+                ? `<span class="account-type-tag ${accountTypeClass}">${accountTypeLabel}</span>`
+                : '';
+            const displayRole = isSuperAdminAccount ? '—' : (user.role || '—');
             const expirationLabel = user.expiresOn ? formatDateForDisplay(user.expiresOn) : '—';
+            const invitation = user.invitation || {};
+            const registrationCompleted = Boolean(invitation.completedAt || invitation.verifiedAt);
+            const phoneDisplay = (!isPending || registrationCompleted)
+                ? (user.phone && String(user.phone).trim() ? String(user.phone).trim() : '—')
+                : '—';
+            const employeeIdDisplay = user.employeeId && String(user.employeeId).trim() ? String(user.employeeId).trim() : '—';
+            const isCurrentSessionUser = Boolean(state.activeSession && state.activeSession.user && state.activeSession.user.id === user.id);
+            const deleteTooltip = isSuperAdminAccount
+                ? 'Super Admin accounts cannot be deleted.'
+                : isCurrentSessionUser
+                    ? 'You cannot delete the account that is currently signed in.'
+                    : 'Delete user';
+            const deleteAction = (!isSuperAdminAccount && !isCurrentSessionUser)
+                ? `<button class="action-btn delete" onclick="(async () => await handleUserDelete(${user.id}))()" title="${escapeAttribute(deleteTooltip)}"><i class="fas fa-trash"></i></button>`
+                : `<button class="action-btn delete disabled" type="button" disabled title="${escapeAttribute(deleteTooltip)}"><i class="fas fa-trash"></i></button>`;
 
             const secondaryAction = isPending
-                ? `<button class="action-btn activate" onclick="openRegistrationFlow(${user.id}, { autoStart: true })" title="Simulate registration"><i class="fas fa-envelope-open-text"></i></button>`
+                ? `<button class="action-btn activate" onclick="showUserInvitationLink(${user.id})" title="Show invitation link"><i class="fas fa-envelope-open-text"></i></button>`
                 : `<button class="action-btn ${isActive ? 'deactivate' : 'activate'}" onclick="(async () => await handleUserToggle(${user.id}))()" title="${isActive ? 'Deactivate user' : 'Activate user'}"><i class="fas ${isActive ? 'fa-power-off' : 'fa-rotate-right'}"></i></button>`;
 
             return `
@@ -4257,15 +4567,16 @@ function renderUsersTable(searchTerm = state.userSearchTerm, page = state.curren
                             <div>
                                 <div class="user-name-row">
                                     <span class="user-name">${user.name}</span>
-                                    <span class="account-type-tag ${accountTypeClass}">${accountTypeLabel}</span>
+                                    ${accountTypeTag}
                                 </div>
                                 <div class="user-meta">${user.email}</div>
-                                ${user.department ? `<div class="user-meta">${user.department}</div>` : ''}
-                                <div class="user-meta">${user.phone || '+96650' + user.id.toString().padStart(6, '0')}</div>
+                                <div class="user-meta">${phoneDisplay}</div>
+                                <div class="user-meta">ID: ${employeeIdDisplay}</div>
                             </div>
                         </div>
                     </td>
-                    <td>${user.role}</td>
+                    <td>${displayRole}</td>
+                    <td>${user.department || '—'}</td>
                     <td><span class="status-badge status-${statusClass}">${displayStatus}</span></td>
                     <td>${user.lastLogin}</td>
                     <td>${user.created}</td>
@@ -4274,6 +4585,7 @@ function renderUsersTable(searchTerm = state.userSearchTerm, page = state.curren
                         <div class="action-group">
                             <button class="action-btn edit" onclick="showUserForm('edit', ${user.id})" title="Edit user"><i class="fas fa-pen"></i></button>
                             ${secondaryAction}
+                            ${deleteAction}
                         </div>
                     </td>
                 </tr>
@@ -4286,11 +4598,12 @@ function renderUsersTable(searchTerm = state.userSearchTerm, page = state.curren
 
 function exportUsers() {
     const rows = [
-        ['Name', 'Email', 'Role', 'Status', 'Last Login', 'Created', 'Account Expiration'],
+        ['Name', 'Email', 'Role', 'Department', 'Status', 'Last Login', 'Created', 'Account Expiration'],
         ...users.map(user => [
             user.name,
             user.email,
             user.role,
+            user.department || '',
             user.status,
             user.lastLogin,
             user.created,

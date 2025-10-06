@@ -51,6 +51,10 @@ body.auth-body {
     box-shadow: 0 40px 80px rgba(15, 23, 42, 0.25);
 }
 
+.auth-shell.registration-wrapper {
+    grid-template-columns: repeat(1, minmax(0, 1fr));
+}
+
 @media (max-width: 968px) {
     .auth-shell {
         grid-template-columns: 1fr;
@@ -133,13 +137,6 @@ body.auth-body {
 .auth-help-btn:hover {
     background: rgba(37, 99, 235, 0.18);
 }
-
-.auth-main {
-    display: flex;
-    flex-direction: column;
-    gap: 24px;
-}
-
 .auth-main h2 {
     margin: 0;
     font-size: clamp(26px, 3vw, 32px);
@@ -196,6 +193,34 @@ body.auth-body {
     font-size: 15px;
     font-family: inherit;
     transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.file-input {
+    padding: 10px 16px;
+    cursor: pointer;
+}
+
+.file-input::file-selector-button {
+    margin-right: 12px;
+    padding: 10px 16px;
+    border: none;
+    border-radius: 10px;
+    background: rgba(37, 99, 235, 0.12);
+    color: var(--auth-primary);
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+
+.file-input:hover::file-selector-button {
+    background: rgba(37, 99, 235, 0.18);
+}
+
+.form-hint {
+    margin: 4px 0 0;
+    font-size: 13px;
+    color: var(--auth-muted);
 }
 
 .form-input:focus {
@@ -515,6 +540,10 @@ body[data-auth-page="registration"] {
     margin: 0;
 }
 
+.registration-grid .form-group.full-span {
+    grid-column: 1 / -1;
+}
+
 .otp-panel {
     background: linear-gradient(135deg, rgba(15, 23, 42, 0.94), rgba(37, 99, 235, 0.92));
     color: #e2e8f0;
@@ -534,6 +563,36 @@ body[data-auth-page="registration"] {
     margin: 0;
     color: rgba(226, 232, 240, 0.78);
     line-height: 1.7;
+}
+
+.otp-panel .otp-timer {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: -4px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #f8fafc;
+    letter-spacing: 0.02em;
+}
+
+.otp-panel .otp-timer i {
+    color: #bae6fd;
+    font-size: 14px;
+}
+
+.otp-panel .otp-timer span {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 12px;
+    border-radius: 999px;
+    background: rgba(15, 23, 42, 0.42);
+    font-variant-numeric: tabular-nums;
+}
+
+.otp-panel .otp-timer span.expired {
+    background: rgba(248, 113, 113, 0.16);
+    color: #fecaca;
 }
 
 .otp-group {
@@ -592,6 +651,7 @@ body[data-auth-page="registration"] {
     padding: clamp(20px, 3vw, 28px);
     display: grid;
     gap: 16px;
+    height: fit-content;
 }
 
 .registration-summary h3 {
@@ -609,21 +669,6 @@ body[data-auth-page="registration"] {
 
 .summary-row strong {
     color: #0f172a;
-}
-
-.registration-success {
-    display: grid;
-    gap: 18px;
-    text-align: center;
-    padding: 32px;
-    border-radius: 24px;
-    background: linear-gradient(135deg, rgba(34, 197, 94, 0.12), rgba(22, 163, 74, 0.12));
-    border: 1px solid rgba(34, 197, 94, 0.18);
-}
-
-.registration-success i {
-    font-size: 42px;
-    color: var(--auth-success);
 }
 
 .hidden {

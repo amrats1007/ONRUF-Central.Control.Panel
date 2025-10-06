@@ -6,6 +6,99 @@
     const OTP_EXPIRY_MINUTES = 10;
     const DATA_RESET_VERSION = '20241005-super-admin-seed';
     const DATA_RESET_KEY = 'onruf_data_reset_version';
+    const INVITATION_SERVICE_ENDPOINT_DEFAULT = '/api/invitations/send';
+
+    function resolveInvitationServiceUrl() {
+        try {
+            const config = window.__ONRUF_CONFIG__;
+            if (config) {
+                const value = config.invitationServiceUrl;
+                if (typeof value === 'string') {
+                    const trimmed = value.trim();
+                    if (trimmed.length > 0) {
+                        return trimmed;
+                    }
+                    return null;
+                }
+                if (value === null) {
+                    return null;
+                }
+            }
+        } catch (error) {
+            console.warn('Unable to read window.__ONRUF_CONFIG__.invitationServiceUrl', error);
+        }
+        if (typeof window !== 'undefined' && window.location && window.location.protocol === 'file:') {
+            return null;
+        }
+        return INVITATION_SERVICE_ENDPOINT_DEFAULT;
+    }
+
+    function buildAbsoluteInvitationLink(token) {
+        if (!token) {
+            return window.location.href.split('#')[0];
+        }
+        try {
+            const currentUrl = new URL(window.location.href);
+            currentUrl.searchParams.set('token', token);
+            currentUrl.hash = '';
+            return currentUrl.toString();
+        } catch (error) {
+            console.warn('Unable to construct absolute invitation link.', error);
+            const base = window.location.origin || '';
+            return `${base}/complete-registration.html?token=${encodeURIComponent(token)}`;
+        }
+    }
+
+    async function deliverInvitationEmail(user, meta = {}) {
+        if (!user || !user.email) {
+            return { status: 'skipped', message: 'Recipient email missing.' };
+        }
+
+        const endpoint = resolveInvitationServiceUrl();
+        if (!endpoint) {
+            return { status: 'skipped', message: 'Invitation service not configured.' };
+        }
+
+        const payload = {
+            recipientEmail: user.email,
+            recipientName: user.name || `${user.firstName || ''} ${user.lastName || ''}`.trim() || null,
+            invitationLink: buildAbsoluteInvitationLink(meta.token || (user.invitation && user.invitation.token)),
+            otp: meta.otp || null,
+            expiresAt: meta.expiresAt || null,
+            invitedBy: meta.invitedBy || null
+        };
+
+        try {
+            const response = await fetch(endpoint, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(payload)
+            });
+
+            let responseBody = null;
+            try {
+                responseBody = await response.json();
+            } catch (parseError) {
+                responseBody = null;
+            }
+
+            if (!response.ok) {
+                const details = responseBody && (responseBody.error || responseBody.details);
+                const message = details || `Service returned status ${response.status}.`;
+                return { status: 'error', message };
+            }
+
+            return {
+                status: 'sent',
+                messageId: responseBody && responseBody.messageId ? responseBody.messageId : null
+            };
+        } catch (error) {
+            console.error('Unable to deliver invitation email.', error);
+            return { status: 'error', message: error.message };
+        }
+    }
 
     const DEFAULT_USERS_SEED = [
         {
@@ -82,6 +175,8 @@
         token: null
     };
 
+    let otpCountdownInterval = null;
+
     const toastEl = document.getElementById('authToast');
 
     function loadUsersFromStorage() {
@@ -109,14 +204,16 @@
         if (Number.isNaN(date.getTime())) {
             return value || '';
         }
-        return date.toLocaleString(undefined, {
-            weekday: 'short',
+        const datePart = date.toLocaleDateString(undefined, {
             year: 'numeric',
             month: 'short',
-            day: 'numeric',
+            day: 'numeric'
+        });
+        const timePart = date.toLocaleTimeString(undefined, {
             hour: '2-digit',
             minute: '2-digit'
         });
+        return `${datePart} ${timePart}`.trim();
     }
 
     function hashPassword(value) {
@@ -294,42 +391,41 @@
     function setStatusPill(type, text) {
         const pill = document.getElementById('registrationStatusPill');
         if (!pill) return;
-        pill.classList.remove('success', 'warning');
+        pill.classList.remove('success', 'warning', 'hidden');
+        if (!text) {
+            pill.innerHTML = '';
+            pill.classList.add('hidden');
+            return;
+        }
+        pill.innerHTML = text;
         if (type) {
             pill.classList.add(type);
         }
-        pill.innerHTML = text;
     }
 
     function renderSummary(user) {
-        const nameEl = document.getElementById('summaryName');
-        const emailEl = document.getElementById('summaryEmail');
         const roleEl = document.getElementById('summaryRole');
         const sentAtEl = document.getElementById('summarySentAt');
-        const otpStatusEl = document.getElementById('summaryOtpStatus');
+        const departmentEl = document.getElementById('summaryDepartment');
+        const expiresEl = document.getElementById('summaryExpiresOn');
+        const employeeIdEl = document.getElementById('summaryEmployeeId');
 
-        if (nameEl) {
-            nameEl.textContent = user.name || `${user.firstName || ''} ${user.lastName || ''}`.trim() || '—';
-        }
-        if (emailEl) {
-            emailEl.textContent = user.email || '—';
-        }
         if (roleEl) {
             roleEl.textContent = user.role || 'Pending role';
         }
         if (sentAtEl) {
             sentAtEl.textContent = user.invitation && user.invitation.sentAt ? formatDateTime(user.invitation.sentAt) : '—';
         }
-        if (otpStatusEl) {
-            if (user.status && user.status.toLowerCase() === 'active') {
-                otpStatusEl.textContent = 'Verified';
-            } else if (user.invitation && user.invitation.verifiedAt) {
-                otpStatusEl.textContent = `Verified ${formatDateTime(user.invitation.verifiedAt)}`;
-            } else if (user.invitation && user.invitation.lastOtpSentAt) {
-                otpStatusEl.textContent = `Sent ${formatDateTime(user.invitation.lastOtpSentAt)}`;
-            } else {
-                otpStatusEl.textContent = 'Awaiting submission';
-            }
+        if (departmentEl) {
+            const department = user.department || (user.organization && user.organization.department) || '';
+            departmentEl.textContent = department || '—';
+        }
+        if (expiresEl) {
+            expiresEl.textContent = user.expiresOn ? formatDateTime(user.expiresOn) : '—';
+        }
+        if (employeeIdEl) {
+            const employeeId = user.employeeId || (user.organization && user.organization.employeeId) || '';
+            employeeIdEl.textContent = employeeId ? String(employeeId) : '—';
         }
     }
 
@@ -353,11 +449,15 @@
     function setRegistrationStep(step) {
         const account = document.getElementById('registrationStepAccount');
         const otp = document.getElementById('registrationStepOtp');
-        const success = document.getElementById('registrationStepSuccess');
 
         if (account) account.classList.toggle('hidden', step !== 'account');
         if (otp) otp.classList.toggle('hidden', step !== 'otp');
-        if (success) success.classList.toggle('hidden', step !== 'success');
+
+        if (step === 'otp') {
+            startOtpCountdown();
+        } else {
+            resetOtpCountdown();
+        }
     }
 
     function collectOtpValue() {
@@ -377,6 +477,70 @@
             inputs[0].focus();
             inputs[0].select();
         }
+    }
+
+    function getOtpCountdownElement() {
+        return document.getElementById('otpCountdown');
+    }
+
+    function stopOtpCountdown() {
+        if (otpCountdownInterval !== null) {
+            clearInterval(otpCountdownInterval);
+            otpCountdownInterval = null;
+        }
+    }
+
+    function resetOtpCountdown() {
+        stopOtpCountdown();
+        const countdownEl = getOtpCountdownElement();
+        if (countdownEl) {
+            const fallback = countdownEl.dataset.default || '--:--';
+            countdownEl.textContent = fallback;
+            countdownEl.classList.remove('expired');
+        }
+    }
+
+    function startOtpCountdown() {
+        const countdownEl = getOtpCountdownElement();
+        if (!countdownEl) {
+            return;
+        }
+
+        stopOtpCountdown();
+
+        if (!authState.otpExpiresAt) {
+            resetOtpCountdown();
+            return;
+        }
+
+        const update = () => {
+            const remainingMs = authState.otpExpiresAt - Date.now();
+            if (remainingMs <= 0) {
+                countdownEl.textContent = 'Expired';
+                countdownEl.classList.add('expired');
+                stopOtpCountdown();
+                return;
+            }
+
+            countdownEl.classList.remove('expired');
+            const totalSeconds = Math.ceil(remainingMs / 1000);
+            const minutes = Math.floor(totalSeconds / 60);
+            const seconds = totalSeconds % 60;
+            countdownEl.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        };
+
+        update();
+
+        otpCountdownInterval = window.setInterval(update, 1000);
+    }
+
+    function readFileAsDataUrl(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = () => reject(reader.error || new Error('File reading failed'));
+            reader.readAsDataURL(file);
+        });
     }
 
     function updateOtpEmailLabel(email) {
@@ -471,23 +635,22 @@
         const lastNameInput = document.getElementById('registrationLastName');
         const phoneInput = document.getElementById('registrationPhone');
         const emailDisplay = document.getElementById('registrationEmailDisplay');
-        const departmentInput = document.getElementById('registrationDepartment');
 
         if (firstNameInput) firstNameInput.value = user.firstName || '';
         if (lastNameInput) lastNameInput.value = user.lastName || '';
         if (phoneInput) phoneInput.value = user.phone || '';
         if (emailDisplay) emailDisplay.value = user.email || '';
-        if (departmentInput) departmentInput.value = user.department || '';
 
-        updateHeadline('Verify your details and create a password to continue.');
-        setStatusPill('', '<i class="fas fa-paper-plane"></i> Invitation received');
+    updateHeadline('');
+    setStatusPill('', '');
 
         if (user.status && user.status.toLowerCase() === 'active') {
             setStatusPill('success', '<i class="fas fa-circle-check"></i> Account already active');
-            updateHeadline('This invitation has already been completed. You can sign in below.');
-            setRegistrationStep('success');
-            renderSummary(user);
-            showAlert('success', 'Great news! Your account is already active. You can sign in using the button below.');
+            updateHeadline('This invitation has already been completed. Redirecting you to sign in.');
+            showAlert('info', 'This invitation was already used. We\'ll take you to the login page.');
+            resetOtpCountdown();
+            showToast('info', 'Account already active. Redirecting to sign in...', 2200);
+            window.location.href = 'login.html';
             return;
         }
 
@@ -495,7 +658,10 @@
         if (accountForm) {
             accountForm.addEventListener('submit', event => {
                 event.preventDefault();
-                handleRegistrationAccountSubmit();
+                handleRegistrationAccountSubmit().catch(error => {
+                    console.error('Registration submission failed', error);
+                    showToast('error', 'Something went wrong while saving your details. Please try again.');
+                });
             });
         }
 
@@ -518,7 +684,7 @@
         setRegistrationStep('account');
     }
 
-    function handleRegistrationAccountSubmit() {
+    async function handleRegistrationAccountSubmit() {
         const user = authState.currentUser;
         if (!user) {
             showToast('error', 'This invitation is no longer available.');
@@ -530,14 +696,14 @@
         const phoneInput = document.getElementById('registrationPhone');
         const passwordInput = document.getElementById('registrationPassword');
         const confirmInput = document.getElementById('registrationPasswordConfirm');
-        const departmentInput = document.getElementById('registrationDepartment');
+        const photoInput = document.getElementById('registrationPhoto');
 
         const firstName = firstNameInput?.value.trim();
         const lastName = lastNameInput?.value.trim();
         const phone = phoneInput?.value.trim();
         const password = passwordInput?.value || '';
         const confirm = confirmInput?.value || '';
-        const department = departmentInput?.value.trim();
+        const photoFile = photoInput?.files?.[0] || null;
 
         if (!firstName) {
             showToast('error', 'First name is required.');
@@ -565,11 +731,36 @@
             return;
         }
 
+        if (photoFile) {
+            const isImage = photoFile.type ? photoFile.type.startsWith('image/') : false;
+            if (!isImage) {
+                showToast('error', 'Please choose a valid image file.');
+                photoInput.value = '';
+                return;
+            }
+            const maxSizeBytes = 5 * 1024 * 1024;
+            if (photoFile.size > maxSizeBytes) {
+                showToast('error', 'Photo must be 5 MB or smaller.');
+                photoInput.value = '';
+                return;
+            }
+        }
+
         user.firstName = firstName;
         user.lastName = lastName;
         user.name = `${firstName} ${lastName}`.trim();
         user.phone = phone;
-        user.department = department || user.department || '';
+
+        if (photoFile) {
+            try {
+                user.photoDataUrl = await readFileAsDataUrl(photoFile);
+                user.photoFileName = photoFile.name;
+            } catch (error) {
+                console.error('Failed to read uploaded photo', error);
+                showToast('error', 'We could not read the selected photo. Please try again with a different image.');
+                return;
+            }
+        }
 
         ensureUserAuthObject(user);
         user.auth.passwordHash = hashPassword(password);
@@ -587,8 +778,8 @@
         updateOtpEmailLabel(user.email);
         resetOtpInputs(authState.otp);
         showToast('success', 'Details saved. A one-time code has been generated.', 3000);
-        updateHeadline('Enter the one-time password sent to your email to activate your access.');
-        setStatusPill('', '<i class="fas fa-user-edit"></i> Account details submitted');
+        updateHeadline('');
+        setStatusPill('', '');
         setRegistrationStep('otp');
     }
 
@@ -627,12 +818,12 @@
         saveUsersToStorage();
         renderSummary(user);
         setStatusPill('success', '<i class="fas fa-circle-check"></i> Account activated');
-        setRegistrationStep('success');
-        showAlert('success', 'Success! You can now sign in with your new credentials.');
-        showToast('success', 'Account activated. You can sign in now.', 3200);
+        showToast('success', 'Account activated. Redirecting you to sign in...', 1800);
+        resetOtpCountdown();
+        window.location.href = 'login.html';
     }
 
-    function resendOtp() {
+    async function resendOtp() {
         const user = authState.currentUser;
         if (!user) {
             showToast('error', 'Invitation not available.');
@@ -648,7 +839,20 @@
         saveUsersToStorage();
         renderSummary(user);
         resetOtpInputs(authState.otp);
-        showToast('info', 'A new verification code has been generated.', 2600);
+        startOtpCountdown();
+        const emailResult = await deliverInvitationEmail(user, {
+            otp: authState.otp,
+            expiresAt: authState.otpExpiresAt,
+            token: user.invitation && user.invitation.token ? user.invitation.token : authState.token
+        });
+
+        if (emailResult.status === 'sent') {
+            showToast('success', 'We emailed you a fresh verification code. Check your inbox.', 3200);
+        } else if (emailResult.status === 'skipped') {
+            showToast('info', 'A new code is ready. Email delivery is disabled, so copy the code shown on screen.', 3600);
+        } else {
+            showToast('error', `We couldn\'t email the code: ${emailResult.message}. Use the code shown on screen.`, 4200);
+        }
     }
 
     if (pageType === 'login') {

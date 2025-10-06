@@ -12,12 +12,9 @@
     <div class="auth-shell registration-wrapper">
         <div class="registration-card" aria-live="polite">
             <header class="registration-headline">
-                <div class="status-pill" id="registrationStatusPill">
-                    <i class="fas fa-paper-plane"></i>
-                    Invitation received
-                </div>
-                <h2>Welcome to OnRuf Central Control</h2>
-                <p id="registrationHeadline">Verify your account details to activate your access to the control panel.</p>
+                <div class="status-pill hidden" id="registrationStatusPill"></div>
+                <h2>Welcome to ONRUF Central Control Panel</h2>
+                <p id="registrationHeadline"></p>
             </header>
 
             <div id="registrationAlertContainer" class="hidden"></div>
@@ -39,12 +36,17 @@
                                         <input type="text" id="registrationLastName" class="form-input" autocomplete="family-name" required aria-required="true" placeholder="Al-Qahtani">
                                     </div>
                                     <div class="form-group">
+                                        <label for="registrationEmailDisplay" class="form-label">Email address</label>
+                                        <input type="email" id="registrationEmailDisplay" class="form-input" readonly>
+                                    </div>
+                                    <div class="form-group">
                                         <label for="registrationPhone" class="form-label">Phone number</label>
                                         <input type="tel" id="registrationPhone" class="form-input" autocomplete="tel" required aria-required="true" placeholder="+9665XXXXXXXX">
                                     </div>
-                                    <div class="form-group">
-                                        <label for="registrationEmailDisplay" class="form-label">Email address</label>
-                                        <input type="email" id="registrationEmailDisplay" class="form-input" readonly>
+                                    <div class="form-group full-span">
+                                        <label for="registrationPhoto" class="form-label">Account photo (optional)</label>
+                                        <input type="file" id="registrationPhoto" class="form-input file-input" accept="image/*">
+                                        <p class="form-hint">PNG or JPG, up to 5&nbsp;MB.</p>
                                     </div>
                                     <div class="form-group">
                                         <label for="registrationPassword" class="form-label">Create password</label>
@@ -65,13 +67,9 @@
                                         </div>
                                     </div>
                                 </div>
-                                <div class="form-group">
-                                    <label for="registrationDepartment" class="form-label">Department (optional)</label>
-                                    <input type="text" id="registrationDepartment" class="form-input" placeholder="e.g. Municipal Compliance">
-                                </div>
                             </fieldset>
                             <button type="submit" class="btn btn-primary" id="registrationAccountSubmit">
-                                <span>Submit details &amp; send OTP</span>
+                                <span>Submit</span>
                                 <i class="fas fa-paper-plane"></i>
                             </button>
                         </form>
@@ -81,24 +79,16 @@
                         <h3>Step 2 · Verify with one-time password</h3>
                         <div class="otp-panel" role="group" aria-labelledby="otpHeading">
                             <h3 id="otpHeading">Enter the six-digit verification code</h3>
-                            <p id="otpDescription">We've sent a code to <strong id="otpEmailLabel">user@email.com</strong>. Enter it below to activate your access.</p>
-                            <form id="registrationOtpForm" class="otp-group" novalidate>
-                                <div class="otp-inputs" id="otpInputGroup">
-                                    <input type="text" inputmode="numeric" pattern="\d" maxlength="1" aria-label="Digit 1" required>
-                                    <input type="text" inputmode="numeric" pattern="\d" maxlength="1" aria-label="Digit 2" required>
-                                    <input type="text" inputmode="numeric" pattern="\d" maxlength="1" aria-label="Digit 3" required>
-                                    <input type="text" inputmode="numeric" pattern="\d" maxlength="1" aria-label="Digit 4" required>
-                                    <input type="text" inputmode="numeric" pattern="\d" maxlength="1" aria-label="Digit 5" required>
-                                    <input type="text" inputmode="numeric" pattern="\d" maxlength="1" aria-label="Digit 6" required>
-                                </div>
-                                <div class="otp-actions">
-                                    <button type="button" class="resend-btn" id="registrationResendOtp">
-                                        <i class="fas fa-envelope-open-text"></i>
+                            <p id="otpDescription">We've sent a code to <strong id="otpEmailLabel">user@email.com</strong>.<br>Enter it below to activate your access.</p>
+                            <p class="otp-timer" aria-live="polite">
+                                <i class="fas fa-clock"></i>
+                                Code expires in
+                                <span id="otpCountdown" data-default="--:--">--:--</span>
                                         Resend code
                                     </button>
                                 </div>
                                 <button type="submit" class="btn btn-primary" id="registrationOtpSubmit">
-                                    <span>Verify &amp; activate</span>
+                                    <span>Verify</span>
                                     <i class="fas fa-circle-check"></i>
                                 </button>
                             </form>
@@ -121,28 +111,28 @@
                 <aside class="registration-summary" aria-live="polite" id="registrationSummary">
                     <h3>Invitation summary</h3>
                     <div class="summary-row">
-                        <span>Invitation for</span>
-                        <strong id="summaryName">—</strong>
-                    </div>
-                    <div class="summary-row">
-                        <span>Email</span>
-                        <strong id="summaryEmail">—</strong>
+                        <span>Invitation sent</span>
+                        <strong id="summarySentAt">—</strong>
                     </div>
                     <div class="summary-row">
                         <span>Organization</span>
-                        <strong>OnRuf Control</strong>
+                        <strong>ONRUF</strong>
                     </div>
                     <div class="summary-row">
                         <span>Access level</span>
                         <strong id="summaryRole">Pending role</strong>
                     </div>
                     <div class="summary-row">
-                        <span>Invitation sent</span>
-                        <strong id="summarySentAt">—</strong>
+                        <span>Department</span>
+                        <strong id="summaryDepartment">—</strong>
                     </div>
                     <div class="summary-row">
-                        <span>OTP status</span>
-                        <strong id="summaryOtpStatus">Awaiting submission</strong>
+                        <span>ID</span>
+                        <strong id="summaryEmployeeId">—</strong>
+                    </div>
+                    <div class="summary-row">
+                        <span>Account expiration</span>
+                        <strong id="summaryExpiresOn">—</strong>
                     </div>
                 </aside>
             </div>
