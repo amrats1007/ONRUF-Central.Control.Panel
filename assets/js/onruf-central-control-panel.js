@@ -20,7 +20,8 @@ const state = {
         expiresAt: null,
         token: null,
         stage: 'prepared',
-        link: null
+    link: null,
+    linkExpiresAt: null
     },
     activeSession: null
 };
@@ -347,6 +348,7 @@ const USERS_STORAGE_KEY = 'onruf_users_v1';
 const SESSION_STORAGE_KEY = 'onruf_active_session_v1';
 const DATA_RESET_VERSION = '20241005-super-admin-seed';
 const DATA_RESET_KEY = 'onruf_data_reset_version';
+const INVITATION_VALIDITY_MS = 7 * 24 * 60 * 60 * 1000;
 
 function generateRegistrationToken() {
     if (typeof crypto !== 'undefined' && crypto.randomUUID) {
@@ -398,11 +400,26 @@ function normalizeInvitationPayload(invitation) {
     const token = typeof normalized.token === 'string' && normalized.token.trim()
         ? normalized.token.trim()
         : generateRegistrationToken();
+    const sentTimestamp = normalized.sentAt ? Date.parse(normalized.sentAt) : NaN;
+    const sentAt = Number.isFinite(sentTimestamp) ? new Date(sentTimestamp).toISOString() : (normalized.sentAt || null);
+
+    let expiresAt = null;
+    if (normalized.expiresAt) {
+        const expiresTimestamp = Date.parse(normalized.expiresAt);
+        if (Number.isFinite(expiresTimestamp)) {
+            expiresAt = new Date(expiresTimestamp).toISOString();
+        }
+    }
+    if (!expiresAt) {
+        const base = Number.isFinite(sentTimestamp) ? sentTimestamp : Date.now();
+        expiresAt = new Date(base + INVITATION_VALIDITY_MS).toISOString();
+    }
 
     return {
         otp,
         token,
-        sentAt: normalized.sentAt || null,
+        sentAt,
+        expiresAt,
         completedAt: normalized.completedAt || null,
         verifiedAt: normalized.verifiedAt || null,
         lastOtpSentAt: normalized.lastOtpSentAt || null
@@ -426,6 +443,14 @@ function ensureUserInvitationRecord(user) {
     }
     if (!user.invitation.token) {
         user.invitation.token = generateRegistrationToken();
+    }
+    if (!user.invitation.sentAt) {
+        user.invitation.sentAt = new Date().toISOString();
+    }
+    if (!user.invitation.expiresAt) {
+        const sentTimestamp = Date.parse(user.invitation.sentAt);
+        const base = Number.isFinite(sentTimestamp) ? sentTimestamp : Date.now();
+        user.invitation.expiresAt = new Date(base + INVITATION_VALIDITY_MS).toISOString();
     }
 }
 
@@ -493,6 +518,7 @@ async function deliverInvitationEmail(user, invitationMeta) {
         invitationLink: buildAbsoluteInvitationLink(invitationMeta.token),
         otp: invitationMeta.otp || null,
         expiresAt: invitationMeta.expiresAt || null,
+        linkExpiresAt: invitationMeta.linkExpiresAt || null,
         invitedBy: invitationMeta.invitedBy || null
     };
 
@@ -1231,6 +1257,14 @@ function initializeApp() {
     const storedUsers = loadUsersFromStorage();
     if (storedUsers && storedUsers.length) {
         users = storedUsers;
+        const superAdmin = users.find(user => typeof user.email === 'string' && user.email.trim().toLowerCase() === 'superadmin@onruf.com');
+        if (superAdmin && superAdmin.status !== 'Active') {
+            superAdmin.status = 'Active';
+            if (!superAdmin.accountType || superAdmin.accountType === 'pending-invite') {
+                superAdmin.accountType = 'platform-administrator';
+            }
+            saveUsersToStorage();
+        }
     } else {
         users = defaultUsers.map((user, index) => normalizeUserPayload(user, index)).filter(Boolean);
         saveUsersToStorage();
@@ -1966,30 +2000,57 @@ function showNotification(type, message, timeout = 4000, areaId = null) {
     if (!host) return;
 
     const note = document.createElement('div');
-    note.className = `notification ${type}`;
-    note.innerHTML = `
-        <span>${message}</span>
-        <button type="button" class="notification-close" aria-label="Dismiss">&times;</button>
-    `;
+    note.className = 'notification';
+    if (type) {
+        note.classList.add(type);
+    }
+    note.setAttribute('role', 'status');
+    note.tabIndex = 0;
+
+    const messageEl = document.createElement('span');
+    messageEl.className = 'notification-message';
+    messageEl.textContent = message;
+    note.appendChild(messageEl);
 
     const close = () => {
-        note.classList.add('hidden');
-        setTimeout(() => {
+        if (note._closing) return;
+        note._closing = true;
+        window.clearTimeout(note._timeoutId);
+        note.classList.remove('visible');
+
+        const removeNote = () => {
+            note.removeEventListener('transitionend', removeNoteHandler);
             if (note.parentElement) {
                 note.parentElement.removeChild(note);
             }
-        }, 150);
+        };
+
+        const removeNoteHandler = event => {
+            if (event && event.target !== note) return;
+            removeNote();
+        };
+
+        note.addEventListener('transitionend', removeNoteHandler);
+
+        setTimeout(removeNote, 320);
     };
 
-    const closeBtn = note.querySelector('.notification-close');
-    if (closeBtn) {
-        closeBtn.addEventListener('click', close);
-    }
+    note.addEventListener('click', () => close());
+    note.addEventListener('keydown', event => {
+        if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            close();
+        }
+    });
 
     host.appendChild(note);
 
+    requestAnimationFrame(() => {
+        note.classList.add('visible');
+    });
+
     if (timeout > 0) {
-        setTimeout(close, timeout);
+        note._timeoutId = window.setTimeout(close, timeout);
     }
 }
 
@@ -1999,6 +2060,79 @@ function normalizeEmail(value) {
 
 function normalizeEmployeeId(value) {
     return typeof value === 'string' ? value.trim().toUpperCase() : '';
+}
+
+function formatNameToken(token) {
+    if (!token) {
+        return '';
+    }
+    const lower = token.toLowerCase();
+    return lower.charAt(0).toUpperCase() + lower.slice(1);
+}
+
+function deriveNamePartsFromEmail(email) {
+    if (!email || typeof email !== 'string') {
+        return { firstName: '', lastName: '', fullName: '' };
+    }
+
+    const localPart = email.split('@')[0] || '';
+    const sanitized = localPart
+        .replace(/[_\.\-\+]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+    if (!sanitized) {
+        return { firstName: '', lastName: '', fullName: '' };
+    }
+
+    const tokens = sanitized
+        .split(' ')
+        .map(formatNameToken)
+        .filter(Boolean);
+
+    if (!tokens.length) {
+        return { firstName: '', lastName: '', fullName: '' };
+    }
+
+    const [firstName, ...rest] = tokens;
+    const lastName = rest.join(' ');
+    const fullName = [firstName, lastName].filter(Boolean).join(' ');
+
+    return { firstName, lastName, fullName };
+}
+
+function resolveUserDisplayName(user) {
+    if (!user || typeof user !== 'object') {
+        return 'User';
+    }
+
+    const nameCandidates = [
+        typeof user.name === 'string' ? user.name.trim() : '',
+        [user.firstName, user.lastName]
+            .map(value => (typeof value === 'string' ? value.trim() : ''))
+            .filter(Boolean)
+            .join(' ')
+    ];
+
+    const existing = nameCandidates.find(candidate => candidate);
+    if (existing) {
+        return existing;
+    }
+
+    const derived = deriveNamePartsFromEmail(user.email || '');
+    if (derived.fullName) {
+        return derived.fullName;
+    }
+
+    if (typeof user.email === 'string' && user.email.trim()) {
+        return user.email.trim();
+    }
+
+    if (typeof user.employeeId === 'string' && user.employeeId.trim()) {
+        return user.employeeId.trim();
+    }
+
+    return user.id ? `User #${user.id}` : 'User';
 }
 
 function formatStatusLabel(status) {
@@ -2514,6 +2648,7 @@ function updateAccountTypeUI() {
 }
 
 function renderRolePermissionsPreview(roleName) {
+    const wrapper = document.getElementById('userPermissionsWrapper');
     const container = document.getElementById('userRolePermissionsPreview');
     const list = document.getElementById('userRolePermissionsList');
 
@@ -2525,6 +2660,9 @@ function renderRolePermissionsPreview(roleName) {
 
     if (!roleName) {
         container.classList.add('hidden');
+        if (wrapper) {
+            wrapper.classList.add('hidden');
+        }
         if (state.userDraft) {
             state.userDraft.permissionSummary = '';
         }
@@ -2536,6 +2674,9 @@ function renderRolePermissionsPreview(roleName) {
     const displayLabel = role ? (role.nameEnglish || role.name || role.id) : roleName;
 
     container.classList.remove('hidden');
+    if (wrapper) {
+        wrapper.classList.remove('hidden');
+    }
 
     if (!permissions.length) {
         list.innerHTML = '<p class="permissions-preview-placeholder">No structured permissions are defined for this role yet.</p>';
@@ -3264,7 +3405,7 @@ function collectUserFormStepData(step) {
         const excludeUserId = Number.isInteger(state.editingUserId) ? state.editingUserId : null;
         const duplicateUser = findExistingUserByEmail(email, excludeUserId);
         if (duplicateUser) {
-            showNotification('warning', 'This email already exists in Users Management.');
+            showNotification('warning', 'This Email Already Exists');
             if (state.userFormStep !== 1) {
                 setUserFormStep(1);
             }
@@ -3287,7 +3428,7 @@ function collectUserFormStepData(step) {
 
     const duplicateEmployee = findExistingUserByEmployeeId(employeeId, excludeUserId);
         if (duplicateEmployee) {
-            showNotification('warning', 'This ID already exists in Users Management.');
+            showNotification('warning', 'This ID Already Exists');
             if (state.userFormStep !== 1) {
                 setUserFormStep(1);
             }
@@ -3301,6 +3442,17 @@ function collectUserFormStepData(step) {
         draft.email = email;
         draft.department = department;
         draft.employeeId = employeeId;
+
+        const existingFirstName = typeof draft.firstName === 'string' ? draft.firstName.trim() : '';
+        const existingLastName = typeof draft.lastName === 'string' ? draft.lastName.trim() : '';
+        const derivedNames = (!existingFirstName || !existingLastName) ? deriveNamePartsFromEmail(email) : null;
+
+        if (!existingFirstName && derivedNames && derivedNames.firstName) {
+            draft.firstName = derivedNames.firstName;
+        }
+        if (!existingLastName && derivedNames && derivedNames.lastName) {
+            draft.lastName = derivedNames.lastName;
+        }
 
         const emailDisplay = document.getElementById('registrationEmail');
         if (emailDisplay) {
@@ -3412,7 +3564,9 @@ function showUserForm(mode, userId = null) {
         userId: null,
         expiresAt: null,
         token: null,
-        stage: 'prepared'
+        stage: 'prepared',
+        link: null,
+        linkExpiresAt: null
     };
 
     if (permissionsSummary) {
@@ -3544,7 +3698,9 @@ function hideUserForm() {
         userId: null,
         expiresAt: null,
         token: null,
-        stage: 'prepared'
+        stage: 'prepared',
+        link: null,
+        linkExpiresAt: null
     };
     state.userFormStep = 1;
 
@@ -3583,7 +3739,7 @@ async function handleUserFormSubmit(event) {
 
     const duplicateEmployee = findExistingUserByEmployeeId(draft.employeeId, isEditing ? state.editingUserId : null);
     if (duplicateEmployee) {
-    showNotification('warning', 'This ID already exists in Users Management.');
+    showNotification('warning', 'This ID Already Exists');
         setUserFormStep(1);
         const employeeIdInput = document.getElementById('userEmployeeId');
         if (employeeIdInput) {
@@ -3598,13 +3754,22 @@ async function handleUserFormSubmit(event) {
     if (!isEditing) {
         const existingUser = findExistingUserByEmail(draft.email);
         if (existingUser) {
-            showNotification('warning', 'This email already exists in Users Management.');
+            showNotification('warning', 'This Email Already Exists');
             setUserFormStep(1);
             return;
         }
     }
 
-    const fullName = `${draft.firstName} ${draft.lastName}`.trim();
+    const rawFirstName = typeof draft.firstName === 'string' ? draft.firstName.trim() : '';
+    const rawLastName = typeof draft.lastName === 'string' ? draft.lastName.trim() : '';
+    const derivedFromEmail = deriveNamePartsFromEmail(draft.email);
+    const firstName = rawFirstName || derivedFromEmail.firstName;
+    const lastName = rawLastName || derivedFromEmail.lastName;
+    const combinedName = [firstName, lastName].filter(Boolean).join(' ');
+    const effectiveName = combinedName || derivedFromEmail.fullName || (typeof draft.email === 'string' ? draft.email.trim() : '');
+
+    draft.firstName = firstName;
+    draft.lastName = lastName;
 
     if (isEditing) {
         const user = users.find(u => u.id === state.editingUserId);
@@ -3614,9 +3779,10 @@ async function handleUserFormSubmit(event) {
             return;
         }
 
-        user.name = fullName || user.name;
-        user.firstName = draft.firstName;
-        user.lastName = draft.lastName;
+        const updatedName = combinedName || user.name || effectiveName;
+        user.name = updatedName || user.name || '';
+        user.firstName = firstName || user.firstName || '';
+        user.lastName = lastName || user.lastName || '';
         user.phone = draft.phone;
         user.department = draft.department;
         user.employeeId = draft.employeeId;
@@ -3661,9 +3827,11 @@ async function handleUserFormSubmit(event) {
     const otpCode = generateRegistrationOtp();
     const invitationToken = generateRegistrationToken();
     const createdIso = new Date().toISOString();
+    const invitationExpiresIso = new Date(Date.now() + INVITATION_VALIDITY_MS).toISOString();
     const passwordHash = draft.password ? hashPasswordValue(draft.password) : '';
     const passwordTimestamp = draft.password ? createdIso : null;
 
+    const safeName = effectiveName || `Pending User #${newId}`;
     const accountType = draft.accountType === 'system-administrator' ? 'system-administrator' : 'platform-administrator';
     const roleId = accountType === 'system-administrator' ? 'system-administrator' : (draft.roleId || '');
     const roleLabel = accountType === 'system-administrator' ? 'Super Admin' : (draft.role || 'Admin');
@@ -3674,9 +3842,9 @@ async function handleUserFormSubmit(event) {
 
     const newUser = {
         id: newId,
-        name: fullName,
-        firstName: draft.firstName,
-        lastName: draft.lastName,
+        name: safeName,
+        firstName,
+        lastName,
         email: draft.email,
         department: draft.department,
         employeeId: draft.employeeId,
@@ -3692,6 +3860,7 @@ async function handleUserFormSubmit(event) {
             otp: otpCode,
             token: invitationToken,
             sentAt: createdIso,
+            expiresAt: invitationExpiresIso,
             completedAt: null,
             verifiedAt: null,
             lastOtpSentAt: null
@@ -3713,6 +3882,7 @@ async function handleUserFormSubmit(event) {
     state.registrationFlow.userId = newId;
     state.registrationFlow.expiresAt = Date.now() + 10 * 60 * 1000;
     state.registrationFlow.token = invitationToken;
+    state.registrationFlow.linkExpiresAt = invitationExpiresIso;
     updateRegistrationLinkDisplay(invitationToken);
     setInvitationStage('account-info');
 
@@ -3731,6 +3901,7 @@ async function handleUserFormSubmit(event) {
         otp: otpCode,
         token: invitationToken,
         expiresAt: state.registrationFlow.expiresAt,
+        linkExpiresAt: invitationExpiresIso,
         invitedBy
     });
 
@@ -3743,7 +3914,6 @@ async function handleUserFormSubmit(event) {
     }
 
     hideUserForm();
-    openRegistrationFlow(newId, { autoStart: true });
 }
 
 function showRegistrationFlowStep(step) {
@@ -3796,6 +3966,7 @@ function showUserInvitationLink(userId) {
     state.registrationFlow.userId = userId;
     state.registrationFlow.token = token;
     state.registrationFlow.link = link;
+    state.registrationFlow.linkExpiresAt = user.invitation.expiresAt || null;
 
     saveUsersToStorage();
 
@@ -3841,6 +4012,11 @@ function openRegistrationFlow(userId, options = {}) {
     if (!user.invitation.sentAt) {
         user.invitation.sentAt = new Date().toISOString();
     }
+    if (!user.invitation.expiresAt) {
+        const sentTimestamp = Date.parse(user.invitation.sentAt);
+        const base = Number.isFinite(sentTimestamp) ? sentTimestamp : Date.now();
+        user.invitation.expiresAt = new Date(base + INVITATION_VALIDITY_MS).toISOString();
+    }
     if (!user.invitation.otp) {
         user.invitation.otp = generateRegistrationOtp();
     }
@@ -3849,6 +4025,7 @@ function openRegistrationFlow(userId, options = {}) {
     state.registrationFlow.otp = user.invitation.otp || generateRegistrationOtp();
     state.registrationFlow.expiresAt = Date.now() + 10 * 60 * 1000;
     state.registrationFlow.token = user.invitation.token;
+    state.registrationFlow.linkExpiresAt = user.invitation.expiresAt || null;
     updateRegistrationLinkDisplay(state.registrationFlow.token);
 
     const shouldStartAtOtp = options && options.resumeOtp;
@@ -3891,6 +4068,7 @@ function closeRegistrationFlow() {
     state.registrationFlow.userId = null;
     state.registrationFlow.expiresAt = null;
     state.registrationFlow.token = null;
+    state.registrationFlow.linkExpiresAt = null;
     updateRegistrationLinkDisplay(null);
 }
 
@@ -4050,6 +4228,7 @@ async function handleRegistrationFlowResend() {
     state.registrationFlow.otp = newOtp;
     state.registrationFlow.expiresAt = Date.now() + 10 * 60 * 1000;
     state.registrationFlow.token = user.invitation.token;
+    state.registrationFlow.linkExpiresAt = user.invitation.expiresAt || null;
     updateRegistrationLinkDisplay(state.registrationFlow.token);
 
     user.invitation.otp = newOtp;
@@ -4062,6 +4241,7 @@ async function handleRegistrationFlowResend() {
         otp: newOtp,
         token: user.invitation.token,
         expiresAt: state.registrationFlow.expiresAt,
+        linkExpiresAt: user.invitation.expiresAt || null,
         invitedBy
     });
 
@@ -4365,7 +4545,7 @@ async function handleUserDelete(userId) {
         return;
     }
 
-    const userLabel = user.name || user.email || `User #${user.id}`;
+    const userLabel = resolveUserDisplayName(user);
     const confirmed = await showUserConfirm(
         `Delete the user account for ${userLabel}? This action cannot be undone.`,
         'Delete',
@@ -4511,7 +4691,11 @@ function renderUsersTable(searchTerm = state.userSearchTerm, page = state.curren
     }
 
     const filtered = normalizedTerm
-        ? users.filter(user => `${user.name} ${user.email} ${user.role} ${user.status} ${user.phone || ''} ${user.department || ''}`.toLowerCase().includes(normalizedTerm))
+        ? users.filter(user => {
+            const displayName = resolveUserDisplayName(user);
+            const haystack = `${displayName} ${user.email || ''} ${user.role || ''} ${user.status || ''} ${user.phone || ''} ${user.department || ''}`.toLowerCase();
+            return haystack.includes(normalizedTerm);
+        })
         : users;
 
     const totalPages = Math.max(1, Math.ceil(filtered.length / state.usersPerPage));
@@ -4524,6 +4708,7 @@ function renderUsersTable(searchTerm = state.userSearchTerm, page = state.curren
     } else {
         let index = startIndex + 1;
         tbody.innerHTML = visibleUsers.map(user => {
+            const displayName = resolveUserDisplayName(user);
             const rawStatus = (user.status || 'Active').toLowerCase();
             const isActive = rawStatus === 'active';
             const isPending = rawStatus === 'pending';
@@ -4563,10 +4748,10 @@ function renderUsersTable(searchTerm = state.userSearchTerm, page = state.curren
                     <td>${index++}</td>
                     <td>
                         <div style="display: flex; align-items: center; gap: 12px;">
-                            <img src="https://picsum.photos/seed/${user.id}/40/40" alt="${user.name}" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover;">
+                            <img src="https://picsum.photos/seed/${user.id}/40/40" alt="${displayName}" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover;">
                             <div>
                                 <div class="user-name-row">
-                                    <span class="user-name">${user.name}</span>
+                                    <span class="user-name">${displayName}</span>
                                     ${accountTypeTag}
                                 </div>
                                 <div class="user-meta">${user.email}</div>
@@ -4600,7 +4785,7 @@ function exportUsers() {
     const rows = [
         ['Name', 'Email', 'Role', 'Department', 'Status', 'Last Login', 'Created', 'Account Expiration'],
         ...users.map(user => [
-            user.name,
+            resolveUserDisplayName(user),
             user.email,
             user.role,
             user.department || '',

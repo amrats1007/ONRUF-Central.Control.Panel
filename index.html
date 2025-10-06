@@ -370,7 +370,7 @@
                             <div class="users-header">
                                 <div class="search-box">
                                     <i class="fas fa-search"></i>
-                                    <input type="text" id="userSearch" placeholder="Search by User Name, Email, Phone, Role, Status, or Department" />
+                                    <input type="text" id="userSearch" placeholder="Search by User Name, Email, Phone, Role, Status, Department or ID" />
                                 </div>
                                 <div class="users-actions">
                                     <button class="btn btn-primary" id="addUserBtn">
@@ -507,13 +507,10 @@
                                                                 <option value="">Select a role</option>
                                                             </select>
                                                         </div>
-                                                        <div class="user-permissions-wrapper">
+                                                        <div class="user-permissions-wrapper hidden" id="userPermissionsWrapper">
                                                             <div class="permissions-preview">
                                                                 <div class="permissions-preview-header">
                                                                     <i class="fas fa-shield-check"></i>
-                                                                    <div>
-                                                                        <span>Permission Overview</span>
-                                                                    </div>
                                                                 </div>
                                                                 <p class="helper-text" id="userPermissionsSummary">Toggle Super Admin or choose a user role to preview permissions.</p>
                                                                 <div class="permissions-preview-body hidden" id="userRolePermissionsPreview">
@@ -521,18 +518,18 @@
                                                                 </div>
                                                             </div>
                                                         </div>
+                                                        <div class="form-actions" id="userFormActions">
+                                                            <button type="button" class="btn btn-outline" id="userFormBackBtn">
+                                                                <i class="fas fa-arrow-left"></i>
+                                                                Back
+                                                            </button>
+                                                            <button type="submit" class="btn btn-primary" id="userFormSubmitBtn">
+                                                                <i class="fas fa-user-plus"></i>
+                                                                Add
+                                                            </button>
+                                                        </div>
                                                     </div>
                                                 </div>
-                                            </div>
-                                            <div class="form-actions" id="userFormActions">
-                                                <button type="button" class="btn btn-outline" id="userFormBackBtn">
-                                                    <i class="fas fa-arrow-left"></i>
-                                                    Back
-                                                </button>
-                                                <button type="submit" class="btn btn-primary" id="userFormSubmitBtn">
-                                                    <i class="fas fa-user-plus"></i>
-                                                    Add
-                                                </button>
                                             </div>
                                         </section>
                                     </form>

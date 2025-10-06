@@ -84,13 +84,28 @@
                                 <i class="fas fa-clock"></i>
                                 Code expires in
                                 <span id="otpCountdown" data-default="--:--">--:--</span>
-                                        Resend code
-                                    </button>
+                            </p>
+                            <form id="registrationOtpForm" class="registration-form" novalidate>
+                                <div class="otp-group">
+                                    <div id="otpInputGroup" class="otp-inputs" role="group" aria-label="Verification code digits">
+                                        <input type="text" inputmode="numeric" pattern="\d" maxlength="1" autocomplete="one-time-code" aria-label="Digit 1">
+                                        <input type="text" inputmode="numeric" pattern="\d" maxlength="1" autocomplete="one-time-code" aria-label="Digit 2">
+                                        <input type="text" inputmode="numeric" pattern="\d" maxlength="1" autocomplete="one-time-code" aria-label="Digit 3">
+                                        <input type="text" inputmode="numeric" pattern="\d" maxlength="1" autocomplete="one-time-code" aria-label="Digit 4">
+                                        <input type="text" inputmode="numeric" pattern="\d" maxlength="1" autocomplete="one-time-code" aria-label="Digit 5">
+                                        <input type="text" inputmode="numeric" pattern="\d" maxlength="1" autocomplete="one-time-code" aria-label="Digit 6">
+                                    </div>
+                                    <div class="otp-actions">
+                                        <button type="button" class="resend-btn" id="registrationResendOtp">
+                                            <i class="fas fa-envelope-open-text"></i>
+                                            Resend code
+                                        </button>
+                                        <button type="submit" class="btn btn-primary" id="registrationOtpSubmit">
+                                            <span>Verify</span>
+                                            <i class="fas fa-circle-check"></i>
+                                        </button>
+                                    </div>
                                 </div>
-                                <button type="submit" class="btn btn-primary" id="registrationOtpSubmit">
-                                    <span>Verify</span>
-                                    <i class="fas fa-circle-check"></i>
-                                </button>
                             </form>
                         </div>
                     </div>

@@ -144,7 +144,7 @@ body.auth-body {
 }
 
 .auth-subtitle {
-    margin: 0;
+    margin: 0 0 20px;
     color: var(--auth-muted);
     font-size: 15px;
     line-height: 1.6;
@@ -321,7 +321,6 @@ body.auth-body {
 }
 
 .auth-aside-content {
-    max-width: 360px;
     display: flex;
     flex-direction: column;
     gap: 16px;
@@ -650,7 +649,7 @@ body[data-auth-page="registration"] {
     border-radius: 20px;
     padding: clamp(20px, 3vw, 28px);
     display: grid;
-    gap: 16px;
+    gap: 32px;
     height: fit-content;
 }
 

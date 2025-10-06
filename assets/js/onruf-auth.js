@@ -7,6 +7,7 @@
     const DATA_RESET_VERSION = '20241005-super-admin-seed';
     const DATA_RESET_KEY = 'onruf_data_reset_version';
     const INVITATION_SERVICE_ENDPOINT_DEFAULT = '/api/invitations/send';
+    const INVITATION_VALIDITY_MS = 7 * 24 * 60 * 60 * 1000;
 
     function resolveInvitationServiceUrl() {
         try {
@@ -65,6 +66,7 @@
             invitationLink: buildAbsoluteInvitationLink(meta.token || (user.invitation && user.invitation.token)),
             otp: meta.otp || null,
             expiresAt: meta.expiresAt || null,
+            linkExpiresAt: meta.linkExpiresAt || (user.invitation && user.invitation.expiresAt) || null,
             invitedBy: meta.invitedBy || null
         };
 
@@ -120,6 +122,7 @@
             invitation: {
                 token: 'reg-super-admin-seed',
                 sentAt: '2025-10-05T00:00:00.000Z',
+                expiresAt: '2025-10-12T00:00:00.000Z',
                 completedAt: '2025-10-05T00:00:00.000Z',
                 verifiedAt: '2025-10-05T00:00:00.000Z',
                 otp: null,
@@ -184,7 +187,29 @@
             const raw = localStorage.getItem(USERS_STORAGE_KEY);
             if (!raw) return [];
             const parsed = JSON.parse(raw);
-            return Array.isArray(parsed) ? parsed : [];
+            const users = Array.isArray(parsed) ? parsed : [];
+            const superAdmin = users.find(user => typeof user.email === 'string' && user.email.trim().toLowerCase() === 'superadmin@onruf.com');
+            let modified = false;
+            if (superAdmin && (!superAdmin.status || superAdmin.status.toLowerCase() !== 'active')) {
+                superAdmin.status = 'Active';
+                if (!superAdmin.accountType || superAdmin.accountType === 'pending-invite') {
+                    superAdmin.accountType = 'platform-administrator';
+                }
+                modified = true;
+            }
+            users.forEach(user => {
+                if (ensureInvitationObject(user)) {
+                    modified = true;
+                }
+            });
+            if (modified) {
+                try {
+                    localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(users));
+                } catch (persistError) {
+                    console.warn('Unable to persist invitation updates', persistError);
+                }
+            }
+            return users;
         } catch (error) {
             console.warn('Unable to load users from storage', error);
             return [];
@@ -567,12 +592,43 @@
     }
 
     function ensureInvitationObject(user) {
-        if (!user.invitation) {
+        if (!user) {
+            return false;
+        }
+        let modified = false;
+        if (!user.invitation || typeof user.invitation !== 'object') {
             user.invitation = {};
+            modified = true;
         }
         if (!user.invitation.token) {
             user.invitation.token = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.floor(Math.random() * 100000)}`;
+            modified = true;
         }
+        if (!user.invitation.sentAt) {
+            user.invitation.sentAt = new Date().toISOString();
+            modified = true;
+        }
+        let sentTimestamp = user.invitation.sentAt ? Date.parse(user.invitation.sentAt) : NaN;
+        if (!Number.isFinite(sentTimestamp)) {
+            user.invitation.sentAt = new Date().toISOString();
+            sentTimestamp = Date.parse(user.invitation.sentAt);
+            modified = true;
+        }
+        const computeExpiry = () => {
+            const base = Number.isFinite(sentTimestamp) ? sentTimestamp : Date.now();
+            return new Date(base + INVITATION_VALIDITY_MS).toISOString();
+        };
+        if (!user.invitation.expiresAt) {
+            user.invitation.expiresAt = computeExpiry();
+            modified = true;
+        } else {
+            const expiresTimestamp = Date.parse(user.invitation.expiresAt);
+            if (!Number.isFinite(expiresTimestamp)) {
+                user.invitation.expiresAt = computeExpiry();
+                modified = true;
+            }
+        }
+        return modified;
     }
 
     function setupOtpInputBehavior() {
@@ -593,6 +649,67 @@
                 }
             });
         });
+    }
+
+    function getInvitationExpiryTimestamp(invitation) {
+        if (!invitation) {
+            return NaN;
+        }
+        if (invitation.expiresAt) {
+            const expiresTimestamp = Date.parse(invitation.expiresAt);
+            if (Number.isFinite(expiresTimestamp)) {
+                return expiresTimestamp;
+            }
+        }
+        if (invitation.sentAt) {
+            const sentTimestamp = Date.parse(invitation.sentAt);
+            if (Number.isFinite(sentTimestamp)) {
+                return sentTimestamp + INVITATION_VALIDITY_MS;
+            }
+        }
+        return NaN;
+    }
+
+    function isInvitationExpired(invitation) {
+        const expiry = getInvitationExpiryTimestamp(invitation);
+        if (!Number.isFinite(expiry)) {
+            return false;
+        }
+        return Date.now() > expiry;
+    }
+
+    function disableRegistrationForms() {
+        const forms = [
+            document.getElementById('registrationAccountForm'),
+            document.getElementById('registrationOtpForm')
+        ];
+        forms.forEach(form => {
+            if (!form) return;
+            form.querySelectorAll('input, button, select, textarea').forEach(element => {
+                element.disabled = true;
+            });
+        });
+        const resendBtn = document.getElementById('registrationResendOtp');
+        if (resendBtn) {
+            resendBtn.disabled = true;
+        }
+    }
+
+    function handleExpiredInvitation(user) {
+        disableRegistrationForms();
+        resetOtpCountdown();
+        updateHeadline('Invitation link expired');
+        setStatusPill('warning', '<i class="fas fa-triangle-exclamation"></i> Invitation expired');
+        showAlert('error', 'This invitation link has expired and the registration completion period has ended. Please contact your administrator for a new invitation.');
+        showToast('error', 'This invitation link has expired. Request a new invitation from your administrator.', 6000);
+        setRegistrationStep('account');
+        const otpSection = document.getElementById('registrationStepOtp');
+        if (otpSection) {
+            otpSection.classList.add('hidden');
+        }
+        if (user && user.email) {
+            updateOtpEmailLabel(user.email);
+        }
     }
 
     function setupRegistrationPage() {
@@ -641,8 +758,13 @@
         if (phoneInput) phoneInput.value = user.phone || '';
         if (emailDisplay) emailDisplay.value = user.email || '';
 
-    updateHeadline('');
-    setStatusPill('', '');
+        if (isInvitationExpired(user.invitation)) {
+            handleExpiredInvitation(user);
+            return;
+        }
+
+        updateHeadline('');
+        setStatusPill('', '');
 
         if (user.status && user.status.toLowerCase() === 'active') {
             setStatusPill('success', '<i class="fas fa-circle-check"></i> Account already active');
@@ -688,6 +810,11 @@
         const user = authState.currentUser;
         if (!user) {
             showToast('error', 'This invitation is no longer available.');
+            return;
+        }
+
+        if (isInvitationExpired(user.invitation)) {
+            handleExpiredInvitation(user);
             return;
         }
 
@@ -790,6 +917,11 @@
             return;
         }
 
+        if (isInvitationExpired(user.invitation)) {
+            handleExpiredInvitation(user);
+            return;
+        }
+
         const entered = collectOtpValue();
         if (!/^[0-9]{6}$/.test(entered)) {
             showToast('error', 'Enter the 6-digit code to continue.');
@@ -827,6 +959,11 @@
         const user = authState.currentUser;
         if (!user) {
             showToast('error', 'Invitation not available.');
+            return;
+        }
+
+        if (isInvitationExpired(user.invitation)) {
+            handleExpiredInvitation(user);
             return;
         }
 
