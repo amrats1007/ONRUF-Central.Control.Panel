@@ -175,7 +175,8 @@
         currentUser: null,
         otp: null,
         otpExpiresAt: null,
-        token: null
+        token: null,
+        tokenStatus: 'unknown'
     };
 
     let otpCountdownInterval = null;
@@ -311,13 +312,112 @@
         return authState.users.find(user => typeof user.email === 'string' && user.email.trim().toLowerCase() === normalized) || null;
     }
 
-    function findUserByToken(token) {
-        if (!token) return null;
+    function resolveInvitationByToken(token) {
+        if (!token) {
+            return { user: null, status: 'missing', revokedRecord: null };
+        }
+
         const normalized = token.trim();
-        return authState.users.find(user => {
-            const userToken = user && user.invitation && typeof user.invitation.token === 'string' ? user.invitation.token.trim() : '';
-            return userToken && userToken === normalized;
-        }) || null;
+        if (!normalized) {
+            return { user: null, status: 'missing', revokedRecord: null };
+        }
+        let matchedUser = null;
+        let status = 'not-found';
+        let revokedRecord = null;
+
+        authState.users.some(user => {
+            if (!user || !user.invitation) {
+                return false;
+            }
+
+            const invitation = user.invitation;
+            const activeToken = typeof invitation.token === 'string' ? invitation.token.trim() : '';
+            if (activeToken && activeToken === normalized) {
+                matchedUser = user;
+                status = 'active';
+                return true;
+            }
+
+            const revokedList = Array.isArray(invitation.revokedTokens) ? invitation.revokedTokens : [];
+            const revokedMatch = revokedList.find(entry => {
+                if (!entry) {
+                    return false;
+                }
+                if (typeof entry === 'string') {
+                    return entry.trim() === normalized;
+                }
+                if (typeof entry === 'object') {
+                    const value = typeof entry.token === 'string' ? entry.token.trim() : '';
+                    return value && value === normalized;
+                }
+                return false;
+            });
+
+            if (revokedMatch) {
+                matchedUser = user;
+                status = 'revoked';
+                revokedRecord = typeof revokedMatch === 'object' ? revokedMatch : { token: normalized, revokedAt: null };
+                return true;
+            }
+
+            return false;
+        });
+
+        return { user: matchedUser, status, revokedRecord };
+    }
+
+    function findUserByToken(token) {
+        const result = resolveInvitationByToken(token);
+        return result.status === 'active' ? result.user : null;
+    }
+
+    function resolveInvitationByToken(token) {
+        if (!token) {
+            return { user: null, status: 'missing' };
+        }
+
+        const normalized = token.trim();
+        let matchedUser = null;
+        let status = 'not-found';
+
+        authState.users.some(user => {
+            if (!user || !user.invitation) {
+                return false;
+            }
+
+            const invitation = user.invitation;
+            const activeToken = typeof invitation.token === 'string' ? invitation.token.trim() : '';
+            if (activeToken && activeToken === normalized) {
+                matchedUser = user;
+                status = 'active';
+                return true;
+            }
+
+            const revokedList = Array.isArray(invitation.revokedTokens) ? invitation.revokedTokens : [];
+            const revokedMatch = revokedList.find(entry => {
+                if (!entry) {
+                    return false;
+                }
+                if (typeof entry === 'string') {
+                    return entry.trim() === normalized;
+                }
+                if (typeof entry === 'object') {
+                    const value = typeof entry.token === 'string' ? entry.token.trim() : '';
+                    return value && value === normalized;
+                }
+                return false;
+            });
+
+            if (revokedMatch) {
+                matchedUser = user;
+                status = 'revoked';
+                return true;
+            }
+
+            return false;
+        });
+
+        return { user: matchedUser, status };
     }
 
     function persistAuthSession(user) {
@@ -431,9 +531,10 @@
     function renderSummary(user) {
         const roleEl = document.getElementById('summaryRole');
         const sentAtEl = document.getElementById('summarySentAt');
-        const departmentEl = document.getElementById('summaryDepartment');
+    const departmentEl = document.getElementById('summaryDepartment');
         const expiresEl = document.getElementById('summaryExpiresOn');
         const employeeIdEl = document.getElementById('summaryEmployeeId');
+    const invitationExpiresEl = document.getElementById('summaryInvitationExpiresAt');
 
         if (roleEl) {
             roleEl.textContent = user.role || 'Pending role';
@@ -447,6 +548,10 @@
         }
         if (expiresEl) {
             expiresEl.textContent = user.expiresOn ? formatDateTime(user.expiresOn) : '—';
+        }
+        if (invitationExpiresEl) {
+            const invitationExpiresAt = user.invitation && user.invitation.expiresAt ? user.invitation.expiresAt : null;
+            invitationExpiresEl.textContent = invitationExpiresAt ? formatDateTime(invitationExpiresAt) : '—';
         }
         if (employeeIdEl) {
             const employeeId = user.employeeId || (user.organization && user.organization.employeeId) || '';
@@ -695,51 +800,189 @@
         }
     }
 
-    function handleExpiredInvitation(user) {
+    function showInactiveInvitationView(options = {}) {
+        const {
+            title = 'Invitation link inactive',
+            message = 'This invitation can no longer be used to finish registration.',
+            pillText = '',
+            statusMarkup = '<i class="fas fa-link-slash"></i> Invitation inactive',
+            statusTone = 'warning',
+            email = null,
+            timestampLabel = '',
+            timestampValue = '',
+            user = null
+        } = options;
+
+        authState.currentUser = user || null;
+        authState.otp = null;
+        authState.otpExpiresAt = null;
+
         disableRegistrationForms();
         resetOtpCountdown();
-        updateHeadline('Invitation link expired');
-        setStatusPill('warning', '<i class="fas fa-triangle-exclamation"></i> Invitation expired');
-        showAlert('error', 'This invitation link has expired and the registration completion period has ended. Please contact your administrator for a new invitation.');
-        showToast('error', 'This invitation link has expired. Request a new invitation from your administrator.', 6000);
+
+        setStatusPill(statusTone || 'warning', statusMarkup || '');
+        updateHeadline('');
+        showAlert(null, '');
         setRegistrationStep('account');
-        const otpSection = document.getElementById('registrationStepOtp');
-        if (otpSection) {
-            otpSection.classList.add('hidden');
+
+        const layout = document.querySelector('.registration-layout');
+        if (layout) {
+            layout.classList.add('hidden');
         }
-        if (user && user.email) {
-            updateOtpEmailLabel(user.email);
+
+        const inactiveContainer = document.getElementById('inactiveInvitationContainer');
+        if (inactiveContainer) {
+            inactiveContainer.classList.remove('hidden');
         }
+
+        const messageEl = document.getElementById('inactiveInvitationMessage');
+        if (messageEl) {
+            messageEl.textContent = message;
+        }
+
+        const titleEl = document.getElementById('inactiveInvitationTitle');
+        if (titleEl) {
+            titleEl.textContent = title;
+        }
+
+        const pillEl = document.getElementById('inactiveInvitationPill');
+        if (pillEl) {
+            if (pillText) {
+                pillEl.textContent = pillText;
+                pillEl.classList.remove('hidden');
+            } else {
+                pillEl.textContent = '';
+                pillEl.classList.add('hidden');
+            }
+        }
+
+        const metaEl = document.getElementById('inactiveInvitationMeta');
+        const hasMeta = Boolean(email) || Boolean(timestampLabel) || Boolean(timestampValue);
+        if (metaEl) {
+            metaEl.classList.toggle('hidden', !hasMeta);
+        }
+
+        const emailEl = document.getElementById('inactiveInvitationEmail');
+        if (emailEl) {
+            emailEl.textContent = email || '—';
+        }
+
+        const tsLabelEl = document.getElementById('inactiveInvitationTimestampLabel');
+        const tsValueEl = document.getElementById('inactiveInvitationTimestampValue');
+        if (tsLabelEl) {
+            tsLabelEl.textContent = timestampLabel || 'Updated';
+        }
+        if (tsValueEl) {
+            tsValueEl.textContent = timestampValue || '—';
+        }
+
+        if (inactiveContainer && typeof inactiveContainer.scrollIntoView === 'function') {
+            inactiveContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+    }
+
+    function handleExpiredInvitation(user) {
+        authState.tokenStatus = 'expired';
+        const expiresLabel = user && user.invitation && user.invitation.expiresAt ? formatDateTime(user.invitation.expiresAt) : '';
+        showInactiveInvitationView({
+            title: 'This invitation link has expired',
+            message: 'The registration window for this invitation has closed. Please ask your administrator to send a new invitation.',
+            pillText: 'Expired link',
+            statusMarkup: '<i class="fas fa-hourglass-end"></i> Invitation expired',
+            statusTone: 'warning',
+            email: user && user.email ? user.email : null,
+            timestampLabel: 'Expired on',
+            timestampValue: expiresLabel,
+            user
+        });
+        showToast('error', 'This invitation link has expired. Request a new invitation from your administrator.', 6000);
     }
 
     function setupRegistrationPage() {
         setupSharedToggles();
         setupOtpInputBehavior();
 
-        const params = new URLSearchParams(window.location.search);
-        const token = params.get('token');
-        authState.token = token;
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get('token');
+    authState.token = token ? token.trim() : null;
 
         if (!token) {
-            const accountSection = document.getElementById('registrationStepAccount');
-            setStatusPill('warning', '<i class="fas fa-triangle-exclamation"></i> Invitation token missing');
-            showAlert('info', 'This invitation link is missing required details. Please contact your administrator.');
-            setRegistrationStep('account');
-            if (accountSection) {
-                accountSection.classList.add('hidden');
-            }
+            authState.tokenStatus = 'missing';
+            showInactiveInvitationView({
+                title: 'Invitation details missing',
+                message: 'This invitation link is missing the required token. Please contact your administrator for a fresh invitation.',
+                pillText: 'Invalid link',
+                statusMarkup: '<i class="fas fa-triangle-exclamation"></i> Invalid invitation',
+                statusTone: 'warning'
+            });
+            showToast('error', 'This invitation link is incomplete. Request a new invitation from your administrator.', 6000);
             return;
         }
 
-        const user = findUserByToken(token);
+        const tokenResult = resolveInvitationByToken(token);
+        authState.tokenStatus = tokenResult.status;
+
+        const layout = document.querySelector('.registration-layout');
+        if (layout) {
+            layout.classList.remove('hidden');
+        }
+        const inactiveContainer = document.getElementById('inactiveInvitationContainer');
+        if (inactiveContainer) {
+            inactiveContainer.classList.add('hidden');
+        }
+
+        if (tokenResult.status === 'not-found') {
+            showInactiveInvitationView({
+                title: 'Invitation link inactive',
+                message: 'We could not find an invitation that matches this link. It may have expired or been replaced. Please request a new invitation.',
+                pillText: 'Inactive link',
+                statusMarkup: '<i class="fas fa-link-slash"></i> Invitation inactive',
+                statusTone: 'warning'
+            });
+            showToast('error', 'We could not find an invitation for this link. Request a new invitation from your administrator.', 6000);
+            return;
+        }
+
+        if (tokenResult.status === 'revoked') {
+            const revokedUser = tokenResult.user;
+            const revokedLabel = tokenResult.revokedRecord && tokenResult.revokedRecord.revokedAt
+                ? formatDateTime(tokenResult.revokedRecord.revokedAt)
+                : '';
+            showInactiveInvitationView({
+                title: 'This invitation link was replaced',
+                message: 'A newer invitation link has been issued for this account. Please use the most recent email or request another invitation from your administrator.',
+                pillText: 'Inactive link',
+                statusMarkup: '<i class="fas fa-link-slash"></i> Invitation inactive',
+                statusTone: 'warning',
+                email: revokedUser && revokedUser.email ? revokedUser.email : null,
+                timestampLabel: 'Replaced on',
+                timestampValue: revokedLabel,
+                user: revokedUser || null
+            });
+            showToast('info', 'This invitation link has been replaced by a newer email. Request a fresh invite if needed.', 6000);
+            return;
+        }
+
+        if (tokenResult.status === 'missing') {
+            showInactiveInvitationView({
+                title: 'Invitation details missing',
+                message: 'This invitation link is missing the required token. Please contact your administrator for a fresh invitation.',
+                pillText: 'Invalid link',
+                statusMarkup: '<i class="fas fa-triangle-exclamation"></i> Invalid invitation'
+            });
+            showToast('error', 'This invitation link is incomplete. Request a new invitation from your administrator.', 6000);
+            return;
+        }
+
+        const user = tokenResult.user;
         if (!user) {
-            const accountSection = document.getElementById('registrationStepAccount');
-            setStatusPill('warning', '<i class="fas fa-triangle-exclamation"></i> Invitation not found');
-            showAlert('error', 'We could not find an invitation that matches this link. It may have expired or already been used.');
-            setRegistrationStep('account');
-            if (accountSection) {
-                accountSection.classList.add('hidden');
-            }
+            showInactiveInvitationView({
+                title: 'Invitation unavailable',
+                message: 'We were unable to load this invitation. Please ask your administrator to resend it.',
+                pillText: 'Inactive link',
+                statusMarkup: '<i class="fas fa-link-slash"></i> Invitation inactive'
+            });
+            showToast('error', 'This invitation is no longer available. Request a new invitation from your administrator.', 6000);
             return;
         }
 

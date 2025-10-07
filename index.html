@@ -471,14 +471,42 @@
                                                     <label class="form-label required" for="userEmployeeId">ID</label>
                                                     <input type="text" class="form-input" id="userEmployeeId" placeholder="e.g. ONR-4521" required aria-required="true" />
                                                 </div>
-                                                <div class="form-group-inline">
-                                                    <div>
-                                                        <label class="form-label" for="userSuperAdminToggle">Super Admin</label>
+                                                <div id="userCompletedRegistrationSection" class="completed-registration-section hidden">
+                                                    <div class="completed-registration-header">
+                                                        <i class="fas fa-circle-user" aria-hidden="true"></i>
+                                                        <div>
+                                                            <div class="completed-registration-title">Personal Details</div>
+                                                            <p class="helper-text" id="userCompletedRegistrationStatus">These fields appear after the user finishes onboarding.</p>
+                                                        </div>
                                                     </div>
-                                                    <label class="toggle-switch" for="userSuperAdminToggle">
-                                                        <input type="checkbox" id="userSuperAdminToggle" />
-                                                        <span class="toggle-slider"></span>
-                                                    </label>
+                                                    <div class="completed-registration-grid">
+                                                        <div class="form-group" id="userPhotoGroup">
+                                                            <label class="form-label" for="userPhotoInput">Profile Photo</label>
+                                                            <div class="user-photo-field">
+                                                                <img id="userPhotoPreview" alt="Profile photo preview" src="" aria-hidden="true" />
+                                                                <div class="user-photo-actions">
+                                                                    <input type="file" class="form-input file-input" id="userPhotoInput" accept="image/*" />
+                                                                    <button type="button" class="btn btn-outline" id="userPhotoClearBtn">
+                                                                        <i class="fas fa-trash-can"></i>
+                                                                        Remove photo
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                            <p class="form-hint" id="userPhotoFilename"></p>
+                                                        </div>
+                                                        <div class="form-group">
+                                                            <label class="form-label required" for="userFirstName">First Name</label>
+                                                            <input type="text" class="form-input" id="userFirstName" placeholder="e.g. Sara" />
+                                                        </div>
+                                                        <div class="form-group">
+                                                            <label class="form-label required" for="userLastName">Last Name</label>
+                                                            <input type="text" class="form-input" id="userLastName" placeholder="e.g. Al-Qahtani" />
+                                                        </div>
+                                                        <div class="form-group">
+                                                            <label class="form-label required" for="userPhone">Phone Number</label>
+                                                            <input type="tel" class="form-input" id="userPhone" placeholder="+9665XXXXXXXX" />
+                                                        </div>
+                                                    </div>
                                                 </div>
                                                 <div class="form-actions user-info-actions">
                                                     <button type="button" class="btn btn-outline" id="userInfoCancelBtn">
@@ -487,7 +515,7 @@
                                                     </button>
                                                     <button type="button" class="btn btn-primary" id="userInfoNextBtn">
                                                         <i class="fas fa-arrow-right"></i>
-                                                        Register
+                                                        <span id="userInfoNextBtnLabel">Register</span>
                                                     </button>
                                                 </div>
                                             </div>
@@ -497,6 +525,15 @@
                                             <div class="account-info-grid">
                                                 <div class="account-info-card account-access-card">
                                                     <div class="account-info-fields">
+                                                        <div class="form-group-inline account-type-toggle">
+                                                            <div>
+                                                                <label class="form-label" for="userSuperAdminToggle">Super Admin</label>
+                                                            </div>
+                                                            <label class="toggle-switch" for="userSuperAdminToggle">
+                                                                <input type="checkbox" id="userSuperAdminToggle" />
+                                                                <span class="toggle-slider"></span>
+                                                            </label>
+                                                        </div>
                                                         <div class="form-group">
                                                             <label class="form-label" for="userAccountExpiration">Account Expiration</label>
                                                             <input type="date" class="form-input" id="userAccountExpiration" />

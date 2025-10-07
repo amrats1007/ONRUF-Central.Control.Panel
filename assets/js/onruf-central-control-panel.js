@@ -415,6 +415,33 @@ function normalizeInvitationPayload(invitation) {
         expiresAt = new Date(base + INVITATION_VALIDITY_MS).toISOString();
     }
 
+    const revokedTokens = Array.isArray(normalized.revokedTokens)
+        ? normalized.revokedTokens
+            .map(entry => {
+                if (!entry) {
+                    return null;
+                }
+                if (typeof entry === 'string') {
+                    const trimmed = entry.trim();
+                    return trimmed ? { token: trimmed, revokedAt: null } : null;
+                }
+                const value = typeof entry.token === 'string' ? entry.token.trim() : '';
+                if (!value) {
+                    return null;
+                }
+                let revokedAt = null;
+                if (entry.revokedAt) {
+                    const parsed = Date.parse(entry.revokedAt);
+                    if (Number.isFinite(parsed)) {
+                        revokedAt = new Date(parsed).toISOString();
+                    }
+                }
+                return { token: value, revokedAt };
+            })
+            .filter(Boolean)
+            .slice(0, 10)
+        : [];
+
     return {
         otp,
         token,
@@ -422,7 +449,8 @@ function normalizeInvitationPayload(invitation) {
         expiresAt,
         completedAt: normalized.completedAt || null,
         verifiedAt: normalized.verifiedAt || null,
-        lastOtpSentAt: normalized.lastOtpSentAt || null
+        lastOtpSentAt: normalized.lastOtpSentAt || null,
+        revokedTokens
     };
 }
 
@@ -1503,6 +1531,8 @@ function setupEventListeners() {
     const userInfoNextBtn = document.getElementById('userInfoNextBtn');
     const userInfoCancelBtn = document.getElementById('userInfoCancelBtn');
     const userFormBackBtn = document.getElementById('userFormBackBtn');
+    const userPhotoInput = document.getElementById('userPhotoInput');
+    const userPhotoClearBtn = document.getElementById('userPhotoClearBtn');
 
     const registrationFlowOverlay = document.getElementById('registrationFlowOverlay');
     const registrationFlowCloseBtn = document.getElementById('registrationFlowCloseBtn');
@@ -1527,6 +1557,12 @@ function setupEventListeners() {
     }
     if (userForm) {
         userForm.addEventListener('submit', handleUserFormSubmit);
+    }
+    if (userPhotoInput) {
+        userPhotoInput.addEventListener('change', handleAdminPhotoUpload);
+    }
+    if (userPhotoClearBtn) {
+        userPhotoClearBtn.addEventListener('click', handleAdminPhotoClear);
     }
     if (userFormProgress) {
         const activateStep = stepItem => {
@@ -3255,6 +3291,23 @@ function buildAccessWindowLabel(start, end) {
     return 'Immediately';
 }
 
+function readFileAsDataUrl(file) {
+    return new Promise((resolve, reject) => {
+        if (typeof File !== 'undefined' && !(file instanceof File)) {
+            reject(new Error('Invalid file input.'));
+            return;
+        }
+        const reader = new FileReader();
+        reader.onload = () => {
+            resolve(typeof reader.result === 'string' ? reader.result : '');
+        };
+        reader.onerror = () => {
+            reject(reader.error || new Error('Unable to read file.'));
+        };
+        reader.readAsDataURL(file);
+    });
+}
+
 function generateRegistrationOtp() {
     return String(Math.floor(100000 + Math.random() * 900000));
 }
@@ -3372,6 +3425,131 @@ function updateInvitationTimeline() {
     });
 }
 
+function hasUserCompletedRegistration(user) {
+    if (!user) {
+        return false;
+    }
+    const status = typeof user.status === 'string' ? user.status.trim().toLowerCase() : '';
+    if (status === 'active' || status === 'inactive') {
+        return true;
+    }
+    return Boolean(user.invitation && user.invitation.completedAt);
+}
+
+function updateCompletedRegistrationPhotoPreview(photoDataUrl, photoFileName, emailFallback) {
+    const preview = document.getElementById('userPhotoPreview');
+    const filenameEl = document.getElementById('userPhotoFilename');
+    const resolvedEmail = typeof emailFallback === 'string' ? emailFallback : '';
+    const resolvedPreview = photoDataUrl || getUserAvatarUrl(resolvedEmail || 'placeholder');
+
+    if (preview) {
+        preview.src = resolvedPreview;
+    }
+
+    if (filenameEl) {
+        filenameEl.textContent = photoFileName
+            ? `Current photo: ${photoFileName}`
+            : '';
+    }
+}
+
+function populateCompletedRegistrationSection(options = {}) {
+    const {
+        visible = false,
+        firstName = '',
+        lastName = '',
+        phone = '',
+        photoDataUrl = '',
+        photoFileName = '',
+        email = '',
+        statusLabel = 'These fields appear after the user finishes onboarding.'
+    } = options;
+
+    const section = document.getElementById('userCompletedRegistrationSection');
+    if (section) {
+        section.classList.toggle('hidden', !visible);
+        section.dataset.completed = visible ? 'true' : 'false';
+    }
+
+    const firstNameInput = document.getElementById('userFirstName');
+    if (firstNameInput) {
+        firstNameInput.value = visible ? firstName : '';
+    }
+
+    const lastNameInput = document.getElementById('userLastName');
+    if (lastNameInput) {
+        lastNameInput.value = visible ? lastName : '';
+    }
+
+    const phoneInput = document.getElementById('userPhone');
+    if (phoneInput) {
+        phoneInput.value = visible ? phone : '';
+    }
+
+    const statusEl = document.getElementById('userCompletedRegistrationStatus');
+    if (statusEl) {
+        statusEl.textContent = statusLabel;
+    }
+
+    updateCompletedRegistrationPhotoPreview(visible ? photoDataUrl : '', visible ? photoFileName : '', email);
+
+    const photoInput = document.getElementById('userPhotoInput');
+    if (photoInput && !visible) {
+        photoInput.value = '';
+    }
+}
+
+async function handleAdminPhotoUpload(event) {
+    const input = event?.target;
+    const file = input?.files?.[0];
+    if (!input || !file) {
+        return;
+    }
+
+    const isImage = file.type ? file.type.startsWith('image/') : false;
+    if (!isImage) {
+        showNotification('error', 'Please choose a valid image file.');
+        input.value = '';
+        return;
+    }
+
+    const maxSizeBytes = 5 * 1024 * 1024;
+    if (file.size > maxSizeBytes) {
+        showNotification('error', 'Profile photo must be 5 MB or smaller.');
+        input.value = '';
+        return;
+    }
+
+    try {
+        const dataUrl = await readFileAsDataUrl(file);
+        const draft = { ...(state.userDraft || {}) };
+        draft.photoDataUrl = dataUrl;
+        draft.photoFileName = file.name || 'profile-photo';
+        state.userDraft = draft;
+        const email = draft.email || '';
+        updateCompletedRegistrationPhotoPreview(dataUrl, draft.photoFileName, email);
+    } catch (error) {
+        console.error('Admin photo upload failed', error);
+        showNotification('error', 'We could not read the selected photo. Please try again.');
+        input.value = '';
+    }
+}
+
+function handleAdminPhotoClear() {
+    const draft = { ...(state.userDraft || {}) };
+    draft.photoDataUrl = '';
+    draft.photoFileName = '';
+    state.userDraft = draft;
+
+    const photoInput = document.getElementById('userPhotoInput');
+    if (photoInput) {
+        photoInput.value = '';
+    }
+
+    const email = draft.email || '';
+    updateCompletedRegistrationPhotoPreview('', '', email);
+}
+
 function setInvitationStage(stage) {
     if (!invitationStageOrder.includes(stage)) {
         return;
@@ -3387,6 +3565,10 @@ function collectUserFormStepData(step) {
         const emailInput = document.getElementById('userEmail');
         const departmentInput = document.getElementById('userDepartment');
         const employeeIdInput = document.getElementById('userEmployeeId');
+        const completedSection = document.getElementById('userCompletedRegistrationSection');
+        const firstNameInput = document.getElementById('userFirstName');
+        const lastNameInput = document.getElementById('userLastName');
+        const phoneInput = document.getElementById('userPhone');
         if (!emailInput || !departmentInput || !employeeIdInput) {
             return false;
         }
@@ -3395,6 +3577,10 @@ function collectUserFormStepData(step) {
         const department = departmentInput.value.trim();
         const employeeId = employeeIdInput.value.trim();
         const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        const requirePersonalDetails = completedSection && completedSection.dataset.completed === 'true';
+        const firstNameValue = firstNameInput ? firstNameInput.value.trim() : '';
+        const lastNameValue = lastNameInput ? lastNameInput.value.trim() : '';
+        const phoneValue = phoneInput ? phoneInput.value.trim() : '';
 
         if (!emailPattern.test(email)) {
             showNotification('error', 'Please enter a valid email address.');
@@ -3426,7 +3612,7 @@ function collectUserFormStepData(step) {
             return false;
         }
 
-    const duplicateEmployee = findExistingUserByEmployeeId(employeeId, excludeUserId);
+        const duplicateEmployee = findExistingUserByEmployeeId(employeeId, excludeUserId);
         if (duplicateEmployee) {
             showNotification('warning', 'This ID Already Exists');
             if (state.userFormStep !== 1) {
@@ -3439,9 +3625,35 @@ function collectUserFormStepData(step) {
             return false;
         }
 
+        if (requirePersonalDetails && !firstNameValue && firstNameInput) {
+            showNotification('error', 'First name is required.');
+            firstNameInput.focus();
+            return false;
+        }
+        if (requirePersonalDetails && !lastNameValue && lastNameInput) {
+            showNotification('error', 'Last name is required.');
+            lastNameInput.focus();
+            return false;
+        }
+        if (requirePersonalDetails && !phoneValue && phoneInput) {
+            showNotification('error', 'Phone number is required.');
+            phoneInput.focus();
+            return false;
+        }
+
         draft.email = email;
         draft.department = department;
         draft.employeeId = employeeId;
+
+        if (firstNameInput) {
+            draft.firstName = firstNameValue || draft.firstName || '';
+        }
+        if (lastNameInput) {
+            draft.lastName = lastNameValue || draft.lastName || '';
+        }
+        if (phoneInput) {
+            draft.phone = phoneValue || draft.phone || '';
+        }
 
         const existingFirstName = typeof draft.firstName === 'string' ? draft.firstName.trim() : '';
         const existingLastName = typeof draft.lastName === 'string' ? draft.lastName.trim() : '';
@@ -3458,6 +3670,9 @@ function collectUserFormStepData(step) {
         if (emailDisplay) {
             emailDisplay.value = email;
         }
+
+        const fallbackEmail = draft.email || '';
+        updateCompletedRegistrationPhotoPreview(draft.photoDataUrl || '', draft.photoFileName || '', fallbackEmail);
 
         state.userDraft = draft;
         updateUserFormProgressState();
@@ -3532,6 +3747,7 @@ function showUserForm(mode, userId = null) {
     const expirationInput = document.getElementById('userAccountExpiration');
     const submitBtn = document.getElementById('userFormSubmitBtn');
     const permissionsSummary = document.getElementById('userPermissionsSummary');
+    const nextBtnLabel = document.getElementById('userInfoNextBtnLabel');
 
     if (!formPage || !listView || !form || !emailInput || !departmentInput || !employeeIdInput || !roleSelect || !superAdminToggle || !expirationInput || !submitBtn) {
         return;
@@ -3554,7 +3770,8 @@ function showUserForm(mode, userId = null) {
         permissionSummary: '',
         expiresOn: '',
         status: 'Pending',
-        photoFileName: ''
+        photoFileName: '',
+        photoDataUrl: ''
     };
 
     state.userDraft = { ...defaultDraft };
@@ -3573,9 +3790,14 @@ function showUserForm(mode, userId = null) {
         permissionsSummary.textContent = 'Toggle Super Admin or choose a user role to preview permissions.';
     }
 
+    populateCompletedRegistrationSection({ visible: false, email: '' });
+
     let initialStep = 1;
     submitBtn.textContent = 'Add';
     emailInput.readOnly = false;
+    if (nextBtnLabel) {
+        nextBtnLabel.textContent = 'Register';
+    }
 
     populateUserRoleOptions(roleSelect);
 
@@ -3598,6 +3820,7 @@ function showUserForm(mode, userId = null) {
         const firstName = user.firstName || (user.name ? user.name.split(' ')[0] : '');
         const lastName = user.lastName || (user.name ? user.name.split(' ').slice(1).join(' ') : '');
         const phone = user.phone || `+96650${String(user.id).padStart(6, '0')}`;
+    const hasCompleted = hasUserCompletedRegistration(user);
 
         emailInput.value = user.email || '';
         emailInput.readOnly = true;
@@ -3632,11 +3855,34 @@ function showUserForm(mode, userId = null) {
                 : (roleLabel ? `Inherits permissions from “${roleLabel}”.` : '')),
             expiresOn,
             status: user.status || 'Pending',
-            photoFileName: user.photoFileName || ''
+            photoFileName: user.photoFileName || '',
+            photoDataUrl: user.photoDataUrl || ''
         };
 
         submitBtn.textContent = 'Save';
-        initialStep = 2;
+        initialStep = 1;
+        if (nextBtnLabel) {
+            nextBtnLabel.textContent = 'Continue';
+        }
+
+        const normalizedStatus = typeof user.status === 'string' ? user.status.trim().toLowerCase() : '';
+        let statusLabel = hasCompleted
+            ? 'Details captured during the registration process.'
+            : 'These fields appear after the user finishes onboarding.';
+        if (user.invitation && user.invitation.completedAt) {
+            statusLabel = `Completed on ${formatDateForDisplay(user.invitation.completedAt)}.`;
+        }
+
+        populateCompletedRegistrationSection({
+            visible: hasCompleted,
+            firstName,
+            lastName,
+            phone,
+            photoDataUrl: user.photoDataUrl || '',
+            photoFileName: user.photoFileName || '',
+            email: user.email || '',
+            statusLabel
+        });
     } else {
         emailInput.value = '';
         departmentInput.value = '';
@@ -3644,6 +3890,10 @@ function showUserForm(mode, userId = null) {
         expirationInput.value = '';
         superAdminToggle.checked = false;
         roleSelect.value = '';
+        populateCompletedRegistrationSection({
+            visible: false,
+            email: ''
+        });
     }
 
     updateAccountTypeUI();
@@ -3678,7 +3928,7 @@ function hideUserForm() {
     const listView = document.getElementById('usersListView');
     const form = document.getElementById('userForm');
     const emailInput = document.getElementById('userEmail');
-    const photoInput = document.getElementById('registrationPhoto');
+    const photoInput = document.getElementById('userPhotoInput');
 
     if (form) {
         form.reset();
@@ -3686,6 +3936,7 @@ function hideUserForm() {
     if (photoInput) {
         photoInput.value = '';
     }
+    populateCompletedRegistrationSection({ visible: false, email: '' });
 
     if (emailInput) {
         emailInput.readOnly = false;
@@ -3799,8 +4050,11 @@ async function handleUserFormSubmit(event) {
         }
         user.expiresOn = draft.expiresOn || '';
         ensureUserAuthRecord(user);
-        if (draft.photoFileName) {
+        if (typeof draft.photoFileName === 'string') {
             user.photoFileName = draft.photoFileName;
+        }
+        if (typeof draft.photoDataUrl !== 'undefined') {
+            user.photoDataUrl = draft.photoDataUrl || '';
         }
         if (draft.password) {
             const updatedAt = new Date().toISOString();
@@ -3873,7 +4127,8 @@ async function handleUserFormSubmit(event) {
         sessionExpiresAt: null,
         permissionSummary,
         expiresOn,
-        photoFileName: draft.photoFileName || ''
+        photoFileName: draft.photoFileName || '',
+        photoDataUrl: draft.photoDataUrl || ''
     };
 
     users.unshift(newUser);
@@ -3971,6 +4226,79 @@ function showUserInvitationLink(userId) {
     saveUsersToStorage();
 
     window.open(link, '_blank', 'noopener');
+}
+
+async function resendUserInvitation(userId) {
+    const user = Number.isInteger(userId) ? users.find(item => item.id === userId) : null;
+    if (!user) {
+        showNotification('error', 'Unable to locate the user for invitation resend.');
+        return;
+    }
+
+    ensureUserInvitationRecord(user);
+
+    const status = (user.status || '').toLowerCase();
+    if (status !== 'pending') {
+        showNotification('info', 'Invitation emails can only be resent for users who are still pending activation.');
+        return;
+    }
+
+    const now = new Date();
+    const sentAtIso = now.toISOString();
+    const newToken = generateRegistrationToken();
+    const newExpiresAt = new Date(now.getTime() + INVITATION_VALIDITY_MS).toISOString();
+    const newOtp = generateRegistrationOtp();
+    const otpExpiresAt = Date.now() + 10 * 60 * 1000;
+    const previousToken = user.invitation.token || null;
+
+    if (!Array.isArray(user.invitation.revokedTokens)) {
+        user.invitation.revokedTokens = [];
+    }
+    if (previousToken) {
+        user.invitation.revokedTokens.unshift({ token: previousToken, revokedAt: sentAtIso });
+        if (user.invitation.revokedTokens.length > 10) {
+            user.invitation.revokedTokens = user.invitation.revokedTokens.slice(0, 10);
+        }
+    }
+
+    user.invitation.token = newToken;
+    user.invitation.sentAt = sentAtIso;
+    user.invitation.expiresAt = newExpiresAt;
+    user.invitation.otp = newOtp;
+    user.invitation.lastOtpSentAt = sentAtIso;
+    user.invitation.completedAt = null;
+    user.invitation.verifiedAt = null;
+
+    const viewingSameUser = state.registrationFlow.userId === userId;
+    if (viewingSameUser) {
+        state.registrationFlow.otp = newOtp;
+        state.registrationFlow.expiresAt = otpExpiresAt;
+        state.registrationFlow.token = newToken;
+        state.registrationFlow.linkExpiresAt = newExpiresAt;
+        state.registrationFlow.link = buildAbsoluteInvitationLink(newToken);
+        updateRegistrationLinkDisplay(newToken);
+    }
+
+    saveUsersToStorage();
+
+    const invitedBy = resolveInvitationSenderLabel();
+    const emailResult = await deliverInvitationEmail(user, {
+        otp: newOtp,
+        token: newToken,
+        expiresAt: otpExpiresAt,
+        linkExpiresAt: newExpiresAt,
+        invitedBy
+    });
+
+    if (emailResult.status === 'sent') {
+        showNotification('success', `A new invitation email was sent to ${user.email}.`, 6000);
+    } else if (emailResult.status === 'skipped') {
+        showNotification('info', `Invitation refreshed for ${user.email}. Share the updated link manually.`, 7000);
+    } else {
+        showNotification('warning', `Failed to deliver the invitation to ${user.email}: ${emailResult.message}.`, 8000);
+    }
+
+    renderUsersTable(state.userSearchTerm, state.currentUserPage);
 }
 
 function openRegistrationFlow(userId, options = {}) {
@@ -4739,9 +5067,17 @@ function renderUsersTable(searchTerm = state.userSearchTerm, page = state.curren
                 ? `<button class="action-btn delete" onclick="(async () => await handleUserDelete(${user.id}))()" title="${escapeAttribute(deleteTooltip)}"><i class="fas fa-trash"></i></button>`
                 : `<button class="action-btn delete disabled" type="button" disabled title="${escapeAttribute(deleteTooltip)}"><i class="fas fa-trash"></i></button>`;
 
-            const secondaryAction = isPending
-                ? `<button class="action-btn activate" onclick="showUserInvitationLink(${user.id})" title="Show invitation link"><i class="fas fa-envelope-open-text"></i></button>`
-                : `<button class="action-btn ${isActive ? 'deactivate' : 'activate'}" onclick="(async () => await handleUserToggle(${user.id}))()" title="${isActive ? 'Deactivate user' : 'Activate user'}"><i class="fas ${isActive ? 'fa-power-off' : 'fa-rotate-right'}"></i></button>`;
+            const editAction = `<button class="action-btn edit" onclick="showUserForm('edit', ${user.id})" title="Edit user"><i class="fas fa-pen"></i></button>`;
+            const actionButtons = [editAction];
+
+            if (isPending) {
+                actionButtons.push(`<button class="action-btn invitation-link" onclick="showUserInvitationLink(${user.id})" title="Show invitation link"><i class="fas fa-envelope-open-text"></i></button>`);
+                actionButtons.push(`<button class="action-btn resend-invite" onclick="(async () => await resendUserInvitation(${user.id}))()" title="Resend invitation email"><i class="fas fa-paper-plane"></i></button>`);
+            } else {
+                actionButtons.push(`<button class="action-btn ${isActive ? 'deactivate' : 'activate'}" onclick="(async () => await handleUserToggle(${user.id}))()" title="${isActive ? 'Deactivate user' : 'Activate user'}"><i class="fas ${isActive ? 'fa-power-off' : 'fa-rotate-right'}"></i></button>`);
+            }
+
+            actionButtons.push(deleteAction);
 
             return `
                 <tr>
@@ -4768,9 +5104,7 @@ function renderUsersTable(searchTerm = state.userSearchTerm, page = state.curren
                     <td>${expirationLabel}</td>
                     <td>
                         <div class="action-group">
-                            <button class="action-btn edit" onclick="showUserForm('edit', ${user.id})" title="Edit user"><i class="fas fa-pen"></i></button>
-                            ${secondaryAction}
-                            ${deleteAction}
+                            ${actionButtons.join('\n')}
                         </div>
                     </td>
                 </tr>

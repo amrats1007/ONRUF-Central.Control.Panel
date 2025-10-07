@@ -130,6 +130,10 @@
                         <strong id="summarySentAt">—</strong>
                     </div>
                     <div class="summary-row">
+                        <span>Invitation expired at:</span>
+                        <strong id="summaryInvitationExpiresAt">—</strong>
+                    </div>
+                    <div class="summary-row">
                         <span>Organization</span>
                         <strong>ONRUF</strong>
                     </div>
@@ -150,6 +154,37 @@
                         <strong id="summaryExpiresOn">—</strong>
                     </div>
                 </aside>
+            </div>
+
+            <div id="inactiveInvitationContainer" class="inactive-invite hidden" role="region" aria-live="polite" aria-labelledby="inactiveInvitationTitle">
+                <div class="inactive-icon" aria-hidden="true">
+                    <i class="fas fa-link-slash"></i>
+                </div>
+                <div class="inactive-copy">
+                    <h3 id="inactiveInvitationTitle">Invitation link inactive</h3>
+                    <p id="inactiveInvitationMessage">This invitation can no longer be used to finish registration.</p>
+                </div>
+                <div class="inactive-pill hidden" id="inactiveInvitationPill"></div>
+                <div class="inactive-meta hidden" id="inactiveInvitationMeta">
+                    <div class="inactive-meta-item">
+                        <span>Sent to</span>
+                        <strong id="inactiveInvitationEmail">—</strong>
+                    </div>
+                    <div class="inactive-meta-item">
+                        <span id="inactiveInvitationTimestampLabel">Updated</span>
+                        <strong id="inactiveInvitationTimestampValue">—</strong>
+                    </div>
+                </div>
+                <div class="inactive-actions">
+                    <a href="mailto:support@onruf.com?subject=Request%20new%20OnRuf%20invitation" class="btn btn-primary">
+                        <span>Request a new invitation</span>
+                        <i class="fas fa-envelope"></i>
+                    </a>
+                    <a href="login.html" class="btn btn-ghost" id="inactiveInvitationLogin">
+                        <span>Return to sign in</span>
+                        <i class="fas fa-arrow-right"></i>
+                    </a>
+                </div>
             </div>
         </div>
     </div>

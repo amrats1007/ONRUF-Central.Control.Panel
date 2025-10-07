@@ -295,6 +295,19 @@ body.auth-body {
     box-shadow: 0 16px 32px rgba(37, 99, 235, 0.32);
 }
 
+.btn-ghost {
+    background: rgba(37, 99, 235, 0.1);
+    color: var(--auth-primary);
+    box-shadow: none;
+    border: 1px solid rgba(37, 99, 235, 0.24);
+}
+
+.btn-ghost:hover {
+    transform: translateY(-1px);
+    background: rgba(37, 99, 235, 0.16);
+    box-shadow: 0 12px 24px rgba(37, 99, 235, 0.18);
+}
+
 .inline-link {
     color: var(--auth-primary);
     text-decoration: none;
@@ -449,6 +462,90 @@ body[data-auth-page="registration"] {
     display: grid;
     gap: 28px;
     box-shadow: 0 32px 60px rgba(15, 23, 42, 0.18);
+
+.inactive-invite {
+    background: linear-gradient(135deg, rgba(15, 23, 42, 0.96), rgba(30, 64, 175, 0.92));
+    border-radius: 28px;
+    border: 1px solid rgba(148, 163, 184, 0.24);
+    padding: clamp(32px, 6vw, 52px);
+    display: grid;
+    gap: 20px;
+    justify-items: center;
+    text-align: center;
+    color: #e2e8f0;
+    box-shadow: 0 42px 80px rgba(15, 23, 42, 0.32);
+}
+
+.inactive-icon {
+    width: 88px;
+    height: 88px;
+    border-radius: 24px;
+    background: rgba(59, 130, 246, 0.16);
+    display: grid;
+    place-items: center;
+    color: #93c5fd;
+    font-size: 34px;
+}
+
+.inactive-copy h3 {
+    margin: 0;
+    font-size: clamp(24px, 3vw, 30px);
+}
+
+.inactive-copy p {
+    margin: 0;
+    font-size: 16px;
+    line-height: 1.7;
+    color: rgba(226, 232, 240, 0.82);
+}
+
+.inactive-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    border-radius: 999px;
+    background: rgba(37, 99, 235, 0.18);
+    color: #bfdbfe;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.inactive-meta {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 16px;
+    width: min(460px, 100%);
+}
+
+.inactive-meta-item {
+    display: grid;
+    gap: 6px;
+    background: rgba(15, 23, 42, 0.38);
+    border-radius: 18px;
+    padding: 16px;
+}
+
+.inactive-meta-item span {
+    font-size: 13px;
+    color: rgba(191, 219, 254, 0.76);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.inactive-meta-item strong {
+    color: #f8fafc;
+    font-size: 16px;
+}
+
+.inactive-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 16px;
+}
 }
 
 .registration-headline {
