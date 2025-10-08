@@ -10,7 +10,7 @@
 </head>
 <body>
     <div class="app-shell">
-        <aside class="sidebar" id="sidebar">
+    <aside class="sidebar collapsed" id="sidebar">
             <div class="sidebar-header">
                 <div class="brand-mark">OR</div>
                 <div class="brand-text">OnRuf Control</div>
@@ -61,7 +61,7 @@
         <main class="main-content">
             <header class="topbar">
                 <div class="topbar-left">
-                    <button class="icon-btn" id="menuToggle" aria-label="Toggle menu">
+                    <button class="icon-btn" id="menuToggle" aria-label="Toggle menu" aria-expanded="false">
                         <i class="fas fa-bars"></i>
                     </button>
                     <nav class="breadcrumb" aria-label="Breadcrumb">
@@ -244,9 +244,12 @@
 
                     <div id="users-app1" class="sub-app active">
                         <div class="roles-header">
-                            <div class="search-box" id="roleSearchContainer">
-                                <i class="fas fa-search"></i>
-                                <input type="text" id="roleSearchInput" placeholder="Search by Role Name or Description" />
+                            <div class="header-stack">
+                                <h2 class="module-title">User Roles</h2>
+                                <div class="search-box" id="roleSearchContainer">
+                                    <i class="fas fa-search"></i>
+                                    <input type="text" id="roleSearchInput" placeholder="Search by Role Name or Description" />
+                                </div>
                             </div>
                             <div class="roles-actions">
                                 <button class="btn btn-primary" id="addRoleBtn">
@@ -368,9 +371,12 @@
                     <div id="users-app2" class="sub-app">
                         <div id="usersListView">
                             <div class="users-header">
-                                <div class="search-box">
-                                    <i class="fas fa-search"></i>
-                                    <input type="text" id="userSearch" placeholder="Search by User Name, Email, Phone, Role, Status, Department or ID" />
+                                <div class="header-stack">
+                                    <h2 class="module-title">User Accounts</h2>
+                                    <div class="search-box">
+                                        <i class="fas fa-search"></i>
+                                        <input type="text" id="userSearch" placeholder="Search by User Name, Email, Phone, Role, Status, Department or ID" />
+                                    </div>
                                 </div>
                                 <div class="users-actions">
                                     <button class="btn btn-primary" id="addUserBtn">
@@ -390,6 +396,7 @@
                                             <th>Status</th>
                                             <th>Last Login</th>
                                             <th>Created</th>
+                                            <th>Created By</th>
                                             <th>Account Expiration</th>
                                             <th>Actions</th>
                                         </tr>
@@ -408,6 +415,18 @@
                                 <div class="confirm-actions">
                                     <button type="button" class="btn btn-outline" id="userConfirmCancel">Cancel</button>
                                     <button type="button" class="btn btn-primary" id="userConfirmOk">Confirm</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="userPromptOverlay" class="confirm-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="userPromptMessage">
+                            <div class="confirm-dialog" role="document">
+                                <p id="userPromptMessage">To Confirm, Type the Email Address Below</p>
+                                <input type="text" id="userPromptInput" class="confirm-input" aria-describedby="userPromptMessage userPromptError" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" />
+                                <p id="userPromptError" class="prompt-error hidden" role="alert"></p>
+                                <div class="confirm-actions">
+                                    <button type="button" class="btn btn-outline" id="userPromptCancel">Cancel</button>
+                                    <button type="button" class="btn btn-primary" id="userPromptConfirm">Delete</button>
                                 </div>
                             </div>
                         </div>
@@ -486,13 +505,8 @@
                                                                 <img id="userPhotoPreview" alt="Profile photo preview" src="" aria-hidden="true" />
                                                                 <div class="user-photo-actions">
                                                                     <input type="file" class="form-input file-input" id="userPhotoInput" accept="image/*" />
-                                                                    <button type="button" class="btn btn-outline" id="userPhotoClearBtn">
-                                                                        <i class="fas fa-trash-can"></i>
-                                                                        Remove photo
-                                                                    </button>
                                                                 </div>
                                                             </div>
-                                                            <p class="form-hint" id="userPhotoFilename"></p>
                                                         </div>
                                                         <div class="form-group">
                                                             <label class="form-label required" for="userFirstName">First Name</label>

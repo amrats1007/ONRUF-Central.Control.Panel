@@ -804,12 +804,8 @@
         const {
             title = 'Invitation link inactive',
             message = 'This invitation can no longer be used to finish registration.',
-            pillText = '',
             statusMarkup = '<i class="fas fa-link-slash"></i> Invitation inactive',
             statusTone = 'warning',
-            email = null,
-            timestampLabel = '',
-            timestampValue = '',
             user = null
         } = options;
 
@@ -845,37 +841,6 @@
             titleEl.textContent = title;
         }
 
-        const pillEl = document.getElementById('inactiveInvitationPill');
-        if (pillEl) {
-            if (pillText) {
-                pillEl.textContent = pillText;
-                pillEl.classList.remove('hidden');
-            } else {
-                pillEl.textContent = '';
-                pillEl.classList.add('hidden');
-            }
-        }
-
-        const metaEl = document.getElementById('inactiveInvitationMeta');
-        const hasMeta = Boolean(email) || Boolean(timestampLabel) || Boolean(timestampValue);
-        if (metaEl) {
-            metaEl.classList.toggle('hidden', !hasMeta);
-        }
-
-        const emailEl = document.getElementById('inactiveInvitationEmail');
-        if (emailEl) {
-            emailEl.textContent = email || '—';
-        }
-
-        const tsLabelEl = document.getElementById('inactiveInvitationTimestampLabel');
-        const tsValueEl = document.getElementById('inactiveInvitationTimestampValue');
-        if (tsLabelEl) {
-            tsLabelEl.textContent = timestampLabel || 'Updated';
-        }
-        if (tsValueEl) {
-            tsValueEl.textContent = timestampValue || '—';
-        }
-
         if (inactiveContainer && typeof inactiveContainer.scrollIntoView === 'function') {
             inactiveContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
@@ -883,16 +848,11 @@
 
     function handleExpiredInvitation(user) {
         authState.tokenStatus = 'expired';
-        const expiresLabel = user && user.invitation && user.invitation.expiresAt ? formatDateTime(user.invitation.expiresAt) : '';
         showInactiveInvitationView({
             title: 'This invitation link has expired',
             message: 'The registration window for this invitation has closed. Please ask your administrator to send a new invitation.',
-            pillText: 'Expired link',
             statusMarkup: '<i class="fas fa-hourglass-end"></i> Invitation expired',
             statusTone: 'warning',
-            email: user && user.email ? user.email : null,
-            timestampLabel: 'Expired on',
-            timestampValue: expiresLabel,
             user
         });
         showToast('error', 'This invitation link has expired. Request a new invitation from your administrator.', 6000);
@@ -911,7 +871,6 @@
             showInactiveInvitationView({
                 title: 'Invitation details missing',
                 message: 'This invitation link is missing the required token. Please contact your administrator for a fresh invitation.',
-                pillText: 'Invalid link',
                 statusMarkup: '<i class="fas fa-triangle-exclamation"></i> Invalid invitation',
                 statusTone: 'warning'
             });
@@ -935,7 +894,6 @@
             showInactiveInvitationView({
                 title: 'Invitation link inactive',
                 message: 'We could not find an invitation that matches this link. It may have expired or been replaced. Please request a new invitation.',
-                pillText: 'Inactive link',
                 statusMarkup: '<i class="fas fa-link-slash"></i> Invitation inactive',
                 statusTone: 'warning'
             });
@@ -945,21 +903,13 @@
 
         if (tokenResult.status === 'revoked') {
             const revokedUser = tokenResult.user;
-            const revokedLabel = tokenResult.revokedRecord && tokenResult.revokedRecord.revokedAt
-                ? formatDateTime(tokenResult.revokedRecord.revokedAt)
-                : '';
             showInactiveInvitationView({
                 title: 'This invitation link was replaced',
                 message: 'A newer invitation link has been issued for this account. Please use the most recent email or request another invitation from your administrator.',
-                pillText: 'Inactive link',
                 statusMarkup: '<i class="fas fa-link-slash"></i> Invitation inactive',
                 statusTone: 'warning',
-                email: revokedUser && revokedUser.email ? revokedUser.email : null,
-                timestampLabel: 'Replaced on',
-                timestampValue: revokedLabel,
                 user: revokedUser || null
             });
-            showToast('info', 'This invitation link has been replaced by a newer email. Request a fresh invite if needed.', 6000);
             return;
         }
 
@@ -967,7 +917,6 @@
             showInactiveInvitationView({
                 title: 'Invitation details missing',
                 message: 'This invitation link is missing the required token. Please contact your administrator for a fresh invitation.',
-                pillText: 'Invalid link',
                 statusMarkup: '<i class="fas fa-triangle-exclamation"></i> Invalid invitation'
             });
             showToast('error', 'This invitation link is incomplete. Request a new invitation from your administrator.', 6000);
@@ -979,7 +928,6 @@
             showInactiveInvitationView({
                 title: 'Invitation unavailable',
                 message: 'We were unable to load this invitation. Please ask your administrator to resend it.',
-                pillText: 'Inactive link',
                 statusMarkup: '<i class="fas fa-link-slash"></i> Invitation inactive'
             });
             showToast('error', 'This invitation is no longer available. Request a new invitation from your administrator.', 6000);

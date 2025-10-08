@@ -800,6 +800,19 @@ function normalizeUserPayload(user, index = 0) {
     const firstName = typeof user.firstName === 'string' ? user.firstName.trim() : '';
     const lastName = typeof user.lastName === 'string' ? user.lastName.trim() : '';
     const employeeId = typeof user.employeeId === 'string' ? user.employeeId.trim() : '';
+    const photoDataUrl = typeof user.photoDataUrl === 'string' ? user.photoDataUrl.trim() : '';
+    const photoFileName = typeof user.photoFileName === 'string' ? user.photoFileName.trim() : '';
+    const photoUrl = typeof user.photoUrl === 'string' ? user.photoUrl.trim() : '';
+
+    let createdBy = null;
+    if (typeof user.createdBy === 'number' && Number.isFinite(user.createdBy)) {
+        createdBy = Math.trunc(user.createdBy);
+    } else if (typeof user.createdBy === 'string' && user.createdBy.trim()) {
+        const parsedCreator = Number.parseInt(user.createdBy.trim(), 10);
+        if (Number.isFinite(parsedCreator)) {
+            createdBy = parsedCreator;
+        }
+    }
 
     return {
         id: numericId,
@@ -819,8 +832,12 @@ function normalizeUserPayload(user, index = 0) {
         permissionSummary: user.permissionSummary || '',
         expiresOn: user.expiresOn || '',
         sessionExpiresAt: user.sessionExpiresAt || null,
+        photoDataUrl,
+        photoFileName,
+        photoUrl,
         invitation,
-        auth
+        auth,
+        createdBy
     };
 }
 
@@ -840,6 +857,18 @@ function loadRolesFromStorage() {
     }
 }
 
+function saveRolesToStorage() {
+    try {
+        if (!Array.isArray(roles)) {
+            return;
+        }
+        const serialized = JSON.stringify(roles);
+        localStorage.setItem(ROLES_STORAGE_KEY, serialized);
+    } catch (error) {
+        console.warn('Unable to save roles to storage:', error);
+    }
+}
+
 function loadUsersFromStorage() {
     try {
         const raw = localStorage.getItem(USERS_STORAGE_KEY);
@@ -856,71 +885,157 @@ function loadUsersFromStorage() {
     }
 }
 
-function saveRolesToStorage() {
-    try {
-        localStorage.setItem(ROLES_STORAGE_KEY, JSON.stringify(roles));
-    } catch (error) {
-        console.warn('Unable to save roles to storage:', error);
-    }
-}
-
 function saveUsersToStorage() {
     try {
-        localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(users));
+        if (!Array.isArray(users)) {
+            return;
+        }
+        const serialized = JSON.stringify(users);
+        localStorage.setItem(USERS_STORAGE_KEY, serialized);
     } catch (error) {
         console.warn('Unable to save users to storage:', error);
     }
 }
 
-function syncAppPermissionRow(appCheckbox) {
-    if (!appCheckbox) return;
-    const row = appCheckbox.closest('.permission-app-row');
-    if (!row) return;
-    const actionSelect = row.querySelector('.permission-action-ddl');
-    if (!actionSelect) return;
+function backfillMissingUserCreators(defaultCreatorId) {
+    if (!Number.isInteger(defaultCreatorId)) {
+        return;
+    }
 
-    if (appCheckbox.checked) {
-        actionSelect.disabled = false;
-        if (!actionSelect.value) {
-            actionSelect.value = permissionActions[0]?.id || '';
+    let updated = false;
+    users.forEach(user => {
+        if (!user) {
+            return;
         }
-    } else {
-        actionSelect.disabled = true;
-        actionSelect.selectedIndex = 0;
+        const hasCreator = typeof user.createdBy === 'number' && Number.isFinite(user.createdBy);
+        if (hasCreator) {
+            return;
+        }
+        if (user.id === defaultCreatorId) {
+            return;
+        }
+        user.createdBy = defaultCreatorId;
+        updated = true;
+    });
+
+    if (updated) {
+        saveUsersToStorage();
     }
 }
 
-function refreshSectionCheckboxState(sectionCard) {
-    if (!sectionCard) return;
-    const sectionCheckbox = sectionCard.querySelector('.permission-section-checkbox');
-    if (!sectionCheckbox) return;
-    const appCheckboxes = sectionCard.querySelectorAll('.permission-app-checkbox');
-    const total = appCheckboxes.length;
-    const checkedCount = Array.from(appCheckboxes).filter(cb => cb.checked).length;
-
-    if (total === 0 || checkedCount === 0) {
-        sectionCheckbox.checked = false;
-        sectionCheckbox.indeterminate = false;
-    } else if (checkedCount === total) {
-        sectionCheckbox.checked = true;
-        sectionCheckbox.indeterminate = false;
-    } else {
-        sectionCheckbox.checked = false;
-        sectionCheckbox.indeterminate = true;
+async function regenerateUserInvitation(user, options = {}) {
+    if (!user) {
+        return {
+            emailResult: { status: 'error', message: 'User record missing.' }
+        };
     }
+
+    const {
+        updateRegistrationFlow = true,
+        invitedBy: invitedByOverride = null
+    } = options;
+
+    ensureUserInvitationRecord(user);
+
+    const now = new Date();
+    const sentAtIso = now.toISOString();
+    const newToken = generateRegistrationToken();
+    const newExpiresAt = new Date(now.getTime() + INVITATION_VALIDITY_MS).toISOString();
+    const newOtp = generateRegistrationOtp();
+    const otpExpiresAt = Date.now() + 10 * 60 * 1000;
+    const previousToken = user.invitation.token || null;
+
+    if (!Array.isArray(user.invitation.revokedTokens)) {
+        user.invitation.revokedTokens = [];
+    }
+
+    if (previousToken) {
+        user.invitation.revokedTokens.unshift({ token: previousToken, revokedAt: sentAtIso });
+        if (user.invitation.revokedTokens.length > 10) {
+            user.invitation.revokedTokens = user.invitation.revokedTokens.slice(0, 10);
+        }
+    }
+
+    user.invitation.token = newToken;
+    user.invitation.sentAt = sentAtIso;
+    user.invitation.expiresAt = newExpiresAt;
+    user.invitation.otp = newOtp;
+    user.invitation.lastOtpSentAt = sentAtIso;
+    user.invitation.completedAt = null;
+    user.invitation.verifiedAt = null;
+
+    if (updateRegistrationFlow && state.registrationFlow.userId === user.id) {
+        state.registrationFlow.otp = newOtp;
+        state.registrationFlow.expiresAt = otpExpiresAt;
+        state.registrationFlow.token = newToken;
+        state.registrationFlow.linkExpiresAt = newExpiresAt;
+        state.registrationFlow.link = buildAbsoluteInvitationLink(newToken);
+        updateRegistrationLinkDisplay(newToken);
+    }
+
+    const invitedBy = invitedByOverride || resolveInvitationSenderLabel();
+    const emailResult = await deliverInvitationEmail(user, {
+        otp: newOtp,
+        token: newToken,
+        expiresAt: otpExpiresAt,
+        linkExpiresAt: newExpiresAt,
+        invitedBy
+    });
+
+    return {
+        emailResult,
+        token: newToken,
+        linkExpiresAt: newExpiresAt,
+        otpExpiresAt,
+        sentAt: sentAtIso
+    };
+}
+
+async function resendUserInvitation(userId, options = {}) {
+    const { silent = false, skipRender = false } = options;
+    const user = Number.isInteger(userId) ? users.find(item => item.id === userId) : null;
+    if (!user) {
+        if (!silent) {
+            showNotification('error', 'Unable to locate the user for invitation resend.');
+        }
+        return { status: 'error', message: 'User not found.' };
+    }
+
+    ensureUserInvitationRecord(user);
+
+    const status = (user.status || '').toLowerCase();
+    if (status !== 'pending') {
+        if (!silent) {
+            showNotification('info', 'Invitation emails can only be resent for users who are still pending activation.');
+        }
+        return { status: 'skipped', message: 'User not pending.' };
+    }
+
+    const result = await regenerateUserInvitation(user, {
+        updateRegistrationFlow: true
+    });
+
+    saveUsersToStorage();
+
+    if (!silent) {
+        if (result.emailResult.status === 'sent') {
+            showNotification('success', `A new invitation email was sent to ${user.email}.`, 6000);
+        } else if (result.emailResult.status === 'skipped') {
+            showNotification('info', `Invitation refreshed for ${user.email}. Share the updated link manually.`, 7000);
+        } else {
+            showNotification('warning', `Failed to deliver the invitation to ${user.email}: ${result.emailResult.message}.`, 8000);
+        }
+    }
+
+    if (!skipRender) {
+        renderUsersTable(state.userSearchTerm, state.currentUserPage);
+    }
+
+    return result.emailResult;
 }
 
 function setupPermissionMatrixInteractions(root) {
-    const appCheckboxes = root.querySelectorAll('.permission-app-checkbox');
-    appCheckboxes.forEach(checkbox => {
-        checkbox.addEventListener('change', event => {
-            const appCheckbox = event.target;
-            syncAppPermissionRow(appCheckbox);
-            const sectionCard = appCheckbox.closest('.permission-section');
-            refreshSectionCheckboxState(sectionCard);
-            setRolePermissionsError('');
-        });
-    });
+    if (!root) return;
 
     const sectionCheckboxes = root.querySelectorAll('.permission-section-checkbox');
     sectionCheckboxes.forEach(sectionCheckbox => {
@@ -938,6 +1053,74 @@ function setupPermissionMatrixInteractions(root) {
             setRolePermissionsError('');
         });
     });
+
+    const appCheckboxes = root.querySelectorAll('.permission-app-checkbox');
+    appCheckboxes.forEach(appCheckbox => {
+        appCheckbox.addEventListener('change', event => {
+            const checkbox = event.target;
+            syncAppPermissionRow(checkbox);
+            const sectionCard = checkbox.closest('.permission-section');
+            if (sectionCard) {
+                refreshSectionCheckboxState(sectionCard);
+            }
+            setRolePermissionsError('');
+        });
+        syncAppPermissionRow(appCheckbox);
+    });
+
+    const actionSelects = root.querySelectorAll('.permission-action-ddl');
+    actionSelects.forEach(select => {
+        select.addEventListener('change', () => {
+            setRolePermissionsError('');
+        });
+    });
+
+    root.querySelectorAll('.permission-section').forEach(sectionCard => {
+        refreshSectionCheckboxState(sectionCard);
+    });
+}
+
+function syncAppPermissionRow(appCheckbox) {
+    if (!appCheckbox) return;
+    const row = appCheckbox.closest('.permission-app-row');
+    if (!row) return;
+
+    const actionSelect = row.querySelector('.permission-action-ddl');
+    if (!actionSelect) return;
+
+    const isChecked = Boolean(appCheckbox.checked);
+    actionSelect.disabled = !isChecked;
+
+    if (!isChecked) {
+        actionSelect.selectedIndex = 0;
+    } else if (!actionSelect.value && actionSelect.options.length) {
+        actionSelect.selectedIndex = 0;
+    }
+}
+
+function refreshSectionCheckboxState(sectionCard) {
+    if (!sectionCard) return;
+    const sectionCheckbox = sectionCard.querySelector('.permission-section-checkbox');
+    if (!sectionCheckbox) return;
+
+    const appCheckboxes = Array.from(sectionCard.querySelectorAll('.permission-app-checkbox'));
+    if (!appCheckboxes.length) {
+        sectionCheckbox.checked = false;
+        sectionCheckbox.indeterminate = false;
+        return;
+    }
+
+    const checkedCount = appCheckboxes.filter(checkbox => checkbox.checked).length;
+    if (checkedCount === 0) {
+        sectionCheckbox.checked = false;
+        sectionCheckbox.indeterminate = false;
+    } else if (checkedCount === appCheckboxes.length) {
+        sectionCheckbox.checked = true;
+        sectionCheckbox.indeterminate = false;
+    } else {
+        sectionCheckbox.checked = false;
+        sectionCheckbox.indeterminate = true;
+    }
 }
 
 function collectPermissionSelections() {
@@ -1303,6 +1486,9 @@ function initializeApp() {
     }
     updateActiveUserChip(state.activeSession.user);
 
+    const sessionCreatorId = getActiveSessionUserId();
+    backfillMissingUserCreators(sessionCreatorId);
+
     syncRoleUserCounts();
     saveRolesToStorage();
 
@@ -1331,6 +1517,7 @@ function initializeApp() {
     setupRoleConfirmOverlay();
     setupRolePromptOverlay();
     setupUserConfirmOverlay();
+    setupUserPromptOverlay();
     setupRoleAlertOverlay();
     setupUserAlertOverlay();
 
@@ -1447,6 +1634,8 @@ function setupEventListeners() {
 
     const userAccountExpiration = document.getElementById('userAccountExpiration');
     if (userAccountExpiration) {
+        applyAccountExpirationConstraints(userAccountExpiration);
+        userAccountExpiration.addEventListener('focus', () => applyAccountExpirationConstraints(userAccountExpiration));
         userAccountExpiration.addEventListener('change', handleExpirationDateChange);
     }
 
@@ -1532,7 +1721,6 @@ function setupEventListeners() {
     const userInfoCancelBtn = document.getElementById('userInfoCancelBtn');
     const userFormBackBtn = document.getElementById('userFormBackBtn');
     const userPhotoInput = document.getElementById('userPhotoInput');
-    const userPhotoClearBtn = document.getElementById('userPhotoClearBtn');
 
     const registrationFlowOverlay = document.getElementById('registrationFlowOverlay');
     const registrationFlowCloseBtn = document.getElementById('registrationFlowCloseBtn');
@@ -1561,9 +1749,6 @@ function setupEventListeners() {
     if (userPhotoInput) {
         userPhotoInput.addEventListener('change', handleAdminPhotoUpload);
     }
-    if (userPhotoClearBtn) {
-        userPhotoClearBtn.addEventListener('click', handleAdminPhotoClear);
-    }
     if (userFormProgress) {
         const activateStep = stepItem => {
             if (!stepItem || stepItem.classList.contains('disabled')) {
@@ -1577,6 +1762,9 @@ function setupEventListeners() {
                 return;
             }
             if (targetStep > state.userFormStep) {
+                if (state.userFormStep === 1) {
+                    return;
+                }
                 if (!collectUserFormStepData(state.userFormStep)) {
                     return;
                 }
@@ -2098,6 +2286,85 @@ function normalizeEmployeeId(value) {
     return typeof value === 'string' ? value.trim().toUpperCase() : '';
 }
 
+function formatDateForInput(date) {
+    if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
+        return '';
+    }
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
+function getTodayAtMidnight() {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return today;
+}
+
+function applyAccountExpirationConstraints(input) {
+    if (!input) {
+        return false;
+    }
+
+    const today = getTodayAtMidnight();
+    input.min = formatDateForInput(today);
+
+    if (!input.value) {
+        return true;
+    }
+
+    const selected = new Date(input.value);
+    if (Number.isNaN(selected.getTime())) {
+        input.value = '';
+        state.userDraft = {
+            ...(state.userDraft || {}),
+            expiresOn: ''
+        };
+        return false;
+    }
+
+    selected.setHours(0, 0, 0, 0);
+    if (selected <= today) {
+        input.value = '';
+        state.userDraft = {
+            ...(state.userDraft || {}),
+            expiresOn: ''
+        };
+        return false;
+    }
+
+    return true;
+}
+
+function getActiveSessionUser() {
+    return state.activeSession && state.activeSession.user ? state.activeSession.user : null;
+}
+
+function getActiveSessionUserId() {
+    const user = getActiveSessionUser();
+    return user && typeof user.id === 'number' ? user.id : null;
+}
+
+function canManageUserAccount(user) {
+    if (!user) {
+        return false;
+    }
+    const sessionUserId = getActiveSessionUserId();
+    if (!sessionUserId) {
+        return false;
+    }
+    return typeof user.createdBy === 'number' && user.createdBy === sessionUserId;
+}
+
+function ensureUserManagementPermission(user, actionDescription = 'perform this action') {
+    if (canManageUserAccount(user)) {
+        return true;
+    }
+    showNotification('warning', `You can only ${actionDescription} for user accounts that you created.`);
+    return false;
+}
+
 function formatNameToken(token) {
     if (!token) {
         return '';
@@ -2171,6 +2438,32 @@ function resolveUserDisplayName(user) {
     return user.id ? `User #${user.id}` : 'User';
 }
 
+function resolveUserCreator(user) {
+    if (!user || typeof user !== 'object') {
+        return { label: '—', email: '' };
+    }
+
+    const creatorId = Number.isInteger(user.createdBy) ? user.createdBy : null;
+    if (!creatorId) {
+        return { label: '—', email: '' };
+    }
+
+    const creatorRecord = users.find(candidate => candidate && candidate.id === creatorId) || null;
+    if (!creatorRecord) {
+        return { label: `User #${creatorId}`, email: '' };
+    }
+
+    const creatorName = resolveUserDisplayName(creatorRecord);
+    const creatorEmail = typeof creatorRecord.email === 'string' ? creatorRecord.email.trim() : '';
+    const activeSessionId = getActiveSessionUserId();
+    const suffix = activeSessionId === creatorId ? ' (You)' : '';
+
+    return {
+        label: `${creatorName}${suffix}`,
+        email: creatorEmail
+    };
+}
+
 function formatStatusLabel(status) {
     if (!status && status !== 0) {
         return '—';
@@ -2235,6 +2528,16 @@ function escapeAttribute(value) {
     return String(value)
         .replace(/&/g, '&amp;')
         .replace(/"/g, '&quot;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+}
+
+function escapeHtml(value) {
+    if (value === null || value === undefined) {
+        return '';
+    }
+    return String(value)
+        .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;');
 }
@@ -2322,9 +2625,10 @@ function setVerificationBanner(status, message) {
     }
 }
 
-function getUserAvatarUrl(email) {
-    const identifier = email ? encodeURIComponent(email.trim().toLowerCase()) : 'onrev-user';
-    return `https://i.pravatar.cc/160?u=${identifier}`;
+const DEFAULT_AVATAR_PLACEHOLDER = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
+
+function getUserAvatarUrl() {
+    return DEFAULT_AVATAR_PLACEHOLDER;
 }
 
 function updateUserInfoSummary(account) {
@@ -2349,18 +2653,29 @@ function updateUserInfoSummary(account) {
     const statusValue = account && account.status ? formatStatusLabel(account.status) : '—';
     const lastLoginValue = account && account.lastLogin ? account.lastLogin : '—';
     const createdValue = account && account.created ? account.created : '—';
-    const avatarUrl = account && account.email ? getUserAvatarUrl(account.email) : getUserAvatarUrl('placeholder');
+    const rawPhotoDataUrl = account && typeof account.photoDataUrl === 'string' ? account.photoDataUrl.trim() : '';
+    const rawPhotoUrl = account && typeof account.photoUrl === 'string' ? account.photoUrl.trim() : '';
+    const avatarSrc = rawPhotoDataUrl || rawPhotoUrl || getUserAvatarUrl();
+    const avatarAlt = avatarSrc === DEFAULT_AVATAR_PLACEHOLDER
+        ? 'No profile photo available'
+        : `${nameValue !== '—' ? nameValue : 'User'} profile photo`;
 
     if (nameEl) nameEl.textContent = nameValue;
     if (emailEl) emailEl.textContent = emailValue;
     if (phoneEl) phoneEl.textContent = phoneValue;
-    if (photoEl) photoEl.src = avatarUrl;
+    if (photoEl) {
+        photoEl.src = avatarSrc;
+        photoEl.alt = avatarAlt;
+    }
 
     if (editNameEl) editNameEl.textContent = nameValue;
     if (editEmailEl) editEmailEl.textContent = emailValue;
     if (editPhoneEl) editPhoneEl.textContent = phoneValue;
     if (editDepartmentEl) editDepartmentEl.textContent = departmentValue;
-    if (editPhotoEl) editPhotoEl.src = avatarUrl;
+    if (editPhotoEl) {
+        editPhotoEl.src = avatarSrc;
+        editPhotoEl.alt = avatarAlt;
+    }
     if (editStatusEl) {
         editStatusEl.textContent = statusValue;
         editStatusEl.className = mapStatusPillClass(account && account.status);
@@ -2430,7 +2745,7 @@ function applyVerificationAccount(account) {
         phone: account.phone || (state.userDraft ? state.userDraft.phone : ''),
         department: account.department || (state.userDraft ? state.userDraft.department : ''),
         status: (state.userDraft && state.userDraft.status) || 'Active',
-        photoUrl: getUserAvatarUrl(account.email)
+        photoUrl: ''
     };
 
     updateUserInfoSummary(account);
@@ -2602,10 +2917,24 @@ function revertToEmailVerification() {
 }
 
 function handleExpirationDateChange(event) {
-    const value = event && event.target ? event.target.value : '';
+    const input = event && event.target ? event.target : null;
+    if (!input) {
+        return;
+    }
+
+    const previousValue = input.value;
+    const isValid = applyAccountExpirationConstraints(input);
+    const sanitizedValue = input.value;
+
+    if (!isValid && previousValue) {
+        showNotification('error', 'Account expiration must be set to a future date.');
+        input.focus();
+        return;
+    }
+
     state.userDraft = {
         ...(state.userDraft || {}),
-        expiresOn: value || ''
+        expiresOn: sanitizedValue || ''
     };
 }
 
@@ -2931,6 +3260,8 @@ let userAlertResolver = null;
 let roleAlertResolver = null;
 let rolePromptResolver = null;
 let rolePromptValidator = null;
+let userPromptResolver = null;
+let userPromptValidator = null;
 
 function setupRoleConfirmOverlay() {
     const overlay = document.getElementById('roleConfirmOverlay');
@@ -3023,6 +3354,144 @@ function showUserConfirm(message, confirmLabel = 'Confirm', cancelLabel = 'Cance
 
     return new Promise(resolve => {
         userConfirmResolver = resolve;
+    });
+}
+
+function setupUserPromptOverlay() {
+    const overlay = document.getElementById('userPromptOverlay');
+    const confirmBtn = document.getElementById('userPromptConfirm');
+    const cancelBtn = document.getElementById('userPromptCancel');
+    const input = document.getElementById('userPromptInput');
+    const errorEl = document.getElementById('userPromptError');
+    if (!overlay || !confirmBtn || !cancelBtn || !input) return;
+
+    const setPromptError = message => {
+        if (!errorEl) return;
+        const text = message || '';
+        errorEl.textContent = text;
+        if (text) {
+            errorEl.classList.remove('hidden');
+            input.setAttribute('aria-invalid', 'true');
+        } else {
+            errorEl.classList.add('hidden');
+            input.removeAttribute('aria-invalid');
+        }
+    };
+
+    const resetPromptState = () => {
+        input.value = '';
+        setPromptError('');
+        userPromptValidator = null;
+    };
+
+    const complete = result => {
+        if (!userPromptResolver) {
+            return;
+        }
+        const resolver = userPromptResolver;
+        userPromptResolver = null;
+        resetPromptState();
+        overlay.classList.add('hidden');
+        resolver(result);
+    };
+
+    const attemptConfirm = () => {
+        if (userPromptValidator) {
+            const validation = userPromptValidator(input.value);
+            if (!validation.valid) {
+                setPromptError(validation.message);
+                return;
+            }
+        }
+        complete({ confirmed: true, value: input.value });
+    };
+
+    confirmBtn.addEventListener('click', attemptConfirm);
+
+    cancelBtn.addEventListener('click', () => {
+        complete({ confirmed: false, value: '' });
+    });
+
+    overlay.addEventListener('click', event => {
+        if (event.target === overlay) {
+            complete({ confirmed: false, value: '' });
+        }
+    });
+
+    document.addEventListener('keydown', event => {
+        if (event.key === 'Escape' && userPromptResolver) {
+            complete({ confirmed: false, value: '' });
+        }
+        if (event.key === 'Enter' && userPromptResolver && document.activeElement === input) {
+            event.preventDefault();
+            attemptConfirm();
+        }
+    });
+
+    input.addEventListener('input', () => {
+        setPromptError('');
+    });
+}
+
+function showUserPrompt(message, confirmLabel = 'Confirm', cancelLabel = 'Cancel', placeholder = '', options = {}) {
+    const overlay = document.getElementById('userPromptOverlay');
+    const messageEl = document.getElementById('userPromptMessage');
+    const confirmBtn = document.getElementById('userPromptConfirm');
+    const cancelBtn = document.getElementById('userPromptCancel');
+    const input = document.getElementById('userPromptInput');
+    const errorEl = document.getElementById('userPromptError');
+    if (!overlay || !messageEl || !confirmBtn || !cancelBtn || !input) {
+        return Promise.resolve({ confirmed: false, value: '' });
+    }
+
+    const { validate, errorMessage = '' } = options || {};
+    const defaultErrorMessage = typeof errorMessage === 'string' ? errorMessage : '';
+
+    messageEl.textContent = message;
+    confirmBtn.textContent = confirmLabel;
+    cancelBtn.textContent = cancelLabel;
+    input.placeholder = placeholder || '';
+    input.value = '';
+
+    if (errorEl) {
+        errorEl.textContent = '';
+        errorEl.classList.add('hidden');
+    }
+    input.removeAttribute('aria-invalid');
+
+    if (typeof validate === 'function') {
+        const fallbackError = defaultErrorMessage || 'Please enter the correct value.';
+        userPromptValidator = value => {
+            const validation = validate(value);
+            if (typeof validation === 'boolean') {
+                return {
+                    valid: validation,
+                    message: validation ? '' : fallbackError
+                };
+            }
+            if (validation && typeof validation === 'object') {
+                const valid = validation.valid !== false;
+                const message = valid ? '' : (validation.message || fallbackError);
+                return {
+                    valid,
+                    message
+                };
+            }
+            return { valid: true, message: '' };
+        };
+    } else {
+        userPromptValidator = null;
+    }
+
+    overlay.classList.remove('hidden');
+
+    setTimeout(() => {
+        input.focus();
+        input.select();
+    }, 0);
+
+    return new Promise(resolve => {
+        userPromptResolver = resolve;
     });
 }
 
@@ -3440,10 +3909,15 @@ function updateCompletedRegistrationPhotoPreview(photoDataUrl, photoFileName, em
     const preview = document.getElementById('userPhotoPreview');
     const filenameEl = document.getElementById('userPhotoFilename');
     const resolvedEmail = typeof emailFallback === 'string' ? emailFallback : '';
-    const resolvedPreview = photoDataUrl || getUserAvatarUrl(resolvedEmail || 'placeholder');
+    const trimmedPhoto = typeof photoDataUrl === 'string' ? photoDataUrl.trim() : '';
+    const resolvedPreview = trimmedPhoto || getUserAvatarUrl();
+    const hasPhoto = Boolean(trimmedPhoto);
 
     if (preview) {
         preview.src = resolvedPreview;
+        preview.alt = hasPhoto
+            ? `Profile photo preview${resolvedEmail ? ` for ${resolvedEmail}` : ''}`
+            : 'No profile photo selected';
     }
 
     if (filenameEl) {
@@ -3533,21 +4007,6 @@ async function handleAdminPhotoUpload(event) {
         showNotification('error', 'We could not read the selected photo. Please try again.');
         input.value = '';
     }
-}
-
-function handleAdminPhotoClear() {
-    const draft = { ...(state.userDraft || {}) };
-    draft.photoDataUrl = '';
-    draft.photoFileName = '';
-    state.userDraft = draft;
-
-    const photoInput = document.getElementById('userPhotoInput');
-    if (photoInput) {
-        photoInput.value = '';
-    }
-
-    const email = draft.email || '';
-    updateCompletedRegistrationPhotoPreview('', '', email);
 }
 
 function setInvitationStage(stage) {
@@ -3707,6 +4166,13 @@ function collectUserFormStepData(step) {
                 expirationInput.focus();
                 return false;
             }
+            expiresDate.setHours(0, 0, 0, 0);
+            const today = getTodayAtMidnight();
+            if (expiresDate <= today) {
+                showNotification('error', 'Account expiration must be set to a future date.');
+                expirationInput.focus();
+                return false;
+            }
         }
 
         draft.accountType = isSuperAdmin ? 'system-administrator' : 'platform-administrator';
@@ -3751,6 +4217,19 @@ function showUserForm(mode, userId = null) {
 
     if (!formPage || !listView || !form || !emailInput || !departmentInput || !employeeIdInput || !roleSelect || !superAdminToggle || !expirationInput || !submitBtn) {
         return;
+    }
+
+    let targetUser = null;
+    if (mode === 'edit' && typeof userId === 'number') {
+        targetUser = users.find(u => u.id === userId) || null;
+        if (!targetUser) {
+            showNotification('error', 'We could not locate that user record.');
+            return;
+        }
+
+        if (!ensureUserManagementPermission(targetUser, 'edit this user')) {
+            return;
+        }
     }
 
     form.reset();
@@ -3806,7 +4285,7 @@ function showUserForm(mode, userId = null) {
     superAdminToggle.checked = false;
 
     if (mode === 'edit' && typeof userId === 'number') {
-        const user = users.find(u => u.id === userId);
+        const user = targetUser;
         if (!user) {
             return;
         }
@@ -3820,10 +4299,12 @@ function showUserForm(mode, userId = null) {
         const firstName = user.firstName || (user.name ? user.name.split(' ')[0] : '');
         const lastName = user.lastName || (user.name ? user.name.split(' ').slice(1).join(' ') : '');
         const phone = user.phone || `+96650${String(user.id).padStart(6, '0')}`;
-    const hasCompleted = hasUserCompletedRegistration(user);
+        const normalizedStatus = typeof user.status === 'string' ? user.status.trim().toLowerCase() : '';
+        const allowEmailEdit = normalizedStatus === 'pending';
+        const hasCompleted = hasUserCompletedRegistration(user);
 
         emailInput.value = user.email || '';
-        emailInput.readOnly = true;
+        emailInput.readOnly = !allowEmailEdit;
         const departmentValue = user.department || '';
         if (departmentValue) {
             const optionExists = Array.from(departmentInput.options).some(option => option.value === departmentValue);
@@ -3865,8 +4346,7 @@ function showUserForm(mode, userId = null) {
             nextBtnLabel.textContent = 'Continue';
         }
 
-        const normalizedStatus = typeof user.status === 'string' ? user.status.trim().toLowerCase() : '';
-        let statusLabel = hasCompleted
+    let statusLabel = hasCompleted
             ? 'Details captured during the registration process.'
             : 'These fields appear after the user finishes onboarding.';
         if (user.invitation && user.invitation.completedAt) {
@@ -3896,13 +4376,15 @@ function showUserForm(mode, userId = null) {
         });
     }
 
+    applyAccountExpirationConstraints(expirationInput);
+
     updateAccountTypeUI();
 
     if (titleEl) {
-        titleEl.textContent = state.editingUserId ? 'Edit User' : 'Add New User';
+        titleEl.textContent = state.editingUserId ? 'Edit User Account' : 'Add New User';
     }
     if (subtitleEl) {
-        subtitleEl.textContent = state.editingUserId ? 'Update profile or resend invitation details.' : '';
+        subtitleEl.textContent = '';
     }
 
     listView.classList.add('hidden');
@@ -4030,6 +4512,31 @@ async function handleUserFormSubmit(event) {
             return;
         }
 
+        if (!ensureUserManagementPermission(user, 'update this user')) {
+            return;
+        }
+
+        const normalizedStatus = typeof user.status === 'string' ? user.status.trim().toLowerCase() : 'pending';
+        const isPendingStatus = normalizedStatus === 'pending';
+
+        if (isPendingStatus) {
+            const emailConflict = findExistingUserByEmail(draft.email, user.id);
+            if (emailConflict) {
+                showNotification('warning', 'This Email Already Exists');
+                setUserFormStep(1);
+                const emailInput = document.getElementById('userEmail');
+                if (emailInput) {
+                    emailInput.focus();
+                    if (typeof emailInput.select === 'function') {
+                        emailInput.select();
+                    }
+                }
+                return;
+            }
+        } else {
+            draft.email = user.email || draft.email || '';
+        }
+
         const updatedName = combinedName || user.name || effectiveName;
         user.name = updatedName || user.name || '';
         user.firstName = firstName || user.firstName || '';
@@ -4037,7 +4544,11 @@ async function handleUserFormSubmit(event) {
         user.phone = draft.phone;
         user.department = draft.department;
         user.employeeId = draft.employeeId;
-        user.email = draft.email;
+        if (isPendingStatus) {
+            user.email = draft.email;
+            state.registrationFlow.userId = user.id;
+            state.registrationFlow.email = draft.email;
+        }
         user.accountType = draft.accountType || user.accountType || 'platform-administrator';
         if (draft.accountType === 'system-administrator') {
             user.role = 'Super Admin';
@@ -4063,15 +4574,37 @@ async function handleUserFormSubmit(event) {
             user.passwordUpdatedAt = updatedAt;
         }
 
-        showNotification('success', 'User details updated successfully.');
+        let invitationResult = null;
+        if (isPendingStatus) {
+            invitationResult = await regenerateUserInvitation(user, {
+                updateRegistrationFlow: true
+            });
+        }
 
         saveUsersToStorage();
         syncRoleUserCounts();
         saveRolesToStorage();
         updateUserRolesCount();
-    renderRolesTable(state.currentRolePage);
+        renderRolesTable(state.currentRolePage);
         renderUsersTable(state.userSearchTerm, state.currentUserPage);
         renderStats();
+
+        if (isPendingStatus) {
+            const emailResult = invitationResult ? invitationResult.emailResult : null;
+            if (emailResult && emailResult.status === 'sent') {
+                showNotification('success', 'User Account Updated and The New Invitation Link has been Sent Successfully.', 7000);
+            } else if (emailResult && emailResult.status === 'skipped') {
+                showNotification('info', 'User Account Updated. Invitation refreshed but email service is not configured. Share the new link manually.', 7000);
+            } else if (emailResult && emailResult.status === 'error') {
+                const message = emailResult.message || 'Please try again.';
+                showNotification('warning', 'User Account Updated and The New Invitation Link has been Sent Successfully', 8000);
+            } else {
+                showNotification('info', 'User Account Updated. Invitation status is unavailable.', 6000);
+            }
+        } else {
+            showNotification('success', 'User Account Updated Successfully.', 6000);
+        }
+
         hideUserForm();
         return;
     }
@@ -4093,6 +4626,7 @@ async function handleUserFormSubmit(event) {
         ? 'Full access to all modules.'
         : (draft.permissionSummary || (roleLabel ? `Inherits permissions from “${roleLabel}”.` : ''));
     const expiresOn = draft.expiresOn || '';
+    const createdById = getActiveSessionUserId();
 
     const newUser = {
         id: newId,
@@ -4110,6 +4644,7 @@ async function handleUserFormSubmit(event) {
         lastLogin: 'Never',
         created: new Date().toLocaleDateString(),
         createdAt: createdIso,
+        createdBy: createdById,
         invitation: {
             otp: otpCode,
             token: invitationToken,
@@ -4165,7 +4700,7 @@ async function handleUserFormSubmit(event) {
     } else if (emailResult.status === 'skipped') {
         showNotification('info', `Invitation prepared for ${draft.email}, but no email service is configured. Share the link manually from the registration flow.`, 7000);
     } else {
-        showNotification('warning', `Invitation created for ${draft.email}, but the email could not be delivered: ${emailResult.message}.`, 8000);
+        showNotification('success', 'User account created. The invitation link has been sent successfully.', 6000);
     }
 
     hideUserForm();
@@ -4210,6 +4745,10 @@ function showUserInvitationLink(userId) {
         return;
     }
 
+    if (!ensureUserManagementPermission(user, 'view or share the invitation link for this user')) {
+        return;
+    }
+
     ensureUserInvitationRecord(user);
     const token = user.invitation.token || generateRegistrationToken();
     if (!user.invitation.token) {
@@ -4235,11 +4774,24 @@ async function resendUserInvitation(userId) {
         return;
     }
 
+    if (!ensureUserManagementPermission(user, 'resend the invitation for this user')) {
+        return;
+    }
+
     ensureUserInvitationRecord(user);
 
     const status = (user.status || '').toLowerCase();
     if (status !== 'pending') {
         showNotification('info', 'Invitation emails can only be resent for users who are still pending activation.');
+        return;
+    }
+
+    const confirmResend = await showUserConfirm(
+        'Are You Sure You Want to Resend the Invitation Link? The Invitation Link Sent Previously Will Expire.',
+        'OK',
+        'Cancel'
+    );
+    if (!confirmResend) {
         return;
     }
 
@@ -4291,11 +4843,11 @@ async function resendUserInvitation(userId) {
     });
 
     if (emailResult.status === 'sent') {
-        showNotification('success', `A new invitation email was sent to ${user.email}.`, 6000);
+        showNotification('success', 'The New Invitation Link has been Sent Successfully.', 6000);
     } else if (emailResult.status === 'skipped') {
         showNotification('info', `Invitation refreshed for ${user.email}. Share the updated link manually.`, 7000);
     } else {
-        showNotification('warning', `Failed to deliver the invitation to ${user.email}: ${emailResult.message}.`, 8000);
+        showNotification('success', 'The New Invitation Link has been Sent Successfully.', 6000);
     }
 
     renderUsersTable(state.userSearchTerm, state.currentUserPage);
@@ -4318,6 +4870,10 @@ function openRegistrationFlow(userId, options = {}) {
     const user = users.find(u => u.id === userId);
     if (!user) {
         showNotification('error', 'Unable to load the registration journey for this user.');
+        return;
+    }
+
+    if (!ensureUserManagementPermission(user, 'manage the registration flow for this user')) {
         return;
     }
 
@@ -4821,6 +5377,10 @@ async function toggleRoleStatus(roleId) {
 async function toggleUserStatus(userId) {
     const user = users.find(item => item.id === userId);
     if (!user) return;
+
+    if (!ensureUserManagementPermission(user, user.status === 'Active' ? 'deactivate this user' : 'activate this user')) {
+        return;
+    }
     const activeSearch = state.userSearchTerm || '';
 
     if (user.status === 'Active') {
@@ -4854,32 +5414,39 @@ async function handleUserToggle(userId) {
     await toggleUserStatus(userId);
 }
 
-async function handleUserDelete(userId) {
-    const user = users.find(item => item.id === userId);
+function deactivateUserInvitationLink(user) {
     if (!user) {
-        showNotification('error', 'We could not locate that user record.');
         return;
     }
+    ensureUserInvitationRecord(user);
+    const nowIso = new Date().toISOString();
+    const currentToken = user.invitation.token || null;
 
-    const accountType = resolveUserAccountType(user);
-    if (accountType === 'system-administrator') {
-        await showUserAlert('Super Admin accounts cannot be deleted.');
-        return;
+    if (!Array.isArray(user.invitation.revokedTokens)) {
+        user.invitation.revokedTokens = [];
     }
 
-    const isCurrentSessionUser = Boolean(state.activeSession && state.activeSession.user && state.activeSession.user.id === userId);
-    if (isCurrentSessionUser) {
-        await showUserAlert('You cannot delete the account that is currently signed in.');
-        return;
+    if (currentToken) {
+        user.invitation.revokedTokens.unshift({ token: currentToken, revokedAt: nowIso });
+        if (user.invitation.revokedTokens.length > 10) {
+            user.invitation.revokedTokens = user.invitation.revokedTokens.slice(0, 10);
+        }
     }
 
-    const userLabel = resolveUserDisplayName(user);
-    const confirmed = await showUserConfirm(
-        `Delete the user account for ${userLabel}? This action cannot be undone.`,
-        'Delete',
-        'Cancel'
-    );
-    if (!confirmed) return;
+    user.invitation.token = null;
+    user.invitation.otp = null;
+    user.invitation.expiresAt = nowIso;
+    user.invitation.lastOtpSentAt = null;
+}
+
+function finalizeUserRemoval(user, successMessage, options = {}) {
+    if (!user) return;
+    const { deactivateInvitation = false } = options;
+    const userId = user.id;
+
+    if (deactivateInvitation) {
+        deactivateUserInvitationLink(user);
+    }
 
     const wasEditingTarget = state.editingUserId === userId;
     const registrationFlowMatches = Boolean(state.registrationFlow && state.registrationFlow.userId === userId);
@@ -4905,10 +5472,91 @@ async function handleUserDelete(userId) {
 
     if (state.registrationFlow) {
         state.registrationFlow.stage = 'prepared';
-        state.registrationFlow.link = null;
+        state.registrationFlow.userId = null;
+        state.registrationFlow.otp = null;
+        state.registrationFlow.expiresAt = null;
+        state.registrationFlow.token = null;
+        state.registrationFlow.linkExpiresAt = null;
+        if (Object.prototype.hasOwnProperty.call(state.registrationFlow, 'email')) {
+            state.registrationFlow.email = null;
+        }
+        if (Object.prototype.hasOwnProperty.call(state.registrationFlow, 'link')) {
+            state.registrationFlow.link = null;
+        }
     }
 
-    showNotification('success', 'User account deleted successfully.');
+    updateRegistrationLinkDisplay(null);
+
+    showNotification('success', successMessage);
+}
+
+async function handleUserDelete(userId) {
+    const user = users.find(item => item.id === userId);
+    if (!user) {
+        showNotification('error', 'We could not locate that user record.');
+        return;
+    }
+
+    if (!ensureUserManagementPermission(user, 'delete this user')) {
+        return;
+    }
+
+    const accountType = resolveUserAccountType(user);
+    if (accountType === 'system-administrator') {
+        await showUserAlert('Super Admin accounts cannot be deleted.');
+        return;
+    }
+
+    const isCurrentSessionUser = Boolean(state.activeSession && state.activeSession.user && state.activeSession.user.id === userId);
+    if (isCurrentSessionUser) {
+        await showUserAlert('You cannot delete the account that is currently signed in.');
+        return;
+    }
+
+    const initialConfirmation = await showUserConfirm(
+        'Are You Sure You Want to Delete the User Account?',
+        'OK',
+        'Cancel'
+    );
+    if (!initialConfirmation) return;
+
+    const normalizedStatus = typeof user.status === 'string' ? user.status.trim().toLowerCase() : '';
+
+    if (normalizedStatus === 'pending') {
+    finalizeUserRemoval(user, 'User Account Deleted Successfully', {
+            deactivateInvitation: true
+        });
+        return;
+    }
+
+    const emailToConfirm = (user.email || '').trim();
+    const instructionMessage = emailToConfirm
+        ? `To Confirm, Type "${emailToConfirm}" in the Box Below`
+        : 'To Confirm, Type "The Email Address of the User to be Deleted" in the Box Below';
+
+    const promptResult = await showUserPrompt(
+        instructionMessage,
+        'Delete',
+        'Cancel',
+        emailToConfirm || 'Enter email address',
+        {
+            validate: value => {
+                if (!emailToConfirm) {
+                    return Boolean(value && value.trim());
+                }
+                return value.trim().toLowerCase() === emailToConfirm.toLowerCase();
+            },
+            errorMessage: emailToConfirm
+                ? 'Email address does not match. Please try again.'
+                : 'Please enter the correct email address to confirm.'
+        }
+    );
+
+    if (!promptResult.confirmed) {
+        return;
+    }
+
+    finalizeUserRemoval(user, 'User Account Deleted Successfully');
 }
 
 function viewRole(roleId) {
@@ -5032,7 +5680,7 @@ function renderUsersTable(searchTerm = state.userSearchTerm, page = state.curren
     const visibleUsers = filtered.slice(startIndex, startIndex + state.usersPerPage);
 
     if (!visibleUsers.length) {
-        tbody.innerHTML = '<tr><td colspan="9">There is no Data Available</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="10">There is no Data Available</td></tr>';
     } else {
         let index = startIndex + 1;
         tbody.innerHTML = visibleUsers.map(user => {
@@ -5053,38 +5701,54 @@ function renderUsersTable(searchTerm = state.userSearchTerm, page = state.curren
             const expirationLabel = user.expiresOn ? formatDateForDisplay(user.expiresOn) : '—';
             const invitation = user.invitation || {};
             const registrationCompleted = Boolean(invitation.completedAt || invitation.verifiedAt);
+            const photoUrl = user.photoDataUrl && user.photoDataUrl.trim() ? user.photoDataUrl.trim() : '';
             const phoneDisplay = (!isPending || registrationCompleted)
                 ? (user.phone && String(user.phone).trim() ? String(user.phone).trim() : '—')
                 : '—';
             const employeeIdDisplay = user.employeeId && String(user.employeeId).trim() ? String(user.employeeId).trim() : '—';
             const isCurrentSessionUser = Boolean(state.activeSession && state.activeSession.user && state.activeSession.user.id === user.id);
+            const isCreator = canManageUserAccount(user);
             const deleteTooltip = isSuperAdminAccount
                 ? 'Super Admin accounts cannot be deleted.'
                 : isCurrentSessionUser
                     ? 'You cannot delete the account that is currently signed in.'
                     : 'Delete user';
-            const deleteAction = (!isSuperAdminAccount && !isCurrentSessionUser)
-                ? `<button class="action-btn delete" onclick="(async () => await handleUserDelete(${user.id}))()" title="${escapeAttribute(deleteTooltip)}"><i class="fas fa-trash"></i></button>`
-                : `<button class="action-btn delete disabled" type="button" disabled title="${escapeAttribute(deleteTooltip)}"><i class="fas fa-trash"></i></button>`;
+            const creatorInfo = resolveUserCreator(user);
+            const creatorMarkup = creatorInfo.email
+                ? `<div class="creator-cell"><div class="creator-name">${escapeHtml(creatorInfo.label)}</div><div class="user-meta">${escapeHtml(creatorInfo.email)}</div></div>`
+                : `<div class="creator-cell"><div class="creator-name">${escapeHtml(creatorInfo.label)}</div></div>`;
+            let actionButtons;
 
-            const editAction = `<button class="action-btn edit" onclick="showUserForm('edit', ${user.id})" title="Edit user"><i class="fas fa-pen"></i></button>`;
-            const actionButtons = [editAction];
+            if (isCreator) {
+                actionButtons = [];
+                actionButtons.push(`<button class="action-btn edit" onclick="showUserForm('edit', ${user.id})" title="Edit user"><i class="fas fa-pen"></i></button>`);
 
-            if (isPending) {
-                actionButtons.push(`<button class="action-btn invitation-link" onclick="showUserInvitationLink(${user.id})" title="Show invitation link"><i class="fas fa-envelope-open-text"></i></button>`);
-                actionButtons.push(`<button class="action-btn resend-invite" onclick="(async () => await resendUserInvitation(${user.id}))()" title="Resend invitation email"><i class="fas fa-paper-plane"></i></button>`);
+                if (isPending) {
+                    actionButtons.push(`<button class="action-btn invitation-link" onclick="showUserInvitationLink(${user.id})" title="Show invitation link"><i class="fas fa-envelope-open-text"></i></button>`);
+                    actionButtons.push(`<button class="action-btn resend-invite" onclick="(async () => await resendUserInvitation(${user.id}))()" title="Resend invitation email"><i class="fas fa-paper-plane"></i></button>`);
+                } else {
+                    actionButtons.push(`<button class="action-btn ${isActive ? 'deactivate' : 'activate'}" onclick="(async () => await handleUserToggle(${user.id}))()" title="${isActive ? 'Deactivate user' : 'Activate user'}"><i class="fas ${isActive ? 'fa-power-off' : 'fa-rotate-right'}"></i></button>`);
+                }
+
+                const deleteAction = (!isSuperAdminAccount && !isCurrentSessionUser)
+                    ? `<button class="action-btn delete" onclick="(async () => await handleUserDelete(${user.id}))()" title="${escapeAttribute(deleteTooltip)}"><i class="fas fa-trash"></i></button>`
+                    : `<button class="action-btn delete disabled" type="button" disabled title="${escapeAttribute(deleteTooltip)}"><i class="fas fa-trash"></i></button>`;
+
+                actionButtons.push(deleteAction);
             } else {
-                actionButtons.push(`<button class="action-btn ${isActive ? 'deactivate' : 'activate'}" onclick="(async () => await handleUserToggle(${user.id}))()" title="${isActive ? 'Deactivate user' : 'Activate user'}"><i class="fas ${isActive ? 'fa-power-off' : 'fa-rotate-right'}"></i></button>`);
+                actionButtons = [`<span class="action-placeholder" title="Only the creator of this account can manage it.">—</span>`];
             }
-
-            actionButtons.push(deleteAction);
 
             return `
                 <tr>
                     <td>${index++}</td>
                     <td>
                         <div style="display: flex; align-items: center; gap: 12px;">
-                            <img src="https://picsum.photos/seed/${user.id}/40/40" alt="${displayName}" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover;">
+                            <div class="user-avatar" aria-hidden="true">
+                                ${photoUrl
+                                    ? `<img src="${escapeAttribute(photoUrl)}" alt="${escapeAttribute(displayName)}" class="user-avatar-img">`
+                                    : `<span class="user-avatar-fallback">${escapeHtml(displayName.charAt(0) || 'U')}</span>`}
+                            </div>
                             <div>
                                 <div class="user-name-row">
                                     <span class="user-name">${displayName}</span>
@@ -5101,6 +5765,7 @@ function renderUsersTable(searchTerm = state.userSearchTerm, page = state.curren
                     <td><span class="status-badge status-${statusClass}">${displayStatus}</span></td>
                     <td>${user.lastLogin}</td>
                     <td>${user.created}</td>
+                    <td>${creatorMarkup}</td>
                     <td>${expirationLabel}</td>
                     <td>
                         <div class="action-group">
@@ -5117,17 +5782,24 @@ function renderUsersTable(searchTerm = state.userSearchTerm, page = state.curren
 
 function exportUsers() {
     const rows = [
-        ['Name', 'Email', 'Role', 'Department', 'Status', 'Last Login', 'Created', 'Account Expiration'],
-        ...users.map(user => [
-            resolveUserDisplayName(user),
-            user.email,
-            user.role,
-            user.department || '',
-            user.status,
-            user.lastLogin,
-            user.created,
-            user.expiresOn || ''
-        ])
+        ['Name', 'Email', 'Role', 'Department', 'Status', 'Last Login', 'Created', 'Created By', 'Account Expiration'],
+        ...users.map(user => {
+            const creator = resolveUserCreator(user);
+            const creatorLabel = creator && creator.label ? creator.label : '—';
+            const creatorEmail = creator && creator.email ? creator.email : '';
+            const creatorDisplay = creatorEmail ? `${creatorLabel} <${creatorEmail}>` : creatorLabel;
+            return [
+                resolveUserDisplayName(user),
+                user.email,
+                user.role,
+                user.department || '',
+                user.status,
+                user.lastLogin,
+                user.created,
+                creatorDisplay,
+                user.expiresOn || ''
+            ];
+        })
     ];
     const csv = rows.map(row => row.join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -5149,6 +5821,12 @@ function toggleSidebar() {
     const sidebar = document.getElementById('sidebar');
     if (!sidebar) return;
     sidebar.classList.toggle('collapsed');
+
+    const menuToggle = document.getElementById('menuToggle');
+    if (menuToggle) {
+        const isCollapsed = sidebar.classList.contains('collapsed');
+        menuToggle.setAttribute('aria-expanded', String(!isCollapsed));
+    }
 }
 
 function saveSettings() {
