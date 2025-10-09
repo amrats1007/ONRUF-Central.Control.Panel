@@ -42,7 +42,14 @@
                         <div class="input-with-toggle">
                             <input type="password" id="loginPassword" class="form-input" placeholder="Enter your password" autocomplete="current-password" required aria-required="true">
                             <button type="button" class="input-toggle" id="loginPasswordToggle" aria-label="Show password">
-                                <i class="fas fa-eye"></i>
+                                <svg class="password-toggle-icon password-icon-show" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                                    <path d="M2.036 12.322a.75.75 0 010-.643C3.423 8.945 7.052 6 12 6s8.577 2.945 9.964 5.679a.75.75 0 010 .643C20.577 15.055 16.948 18 12 18s-8.577-2.945-9.964-5.678z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+                                    <path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+                                </svg>
+                                <svg class="password-toggle-icon password-icon-hide hidden" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                                    <path d="M3.98 8.223A10.48 10.48 0 001.87 12c.66 1.733 2.019 3.478 3.772 4.9C7.396 18.32 9.658 19.5 12 19.5c2.342 0 4.604-1.18 6.358-2.6 1.753-1.422 3.112-3.167 3.772-4.9a10.48 10.48 0 00-2.11-3.777" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+                                    <path d="M3.98 8.223c1.132 1.253 2.588 2.306 4.206 3.052M3.98 8.223L1.5 5.75M8.186 11.275c.255 1.36 1.37 2.455 2.764 2.455 1.518 0 2.75-1.232 2.75-2.75 0-1.394-1.095-2.509-2.455-2.764M8.186 11.275L15.75 18.75M11.25 8.215a4.5 4.5 0 015.335-3.72M11.25 8.215L7.5 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+                                </svg>
                             </button>
                         </div>
                     </div>

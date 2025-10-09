@@ -12,7 +12,6 @@
     <div class="auth-shell registration-wrapper">
         <div class="registration-card" aria-live="polite">
             <header class="registration-headline">
-                <div class="status-pill hidden" id="registrationStatusPill"></div>
                 <h2>Welcome to ONRUF Central Control Panel</h2>
                 <p id="registrationHeadline"></p>
             </header>
@@ -22,7 +21,7 @@
             <div class="registration-layout">
                 <section class="registration-form" aria-labelledby="accountInfoHeading">
                     <div id="registrationStepAccount">
-                        <h3 id="accountInfoHeading">Step 1 · Confirm account information</h3>
+                        <h3 id="accountInfoHeading">Step 1: User and Account Information</h3>
                         <form id="registrationAccountForm" class="registration-form" novalidate>
                             <fieldset>
                                 <legend class="sr-only">Personal details</legend>
@@ -44,7 +43,7 @@
                                         <input type="tel" id="registrationPhone" class="form-input" autocomplete="tel" required aria-required="true" placeholder="+9665XXXXXXXX">
                                     </div>
                                     <div class="form-group full-span">
-                                        <label for="registrationPhoto" class="form-label">Account photo (optional)</label>
+                                            <label for="registrationPhoto" class="form-label">Profile Photo</label>
                                         <input type="file" id="registrationPhoto" class="form-input file-input" accept="image/*">
                                         <p class="form-hint">PNG or JPG, up to 5&nbsp;MB.</p>
                                     </div>
@@ -53,7 +52,14 @@
                                         <div class="input-with-toggle">
                                             <input type="password" id="registrationPassword" class="form-input" autocomplete="new-password" required aria-required="true" placeholder="Minimum 8 characters">
                                             <button type="button" class="input-toggle" data-toggle-target="registrationPassword" aria-label="Show password">
-                                                <i class="fas fa-eye"></i>
+                                                <svg class="password-toggle-icon password-icon-show" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                                                    <path d="M2.036 12.322a.75.75 0 010-.643C3.423 8.945 7.052 6 12 6s8.577 2.945 9.964 5.679a.75.75 0 010 .643C20.577 15.055 16.948 18 12 18s-8.577-2.945-9.964-5.678z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+                                                    <path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+                                                </svg>
+                                                <svg class="password-toggle-icon password-icon-hide hidden" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                                                    <path d="M3.98 8.223A10.48 10.48 0 001.87 12c.66 1.733 2.019 3.478 3.772 4.9C7.396 18.32 9.658 19.5 12 19.5c2.342 0 4.604-1.18 6.358-2.6 1.753-1.422 3.112-3.167 3.772-4.9a10.48 10.48 0 00-2.11-3.777" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+                                                    <path d="M3.98 8.223c1.132 1.253 2.588 2.306 4.206 3.052M3.98 8.223L1.5 5.75M8.186 11.275c.255 1.36 1.37 2.455 2.764 2.455 1.518 0 2.75-1.232 2.75-2.75 0-1.394-1.095-2.509-2.455-2.764M8.186 11.275L15.75 18.75M11.25 8.215a4.5 4.5 0 015.335-3.72M11.25 8.215L7.5 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+                                                </svg>
                                             </button>
                                         </div>
                                     </div>
@@ -62,12 +68,23 @@
                                         <div class="input-with-toggle">
                                             <input type="password" id="registrationPasswordConfirm" class="form-input" autocomplete="new-password" required aria-required="true" placeholder="Repeat your password">
                                             <button type="button" class="input-toggle" data-toggle-target="registrationPasswordConfirm" aria-label="Show password">
-                                                <i class="fas fa-eye"></i>
+                                                <svg class="password-toggle-icon password-icon-show" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                                                    <path d="M2.036 12.322a.75.75 0 010-.643C3.423 8.945 7.052 6 12 6s8.577 2.945 9.964 5.679a.75.75 0 010 .643C20.577 15.055 16.948 18 12 18s-8.577-2.945-9.964-5.678z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+                                                    <path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+                                                </svg>
+                                                <svg class="password-toggle-icon password-icon-hide hidden" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                                                    <path d="M3.98 8.223A10.48 10.48 0 001.87 12c.66 1.733 2.019 3.478 3.772 4.9C7.396 18.32 9.658 19.5 12 19.5c2.342 0 4.604-1.18 6.358-2.6 1.753-1.422 3.112-3.167 3.772-4.9a10.48 10.48 0 00-2.11-3.777" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+                                                    <path d="M3.98 8.223c1.132 1.253 2.588 2.306 4.206 3.052M3.98 8.223L1.5 5.75M8.186 11.275c.255 1.36 1.37 2.455 2.764 2.455 1.518 0 2.75-1.232 2.75-2.75 0-1.394-1.095-2.509-2.455-2.764M8.186 11.275L15.75 18.75M11.25 8.215a4.5 4.5 0 015.335-3.72M11.25 8.215L7.5 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+                                                </svg>
                                             </button>
                                         </div>
                                     </div>
                                 </div>
                             </fieldset>
+                            <div class="form-group form-checkbox">
+                                <input type="checkbox" id="registrationPrivacyAgree" class="form-checkbox-input" required aria-required="true">
+                                <label for="registrationPrivacyAgree">I agree to the <a href="#" class="inline-link" id="registrationPrivacyLink" aria-controls="registrationPrivacyModal">Privacy Policy and Terms of Use</a>.</label>
+                            </div>
                             <button type="submit" class="btn btn-primary" id="registrationAccountSubmit">
                                 <span>Submit</span>
                                 <i class="fas fa-paper-plane"></i>
@@ -76,13 +93,13 @@
                     </div>
 
                     <div id="registrationStepOtp" class="hidden">
-                        <h3>Step 2 · Verify with one-time password</h3>
+                        <h3>Step 2: Verify Information</h3>
                         <div class="otp-panel" role="group" aria-labelledby="otpHeading">
                             <h3 id="otpHeading">Enter the six-digit verification code</h3>
                             <p id="otpDescription">We've sent a code to <strong id="otpEmailLabel">user@email.com</strong>.<br>Enter it below to activate your access.</p>
                             <p class="otp-timer" aria-live="polite">
                                 <i class="fas fa-clock"></i>
-                                Code expires in
+                                Code Expires in
                                 <span id="otpCountdown" data-default="--:--">--:--</span>
                             </p>
                             <form id="registrationOtpForm" class="registration-form" novalidate>
@@ -96,9 +113,13 @@
                                         <input type="text" inputmode="numeric" pattern="\d" maxlength="1" autocomplete="one-time-code" aria-label="Digit 6">
                                     </div>
                                     <div class="otp-actions">
-                                        <button type="button" class="resend-btn" id="registrationResendOtp">
+                                        <button type="button" class="btn btn-secondary" id="registrationOtpBack">
+                                            <span>Back</span>
+                                            <i class="fas fa-arrow-left"></i>
+                                        </button>
+                                        <button type="button" class="resend-btn" id="registrationResendOtp" disabled>
                                             <i class="fas fa-envelope-open-text"></i>
-                                            Resend code
+                                            Resend Code
                                         </button>
                                         <button type="submit" class="btn btn-primary" id="registrationOtpSubmit">
                                             <span>Verify</span>
@@ -124,13 +145,13 @@
                 </section>
 
                 <aside class="registration-summary" aria-live="polite" id="registrationSummary">
-                    <h3>Invitation summary</h3>
+                    <h3>Invitation Summary</h3>
                     <div class="summary-row">
-                        <span>Invitation sent</span>
+                        <span>Invitation Sent</span>
                         <strong id="summarySentAt">—</strong>
                     </div>
                     <div class="summary-row">
-                        <span>Invitation expired at:</span>
+                        <span>Invitation Expiration</span>
                         <strong id="summaryInvitationExpiresAt">—</strong>
                     </div>
                     <div class="summary-row">
@@ -138,7 +159,7 @@
                         <strong>ONRUF</strong>
                     </div>
                     <div class="summary-row">
-                        <span>Access level</span>
+                        <span>User Role</span>
                         <strong id="summaryRole">Pending role</strong>
                     </div>
                     <div class="summary-row">
@@ -150,7 +171,7 @@
                         <strong id="summaryEmployeeId">—</strong>
                     </div>
                     <div class="summary-row">
-                        <span>Account expiration</span>
+                        <span>Account Expiration</span>
                         <strong id="summaryExpiresOn">—</strong>
                     </div>
                 </aside>
@@ -158,7 +179,12 @@
 
             <div id="inactiveInvitationContainer" class="inactive-invite hidden" role="region" aria-live="polite" aria-labelledby="inactiveInvitationTitle">
                 <div class="inactive-icon" aria-hidden="true">
-                    <i class="fas fa-link-slash"></i>
+                    <svg class="inactive-icon-graphic" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M18.42 13.58l-4.42-4.42c-3.51-3.51-9.2-3.51-12.72 0-3.51 3.52-3.51 9.21 0 12.72l6.34 6.34c3.14 3.14 8.24 3.46 11.77.95" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+                        <path d="M29.58 34.42l4.42 4.42c3.51 3.51 9.2 3.51 12.72 0 3.51-3.52 3.51-9.21 0-12.72l-6.34-6.34c-3.14-3.14-8.24-3.46-11.77-.95" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+                        <path d="M16 32l16-16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+                        <path d="M6 42L42 6" stroke="currentColor" stroke-width="3" stroke-linecap="round" />
+                    </svg>
                 </div>
                 <div class="inactive-copy">
                     <h3 id="inactiveInvitationTitle">Invitation link inactive</h3>
@@ -169,6 +195,25 @@
     </div>
 
     <div class="auth-toast hidden" id="authToast" role="alert" aria-live="assertive"></div>
+
+    <div class="modal-overlay hidden" id="registrationPrivacyModal" role="dialog" aria-modal="true" aria-labelledby="privacyModalTitle">
+        <div class="modal-content">
+            <header class="modal-header">
+                <h2 id="privacyModalTitle">Privacy Policy &amp; Terms of Use</h2>
+                <button type="button" class="modal-close" id="privacyModalClose" aria-label="Close dialog" data-modal-focus>
+                    <i class="fas fa-times"></i>
+                </button>
+            </header>
+            <div class="modal-body">
+                <p>We collect the minimum personal information needed to configure your OnRuf Central Control Panel account, including your name, email, phone number, and role information supplied by your administrator.</p>
+                <p>Your data is encrypted in transit and at rest. It is used solely for account security, access provisioning, and audit reporting within OnRuf. We do not share your information with third parties without your consent, except when required by law.</p>
+                <p>By continuing, you acknowledge that you have read and agree to these terms, and that you are responsible for protecting your credentials and notifying OnRuf if you suspect unauthorized use of your account.</p>
+            </div>
+            <footer class="modal-footer">
+                <button type="button" class="btn btn-primary" id="privacyModalAcknowledge">Close</button>
+            </footer>
+        </div>
+    </div>
 
     <script src="assets/js/onruf-auth.js" defer></script>
 </body>

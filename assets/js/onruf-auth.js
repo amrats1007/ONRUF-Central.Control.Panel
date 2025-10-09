@@ -176,7 +176,8 @@
         otp: null,
         otpExpiresAt: null,
         token: null,
-        tokenStatus: 'unknown'
+        tokenStatus: 'unknown',
+        pendingPersonalData: null
     };
 
     let otpCountdownInterval = null;
@@ -288,22 +289,125 @@
     function attachPasswordToggle(button) {
         if (!button) return;
         const targetId = button.dataset.toggleTarget;
-        const icon = button.querySelector('i');
+        const showIcon = button.querySelector('.password-icon-show');
+        const hideIcon = button.querySelector('.password-icon-hide');
+
+        const updateToggleState = input => {
+            if (!input) return;
+            const isHidden = input.type === 'password';
+            if (showIcon) {
+                showIcon.classList.toggle('hidden', !isHidden);
+            }
+            if (hideIcon) {
+                hideIcon.classList.toggle('hidden', isHidden);
+            }
+            button.setAttribute('aria-label', isHidden ? 'Show password' : 'Hide password');
+            button.setAttribute('aria-pressed', isHidden ? 'false' : 'true');
+        };
+
         button.addEventListener('click', () => {
             const input = targetId ? document.getElementById(targetId) : button.previousElementSibling;
             if (!input) return;
             const isHidden = input.type === 'password';
             input.type = isHidden ? 'text' : 'password';
-            if (icon) {
-                icon.classList.toggle('fa-eye', !isHidden);
-                icon.classList.toggle('fa-eye-slash', isHidden);
-            }
+            updateToggleState(input);
             input.focus();
         });
+
+        const initialInput = targetId ? document.getElementById(targetId) : button.previousElementSibling;
+        if (initialInput) {
+            updateToggleState(initialInput);
+        }
+    }
+
+    function handleOtpBack() {
+        resetOtpCountdown();
+        setRegistrationStep('account');
+        
+        // Restore pending personal data to form inputs if user goes back
+        if (authState.pendingPersonalData) {
+            const firstNameInput = document.getElementById('registrationFirstName');
+            const lastNameInput = document.getElementById('registrationLastName');
+            const phoneInput = document.getElementById('registrationPhone');
+            if (firstNameInput) firstNameInput.value = authState.pendingPersonalData.firstName || '';
+            if (lastNameInput) lastNameInput.value = authState.pendingPersonalData.lastName || '';
+            if (phoneInput) phoneInput.value = authState.pendingPersonalData.phone || '';
+        }
+        
+        const firstNameInput = document.getElementById('registrationFirstName');
+        if (firstNameInput) {
+            firstNameInput.focus();
+        }
     }
 
     function setupSharedToggles() {
         document.querySelectorAll('.input-toggle').forEach(btn => attachPasswordToggle(btn));
+    }
+
+    function setupPrivacyModal() {
+        const modal = document.getElementById('registrationPrivacyModal');
+        if (!modal || modal.dataset.setupComplete === 'true') {
+            return;
+        }
+
+        const openLink = document.getElementById('registrationPrivacyLink');
+        const closeButton = document.getElementById('privacyModalClose');
+        const acknowledgeButton = document.getElementById('privacyModalAcknowledge');
+        const focusTarget = modal.querySelector('[data-modal-focus]') || closeButton || acknowledgeButton;
+
+        if (!openLink) {
+            return;
+        }
+
+        const closeModal = () => {
+            if (modal.classList.contains('hidden')) {
+                return;
+            }
+            modal.classList.add('hidden');
+            document.body.classList.remove('modal-open');
+            window.setTimeout(() => {
+                openLink.focus();
+            }, 0);
+        };
+
+        const openModal = event => {
+            if (event) {
+                event.preventDefault();
+            }
+            if (!modal.classList.contains('hidden')) {
+                return;
+            }
+            modal.classList.remove('hidden');
+            document.body.classList.add('modal-open');
+            window.setTimeout(() => {
+                focusTarget?.focus();
+            }, 0);
+        };
+
+        openLink.addEventListener('click', openModal);
+
+        [closeButton, acknowledgeButton].forEach(button => {
+            if (!button) {
+                return;
+            }
+            button.addEventListener('click', () => {
+                closeModal();
+            });
+        });
+
+        modal.addEventListener('click', event => {
+            if (event.target === modal) {
+                closeModal();
+            }
+        });
+
+        document.addEventListener('keydown', event => {
+            if (event.key === 'Escape' && !modal.classList.contains('hidden')) {
+                closeModal();
+            }
+        });
+
+        modal.dataset.setupComplete = 'true';
     }
 
     function findUserByEmail(email) {
@@ -613,6 +717,14 @@
         return document.getElementById('otpCountdown');
     }
 
+    function setResendButtonDisabled(disabled) {
+        const resendBtn = document.getElementById('registrationResendOtp');
+        if (!resendBtn) {
+            return;
+        }
+        resendBtn.disabled = !!disabled;
+    }
+
     function stopOtpCountdown() {
         if (otpCountdownInterval !== null) {
             clearInterval(otpCountdownInterval);
@@ -628,6 +740,7 @@
             countdownEl.textContent = fallback;
             countdownEl.classList.remove('expired');
         }
+        setResendButtonDisabled(true);
     }
 
     function startOtpCountdown() {
@@ -640,8 +753,11 @@
 
         if (!authState.otpExpiresAt) {
             resetOtpCountdown();
+            setResendButtonDisabled(false);
             return;
         }
+
+        setResendButtonDisabled(true);
 
         const update = () => {
             const remainingMs = authState.otpExpiresAt - Date.now();
@@ -649,6 +765,7 @@
                 countdownEl.textContent = 'Expired';
                 countdownEl.classList.add('expired');
                 stopOtpCountdown();
+                setResendButtonDisabled(false);
                 return;
             }
 
@@ -783,6 +900,21 @@
         return Date.now() > expiry;
     }
 
+    function isAccountExpired(user) {
+        if (!user) {
+            return false;
+        }
+        const expiresOn = user.expiresOn || (user.account && user.account.expiresOn);
+        if (!expiresOn) {
+            return false;
+        }
+        const expiryTimestamp = Date.parse(expiresOn);
+        if (!Number.isFinite(expiryTimestamp)) {
+            return false;
+        }
+        return Date.now() > expiryTimestamp;
+    }
+
     function disableRegistrationForms() {
         const forms = [
             document.getElementById('registrationAccountForm'),
@@ -861,10 +993,11 @@
     function setupRegistrationPage() {
         setupSharedToggles();
         setupOtpInputBehavior();
+        setupPrivacyModal();
 
-    const params = new URLSearchParams(window.location.search);
-    const token = params.get('token');
-    authState.token = token ? token.trim() : null;
+        const params = new URLSearchParams(window.location.search);
+        const token = params.get('token');
+        authState.token = token ? token.trim() : null;
 
         if (!token) {
             authState.tokenStatus = 'missing';
@@ -892,20 +1025,19 @@
 
         if (tokenResult.status === 'not-found') {
             showInactiveInvitationView({
-                title: 'Invitation link inactive',
-                message: 'We could not find an invitation that matches this link. It may have expired or been replaced. Please request a new invitation.',
+                title: 'The Invitation Link is not Active',
+                message: 'For More Information, Please Contact ONRUF Administrator',
                 statusMarkup: '<i class="fas fa-link-slash"></i> Invitation inactive',
                 statusTone: 'warning'
             });
-            showToast('error', 'We could not find an invitation for this link. Request a new invitation from your administrator.', 6000);
             return;
         }
 
         if (tokenResult.status === 'revoked') {
             const revokedUser = tokenResult.user;
             showInactiveInvitationView({
-                title: 'This invitation link was replaced',
-                message: 'A newer invitation link has been issued for this account. Please use the most recent email or request another invitation from your administrator.',
+                title: 'The Invitation Link is not Active',
+                message: 'For More Information, Please Contact ONRUF Administrator',
                 statusMarkup: '<i class="fas fa-link-slash"></i> Invitation inactive',
                 statusTone: 'warning',
                 user: revokedUser || null
@@ -954,6 +1086,18 @@
             return;
         }
 
+        // Check if account has expired before registration completes
+        if (isAccountExpired(user)) {
+            showInactiveInvitationView({
+                title: 'The Invitation Link is not Active',
+                message: 'For More Information, Please Contact ONRUF Administrator',
+                statusMarkup: '<i class="fas fa-link-slash"></i> Invitation inactive',
+                statusTone: 'warning',
+                user
+            });
+            return;
+        }
+
         updateHeadline('');
         setStatusPill('', '');
 
@@ -993,6 +1137,13 @@
             });
         }
 
+        const otpBackBtn = document.getElementById('registrationOtpBack');
+        if (otpBackBtn) {
+            otpBackBtn.addEventListener('click', () => {
+                handleOtpBack();
+            });
+        }
+
         updateOtpEmailLabel(user.email);
         setRegistrationStep('account');
     }
@@ -1009,12 +1160,14 @@
             return;
         }
 
+
         const firstNameInput = document.getElementById('registrationFirstName');
         const lastNameInput = document.getElementById('registrationLastName');
         const phoneInput = document.getElementById('registrationPhone');
         const passwordInput = document.getElementById('registrationPassword');
         const confirmInput = document.getElementById('registrationPasswordConfirm');
         const photoInput = document.getElementById('registrationPhoto');
+    const privacyCheckbox = document.getElementById('registrationPrivacyAgree');
 
         const firstName = firstNameInput?.value.trim();
         const lastName = lastNameInput?.value.trim();
@@ -1038,14 +1191,41 @@
             phoneInput?.focus();
             return;
         }
+
+        // basic E.164-ish validation: requires leading + and digits (8-15 digits total)
+        const phoneNormalized = (phone || '').trim();
+        const phoneValid = /^\+\d{8,15}$/.test(phoneNormalized);
+        if (!phoneValid) {
+            showToast('error', 'Please, Enter a Valid Phone Number');
+            phoneInput?.focus();
+            return;
+        }
+
+        // duplicate phone check (exclude the current user record if present)
+        const duplicatePhone = authState.users.find(u => {
+            if (!u || !u.phone) return false;
+            if (authState.currentUser && u === authState.currentUser) return false;
+            return (u.phone || '').trim() === phoneNormalized;
+        });
+        if (duplicatePhone) {
+            showToast('error', 'This Phone Number is Already Registered');
+            phoneInput?.focus();
+            return;
+        }
         if (password.length < 8) {
             showToast('error', 'Password must be at least 8 characters long.');
             passwordInput?.focus();
             return;
         }
         if (password !== confirm) {
-            showToast('error', 'Passwords do not match.');
+            showToast('error', 'Password Does not Match, Please Check Again');
             confirmInput?.focus();
+            return;
+        }
+
+        if (!privacyCheckbox?.checked) {
+            showToast('error', 'You Must Agree to The Privacy Policy and Terms and Conditions of Use');
+            privacyCheckbox?.focus();
             return;
         }
 
@@ -1064,15 +1244,20 @@
             }
         }
 
-        user.firstName = firstName;
-        user.lastName = lastName;
-        user.name = `${firstName} ${lastName}`.trim();
-        user.phone = phone;
+        // Store personal data temporarily in authState until OTP verification succeeds
+        authState.pendingPersonalData = {
+            firstName,
+            lastName,
+            phone,
+            photoFile: photoFile || null,
+            photoDataUrl: null,
+            photoFileName: photoFile ? photoFile.name : null
+        };
 
+        // Process photo if present, store in temporary object
         if (photoFile) {
             try {
-                user.photoDataUrl = await readFileAsDataUrl(photoFile);
-                user.photoFileName = photoFile.name;
+                authState.pendingPersonalData.photoDataUrl = await readFileAsDataUrl(photoFile);
             } catch (error) {
                 console.error('Failed to read uploaded photo', error);
                 showToast('error', 'We could not read the selected photo. Please try again with a different image.');
@@ -1095,7 +1280,7 @@
         renderSummary(user);
         updateOtpEmailLabel(user.email);
         resetOtpInputs(authState.otp);
-        showToast('success', 'Details saved. A one-time code has been generated.', 3000);
+        showToast('success', 'Information Saved. A One-Time Verification Code has been sent to your Email Address.', 3000);
         updateHeadline('');
         setStatusPill('', '');
         setRegistrationStep('otp');
@@ -1112,6 +1297,7 @@
             handleExpiredInvitation(user);
             return;
         }
+
 
         const entered = collectOtpValue();
         if (!/^[0-9]{6}$/.test(entered)) {
@@ -1132,6 +1318,19 @@
             return;
         }
 
+        // Now commit the pending personal data to the user record
+        if (authState.pendingPersonalData) {
+            user.firstName = authState.pendingPersonalData.firstName;
+            user.lastName = authState.pendingPersonalData.lastName;
+            user.name = `${authState.pendingPersonalData.firstName} ${authState.pendingPersonalData.lastName}`.trim();
+            user.phone = authState.pendingPersonalData.phone;
+            if (authState.pendingPersonalData.photoDataUrl) {
+                user.photoDataUrl = authState.pendingPersonalData.photoDataUrl;
+                user.photoFileName = authState.pendingPersonalData.photoFileName;
+            }
+            authState.pendingPersonalData = null;
+        }
+
         user.status = 'Active';
         user.accountType = user.accountType === 'pending-invite' ? 'platform-user' : user.accountType;
         ensureInvitationObject(user);
@@ -1141,9 +1340,12 @@
         saveUsersToStorage();
         renderSummary(user);
         setStatusPill('success', '<i class="fas fa-circle-check"></i> Account activated');
-        showToast('success', 'Account activated. Redirecting you to sign in...', 1800);
+        // show the requested message then redirect after a short pause
+        showToast('success', 'Registered Successfully, Redirecting…', 3000);
         resetOtpCountdown();
-        window.location.href = 'login.html';
+        window.setTimeout(() => {
+            window.location.href = 'login.html';
+        }, 2200);
     }
 
     async function resendOtp() {
@@ -1177,6 +1379,7 @@
         if (emailResult.status === 'sent') {
             showToast('success', 'We emailed you a fresh verification code. Check your inbox.', 3200);
         } else if (emailResult.status === 'skipped') {
+                setResendButtonDisabled(true);
             showToast('info', 'A new code is ready. Email delivery is disabled, so copy the code shown on screen.', 3600);
         } else {
             showToast('error', `We couldn\'t email the code: ${emailResult.message}. Use the code shown on screen.`, 4200);

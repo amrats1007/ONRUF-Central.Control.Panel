@@ -2347,21 +2347,14 @@ function getActiveSessionUserId() {
 }
 
 function canManageUserAccount(user) {
-    if (!user) {
-        return false;
-    }
-    const sessionUserId = getActiveSessionUserId();
-    if (!sessionUserId) {
-        return false;
-    }
-    return typeof user.createdBy === 'number' && user.createdBy === sessionUserId;
+    return Boolean(getActiveSessionUserId());
 }
 
 function ensureUserManagementPermission(user, actionDescription = 'perform this action') {
     if (canManageUserAccount(user)) {
         return true;
     }
-    showNotification('warning', `You can only ${actionDescription} for user accounts that you created.`);
+    showNotification('warning', 'You need to be signed in to manage user accounts.');
     return false;
 }
 
@@ -2927,7 +2920,7 @@ function handleExpirationDateChange(event) {
     const sanitizedValue = input.value;
 
     if (!isValid && previousValue) {
-        showNotification('error', 'Account expiration must be set to a future date.');
+        showNotification('error', 'Account Expiration must be Set to a Future Date.');
         input.focus();
         return;
     }
@@ -4114,17 +4107,6 @@ function collectUserFormStepData(step) {
             draft.phone = phoneValue || draft.phone || '';
         }
 
-        const existingFirstName = typeof draft.firstName === 'string' ? draft.firstName.trim() : '';
-        const existingLastName = typeof draft.lastName === 'string' ? draft.lastName.trim() : '';
-        const derivedNames = (!existingFirstName || !existingLastName) ? deriveNamePartsFromEmail(email) : null;
-
-        if (!existingFirstName && derivedNames && derivedNames.firstName) {
-            draft.firstName = derivedNames.firstName;
-        }
-        if (!existingLastName && derivedNames && derivedNames.lastName) {
-            draft.lastName = derivedNames.lastName;
-        }
-
         const emailDisplay = document.getElementById('registrationEmail');
         if (emailDisplay) {
             emailDisplay.value = email;
@@ -4169,7 +4151,7 @@ function collectUserFormStepData(step) {
             expiresDate.setHours(0, 0, 0, 0);
             const today = getTodayAtMidnight();
             if (expiresDate <= today) {
-                showNotification('error', 'Account expiration must be set to a future date.');
+                showNotification('error', 'Account Expiration must be Set to a Future Date.');
                 expirationInput.focus();
                 return false;
             }
@@ -4495,11 +4477,14 @@ async function handleUserFormSubmit(event) {
 
     const rawFirstName = typeof draft.firstName === 'string' ? draft.firstName.trim() : '';
     const rawLastName = typeof draft.lastName === 'string' ? draft.lastName.trim() : '';
-    const derivedFromEmail = deriveNamePartsFromEmail(draft.email);
-    const firstName = rawFirstName || derivedFromEmail.firstName;
-    const lastName = rawLastName || derivedFromEmail.lastName;
+    const derivedFromEmail = isEditing ? deriveNamePartsFromEmail(draft.email) : { firstName: '', lastName: '', fullName: '' };
+
+    const firstName = rawFirstName || (isEditing ? derivedFromEmail.firstName : '');
+    const lastName = rawLastName || (isEditing ? derivedFromEmail.lastName : '');
     const combinedName = [firstName, lastName].filter(Boolean).join(' ');
-    const effectiveName = combinedName || derivedFromEmail.fullName || (typeof draft.email === 'string' ? draft.email.trim() : '');
+    const effectiveName = isEditing
+        ? (combinedName || derivedFromEmail.fullName || (typeof draft.email === 'string' ? draft.email.trim() : ''))
+        : (combinedName || '—');
 
     draft.firstName = firstName;
     draft.lastName = lastName;
@@ -5502,10 +5487,7 @@ async function handleUserDelete(userId) {
     }
 
     const accountType = resolveUserAccountType(user);
-    if (accountType === 'system-administrator') {
-        await showUserAlert('Super Admin accounts cannot be deleted.');
-        return;
-    }
+    const isSuperAdminAccount = accountType === 'system-administrator';
 
     const isCurrentSessionUser = Boolean(state.activeSession && state.activeSession.user && state.activeSession.user.id === userId);
     if (isCurrentSessionUser) {
@@ -5513,8 +5495,12 @@ async function handleUserDelete(userId) {
         return;
     }
 
+    const deletionPromptTitle = isSuperAdminAccount
+        ? 'Are You Sure You Want to Delete the Super Admin Account?'
+        : 'Are You Sure You Want to Delete the User Account?';
+
     const initialConfirmation = await showUserConfirm(
-        'Are You Sure You Want to Delete the User Account?',
+        deletionPromptTitle,
         'OK',
         'Cancel'
     );
@@ -5556,7 +5542,11 @@ async function handleUserDelete(userId) {
         return;
     }
 
-    finalizeUserRemoval(user, 'User Account Deleted Successfully');
+    const successMessage = isSuperAdminAccount
+        ? 'Super Admin Account Deleted Successfully'
+        : 'User Account Deleted Successfully';
+
+    finalizeUserRemoval(user, successMessage);
 }
 
 function viewRole(roleId) {
@@ -5680,7 +5670,7 @@ function renderUsersTable(searchTerm = state.userSearchTerm, page = state.curren
     const visibleUsers = filtered.slice(startIndex, startIndex + state.usersPerPage);
 
     if (!visibleUsers.length) {
-        tbody.innerHTML = '<tr><td colspan="10">There is no Data Available</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9">There is no Data Available</td></tr>';
     } else {
         let index = startIndex + 1;
         tbody.innerHTML = visibleUsers.map(user => {
@@ -5707,37 +5697,35 @@ function renderUsersTable(searchTerm = state.userSearchTerm, page = state.curren
                 : '—';
             const employeeIdDisplay = user.employeeId && String(user.employeeId).trim() ? String(user.employeeId).trim() : '—';
             const isCurrentSessionUser = Boolean(state.activeSession && state.activeSession.user && state.activeSession.user.id === user.id);
-            const isCreator = canManageUserAccount(user);
-            const deleteTooltip = isSuperAdminAccount
-                ? 'Super Admin accounts cannot be deleted.'
-                : isCurrentSessionUser
-                    ? 'You cannot delete the account that is currently signed in.'
+            const deleteTooltip = isCurrentSessionUser
+                ? 'You cannot delete the account that is currently signed in.'
+                : isSuperAdminAccount
+                    ? 'Delete Super Admin account'
                     : 'Delete user';
             const creatorInfo = resolveUserCreator(user);
             const creatorMarkup = creatorInfo.email
                 ? `<div class="creator-cell"><div class="creator-name">${escapeHtml(creatorInfo.label)}</div><div class="user-meta">${escapeHtml(creatorInfo.email)}</div></div>`
                 : `<div class="creator-cell"><div class="creator-name">${escapeHtml(creatorInfo.label)}</div></div>`;
-            let actionButtons;
+            const createdDisplay = user.created ? escapeHtml(String(user.created)) : '—';
+            const createdDetailsMarkup = `<div class="created-cell"><div class="created-date">${createdDisplay}</div>${creatorMarkup}</div>`;
+            const fallbackInitialMatch = typeof displayName === 'string' ? displayName.match(/[A-Za-z0-9]/) : null;
+            const fallbackInitial = fallbackInitialMatch ? fallbackInitialMatch[0].toUpperCase() : '';
+            const actionButtons = [];
 
-            if (isCreator) {
-                actionButtons = [];
-                actionButtons.push(`<button class="action-btn edit" onclick="showUserForm('edit', ${user.id})" title="Edit user"><i class="fas fa-pen"></i></button>`);
+            actionButtons.push(`<button class="action-btn edit" onclick="showUserForm('edit', ${user.id})" title="Edit user"><i class="fas fa-pen"></i></button>`);
 
-                if (isPending) {
-                    actionButtons.push(`<button class="action-btn invitation-link" onclick="showUserInvitationLink(${user.id})" title="Show invitation link"><i class="fas fa-envelope-open-text"></i></button>`);
-                    actionButtons.push(`<button class="action-btn resend-invite" onclick="(async () => await resendUserInvitation(${user.id}))()" title="Resend invitation email"><i class="fas fa-paper-plane"></i></button>`);
-                } else {
-                    actionButtons.push(`<button class="action-btn ${isActive ? 'deactivate' : 'activate'}" onclick="(async () => await handleUserToggle(${user.id}))()" title="${isActive ? 'Deactivate user' : 'Activate user'}"><i class="fas ${isActive ? 'fa-power-off' : 'fa-rotate-right'}"></i></button>`);
-                }
-
-                const deleteAction = (!isSuperAdminAccount && !isCurrentSessionUser)
-                    ? `<button class="action-btn delete" onclick="(async () => await handleUserDelete(${user.id}))()" title="${escapeAttribute(deleteTooltip)}"><i class="fas fa-trash"></i></button>`
-                    : `<button class="action-btn delete disabled" type="button" disabled title="${escapeAttribute(deleteTooltip)}"><i class="fas fa-trash"></i></button>`;
-
-                actionButtons.push(deleteAction);
+            if (isPending) {
+                actionButtons.push(`<button class="action-btn invitation-link" onclick="showUserInvitationLink(${user.id})" title="Show invitation link"><i class="fas fa-envelope-open-text"></i></button>`);
+                actionButtons.push(`<button class="action-btn resend-invite" onclick="(async () => await resendUserInvitation(${user.id}))()" title="Resend invitation email"><i class="fas fa-paper-plane"></i></button>`);
             } else {
-                actionButtons = [`<span class="action-placeholder" title="Only the creator of this account can manage it.">—</span>`];
+                actionButtons.push(`<button class="action-btn ${isActive ? 'deactivate' : 'activate'}" onclick="(async () => await handleUserToggle(${user.id}))()" title="${isActive ? 'Deactivate user' : 'Activate user'}"><i class="fas ${isActive ? 'fa-power-off' : 'fa-rotate-right'}"></i></button>`);
             }
+
+            const deleteAction = (!isCurrentSessionUser)
+                ? `<button class="action-btn delete" onclick="(async () => await handleUserDelete(${user.id}))()" title="${escapeAttribute(deleteTooltip)}"><i class="fas fa-trash"></i></button>`
+                : `<button class="action-btn delete disabled" type="button" disabled title="${escapeAttribute(deleteTooltip)}"><i class="fas fa-trash"></i></button>`;
+
+            actionButtons.push(deleteAction);
 
             return `
                 <tr>
@@ -5747,7 +5735,9 @@ function renderUsersTable(searchTerm = state.userSearchTerm, page = state.curren
                             <div class="user-avatar" aria-hidden="true">
                                 ${photoUrl
                                     ? `<img src="${escapeAttribute(photoUrl)}" alt="${escapeAttribute(displayName)}" class="user-avatar-img">`
-                                    : `<span class="user-avatar-fallback">${escapeHtml(displayName.charAt(0) || 'U')}</span>`}
+                                    : fallbackInitial
+                                        ? `<span class="user-avatar-fallback">${escapeHtml(fallbackInitial)}</span>`
+                                        : '<span class="user-avatar-fallback" aria-hidden="true"></span>'}
                             </div>
                             <div>
                                 <div class="user-name-row">
@@ -5764,8 +5754,7 @@ function renderUsersTable(searchTerm = state.userSearchTerm, page = state.curren
                     <td>${user.department || '—'}</td>
                     <td><span class="status-badge status-${statusClass}">${displayStatus}</span></td>
                     <td>${user.lastLogin}</td>
-                    <td>${user.created}</td>
-                    <td>${creatorMarkup}</td>
+                    <td>${createdDetailsMarkup}</td>
                     <td>${expirationLabel}</td>
                     <td>
                         <div class="action-group">
@@ -5782,12 +5771,16 @@ function renderUsersTable(searchTerm = state.userSearchTerm, page = state.curren
 
 function exportUsers() {
     const rows = [
-        ['Name', 'Email', 'Role', 'Department', 'Status', 'Last Login', 'Created', 'Created By', 'Account Expiration'],
+        ['Name', 'Email', 'Role', 'Department', 'Status', 'Last Login', 'Created', 'Account Expiration'],
         ...users.map(user => {
             const creator = resolveUserCreator(user);
             const creatorLabel = creator && creator.label ? creator.label : '—';
             const creatorEmail = creator && creator.email ? creator.email : '';
             const creatorDisplay = creatorEmail ? `${creatorLabel} <${creatorEmail}>` : creatorLabel;
+            const createdDisplay = user.created || '';
+            const createdCombined = creatorDisplay && creatorDisplay !== '—'
+                ? `${createdDisplay}${createdDisplay ? ' | ' : ''}${creatorDisplay}`
+                : createdDisplay || creatorDisplay;
             return [
                 resolveUserDisplayName(user),
                 user.email,
@@ -5795,8 +5788,7 @@ function exportUsers() {
                 user.department || '',
                 user.status,
                 user.lastLogin,
-                user.created,
-                creatorDisplay,
+                createdCombined,
                 user.expiresOn || ''
             ];
         })

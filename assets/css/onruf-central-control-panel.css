@@ -1432,6 +1432,22 @@ body.dark-mode .role-alt-name {
     gap: 2px;
 }
 
+.created-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.created-date {
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--text-primary, #0f172a);
+}
+
+body.dark-mode .created-date {
+    color: var(--muted-dark);
+}
+
 .creator-name {
     font-weight: 500;
     font-size: 13px;
@@ -1503,19 +1519,6 @@ body.dark-mode .user-avatar {
 .action-group {
     display: inline-flex;
     gap: 8px;
-}
-
-.action-placeholder {
-    width: 34px;
-    height: 34px;
-    border-radius: 10px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    background: rgba(148, 163, 184, 0.18);
-    color: var(--muted-light);
-    font-size: 18px;
-    cursor: default;
 }
 
 .action-btn {
