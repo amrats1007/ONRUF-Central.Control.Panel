@@ -24,6 +24,10 @@
                     <i class="fas fa-users"></i>
                     <span class="menu-text">Users</span>
                 </a>
+                <a href="#categories" class="menu-item" data-section="categories">
+                    <i class="fas fa-layer-group"></i>
+                    <span class="menu-text">Categories and Specifications</span>
+                </a>
                 <a href="#settings" class="menu-item" data-section="settings">
                     <i class="fas fa-sliders-h"></i>
                     <span class="menu-text">Settings</span>
@@ -245,10 +249,10 @@
                     <div id="users-app1" class="sub-app active">
                         <div class="roles-header">
                             <div class="header-stack">
-                                <h2 class="module-title">User Roles</h2>
+                                <h2 class="module-title" id="roleModuleTitle">User Roles</h2>
                                 <div class="search-box" id="roleSearchContainer">
                                     <i class="fas fa-search"></i>
-                                    <input type="text" id="roleSearchInput" placeholder="Search by Role Name or Description" />
+                                    <input type="text" id="roleSearchInput" placeholder="Search by User Role Name, ID, or Description" />
                                 </div>
                             </div>
                             <div class="roles-actions">
@@ -264,6 +268,7 @@
                                 <table>
                                     <thead>
                                         <tr>
+                                            <th>#</th>
                                             <th>ID</th>
                                             <th class="role-column">Role</th>
                                             <th>Description</th>
@@ -284,12 +289,14 @@
                         <div id="roleBuilderView" class="role-builder hidden">
                             <div class="form-card">
                                 <div style="display:flex; justify-content: space-between; align-items:center;">
-                                    <div>
-                                        <h3 id="roleFormTitle" style="margin:0 0 4px;">Add New User Role</h3>
-                                        <p id="roleFormSubtitle" class="section-subtitle" style="margin:0;"></p>
-                                    </div>
+                                    <div></div>
                                 </div>
-                                <form id="roleForm" class="form-grid">
+                                <form id="roleForm" class="form-grid" novalidate>
+                                    <div class="form-group">
+                                        <label class="form-label required" for="roleIdInput">ID</label>
+                                        <input type="text" class="form-input" id="roleIdInput" placeholder="e.g. ROLE-001" required pattern="^[A-Za-z0-9_-]+$" title="Unique ID (letters, numbers, dashes, underscores)" />
+                                        <span class="form-validation-error hidden" id="roleIdError" role="alert"></span>
+                                    </div>
                                     <div class="form-group">
                                         <label class="form-label" for="roleNameArabicInput">Role Name (Arabic)</label>
                                         <input type="text" class="form-input" id="roleNameArabicInput" placeholder="مثال: مشرف إقليمي" required />
@@ -369,22 +376,22 @@
                     </div>
 
                     <div id="users-app2" class="sub-app">
-                        <div id="usersListView">
-                            <div class="users-header">
-                                <div class="header-stack">
-                                    <h2 class="module-title">User Accounts</h2>
-                                    <div class="search-box">
-                                        <i class="fas fa-search"></i>
-                                        <input type="text" id="userSearch" placeholder="Search by User Name, Email, Phone, Role, Status, Department or ID" />
-                                    </div>
-                                </div>
-                                <div class="users-actions">
-                                    <button class="btn btn-primary" id="addUserBtn">
-                                        <i class="fas fa-user-plus"></i>
-                                        Add User
-                                    </button>
+                        <div class="users-header">
+                            <div class="header-stack">
+                                <h2 class="module-title" id="usersModuleTitle">User Accounts</h2>
+                                <div class="search-box">
+                                    <i class="fas fa-search"></i>
+                                    <input type="text" id="userSearch" placeholder="Search by User Name, Email, Phone, Role, Status, Department or ID" />
                                 </div>
                             </div>
+                            <div class="users-actions">
+                                <button class="btn btn-primary" id="addUserBtn">
+                                    <i class="fas fa-user-plus"></i>
+                                    Add User
+                                </button>
+                            </div>
+                        </div>
+                        <div id="usersListView">
                             <div class="table-shell">
                                 <table>
                                     <thead>
@@ -396,7 +403,7 @@
                                             <th>Status</th>
                                             <th>Last Login</th>
                                             <th>Created</th>
-                                            <th>Account Expiration</th>
+                                            <th>Expiration</th>
                                             <th>Actions</th>
                                         </tr>
                                     </thead>
@@ -434,20 +441,13 @@
                             <div class="confirm-dialog" role="document">
                                 <p id="userAlertMessage">Notification</p>
                                 <div class="confirm-actions single">
-             er-                    <button type="button" class="btn btn-primary" id="userAlertOk">OK</button>
+                                    <button type="button" class="btn btn-primary" id="userAlertOk">OK</button>
                                 </div>
                             </div>
                         </div>
 
-                        <div id="userFormPage" class="user-form-page hidden" aria-labelledby="userFormTitle">
+                        <div id="userFormPage" class="user-form-page hidden" aria-labelledby="usersModuleTitle">
                             <div class="form-card user-form-card">
-                                <div class="user-form-header">
-                                    <div>
-                                        <h3 id="userFormTitle" style="margin: 0 0 4px;">Add New User</h3>
-                                        <p id="userFormSubtitle" class="section-subtitle" style="margin:0;"></p>
-                                    </div>
-                                </div>
-
                                 <div class="user-form-body">
                                     <ol class="user-form-progress" id="userFormProgress" role="list">
                                         <li class="step active" data-step="1">
@@ -488,6 +488,7 @@
                                                 <div class="form-group">
                                                     <label class="form-label required" for="userEmployeeId">ID</label>
                                                     <input type="text" class="form-input" id="userEmployeeId" placeholder="e.g. ONR-4521" required aria-required="true" />
+                                                    <span class="form-validation-error hidden" id="userEmployeeIdError" role="alert"></span>
                                                 </div>
                                                 <div id="userCompletedRegistrationSection" class="completed-registration-section hidden">
                                                     <div class="completed-registration-header">
@@ -677,6 +678,552 @@
                         </div>
                     </div>
 
+                </section>
+                <section id="categories" class="section-content">
+                    <!-- section-header removed: title and subtitle deleted as requested -->
+                    <div class="sub-apps-nav">
+                        <button class="sub-app-btn active" data-target="categories-app1" data-label="Category Management">
+                            <span>Category Management</span>
+                            <span class="count" id="categoryCountLabel">#0 Categories</span>
+                        </button>
+                        <button class="sub-app-btn" data-target="categories-app2" data-label="Specifications Management">
+                            <span>Specifications Management</span>
+                            <span class="count" id="specificationCountLabel">#0 Specifications</span>
+                        </button>
+                    </div>
+
+                    <div id="categories-app1" class="sub-app active">
+                        <div class="roles-header">
+                            <div class="header-stack">
+                                <h2 class="module-title" id="categoryModuleTitle">Categories</h2>
+                            </div>
+                            <div class="roles-actions">
+                                <button class="btn btn-primary" id="newCategoryBtn">
+                                    <i class="fas fa-circle-plus"></i>
+                                    Add Category
+                                </button>
+                                <button type="button" class="btn btn-outline" id="categoryImportBtn">
+                                    <i class="fas fa-file-import"></i>
+                                    Import
+                                </button>
+                                <button type="button" class="btn btn-outline" id="categoryExportBtn">
+                                    <i class="fas fa-file-export"></i>
+                                    Export
+                                </button>
+                            </div>
+                        </div>
+                        <div class="notification-area" id="categoryNotificationArea" aria-live="polite"></div>
+                        <div id="categoryDirectoryView">
+                            <div class="categories-layout">
+                                <aside class="category-explorer" aria-label="Category explorer">
+                                    <div class="explorer-header">
+                                        <div>
+                                            <h3>Category Explorer</h3>
+                                        </div>
+                                        <div class="explorer-actions">
+                                            <button type="button" class="btn btn-ghost" id="categoryExpandAllBtn" title="Expand all levels">
+                                                <i class="fas fa-plus-square"></i>
+                                            </button>
+                                            <button type="button" class="btn btn-ghost" id="categoryCollapseAllBtn" title="Collapse all levels">
+                                                <i class="fas fa-minus-square"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="explorer-search">
+                                        <i class="fas fa-search"></i>
+                                        <input type="text" id="categoryTreeSearchInput" placeholder="Search names or codes" aria-label="Search categories" />
+                                    </div>
+                                    <div class="explorer-body" id="categoryTreeContainer" role="tree" aria-multiselectable="false"></div>
+                                </aside>
+                                <section class="category-detail" aria-label="Category detail">
+                                    <div class="detail-topbar">
+                                        <div class="breadcrumb-controls">
+                                            <button type="button" class="btn btn-ghost" id="categoryExplorerToggleBtn" aria-expanded="false" aria-controls="categoryTreeContainer" aria-label="Show category explorer">
+                                                <i class="fas fa-bars"></i>
+                                                <span class="label">Show Explorer</span>
+                                            </button>
+                                            <nav class="category-breadcrumb" id="categoryBreadcrumbTrail" aria-label="Category path"></nav>
+                                        </div>
+                                    </div>
+                                    <div class="detail-controls">
+                                        <div class="detail-search">
+                                            <i class="fas fa-search"></i>
+                                            <input type="text" id="categoryDetailSearchInput" placeholder="Filter by name, code, or description" aria-label="Filter categories" />
+                                        </div>
+                                    </div>
+                                    <div class="detail-quick-actions" id="categoryQuickActions">
+                                        <div class="quick-action-group action-group">
+                                            <button type="button" class="action-btn with-label activate" id="categoryBulkActivateBtn" disabled aria-label="Activate selected categories" title="Activate selected categories">
+                                                <i class="fas fa-rotate-right"></i>
+                                                <span>Activate</span>
+                                            </button>
+                                            <button type="button" class="action-btn with-label deactivate" id="categoryBulkArchiveBtn" disabled aria-label="Deactivate selected categories" title="Deactivate selected categories">
+                                                <i class="fas fa-power-off"></i>
+                                                <span>Deactivate</span>
+                                            </button>
+                                            <button type="button" class="action-btn with-label edit" id="categoryBulkModifyBtn" disabled aria-label="Modify selected category" title="Modify selected category">
+                                                <i class="fas fa-pen"></i>
+                                                <span>Modify</span>
+                                            </button>
+                                            <button type="button" class="action-btn with-label delete" id="categoryBulkDeleteBtn" disabled aria-label="Delete selected categories" title="Delete selected categories">
+                                                <i class="fas fa-trash"></i>
+                                                <span>Delete</span>
+                                            </button>
+                                        </div>
+                                        <div class="detail-filters">
+                                            <span class="filter-label" aria-hidden="true">Filter:</span>
+                                            <label class="filter-control" for="categoryStatusFilter">Status
+                                                <select id="categoryStatusFilter">
+                                                    <option value="all">All</option>
+                                                    <option value="active">Active</option>
+                                                    <option value="inactive">Inactive</option>
+                                                </select>
+                                            </label>
+                                            <label class="filter-control" for="categoryDepthFilter">Depth
+                                                <select id="categoryDepthFilter">
+                                                    <option value="all">All Levels</option>
+                                                    <option value="1">1 Level</option>
+                                                    <option value="2">2 Levels</option>
+                                                    <option value="3">3 Levels</option>
+                                                    <option value="4">4 Levels</option>
+                                                </select>
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <div class="category-grid" role="region" aria-label="Category data">
+                                        <div class="category-grid-header" role="row">
+                                            <div class="grid-cell index" data-column="index">#</div>
+                                            <div class="grid-cell code" data-column="code">Code</div>
+                                            <div class="grid-cell name" data-column="name">Category</div>
+                                            <div class="grid-cell description" data-column="description">Description</div>
+                                            <div class="grid-cell parent" data-column="parent">Parent</div>
+                                            <div class="grid-cell status" data-column="status">Status</div>
+                                            <div class="grid-cell created" data-column="created">Created</div>
+                                        </div>
+                                        <div class="category-grid-body" id="categoryGridBody" role="rowgroup" tabindex="0"></div>
+                                    </div>
+                                    <div class="pagination" id="categoryPagination"></div>
+                                    <aside class="category-related hidden" id="categoryRelatedDrawer" aria-label="Related categories"></aside>
+                                </section>
+                            </div>
+                        </div>
+
+                        <div id="categoryImportOverlay" class="confirm-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="categoryImportTitle" aria-hidden="true">
+                            <div class="confirm-dialog import-dialog" role="document">
+                                <header class="import-dialog-header">
+                                    <div>
+                                        <h3 id="categoryImportTitle">Import Categories</h3>
+                                        <p id="categoryImportSubtitle" class="import-dialog-subtitle">Upload an Excel (.xls or .xlsx) or CSV file to add new categories or refresh existing ones in bulk.</p>
+                                    </div>
+                                    <button type="button" class="modal-close-btn" id="categoryImportCloseBtn" aria-label="Close import dialog">
+                                        <i class="fas fa-xmark"></i>
+                                    </button>
+                                </header>
+                                <div class="import-body">
+                                    <input type="file" id="categoryImportFileInput" accept=".csv,.xls,.xlsx,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden />
+                                    <div class="import-dropzone" id="categoryImportDropzone" tabindex="0" role="button" aria-describedby="categoryImportHelp">
+                                        <i class="fas fa-cloud-arrow-up import-drop-icon" aria-hidden="true"></i>
+                                        <div class="import-drop-primary">Drag &amp; drop your file</div>
+                                        <div class="import-drop-secondary">or <button type="button" class="btn btn-secondary btn-compact" id="categoryImportBrowseBtn">Browse files</button></div>
+                                        <p class="import-drop-hint" id="categoryImportHelp">Supports Excel (.xls or .xlsx) or CSV • Max 5&nbsp;MB • Required columns: Code, Name, Status</p>
+                                    </div>
+                                    <button type="button" class="btn btn-ghost import-template-btn" id="categoryImportTemplateBtn">
+                                        <i class="fas fa-file-circle-plus"></i>
+                                        Download starter template
+                                    </button>
+                                    <div class="import-tips" aria-label="Import tips">
+                                        <h4>Import tips</h4>
+                                        <ul>
+                                            <li>Existing category codes update the matching records automatically.</li>
+                                            <li>Leave the Parent column blank for top-level categories.</li>
+                                            <li>Status accepts Active or Inactive; blank values default to Draft.</li>
+                                        </ul>
+                                    </div>
+                                    <div class="import-status" id="categoryImportStatus" role="status" aria-live="polite"></div>
+                                    <div class="import-preview hidden" id="categoryImportPreview">
+                                        <div class="import-preview-header">
+                                            <span class="import-file-name" id="categoryImportFileName"></span>
+                                            <span class="import-chip" id="categoryImportChip"></span>
+                                        </div>
+                                        <div class="import-preview-table" id="categoryImportPreviewTable"></div>
+                                    </div>
+                                </div>
+                                <footer class="import-footer">
+                                    <button type="button" class="btn btn-outline" id="categoryImportCancelBtn">
+                                        <i class="fas fa-arrow-left"></i>
+                                        Cancel
+                                    </button>
+                                    <button type="button" class="btn btn-primary" id="categoryImportSubmitBtn" disabled>
+                                        <i class="fas fa-file-arrow-up"></i>
+                                        <span id="categoryImportSubmitLabel">Import Categories</span>
+                                    </button>
+                                </footer>
+                            </div>
+                        </div>
+
+                        <div id="categoryBuilderView" class="role-builder hidden">
+                            <div class="form-card">
+                                <form id="categoryForm" class="form-grid" novalidate>
+                                    <div class="form-group" style="grid-column: 1; width: 200%;">
+                                        <label class="form-label" for="categoryImageInput">Category Image</label>
+                                        <div class="category-image-field">
+                                            <div id="categoryImagePreview" class="category-image-preview" aria-live="polite"></div>
+                                            <input type="file" id="categoryImageInput" class="form-input" accept="image/*" />
+                                        </div>
+                                    </div>
+                                    <div class="form-group" style="grid-column: 3; width: 200%;">
+                                        <label class="form-label" for="categoryParentInput">Parent Category</label>
+                                        <div style="display:flex; gap:8px; align-items:center;">
+                                            <button type="button" id="openCategoryModalBtn" class="btn btn-secondary" style="white-space:nowrap;">Choose</button>
+                                            <input type="text" id="categoryParentInput" class="form-input" placeholder="Select parent" readonly style="background:#f9fafb; cursor:pointer; flex:1; min-width:280px;" />
+                                        </div>
+                                    </div>
+                                    <!-- Category Selection Modal -->
+                                    <div id="categoryModal" class="modal hidden" tabindex="-1" role="dialog" aria-modal="true" style="position:fixed;z-index:1000;left:0;top:0;width:100vw;height:100vh;background:rgba(0,0,0,0.25);display:flex;align-items:center;justify-content:center;">
+                                        <div class="modal-content" style="background:#fff;padding:24px 32px;border-radius:12px;min-width:320px;max-width:90vw;max-height:80vh;overflow:auto;box-shadow:0 8px 32px rgba(0,0,0,0.18);">
+                                            <h2 style="margin-top:0;font-size:20px;">Select Parent</h2>
+                                            <div id="categoryModalList"></div>
+                                            <button type="button" id="closeCategoryModalBtn" class="btn btn-outline" style="margin-top:16px;">Cancel</button>
+                                        </div>
+                                    </div>
+                                    <div class="form-group" style="grid-column: 1;">
+                                        <label class="form-label" for="categoryNameArabicInput">Category (Arabic)</label>
+                                        <input type="text" class="form-input" id="categoryNameArabicInput" placeholder="مثال: السلامة الكهربائية" required />
+                                    </div>
+                                    <div class="form-group" style="grid-column: 2;">
+                                        <label class="form-label" for="categoryDescriptionArInput">Description (Arabic)</label>
+                                        <textarea id="categoryDescriptionArInput" placeholder="أدخل وصف الفئة باللغة العربية"></textarea>
+                                    </div>
+                                    <div class="form-group" style="grid-column: 3;">
+                                        <label class="form-label" for="categoryNameEnglishInput">Category (English)</label>
+                                        <input type="text" class="form-input" id="categoryNameEnglishInput" placeholder="e.g. Electrical Safety" required />
+                                    </div>
+                                    <div class="form-group" style="grid-column: 4;">
+                                        <label class="form-label" for="categoryDescriptionEnInput">Description (English)</label>
+                                        <textarea id="categoryDescriptionEnInput" placeholder="Enter the English category overview"></textarea>
+                                    </div>
+                                    <div class="form-group" style="grid-column: 1;">
+                                        <label class="form-label" for="categoryFeeDueTimeInput">Ad Publishing Fees Due Date</label>
+                                        <select id="categoryFeeDueTimeInput" class="form-select">
+                                            <option value="on-publish">On Publish</option>
+                                            <option value="after-sales">After Sales</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group" style="grid-column: 2;">
+                                        <label class="form-label" for="categoryPriceTypeInput">Ad Publishing Fees Type</label>
+                                        <select id="categoryPriceTypeInput" class="form-select">
+                                            <option value="fixed">Fixed Price</option>
+                                            <option value="percentage">Percentage of Sales</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group" style="grid-column: 3;">
+                                        <label class="form-label" for="categoryPublishPriceInput">Ad Publishing Fees</label>
+                                        <input type="number" class="form-input" id="categoryPublishPriceInput" placeholder="Enter amount" min="0" step="0.01" />
+                                    </div>
+                                    <div class="form-group" style="grid-column: 1;">
+                                        <label class="form-label" for="categoryFreeImagesInput">Free Images Count per Ad</label>
+                                        <input type="number" class="form-input" id="categoryFreeImagesInput" placeholder="Enter count" min="0" />
+                                    </div>
+                                    <div class="form-group" style="grid-column: 2;">
+                                        <label class="form-label" for="categoryExtraImageFeeInput">Additional Image Fees</label>
+                                        <input type="number" class="form-input" id="categoryExtraImageFeeInput" placeholder="Enter fees" min="0" step="0.01" />
+                                    </div>
+                                    <div class="form-group" style="grid-column: 3;">
+                                        <label class="form-label" for="categoryFreeVideosInput">Free Video Links Count per Ad</label>
+                                        <input type="number" class="form-input" id="categoryFreeVideosInput" placeholder="Enter count" min="0" />
+                                    </div>
+                                    <div class="form-group" style="grid-column: 4;">
+                                        <label class="form-label" for="categoryExtraVideoFeeInput">Additional Video Link Fees</label>
+                                        <input type="number" class="form-input" id="categoryExtraVideoFeeInput" placeholder="Enter fees" min="0" step="0.01" />
+                                    </div>
+                                    <div class="form-group" style="grid-column: 1;">
+                                        <label class="form-label" for="categorySubtitleFeeInput">Subtitle Fees</label>
+                                        <input type="number" class="form-input" id="categorySubtitleFeeInput" placeholder="Enter fees" min="0" step="0.01" />
+                                    </div>
+                                    <div class="form-group" style="grid-column: 1 / -1; display:flex; flex-wrap:wrap; gap:24px; align-items:flex-start;">
+                                        <div style="display:flex; flex-direction:column; gap:12px; width: 100%;">
+                                            <div style="display:flex; align-items:center; gap:12px;">
+                                                <label class="toggle-switch" for="categoryEnableFixedToggle">
+                                                    <input type="checkbox" id="categoryEnableFixedToggle" />
+                                                    <span class="toggle-slider"></span>
+                                                </label>
+                                                <span class="helper-text">Enable Fixed Sale Price Option</span>
+                                            </div>
+                                            <div class="form-group hidden" id="categoryFixedSaleFeeGroup" style="margin:0;">
+                                                <label class="form-label" for="categoryFixedSaleFeeInput">Fixed Sale Price Option Fees</label>
+                                                <input type="number" class="form-input" id="categoryFixedSaleFeeInput" placeholder="Enter fees" min="0" step="0.01" />
+                                            </div>
+                                        </div>
+                                        <div style="display:flex; flex-direction:column; gap:12px; width: 100%;">
+                                            <div style="display:flex; align-items:center; gap:12px;">
+                                                <label class="toggle-switch" for="categoryEnableNegotiationToggle">
+                                                    <input type="checkbox" id="categoryEnableNegotiationToggle" />
+                                                    <span class="toggle-slider"></span>
+                                                </label>
+                                                <span class="helper-text">Enable Negotiable Price Option</span>
+                                            </div>
+                                            <div class="form-group hidden" id="categoryNegotiationFeeGroup" style="margin:0;">
+                                                <label class="form-label" for="categoryNegotiationFeeInput">Negotiable Price Option Fees</label>
+                                                <input type="number" class="form-input" id="categoryNegotiationFeeInput" placeholder="Enter fees" min="0" step="0.01" />
+                                            </div>
+                                        </div>
+                                        <div style="display:flex; flex-direction:column; gap:12px; width: 100%;">
+                                            <div style="display:flex; align-items:center; gap:12px;">
+                                                <label class="toggle-switch" for="categoryEnableAuctionToggle">
+                                                    <input type="checkbox" id="categoryEnableAuctionToggle" />
+                                                    <span class="toggle-slider"></span>
+                                                </label>
+                                                <span class="helper-text">Enable Public Auction Option</span>
+                                            </div>
+                                            <div style="display:flex; flex-direction:column; gap:16px; width: 100%;">
+                                                <div style="display:flex; flex-wrap:wrap; gap:16px; width:100%;">
+                                                    <div class="form-group hidden" id="categoryAuctionFeeGroup" style="margin:0; flex:1; min-width:220px;">
+                                                        <label class="form-label" for="categoryAuctionFeeInput">Enable Public Auction Option Fees</label>
+                                                        <input type="number" class="form-input" id="categoryAuctionFeeInput" placeholder="Enter fees" min="0" step="0.01" />
+                                                    </div>
+                                                    <div class="form-group hidden" id="categoryAuctionTimeFeeGroup" style="margin:0; flex:1; min-width:220px;">
+                                                        <label class="form-label" for="categoryAuctionTimeFeeInput">Auction Closing Time Option Fees</label>
+                                                        <input type="number" class="form-input" id="categoryAuctionTimeFeeInput" placeholder="Enter fees" min="0" step="0.01" />
+                                                    </div>
+                                                    <div class="form-group hidden" id="categoryAuctionPeriodsGroup" style="margin:0; flex:1; min-width:260px;">
+                                                        <label class="form-label" for="categoryAuctionPeriodsInput">Default Auction Closing Periods</label>
+                                                        <div style="display:flex; gap:8px; align-items:center;">
+                                                            <button type="button" id="openAuctionPeriodsModalBtn" class="btn btn-secondary" style="white-space:nowrap;">Configure</button>
+                                                            <input type="text" class="form-input" id="categoryAuctionPeriodsInput" placeholder="Add default periods" readonly style="background:#f9fafb; cursor:pointer; flex:1; min-width:220px;" />
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div class="form-group hidden" id="categoryMinimumBidGroup" style="margin:0; width:50%;">
+                                                    <label class="form-label">Minimum Bid</label>
+                                                    <div style="display:flex; flex-wrap:wrap; gap:12px;">
+                                                        <div style="flex:1; min-width:140px;">
+                                                            <label class="form-label" for="categoryMinimumBidValueInput">Value</label>
+                                                            <input type="number" class="form-input" id="categoryMinimumBidValueInput" placeholder="Minimum bid value" min="0" step="0.01" />
+                                                        </div>
+                                                        <div style="flex:1; min-width:140px;">
+                                                            <label class="form-label" for="categoryMinimumBidEditableSelect">Seller can modify</label>
+                                                            <select id="categoryMinimumBidEditableSelect" class="form-select">
+                                                                <option value="yes">Yes</option>
+                                                                <option value="no" selected>No</option>
+                                                            </select>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div style="display:flex; align-items:center; gap:12px; width: 100%;">
+                                            <label class="toggle-switch" for="categoryShowAtHomeToggle">
+                                                <input type="checkbox" id="categoryShowAtHomeToggle" />
+                                                <span class="toggle-slider"></span>
+                                            </label>
+                                            <span class="helper-text">Show on Home Page?</span>
+                                        </div>
+                                        <div style="display:flex; align-items:center; gap:12px; width: 100%;">
+                                            <label class="toggle-switch" for="categoryRealEstateToggle">
+                                                <input type="checkbox" id="categoryRealEstateToggle" />
+                                                <span class="toggle-slider"></span>
+                                            </label>
+                                            <span class="helper-text">Is Real Estate?</span>
+                                        </div>
+                                    </div>
+                                    <div id="auctionPeriodsModal" class="modal hidden" tabindex="-1" role="dialog" aria-modal="true" style="position:fixed;z-index:1000;left:0;top:0;width:100vw;height:100vh;background:rgba(0,0,0,0.25);display:flex;align-items:center;justify-content:center;">
+                                        <div class="modal-content" role="document" style="background:#fff;padding:24px 32px;border-radius:12px;min-width:360px;max-width:600px;max-height:80vh;overflow:auto;box-shadow:0 8px 32px rgba(0,0,0,0.18);">
+                                            <h2 style="margin-top:0;font-size:20px;margin-bottom:16px;">Default Auction Closing Periods</h2>
+                                            <p style="margin-top:0;margin-bottom:16px;color:#4b5563;font-size:14px;">Add one or more default periods that define how long auctions stay open.</p>
+                                            <div id="auctionPeriodsRows" style="display:flex; flex-direction:column; gap:12px;"></div>
+                                            <div style="display:flex; justify-content:flex-end; gap:12px; margin-top:24px;">
+                                                <button type="button" class="btn btn-outline" id="cancelAuctionPeriodsBtn">Cancel</button>
+                                                <button type="button" class="btn btn-primary" id="applyAuctionPeriodsBtn">Apply</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="form-group" style="grid-column: 1 / -1;">
+                                    </div>
+                                    <div class="form-group" style="grid-column: 1 / -1;">
+                                    </div>
+                                    <div style="grid-column: 1 / -1; display:flex; justify-content:flex-end; gap:12px;">
+                                        <button type="button" class="btn btn-outline" id="cancelCategoryFormBtn">
+                                            <i class="fas fa-xmark"></i>
+                                            Cancel
+                                        </button>
+                                        <button type="submit" class="btn btn-primary" id="categoryFormSubmitBtn">
+                                            <i class="fas fa-floppy-disk"></i>
+                                            Add
+                                        </button>
+                                    </div>
+                                </form>
+                                <div id="categoryImageModal" class="category-image-modal hidden" role="dialog" aria-modal="true" aria-hidden="true" tabindex="-1">
+                                    <div class="category-image-modal-dialog" role="document">
+                                        <button type="button" class="category-image-modal-close" id="closeCategoryImageModalBtn" aria-label="Close image preview">
+                                            <i class="fas fa-xmark"></i>
+                                        </button>
+                                        <div class="category-image-modal-body">
+                                            <img id="categoryImageModalImg" src="" alt="" />
+                                        </div>
+                                        <div id="categoryImageModalCaption" class="category-image-modal-caption hidden"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="categoryConfirmOverlay" class="confirm-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="categoryConfirmMessage">
+                            <div class="confirm-dialog">
+                                <p id="categoryConfirmMessage">Archive this category?</p>
+                                <div class="confirm-actions">
+                                    <button type="button" class="btn btn-outline" id="categoryConfirmCancel">Cancel</button>
+                                    <button type="button" class="btn btn-primary" id="categoryConfirmOk">Confirm</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="categoryAlertOverlay" class="confirm-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="categoryAlertMessage">
+                            <div class="confirm-dialog" role="document">
+                                <p id="categoryAlertMessage">Category updated successfully.</p>
+                                <div class="confirm-actions single">
+                                    <button type="button" class="btn btn-primary" id="categoryAlertOk">OK</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="categories-app2" class="sub-app">
+                        <div id="specificationsListView">
+                            <div class="users-header">
+                                <div class="header-stack">
+                                    <h2 class="module-title">Specification Library</h2>
+                                    <div class="search-box">
+                                        <i class="fas fa-search"></i>
+                                        <input type="text" id="specificationSearch" placeholder="Search by Specification, Category, Type, Version, or Status" />
+                                    </div>
+                                </div>
+                                <div class="users-actions">
+                                    <button class="btn btn-primary" id="addSpecificationBtn">
+                                        <i class="fas fa-file-circle-plus"></i>
+                                        Add Specification
+                                    </button>
+                                    <button class="btn btn-outline" id="specificationTemplateBtn">
+                                        <i class="fas fa-table-list"></i>
+                                        Open Template Gallery
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="table-shell">
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>ID</th>
+                                            <th>Specification</th>
+                                            <th>Category</th>
+                                            <th>Data Type</th>
+                                            <th>Required</th>
+                                            <th>Version</th>
+                                            <th>Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td>SPEC-142</td>
+                                            <td>Maximum Load Rating</td>
+                                            <td>Electrical Safety</td>
+                                            <td>Numeric</td>
+                                            <td>Yes</td>
+                                            <td>v2.1</td>
+                                            <td><span class="status-pill success">Active</span></td>
+                                        </tr>
+                                        <tr>
+                                            <td>SPEC-213</td>
+                                            <td>Food Handling Certificate</td>
+                                            <td>Food Hygiene</td>
+                                            <td>Document</td>
+                                            <td>Yes</td>
+                                            <td>v1.4</td>
+                                            <td><span class="status-pill success">Active</span></td>
+                                        </tr>
+                                        <tr>
+                                            <td>SPEC-321</td>
+                                            <td>Evacuation Drill Date</td>
+                                            <td>Fire Readiness</td>
+                                            <td>Date</td>
+                                            <td>No</td>
+                                            <td>v1.0</td>
+                                            <td><span class="status-pill info">Monitoring</span></td>
+                                        </tr>
+                                        <tr>
+                                            <td>SPEC-404</td>
+                                            <td>Water Potability Index</td>
+                                            <td>Water Quality</td>
+                                            <td>Numeric</td>
+                                            <td>Yes</td>
+                                            <td>v3.2</td>
+                                            <td><span class="status-pill warning">Draft</span></td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <div class="form-card" style="margin-top: 24px;">
+                            <div style="display:flex; justify-content: space-between; align-items:flex-start; gap:24px; flex-wrap: wrap;">
+                                <div style="flex:1 1 320px;">
+                                    <h3 style="margin:0 0 8px;">Specification Blueprint</h3>
+                                    <p class="section-subtitle" style="margin:0 0 16px;">Link data types, collection cadence, and validation rules to keep municipalities aligned.</p>
+                                    <p class="helper-text" style="margin:0 0 8px;">Synchronise schema updates with integration partners.</p>
+                                    <p class="helper-text" style="margin:0 0 8px;">Auto-assign audit ownership based on category steward.</p>
+                                    <p class="helper-text" style="margin:0;">Generate localisation drafts for Arabic and English simultaneously.</p>
+                                </div>
+                                <div style="flex:1 1 320px;">
+                                    <form id="specificationForm" class="form-grid" novalidate>
+                                        <div class="form-group">
+                                            <label class="form-label" for="specificationNameInput">Specification Name</label>
+                                            <input type="text" id="specificationNameInput" class="form-input" placeholder="e.g. Evacuation Assembly Point" required />
+                                        </div>
+                                        <div class="form-group">
+                                            <label class="form-label" for="specificationCategoryInput">Category</label>
+                                            <select id="specificationCategoryInput" class="form-select">
+                                                <option value="Electrical Safety">Electrical Safety</option>
+                                                <option value="Food Hygiene">Food Hygiene</option>
+                                                <option value="Fire Readiness">Fire Readiness</option>
+                                                <option value="Water Quality">Water Quality</option>
+                                            </select>
+                                        </div>
+                                        <div class="form-group">
+                                            <label class="form-label" for="specificationTypeInput">Data Type</label>
+                                            <select id="specificationTypeInput" class="form-select">
+                                                <option value="numeric">Numeric</option>
+                                                <option value="text">Text</option>
+                                                <option value="date">Date</option>
+                                                <option value="document">Document</option>
+                                                <option value="boolean">Boolean</option>
+                                            </select>
+                                        </div>
+                                        <div class="form-group">
+                                            <label class="form-label" for="specificationFrequencyInput">Collection Frequency</label>
+                                            <select id="specificationFrequencyInput" class="form-select">
+                                                <option value="per-inspection">Per Inspection</option>
+                                                <option value="weekly">Weekly</option>
+                                                <option value="monthly">Monthly</option>
+                                                <option value="quarterly">Quarterly</option>
+                                            </select>
+                                        </div>
+                                        <div class="form-group">
+                                            <label class="form-label" for="specificationValidationInput">Validation Rule</label>
+                                            <input type="text" id="specificationValidationInput" class="form-input" placeholder="e.g. Must include geo-tagged evidence" />
+                                        </div>
+                                        <div class="form-group" style="grid-column: 1 / -1; display:flex; justify-content:flex-end; gap:12px;">
+                                            <button type="button" class="btn btn-outline" id="specificationResetBtn">
+                                                <i class="fas fa-rotate-left"></i>
+                                                Reset
+                                            </button>
+                                            <button type="submit" class="btn btn-primary" id="specificationSubmitBtn">
+                                                <i class="fas fa-flask"></i>
+                                                Save Blueprint
+                                            </button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </section>
 
                 <section id="settings" class="section-content">

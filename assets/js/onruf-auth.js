@@ -1269,9 +1269,8 @@
         user.auth.passwordHash = hashPassword(password);
         user.auth.lastUpdated = new Date().toISOString();
 
-        ensureInvitationObject(user);
-        user.invitation.completedAt = new Date().toISOString();
-        user.invitation.lastOtpSentAt = new Date().toISOString();
+    ensureInvitationObject(user);
+    user.invitation.lastOtpSentAt = new Date().toISOString();
         authState.otp = user.invitation.otp && String(user.invitation.otp).length === 6 ? String(user.invitation.otp) : generateOtp();
         user.invitation.otp = authState.otp;
         authState.otpExpiresAt = Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000;
@@ -1333,8 +1332,10 @@
 
         user.status = 'Active';
         user.accountType = user.accountType === 'pending-invite' ? 'platform-user' : user.accountType;
-        ensureInvitationObject(user);
-        user.invitation.verifiedAt = new Date().toISOString();
+    ensureInvitationObject(user);
+    const verificationTimestamp = new Date().toISOString();
+    user.invitation.completedAt = verificationTimestamp;
+    user.invitation.verifiedAt = verificationTimestamp;
         user.lastLogin = 'Awaiting first login';
 
         saveUsersToStorage();
