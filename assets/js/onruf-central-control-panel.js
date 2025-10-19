@@ -224,7 +224,7 @@ function renderCategoryModalTree(items, onSelect, options = {}) {
 
     const roots = buildCategoryModalHierarchy(items);
     if (!roots.length) {
-        container.innerHTML = '<div style="color:#888;">No categories available.</div>';
+        container.innerHTML = '<div style="color:#888;text-align:center;padding:16px;">There is no Data Available</div>';
         return;
     }
 
@@ -978,8 +978,10 @@ const CATEGORY_AD_FEE_TYPE_LABELS = new Map([
 const CATEGORY_EXPORT_COLUMNS = [
     { id: 'index', label: '#', value: (_, index) => String(index + 1) },
     { id: 'categoryCode', label: 'Category Code', value: category => category.categoryCode || category.id || '' },
-    { id: 'categoryName', label: 'Category Name', value: category => getCategoryDisplayName(category) },
-    { id: 'description', label: 'Description', value: category => category.englishDescription || category.description || '' },
+    { id: 'categoryNameArabic', label: 'Category Name (Arabic)', value: category => category.nameArabic || category.arabicName || '' },
+    { id: 'descriptionArabic', label: 'Description (Arabic)', value: category => category.arabicDescription || category.descriptionArabic || '' },
+    { id: 'categoryNameEnglish', label: 'Category Name (English)', value: category => category.nameEnglish || category.englishName || '' },
+    { id: 'descriptionEnglish', label: 'Description (English)', value: category => category.englishDescription || category.description || '' },
     { id: 'parentCategory', label: 'Parent Category', value: category => resolveCategoryParentLabel(category) },
     { id: 'categoryStatus', label: 'Category Status', value: category => getCategoryStatusLabel(category.status) },
     { id: 'creationDate', label: 'Creation Date', value: category => formatDateForDisplay(category.createdAt) || '' },
@@ -1100,9 +1102,70 @@ const CATEGORY_IMPORT_ENDPOINT = '';
 const CATEGORY_IMPORT_CONFIG = {
     maxFileSizeBytes: 5 * 1024 * 1024,
     allowedExtensions: new Set(['csv', 'xls', 'xlsx']),
-    requiredColumns: ['code', 'name', 'status'],
+    requiredColumns: ['category name (arabic)', 'category name (english)'],
     previewRowLimit: 12
 };
+
+const CATEGORY_IMPORT_COLUMN_ALIASES = new Map([
+    ['category code', ['category code', 'code']],
+    ['parent category', ['parent category', 'parent code', 'parent']],
+    ['category name (arabic)', ['category name (arabic)', 'name (arabic)', 'arabic name']],
+    ['category name (english)', ['category name (english)', 'name (english)', 'name']],
+    ['status', ['status']]
+]);
+
+function normalizeCategoryHeaderLabel(label) {
+    if (label == null) {
+        return '';
+    }
+    return String(label)
+        .replace(/[\u2000-\u200F\u202A-\u202E\u2066-\u206F\uFEFF\u00AD\u2028\u2029]/g, '')
+        .replace(/\u00a0/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .toLowerCase();
+}
+
+function formatCategoryImportColumnLabel(column) {
+    if (!column) {
+        return '';
+    }
+    return column.replace(/\b\w/g, char => char.toUpperCase());
+}
+
+function getMissingCategoryImportColumns(header) {
+    const lookup = new Set(header.map(normalizeCategoryHeaderLabel).filter(Boolean));
+    const missing = CATEGORY_IMPORT_CONFIG.requiredColumns.filter(column => {
+        const aliases = CATEGORY_IMPORT_COLUMN_ALIASES.get(column) || [column];
+        return !aliases.some(alias => lookup.has(normalizeCategoryHeaderLabel(alias)));
+    });
+    return missing.map(formatCategoryImportColumnLabel);
+}
+
+function buildCategoryImportColumnIndex(header) {
+    const normalizedHeader = header.map(normalizeCategoryHeaderLabel);
+    const columnIndex = new Map();
+
+    normalizedHeader.forEach((name, index) => {
+        if (name) {
+            columnIndex.set(name, index);
+        }
+    });
+
+    CATEGORY_IMPORT_COLUMN_ALIASES.forEach((aliases, canonical) => {
+        const canonicalKey = normalizeCategoryHeaderLabel(canonical);
+        aliases.forEach(alias => {
+            const normalizedAlias = normalizeCategoryHeaderLabel(alias);
+            const aliasIndex = normalizedHeader.indexOf(normalizedAlias);
+            if (aliasIndex !== -1 && canonicalKey) {
+                columnIndex.set(canonicalKey, aliasIndex);
+            }
+        });
+    });
+
+    const getIndex = name => columnIndex.get(normalizeCategoryHeaderLabel(name));
+    return { columnIndex, normalizedHeader, getIndex };
+}
 
 const CATEGORY_IMPORT_ALLOWED_STATUSES = new Set(['active', 'inactive']);
 
@@ -1136,6 +1199,16 @@ const categoryImportElements = {
 };
 
 let categoryImportXlsxLoader = null;
+let categoryImportFileDialogOpen = false;
+let categoryImportFileDialogFocusHandler = null;
+
+function releaseCategoryImportFileDialogGuard() {
+    categoryImportFileDialogOpen = false;
+    if (categoryImportFileDialogFocusHandler) {
+        window.removeEventListener('focus', categoryImportFileDialogFocusHandler, true);
+        categoryImportFileDialogFocusHandler = null;
+    }
+}
 
 function ensureCategoryImportXlsxParser() {
     if (typeof window !== 'undefined' && window.XLSX) {
@@ -1171,6 +1244,7 @@ function ensureCategoryImportXlsxParser() {
 }
 
 let categoryLookupById = new Map();
+let categoryLookupByCode = new Map();
 let categoryChildrenLookup = new Map();
 let categoryDepthLookup = new Map();
 let categoryDescendantCache = new Map();
@@ -1300,6 +1374,49 @@ const permissionSectionsTemplate = [
                 label: 'Distribution Schedules',
                 description: 'Report scheduling, recipient lists, and delivery tracking.',
                 defaultAction: 'modify'
+            }
+        ]
+    },
+    {
+        id: 'diagrams',
+        label: 'Diagrams',
+        description: 'Architecture references, interaction models, and communication blueprints.',
+        apps: [
+            {
+                id: 'diagrams-component',
+                label: 'Component Diagrams',
+                description: 'Service inventory, dependencies, and deployment scope.',
+                defaultAction: 'view'
+            },
+            {
+                id: 'diagrams-package',
+                label: 'Package Diagrams',
+                description: 'Capability bundles mapped to delivery offerings.',
+                defaultAction: 'modify'
+            },
+            {
+                id: 'diagrams-usecase',
+                label: 'Use Case Diagrams',
+                description: 'Stakeholder journeys and value exchanges.',
+                defaultAction: 'view'
+            },
+            {
+                id: 'diagrams-activity',
+                label: 'Activity Diagrams',
+                description: 'Process choreography and automation triggers.',
+                defaultAction: 'view'
+            },
+            {
+                id: 'diagrams-interaction',
+                label: 'Interaction Overview',
+                description: 'Cross-team plays and escalation pathways.',
+                defaultAction: 'view'
+            },
+            {
+                id: 'diagrams-communication',
+                label: 'Communication Diagrams',
+                description: 'Message flows, latency targets, and reliability patterns.',
+                defaultAction: 'view'
             }
         ]
     },
@@ -1539,7 +1656,7 @@ const CATEGORIES_STORAGE_KEY = 'onruf_categories_v1';
 const SESSION_STORAGE_KEY = 'onruf_active_session_v1';
 const DATA_RESET_VERSION = '20241005-super-admin-seed';
 const DATA_RESET_KEY = 'onruf_data_reset_version';
-const CATEGORY_RESET_VERSION = '20251018-delete-all-now';
+const CATEGORY_RESET_VERSION = '20251019-delete-all-categories';
 const CATEGORY_RESET_KEY = 'onruf_category_reset_version';
 const INVITATION_VALIDITY_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -2041,6 +2158,18 @@ function ensureCategoryCodeTrailingDot(code) {
         return '';
     }
     return trimmed.endsWith('.') ? trimmed : `${trimmed}.`;
+}
+
+function normalizeCategoryCodeCandidate(code) {
+    const trimmed = typeof code === 'string' ? code.trim() : '';
+    if (!trimmed) {
+        return '';
+    }
+    const segments = parseNumericCategoryCodeSegments(trimmed);
+    if (segments && segments.length) {
+        return formatCategoryCodeFromSegments(segments).toLowerCase();
+    }
+    return trimmed.toLowerCase();
 }
 
 function parseNumericCategoryCodeSegments(code) {
@@ -3436,9 +3565,9 @@ function setupEventListeners() {
         bulkModifyBtn.addEventListener('click', () => handleCategoryBulkAction('modify'));
     }
 
-    const bulkDeleteBtn = document.getElementById('categoryBulkDeleteBtn');
-    if (bulkDeleteBtn) {
-        bulkDeleteBtn.addEventListener('click', () => handleCategoryBulkAction('delete'));
+    const deleteAllBtn = document.getElementById('categoryDeleteAllBtn');
+    if (deleteAllBtn) {
+        deleteAllBtn.addEventListener('click', handleCategoryDeleteAllRequest);
     }
 
     if (!categoryGlobalDeselectHandlerBound) {
@@ -3756,6 +3885,7 @@ function updateBreadcrumb(sectionId = state.currentSection) {
         categories: 'Categories',
         settings: 'Settings',
         reports: 'Reports',
+        diagrams: 'Diagrams',
         packages: 'Packages',
         products: 'Products',
         'onruf-users': 'ONRUF Users',
@@ -3857,6 +3987,11 @@ function updateCategoryBadges() {
         ? categories.reduce((sum, entry) => sum + (Number.isFinite(entry.specificationCount) ? entry.specificationCount : 0), 0)
         : 0;
 
+    const deleteAllBtn = document.getElementById('categoryDeleteAllBtn');
+    if (deleteAllBtn) {
+        deleteAllBtn.disabled = totalCategories === 0;
+    }
+
     const categoryBadge = document.getElementById('categoryCountLabel');
     if (categoryBadge) {
         const label = totalCategories === 1 ? 'Category' : 'Categories';
@@ -3883,8 +4018,10 @@ function deleteAllCategories({ refresh = true } = {}) {
     state.categoryCompareMode = false;
     state.categoryFilteredList = [];
     rebuildCategoryCaches();
+    updateCategorySelectionSummary();
     if (refresh) {
         refreshCategoryDirectoryView({ rebuildCaches: true, resetScroll: true });
+    } else {
         updateCategoryBadges();
     }
 }
@@ -3900,6 +4037,15 @@ function resolveCategoryByIdentifier(identifier) {
     const normalized = String(identifier).trim().toLowerCase();
     if (!normalized) {
         return null;
+    }
+    if (categoryLookupByCode instanceof Map && categoryLookupByCode.size) {
+        const normalizedCode = normalizeCategoryCodeCandidate(identifier);
+        if (normalizedCode && categoryLookupByCode.has(normalizedCode)) {
+            return categoryLookupByCode.get(normalizedCode);
+        }
+        if (categoryLookupByCode.has(normalized)) {
+            return categoryLookupByCode.get(normalized);
+        }
     }
     return categories.find(entry => {
         if (!entry) return false;
@@ -3941,6 +4087,7 @@ function compareCategoriesForTree(a, b) {
 
 function rebuildCategoryCaches() {
     categoryLookupById = new Map();
+    categoryLookupByCode = new Map();
     categoryChildrenLookup = new Map();
     categoryDepthLookup = new Map();
     categoryParentLookup = new Map();
@@ -3960,6 +4107,20 @@ function rebuildCategoryCaches() {
         const id = category.id.trim();
         if (!id) return;
         categoryLookupById.set(id, category);
+        const normalizedCode = normalizeCategoryCodeCandidate(category.categoryCode || id);
+        if (normalizedCode) {
+            categoryLookupByCode.set(normalizedCode, category);
+            if (normalizedCode.endsWith('.')) {
+                const withoutDot = normalizedCode.slice(0, -1);
+                if (withoutDot && !categoryLookupByCode.has(withoutDot)) {
+                    categoryLookupByCode.set(withoutDot, category);
+                }
+            }
+        }
+        const normalizedId = id.toLowerCase();
+        if (normalizedId && !categoryLookupByCode.has(normalizedId)) {
+            categoryLookupByCode.set(normalizedId, category);
+        }
         const parentId = getCategoryParentId(category);
         categoryParentLookup.set(id, parentId);
         if (!categoryChildrenLookup.has(parentId)) {
@@ -4065,6 +4226,40 @@ function collectCategoryAncestorIds(categoryId) {
         ancestors.push(CATEGORY_TREE_ROOT_ID);
     }
     return ancestors;
+}
+
+function collectCategoryDescendants(categoryId) {
+    if (!categoryId || !(categoryChildrenLookup instanceof Map)) {
+        return [];
+    }
+    if (categoryDescendantCache.has(categoryId)) {
+        const cached = categoryDescendantCache.get(categoryId);
+        return Array.isArray(cached) ? cached.slice() : [];
+    }
+
+    const descendants = [];
+    const visited = new Set();
+    const stack = [...(categoryChildrenLookup.get(categoryId) || [])];
+
+    while (stack.length) {
+        const current = stack.pop();
+        if (!current || typeof current.id !== 'string') {
+            continue;
+        }
+        const normalizedId = current.id.trim();
+        if (!normalizedId || visited.has(normalizedId)) {
+            continue;
+        }
+        visited.add(normalizedId);
+        descendants.push(current);
+        const children = categoryChildrenLookup.get(normalizedId) || [];
+        for (let index = children.length - 1; index >= 0; index -= 1) {
+            stack.push(children[index]);
+        }
+    }
+
+    categoryDescendantCache.set(categoryId, descendants);
+    return descendants.slice();
 }
 
 function ensureCategoryExplorerExpanded(nodeId) {
@@ -4364,7 +4559,7 @@ function renderCategoryTree() {
     };
 
     const markup = buildMarkup(CATEGORY_TREE_ROOT_ID, 0);
-    container.innerHTML = markup || '<div class="tree-empty">No categories available.</div>';
+    container.innerHTML = markup || '<div class="tree-empty">There is no Data Available</div>';
 }
 
 function setCategoryExplorerCollapsed(collapsed) {
@@ -4624,7 +4819,9 @@ function exportCategoryView() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `categories-${new Date().toISOString().slice(0, 10)}.xls`;
+    const exportTimestamp = new Date();
+    const exportDate = `${String(exportTimestamp.getDate()).padStart(2, '0')}-${String(exportTimestamp.getMonth() + 1).padStart(2, '0')}-${exportTimestamp.getFullYear()}`;
+    link.download = `Categories_Export_${exportDate}.xls`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -4707,10 +4904,20 @@ function initializeCategoryImportWorkflow() {
 }
 
 function triggerCategoryImportFilePicker() {
-    if (categoryImportState.isSubmitting) {
+    if (categoryImportState.isSubmitting || categoryImportFileDialogOpen) {
         return;
     }
     if (categoryImportElements.fileInput) {
+        categoryImportFileDialogOpen = true;
+        if (!categoryImportFileDialogFocusHandler) {
+            categoryImportFileDialogFocusHandler = () => {
+                // When the file dialog closes (regardless of selection), release the guard on the next frame.
+                setTimeout(() => {
+                    releaseCategoryImportFileDialogGuard();
+                }, 0);
+            };
+            window.addEventListener('focus', categoryImportFileDialogFocusHandler, true);
+        }
         categoryImportElements.fileInput.click();
     }
 }
@@ -4724,6 +4931,7 @@ function openCategoryImportOverlay() {
     setCategoryImportStatus('Choose an Excel (.xls or .xlsx) or CSV (.csv) file to get started.', 'info');
     categoryImportElements.overlay.classList.remove('hidden');
     categoryImportElements.overlay.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('body-locked');
     document.addEventListener('keydown', handleCategoryImportKeydown);
     requestAnimationFrame(() => {
         if (categoryImportElements.dropzone) {
@@ -4738,7 +4946,9 @@ function closeCategoryImportOverlay() {
     }
     categoryImportElements.overlay.classList.add('hidden');
     categoryImportElements.overlay.setAttribute('aria-hidden', 'true');
+    document.body.classList.remove('body-locked');
     document.removeEventListener('keydown', handleCategoryImportKeydown);
+    releaseCategoryImportFileDialogGuard();
     resetCategoryImportState();
 }
 
@@ -4781,6 +4991,7 @@ function handleCategoryImportDrop(event) {
 }
 
 function resetCategoryImportState() {
+    releaseCategoryImportFileDialogGuard();
     categoryImportState.file = null;
     categoryImportState.format = 'csv';
     categoryImportState.header = [];
@@ -4840,7 +5051,7 @@ function refreshCategoryImportControls() {
         categoryImportElements.submitBtn.disabled = isSubmitting || !hasRows || hasBlockingErrors;
     }
     if (categoryImportElements.submitLabel) {
-        categoryImportElements.submitLabel.textContent = isSubmitting ? 'Uploading…' : 'Import Categories';
+        categoryImportElements.submitLabel.textContent = isSubmitting ? 'Uploading...' : 'Import';
     }
     if (categoryImportElements.cancelBtn) {
         categoryImportElements.cancelBtn.disabled = isSubmitting;
@@ -4864,6 +5075,7 @@ function handleCategoryImportFile(file) {
     if (categoryImportState.isSubmitting) {
         return;
     }
+    releaseCategoryImportFileDialogGuard();
     if (!file) {
         resetCategoryImportState();
         setCategoryImportStatus('No file selected yet.', 'info');
@@ -4896,10 +5108,10 @@ function handleCategoryImportFile(file) {
     }
 
     if (categoryImportState.format === 'xlsx') {
-        setCategoryImportStatus('Loading Excel parser…', 'info');
+    setCategoryImportStatus('Loading Excel parser...', 'info');
         ensureCategoryImportXlsxParser()
             .then(() => {
-                setCategoryImportStatus('Analyzing file…', 'info');
+                setCategoryImportStatus('Analyzing file...', 'info');
                 const reader = new FileReader();
                 reader.onload = event => {
                     const result = event.target?.result;
@@ -4919,7 +5131,7 @@ function handleCategoryImportFile(file) {
         return;
     }
 
-    setCategoryImportStatus('Analyzing file…', 'info');
+    setCategoryImportStatus('Analyzing file...', 'info');
 
     const reader = new FileReader();
     reader.onload = event => {
@@ -5009,9 +5221,12 @@ function applyParsedCategoryImportResult(parsed) {
         : (categoryImportState.warnings.length || hasRowWarnings)
             ? 'warning'
             : '';
-    const chipLabel = categoryImportState.truncated
-        ? `#${categoryImportState.rows.length}+ preview row${categoryImportState.rows.length === 1 ? '' : 's'}`
-        : `#${categoryImportState.totalRows} row${categoryImportState.totalRows === 1 ? '' : 's'}`;
+    const previewCount = categoryImportState.rows.length;
+    const totalCount = categoryImportState.totalRows || previewCount;
+    const isTruncatedPreview = categoryImportState.truncated && totalCount > previewCount;
+    const chipLabel = isTruncatedPreview
+        ? `Previewing ${previewCount} of ${totalCount} rows`
+        : `${totalCount} row${totalCount === 1 ? '' : 's'}`;
     categoryImportElements.chip.textContent = chipLabel;
     categoryImportElements.chip.className = `import-chip${chipTone ? ` ${chipTone}` : ''}`;
 
@@ -5106,8 +5321,7 @@ function parseCategoryXlsxPreview(arrayBuffer, rowLimit) {
 
     const rows = previewSource.map(row => header.map((_, index) => normalizeCell(Array.isArray(row) ? row[index] : '')));
 
-    const lowerHeader = header.map(cell => cell.toLowerCase());
-    const missingRequired = CATEGORY_IMPORT_CONFIG.requiredColumns.filter(column => !lowerHeader.includes(column));
+    const missingRequired = getMissingCategoryImportColumns(header);
     if (missingRequired.length) {
         errors.push(`Missing required column${missingRequired.length > 1 ? 's' : ''}: ${missingRequired.join(', ')}`);
     }
@@ -5172,8 +5386,7 @@ function parseCategoryHtmlPreview(htmlText, rowLimit) {
     const header = headerCells.map(cell => cell.trim());
 
     // Ensure required columns exist.
-    const lowerHeader = header.map(cell => cell.toLowerCase());
-    const missingRequired = CATEGORY_IMPORT_CONFIG.requiredColumns.filter(column => !lowerHeader.includes(column));
+    const missingRequired = getMissingCategoryImportColumns(header);
     if (missingRequired.length) {
         errors.push(`Missing required column${missingRequired.length > 1 ? 's' : ''}: ${missingRequired.join(', ')}`);
     }
@@ -5252,9 +5465,7 @@ function parseCategoryCsvPreview(text, rowLimit) {
 
     const headerRaw = collectedRows[0];
     const header = headerRaw.map(cell => cell.trim());
-    const headerLookup = header.map(cell => cell.toLowerCase());
-
-    const missingRequired = CATEGORY_IMPORT_CONFIG.requiredColumns.filter(column => !headerLookup.includes(column));
+    const missingRequired = getMissingCategoryImportColumns(header);
     if (missingRequired.length) {
         errors.push(`Missing required column${missingRequired.length > 1 ? 's' : ''}: ${missingRequired.join(', ')}`);
     }
@@ -5287,56 +5498,103 @@ function validateCategoryImportRows(header, rows) {
         return { rowMetadata: [], errors: [], warnings: [] };
     }
 
-    const lowerHeader = header.map(cell => cell.toLowerCase());
-    const columnIndex = new Map(lowerHeader.map((name, index) => [name, index]));
+    const { getIndex } = buildCategoryImportColumnIndex(header);
     const rowMetadata = rows.map(() => ({ issues: [], severity: 'ok' }));
     const errors = [];
     const warnings = [];
 
-    const formatColumnLabel = column => column.charAt(0).toUpperCase() + column.slice(1);
+    const formatColumnLabel = formatCategoryImportColumnLabel;
+    const addIssue = (meta, message, severity = 'error') => {
+        if (!message) {
+            return;
+        }
+        meta.issues.push(message);
+        if (severity === 'error') {
+            meta.severity = 'error';
+        } else if (severity === 'warning' && meta.severity !== 'error') {
+            meta.severity = 'warning';
+        }
+    };
+
+    if (!(categoryLookupById instanceof Map) || !categoryLookupById.size) {
+        rebuildCategoryCaches();
+    }
+
+    const statusIndex = getIndex('status');
+    const codeIndex = getIndex('category code');
+    const parentIndex = getIndex('parent category');
     const seenCodes = new Set();
     let errorCount = 0;
     let warningCount = 0;
 
     rows.forEach((cells, rowIndex) => {
         const meta = rowMetadata[rowIndex];
+
         CATEGORY_IMPORT_CONFIG.requiredColumns.forEach(column => {
-            const requiredIndex = columnIndex.get(column);
+            const requiredIndex = getIndex(column);
             if (requiredIndex === undefined) {
                 return;
             }
             const value = (cells[requiredIndex] || '').trim();
             if (!value) {
-                meta.issues.push(`${formatColumnLabel(column)} is required`);
-                meta.severity = 'error';
+                addIssue(meta, `${formatColumnLabel(column)} is required`);
             }
         });
 
-        const statusIndex = columnIndex.get('status');
         if (statusIndex !== undefined) {
             const rawStatus = (cells[statusIndex] || '').trim();
             if (rawStatus) {
                 const normalizedStatus = rawStatus.toLowerCase();
                 if (!CATEGORY_IMPORT_ALLOWED_STATUSES.has(normalizedStatus)) {
-                    meta.issues.push('Status will default to Draft');
-                    if (meta.severity !== 'error') {
-                        meta.severity = 'warning';
-                    }
+                    addIssue(meta, 'Status will default to Draft', 'warning');
                 }
             }
         }
 
-        const codeIndex = columnIndex.get('code');
-        if (codeIndex !== undefined) {
-            const codeValue = (cells[codeIndex] || '').trim().toLowerCase();
-            if (codeValue) {
-                if (seenCodes.has(codeValue)) {
-                    meta.issues.push('Duplicate Code in file');
-                    if (meta.severity !== 'error') {
-                        meta.severity = 'warning';
-                    }
+        const codeValueRaw = codeIndex !== undefined ? String(cells[codeIndex] || '').trim() : '';
+        if (codeIndex !== undefined && codeValueRaw) {
+            const normalizedDuplicateKey = normalizeCategoryCodeCandidate(codeValueRaw);
+            const duplicateKey = normalizedDuplicateKey || codeValueRaw.toLowerCase();
+            if (seenCodes.has(duplicateKey)) {
+                addIssue(meta, 'Duplicate Code in file', 'warning');
+            } else {
+                seenCodes.add(duplicateKey);
+            }
+        }
+        const parentValueRaw = parentIndex !== undefined ? String(cells[parentIndex] || '').trim() : '';
+
+        const existingCategory = codeValueRaw ? resolveCategoryByIdentifier(codeValueRaw) : null;
+
+        if (codeValueRaw && !existingCategory) {
+            addIssue(meta, 'Category Code does not match any existing category. Leave it blank to add a new category.');
+        }
+
+        if (!codeValueRaw && parentValueRaw) {
+            const parentCategory = resolveCategoryByIdentifier(parentValueRaw);
+            if (!parentCategory) {
+                addIssue(meta, 'Parent Category does not match an existing category. Use an existing code when linking to a parent.');
+            }
+        }
+
+        if (codeValueRaw && existingCategory) {
+            if (parentValueRaw) {
+                const parentCategory = resolveCategoryByIdentifier(parentValueRaw);
+                if (!parentCategory) {
+                    addIssue(meta, 'Parent Category does not match an existing category. Use an existing code when linking to a parent.');
                 } else {
-                    seenCodes.add(codeValue);
+                    const cachedParentId = categoryParentLookup instanceof Map && categoryParentLookup.size
+                        ? categoryParentLookup.get(existingCategory.id)
+                        : null;
+                    const actualParentId = cachedParentId || getCategoryParentId(existingCategory);
+                    if (!actualParentId || actualParentId === CATEGORY_TREE_ROOT_ID) {
+                        addIssue(meta, 'This category is currently top-level. Remove the Parent Category value to continue.');
+                    } else if (parentCategory.id !== actualParentId) {
+                        const actualParent = categoryLookupById instanceof Map ? categoryLookupById.get(actualParentId) : null;
+                        const expectedParentLabel = actualParent
+                            ? (actualParent.categoryCode || actualParent.id || getCategoryDisplayName(actualParent) || 'the current parent')
+                            : 'the current parent';
+                        addIssue(meta, `Parent Category mismatch. Use ${expectedParentLabel} or leave the Parent Category blank.`);
+                    }
                 }
             }
         }
@@ -5349,10 +5607,10 @@ function validateCategoryImportRows(header, rows) {
     });
 
     if (errorCount) {
-        errors.push(`${errorCount} row${errorCount === 1 ? '' : 's'} missing required data. Fix highlighted rows before importing.`);
+        errors.push(`${errorCount} row${errorCount === 1 ? '' : 's'} contain blocking issues. Fix highlighted rows before importing.`);
     }
     if (warningCount) {
-        warnings.push(`${warningCount} row${warningCount === 1 ? '' : 's'} will rely on default values. Review highlighted rows before importing.`);
+        warnings.push(`${warningCount} row${warningCount === 1 ? '' : 's'} include warnings. Review highlighted rows before importing.`);
     }
 
     return { rowMetadata, errors, warnings };
@@ -5377,10 +5635,88 @@ function buildCategoryImportPreviewTable(header, rows, rowMetadata = []) {
 }
 
 function downloadCategoryImportTemplate() {
-    const header = ['Code', 'Name', 'Description', 'Parent', 'Status'];
+    const header = [
+        'Category Code',
+        'Category Name (Arabic)',
+        'Description (Arabic)',
+        'Category Name (English)',
+        'Description (English)',
+        'Parent Category',
+        'Ad Publishing Fees Due Date',
+        'Ad Publishing Fees Type',
+        'Ad Publishing Fees',
+        'Free Images Count per Ad',
+        'Additional Image Fees',
+        'Free Video Links Count per Ad',
+        'Additional Video Link Fees',
+        'Subtitle Fees',
+        'Enable Fixed Sale Price Option',
+        'Enable Fixed Sale Price Option Fees',
+        'Enable Negotiable Price Option',
+        'Enable Negotiable Price Option Fees',
+        'Enable Public Auction Option',
+        'Enable Public Auction Option Fees',
+        'Auction Closing Time Option Fees',
+        'Default Auction Closing Periods',
+        'Minimum Bid (Value, Seller Can Modify?)',
+        'Show on Home Page?',
+        'Is Real Estate?'
+    ];
     const sampleRows = [
-        ['CAT-010', 'Electrical Safety', 'Equipment inspections and safety checks', '', 'Active'],
-        ['CAT-011', 'Elevator Maintenance', 'Mandatory lift maintenance and reporting', 'CAT-010', 'Inactive']
+        [
+            '',
+            'سلامة المعدات',
+            'فحوصات السلامة الدورية للمعدات',
+            'Equipment Safety',
+            'Routine safety inspections for field equipment',
+            '1.2.',
+            'On Publish',
+            'Fixed',
+            '50',
+            '5',
+            '10',
+            '1',
+            '15',
+            '5',
+            'Yes',
+            '25',
+            'Yes',
+            '10',
+            'No',
+            '0',
+            '0',
+            '48h | 72h',
+            '1000 (Yes)',
+            'Yes',
+            'No'
+        ],
+        [
+            '1.5.9.',
+            'صيانة المصاعد',
+            'خدمات الصيانة الدورية للمصاعد',
+            'Elevator Maintenance',
+            'Mandatory elevator upkeep and reporting',
+            '1.5.',
+            'After Sales',
+            'Percentage',
+            '5%',
+            '3',
+            '8',
+            '0',
+            '12',
+            '3',
+            'No',
+            '0',
+            'Yes',
+            '0',
+            'Yes',
+            '50',
+            '25',
+            '24h | 36h',
+            '500 (No)',
+            'No',
+            'Yes'
+        ]
     ];
     const headerHtml = header.map(cell => `<th>${escapeHtml(cell)}</th>`).join('');
     const rowsHtml = sampleRows
@@ -5392,7 +5728,7 @@ function downloadCategoryImportTemplate() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = 'category-import-template.xls';
+    link.download = 'Category_Import_Template.xls';
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -5426,17 +5762,19 @@ async function submitCategoryImport() {
         return;
     }
 
-    const totalCount = categoryImportState.totalRows || categoryImportState.rows.length;
-    const displayCount = categoryImportState.truncated ? `${categoryImportState.rows.length}+` : totalCount;
-    const isSingular = !categoryImportState.truncated && totalCount === 1;
+    const previewCount = categoryImportState.rows.length;
+    const totalCount = categoryImportState.totalRows || previewCount;
+    const truncatedPreview = categoryImportState.truncated && totalCount > previewCount;
+    const displayCount = truncatedPreview ? `${previewCount} of ${totalCount}` : `${totalCount}`;
+    const noun = truncatedPreview ? 'categories' : (totalCount === 1 ? 'category' : 'categories');
     const fileName = categoryImportState.file.name || 'your file';
 
     setCategoryImportSubmitting(true);
-    setCategoryImportStatus('Uploading import…', 'info');
+    setCategoryImportStatus('Uploading import...', 'info');
 
     if (!CATEGORY_IMPORT_ENDPOINT) {
         window.setTimeout(() => {
-            showNotification('success', `Import preview ready for ${displayCount} categor${isSingular ? 'y' : 'ies'} from ${fileName}. Connect your backend endpoint to complete the sync.`, 4600, 'categoryNotificationArea');
+            showNotification('success', `Import preview ready for ${displayCount} ${noun} from ${fileName}. Connect your backend endpoint to complete the sync.`, 4600, 'categoryNotificationArea');
             closeCategoryImportOverlay();
             setCategoryImportSubmitting(false);
         }, 900);
@@ -5509,10 +5847,6 @@ function updateCategorySelectionSummary() {
     const bulkArchiveBtn = document.getElementById('categoryBulkArchiveBtn');
     if (bulkArchiveBtn) {
         bulkArchiveBtn.disabled = selectedCount !== 1 || !hasActiveCategory;
-    }
-    const bulkDeleteBtn = document.getElementById('categoryBulkDeleteBtn');
-    if (bulkDeleteBtn) {
-        bulkDeleteBtn.disabled = selectedCount !== 1;
     }
     const bulkModifyBtn = document.getElementById('categoryBulkModifyBtn');
     if (bulkModifyBtn) {
@@ -5951,27 +6285,88 @@ async function handleCategoryBulkAction(action) {
             showNotification('info', message, 3200, 'categoryNotificationArea');
             return;
         }
-        const confirmation = await showCategoryConfirm(
-            action === 'activate'
-                ? 'Are You Sure You Want to Activate the Category Again?'
-                : 'Are You Sure You Want to Deactivate this Category?',
-            'OK',
-            'Cancel'
-        );
-        if (!confirmation) return;
+
         const [category] = payload;
-        const nextStatus = action === 'activate' ? 'active' : 'inactive';
-        category.status = nextStatus;
-        category.updatedAt = new Date().toISOString();
+
+        if (action === 'activate') {
+            const confirmation = await showCategoryConfirm('Are You Sure You Want to Activate the Category Again?', 'OK', 'Cancel');
+            if (!confirmation) {
+                return;
+            }
+
+            const parentId = categoryParentLookup.get(category.id) || getCategoryParentId(category);
+            const hasParent = parentId && parentId !== CATEGORY_TREE_ROOT_ID;
+            if (hasParent) {
+                const parentCategory = categoryLookupById.get(parentId);
+                if (parentCategory && getCategoryStatusFilterGroup(parentCategory.status) !== 'active') {
+                    showNotification('warning', 'This Category Cannot be Activated Because the Parent Category is Inactive', 4200, 'categoryNotificationArea');
+                    return;
+                }
+            }
+
+            category.status = 'active';
+            category.updatedAt = new Date().toISOString();
+            saveCategoriesToStorage();
+            refreshCategoryDirectoryView({ rebuildCaches: true, resetScroll: false, keepScroll: true });
+            updateCategorySelectionSummary();
+            showNotification('success', 'Category Activated Successfully', 3200, 'categoryNotificationArea');
+            return;
+        }
+
+        const initialConfirmation = await showCategoryConfirm('Are You Sure You Want to Deactivate this Category?', 'OK', 'Cancel');
+        if (!initialConfirmation) {
+            return;
+        }
+
+        const descendants = collectCategoryDescendants(category.id);
+        const activeDescendants = descendants.filter(entry => getCategoryStatusFilterGroup(entry.status) === 'active');
+
+        if (activeDescendants.length) {
+            const pluralSuffix = activeDescendants.length === 1 ? 'y' : 'ies';
+            const warningMessage = `This Category Contains ${activeDescendants.length} Active Subcategor${pluralSuffix}. All of Them Will be Disabled. Do You Want to Continue?`;
+            const proceed = await showCategoryConfirm(warningMessage, 'OK', 'Cancel');
+            if (!proceed) {
+                return;
+            }
+        }
+
+        const timestamp = new Date().toISOString();
+        const categoriesToDeactivate = activeDescendants.length ? [category, ...descendants] : [category];
+        categoriesToDeactivate.forEach(entry => {
+            if (!entry) {
+                return;
+            }
+            entry.status = 'inactive';
+            entry.updatedAt = timestamp;
+        });
+
         saveCategoriesToStorage();
-        refreshCategoryDirectoryView({ rebuildCaches: false, resetScroll: false, keepScroll: true });
+        refreshCategoryDirectoryView({ rebuildCaches: true, resetScroll: false, keepScroll: true });
         updateCategorySelectionSummary();
-        const successMessage = action === 'activate'
-            ? 'Category Activated Successfully'
-            : 'Category Deactivated Successfully';
-        showNotification('success', successMessage, 3200, 'categoryNotificationArea');
+        showNotification('success', 'Category Deactivated Successfully', 3200, 'categoryNotificationArea');
         return;
     }
+}
+
+async function handleCategoryDeleteAllRequest() {
+    const totalCategories = Array.isArray(categories) ? categories.length : 0;
+    if (!totalCategories) {
+        showNotification('info', 'No categories available to delete.', 3200, 'categoryNotificationArea');
+        return;
+    }
+
+    const confirmation = await showCategoryConfirm(
+        `Delete all ${totalCategories} categor${totalCategories === 1 ? 'y' : 'ies'}? This action cannot be undone.`,
+        'Delete All',
+        'Cancel'
+    );
+
+    if (!confirmation) {
+        return;
+    }
+
+    deleteAllCategories({ refresh: true });
+    showNotification('success', 'All categories deleted successfully.', 3600, 'categoryNotificationArea');
 }
 
 function toggleCategoryCompareMode(force) {
@@ -6488,8 +6883,8 @@ async function handleCategoryFormSubmit(event) {
     const statusFieldPresent = !!statusField;
 
     const requiredFieldConfigs = [
-        { id: 'categoryNameArabicInput', label: 'Category (Arabic)' },
-        { id: 'categoryNameEnglishInput', label: 'Category (English)' }
+    { id: 'categoryNameArabicInput', label: 'Category Name (Arabic)' },
+    { id: 'categoryNameEnglishInput', label: 'Category Name (English)' }
     ];
 
     const missingField = requiredFieldConfigs.find(({ id }) => {
@@ -6538,6 +6933,48 @@ async function handleCategoryFormSubmit(event) {
             showNotification('error', 'Selected category could not be found.', 4000, 'categoryNotificationArea');
             return;
         }
+
+        const parentInput = document.getElementById('categoryParentInput');
+        const resolveParentCandidateId = () => {
+            const explicitParentId = typeof categoryData.parentCategoryId === 'string'
+                ? categoryData.parentCategoryId.trim()
+                : '';
+            if (explicitParentId) {
+                return explicitParentId;
+            }
+            const parentLabel = typeof categoryData.parent === 'string' ? categoryData.parent.trim() : '';
+            if (!parentLabel) {
+                return '';
+            }
+            const resolvedParent = resolveCategoryByIdentifier(parentLabel);
+            return resolvedParent && resolvedParent.id ? resolvedParent.id : '';
+        };
+
+        const nextParentId = resolveParentCandidateId();
+        if (nextParentId) {
+            if (nextParentId === existing.id) {
+                if (parentInput && typeof parentInput.focus === 'function') {
+                    parentInput.focus();
+                }
+                showNotification('error', 'A Category Cannot be Set as Its Own Parent.', 4600, 'categoryNotificationArea');
+                return;
+            }
+
+            if (!(categoryChildrenLookup instanceof Map) || !(categoryParentLookup instanceof Map) || !categoryLookupById.size) {
+                rebuildCategoryCaches();
+            }
+
+            const descendantList = collectCategoryDescendants(existing.id);
+            const descendantIds = new Set(descendantList.map(item => item && item.id ? item.id.trim() : '').filter(Boolean));
+            if (descendantIds.has(nextParentId)) {
+                if (parentInput && typeof parentInput.focus === 'function') {
+                    parentInput.focus();
+                }
+                showNotification('error', 'A Subcategory Cannot be Set as a Parent Category for the Current Category', 4800, 'categoryNotificationArea');
+                return;
+            }
+        }
+
         const previousLabel = getCategoryDisplayName(existing);
         const previousStatus = existing.status;
         Object.assign(existing, categoryData);

@@ -36,6 +36,10 @@
                     <i class="fas fa-chart-line"></i>
                     <span class="menu-text">Reports</span>
                 </a>
+                <a href="#diagrams" class="menu-item" data-section="diagrams">
+                    <i class="fas fa-project-diagram"></i>
+                    <span class="menu-text">Diagrams</span>
+                </a>
                 <a href="#packages" class="menu-item" data-section="packages">
                     <i class="fas fa-box-open"></i>
                     <span class="menu-text">Packages</span>
@@ -765,9 +769,9 @@
                                                 <i class="fas fa-pen"></i>
                                                 <span>Modify</span>
                                             </button>
-                                            <button type="button" class="action-btn with-label delete" id="categoryBulkDeleteBtn" disabled aria-label="Delete selected categories" title="Delete selected categories">
+                                            <button type="button" class="action-btn with-label delete" id="categoryDeleteAllBtn" aria-label="Delete all categories" title="Delete all categories">
                                                 <i class="fas fa-trash"></i>
-                                                <span>Delete</span>
+                                                <span>Delete All</span>
                                             </button>
                                         </div>
                                         <div class="detail-filters">
@@ -813,7 +817,7 @@
                                 <header class="import-dialog-header">
                                     <div>
                                         <h3 id="categoryImportTitle">Import Categories</h3>
-                                        <p id="categoryImportSubtitle" class="import-dialog-subtitle">Upload an Excel (.xls or .xlsx) or CSV file to add new categories or refresh existing ones in bulk.</p>
+                                        <p id="categoryImportSubtitle" class="import-dialog-subtitle">Upload an Excel (.xls or .xlsx) or CSV file to Add New Categories or Refresh Existing Ones in Bulk.</p>
                                     </div>
                                     <button type="button" class="modal-close-btn" id="categoryImportCloseBtn" aria-label="Close import dialog">
                                         <i class="fas fa-xmark"></i>
@@ -825,7 +829,11 @@
                                         <i class="fas fa-cloud-arrow-up import-drop-icon" aria-hidden="true"></i>
                                         <div class="import-drop-primary">Drag &amp; drop your file</div>
                                         <div class="import-drop-secondary">or <button type="button" class="btn btn-secondary btn-compact" id="categoryImportBrowseBtn">Browse files</button></div>
-                                        <p class="import-drop-hint" id="categoryImportHelp">Supports Excel (.xls or .xlsx) or CSV • Max 5&nbsp;MB • Required columns: Code, Name, Status</p>
+                                        <p class="import-drop-hint" id="categoryImportHelp">
+                                            Supports Excel (.xls or .xlsx) or CSV<br />
+                                            Max 5&nbsp;MB<br />
+                                            Required columns: Category Name (Arabic), Category Name (English)
+                                        </p>
                                     </div>
                                     <button type="button" class="btn btn-ghost import-template-btn" id="categoryImportTemplateBtn">
                                         <i class="fas fa-file-circle-plus"></i>
@@ -836,7 +844,6 @@
                                         <ul>
                                             <li>Existing category codes update the matching records automatically.</li>
                                             <li>Leave the Parent column blank for top-level categories.</li>
-                                            <li>Status accepts Active or Inactive; blank values default to Draft.</li>
                                         </ul>
                                     </div>
                                     <div class="import-status" id="categoryImportStatus" role="status" aria-live="polite"></div>
@@ -855,7 +862,7 @@
                                     </button>
                                     <button type="button" class="btn btn-primary" id="categoryImportSubmitBtn" disabled>
                                         <i class="fas fa-file-arrow-up"></i>
-                                        <span id="categoryImportSubmitLabel">Import Categories</span>
+                                        <span id="categoryImportSubmitLabel">Import</span>
                                     </button>
                                 </footer>
                             </div>
@@ -887,7 +894,7 @@
                                         </div>
                                     </div>
                                     <div class="form-group" style="grid-column: 1;">
-                                        <label class="form-label" for="categoryNameArabicInput">Category (Arabic)</label>
+                                        <label class="form-label" for="categoryNameArabicInput">Category Name (Arabic)</label>
                                         <input type="text" class="form-input" id="categoryNameArabicInput" placeholder="مثال: السلامة الكهربائية" required />
                                     </div>
                                     <div class="form-group" style="grid-column: 2;">
@@ -895,7 +902,7 @@
                                         <textarea id="categoryDescriptionArInput" placeholder="أدخل وصف الفئة باللغة العربية"></textarea>
                                     </div>
                                     <div class="form-group" style="grid-column: 3;">
-                                        <label class="form-label" for="categoryNameEnglishInput">Category (English)</label>
+                                        <label class="form-label" for="categoryNameEnglishInput">Category Name (English)</label>
                                         <input type="text" class="form-input" id="categoryNameEnglishInput" placeholder="e.g. Electrical Safety" required />
                                     </div>
                                     <div class="form-group" style="grid-column: 4;">
@@ -1601,6 +1608,368 @@
                                     <button class="btn btn-primary" type="button">Generate Preview</button>
                                 </div>
                             </div>
+                        </div>
+                    </div>
+                </section>
+
+                <section id="diagrams" class="section-content">
+                    <div class="section-header">
+                        <h1 class="section-title">Architecture Diagrams</h1>
+                        <p class="section-subtitle">Centralize platform blueprints, interaction models, and operating flows for quick stakeholder alignment.</p>
+                    </div>
+                    <div class="sub-apps-nav">
+                        <button class="sub-app-btn active" data-target="diagrams-component" data-label="Component Diagrams">
+                            <span>Component Diagrams</span>
+                            <span>Service Inventory</span>
+                        </button>
+                        <button class="sub-app-btn" data-target="diagrams-package" data-label="Package Diagrams">
+                            <span>Package Diagrams</span>
+                            <span>Delivery Bundles</span>
+                        </button>
+                        <button class="sub-app-btn" data-target="diagrams-usecase" data-label="Use Case Diagrams">
+                            <span>Use Case Diagrams</span>
+                            <span>Stakeholder Journeys</span>
+                        </button>
+                        <button class="sub-app-btn" data-target="diagrams-activity" data-label="Activity Diagrams">
+                            <span>Activity Diagrams</span>
+                            <span>Process Orchestration</span>
+                        </button>
+                        <button class="sub-app-btn" data-target="diagrams-interaction" data-label="Interaction Overview">
+                            <span>Interaction Overview</span>
+                            <span>Cross-Team Plays</span>
+                        </button>
+                        <button class="sub-app-btn" data-target="diagrams-communication" data-label="Communication Diagrams">
+                            <span>Communication Diagrams</span>
+                            <span>Signal Exchange</span>
+                        </button>
+                    </div>
+
+                    <div id="diagrams-component" class="sub-app active">
+                        <div class="diagram-intro">
+                            <p>Map every core service, microservice, and shared utility to clarify ownership, dependencies, and deployment scope. Use these component snapshots to accelerate onboarding and reduce integration ambiguity.</p>
+                        </div>
+                        <div class="diagram-grid">
+                            <article class="diagram-card">
+                                <header class="diagram-card-header">
+                                    <div>
+                                        <h3>Central Services Mesh</h3>
+                                        <p>Shows orchestration between authentication, workflow, notification, and analytics engines.</p>
+                                    </div>
+                                    <span class="diagram-tag">Current</span>
+                                </header>
+                                <div class="diagram-preview" role="img" aria-label="Component diagram placeholder for central services">
+                                    <div class="diagram-preview-placeholder">
+                                        <i class="fas fa-project-diagram" aria-hidden="true"></i>
+                                        <span>Core Components</span>
+                                    </div>
+                                </div>
+                                <dl class="diagram-metadata">
+                                    <div>
+                                        <dt>Owner</dt>
+                                        <dd>Platform Engineering</dd>
+                                    </div>
+                                    <div>
+                                        <dt>Last Review</dt>
+                                        <dd>Sep 2025</dd>
+                                    </div>
+                                    <div>
+                                        <dt>Format</dt>
+                                        <dd>Visio · PDF</dd>
+                                    </div>
+                                </dl>
+                            </article>
+                            <article class="diagram-card">
+                                <header class="diagram-card-header">
+                                    <div>
+                                        <h3>Field Operations Edge</h3>
+                                        <p>Details mobile inspector tooling, offline sync agents, and telemetry ingestion services.</p>
+                                    </div>
+                                    <span class="diagram-tag status-in-progress">Draft</span>
+                                </header>
+                                <div class="diagram-preview" role="img" aria-label="Component diagram placeholder for field operations edge">
+                                    <div class="diagram-preview-placeholder">
+                                        <i class="fas fa-tablet-screen-button" aria-hidden="true"></i>
+                                        <span>Edge Modules</span>
+                                    </div>
+                                </div>
+                                <ul class="diagram-highlights">
+                                    <li>Offline-first sync contracts</li>
+                                    <li>Geo-fencing & dispatch integration</li>
+                                    <li>Escalation channels to command center</li>
+                                </ul>
+                                <div class="diagram-card-footer">
+                                    <button class="btn btn-outline" type="button">Request SME Review</button>
+                                    <button class="btn btn-primary" type="button">Open Workspace</button>
+                                </div>
+                            </article>
+                        </div>
+                    </div>
+
+                    <div id="diagrams-package" class="sub-app">
+                        <div class="diagram-intro">
+                            <p>Connect business capabilities to delivery bundles so finance, product, and operations teams can coordinate release roadmaps and contract structures.</p>
+                        </div>
+                        <div class="diagram-grid">
+                            <article class="diagram-card">
+                                <header class="diagram-card-header">
+                                    <div>
+                                        <h3>Inspection Services Package</h3>
+                                        <p>Bundled modules for scheduling, crew routing, compliance validation, and invoicing.</p>
+                                    </div>
+                                    <span class="diagram-tag">Ready</span>
+                                </header>
+                                <div class="diagram-preview" role="img" aria-label="Package diagram placeholder for inspection services">
+                                    <div class="diagram-preview-placeholder">
+                                        <i class="fas fa-boxes-stacked" aria-hidden="true"></i>
+                                        <span>Package Layers</span>
+                                    </div>
+                                </div>
+                                <dl class="diagram-metadata">
+                                    <div>
+                                        <dt>Primary Owner</dt>
+                                        <dd>Service Design Office</dd>
+                                    </div>
+                                    <div>
+                                        <dt>Renewal Cycle</dt>
+                                        <dd>Bi-Annual</dd>
+                                    </div>
+                                    <div>
+                                        <dt>Artifact</dt>
+                                        <dd>Archimate · PPT</dd>
+                                    </div>
+                                </dl>
+                            </article>
+                            <article class="diagram-card">
+                                <header class="diagram-card-header">
+                                    <div>
+                                        <h3>Marketplace Growth Package</h3>
+                                        <p>Marketing automation, seller enablement, and partner analytics delivered as one stack.</p>
+                                    </div>
+                                </header>
+                                <div class="diagram-preview" role="img" aria-label="Package diagram placeholder for marketplace growth">
+                                    <div class="diagram-preview-placeholder">
+                                        <i class="fas fa-layer-group" aria-hidden="true"></i>
+                                        <span>Growth Modules</span>
+                                    </div>
+                                </div>
+                                <ul class="diagram-highlights">
+                                    <li>Campaign studio + recommendation engine</li>
+                                    <li>Seller onboarding and scoring bundle</li>
+                                    <li>Partner revenue dashboards</li>
+                                </ul>
+                                <div class="diagram-card-footer">
+                                    <button class="btn btn-outline" type="button">Share With Sales</button>
+                                    <button class="btn btn-primary" type="button">Download Assets</button>
+                                </div>
+                            </article>
+                        </div>
+                    </div>
+
+                    <div id="diagrams-usecase" class="sub-app">
+                        <div class="diagram-intro">
+                            <p>Clarify the objectives and participating actors for every strategic workflow. These diagrams keep product, policy, and technology teams aligned on expected value delivery.</p>
+                        </div>
+                        <div class="diagram-grid">
+                            <article class="diagram-card">
+                                <header class="diagram-card-header">
+                                    <div>
+                                        <h3>Rapid Inspection Response</h3>
+                                        <p>Captures municipality, inspector, command center, and citizen touchpoints.</p>
+                                    </div>
+                                    <span class="diagram-tag">Featured</span>
+                                </header>
+                                <div class="diagram-preview" role="img" aria-label="Use case diagram placeholder for rapid inspection">
+                                    <div class="diagram-preview-placeholder">
+                                        <i class="fas fa-person-running" aria-hidden="true"></i>
+                                        <span>Scenario Actors</span>
+                                    </div>
+                                </div>
+                                <ul class="diagram-highlights">
+                                    <li>Incident intake and prioritisation</li>
+                                    <li>Automated route assignment</li>
+                                    <li>Outcome confirmation loop</li>
+                                </ul>
+                            </article>
+                            <article class="diagram-card">
+                                <header class="diagram-card-header">
+                                    <div>
+                                        <h3>Seller Onboarding Journey</h3>
+                                        <p>Illustrates collaboration between seller, compliance reviewer, and marketplace admin.</p>
+                                    </div>
+                                </header>
+                                <div class="diagram-preview" role="img" aria-label="Use case diagram placeholder for seller onboarding">
+                                    <div class="diagram-preview-placeholder">
+                                        <i class="fas fa-user-check" aria-hidden="true"></i>
+                                        <span>Engagement Model</span>
+                                    </div>
+                                </div>
+                                <dl class="diagram-metadata">
+                                    <div>
+                                        <dt>Owner</dt>
+                                        <dd>Customer Success</dd>
+                                    </div>
+                                    <div>
+                                        <dt>Last Workshop</dt>
+                                        <dd>Aug 2025</dd>
+                                    </div>
+                                    <div>
+                                        <dt>KPIs</dt>
+                                        <dd>Activation SLA · NPS</dd>
+                                    </div>
+                                </dl>
+                            </article>
+                        </div>
+                    </div>
+
+                    <div id="diagrams-activity" class="sub-app">
+                        <div class="diagram-intro">
+                            <p>Outline the end-to-end process choreography so teams can coordinate hand-offs, service levels, and automation triggers.</p>
+                        </div>
+                        <div class="diagram-timeline">
+                            <div class="timeline-entry">
+                                <div class="timeline-point"></div>
+                                <div class="timeline-content">
+                                    <h4>Inspection Lifecycle Flow</h4>
+                                    <p>From request submission through assignment, field execution, quality assurance, and billing.</p>
+                                    <span class="timeline-meta">Owner: Operations Control · SLA: 48 hours</span>
+                                </div>
+                            </div>
+                            <div class="timeline-entry">
+                                <div class="timeline-point"></div>
+                                <div class="timeline-content">
+                                    <h4>Marketplace Dispute Resolution</h4>
+                                    <p>Highlights automated triage, agent investigation, and merchant remediation steps.</p>
+                                    <span class="timeline-meta">Owner: Trust & Safety · SLA: 72 hours</span>
+                                </div>
+                            </div>
+                            <div class="timeline-entry">
+                                <div class="timeline-point"></div>
+                                <div class="timeline-content">
+                                    <h4>Invoice Reconciliation Loop</h4>
+                                    <p>Accounts receivable activities, exception management, and reporting checkpoints.</p>
+                                    <span class="timeline-meta">Owner: Finance Ops · SLA: 5 days</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="diagram-card-footer diagram-action-bar">
+                            <button class="btn btn-outline" type="button">Export BPMN</button>
+                            <button class="btn btn-primary" type="button">Launch RPA Assessment</button>
+                        </div>
+                    </div>
+
+                    <div id="diagrams-interaction" class="sub-app">
+                        <div class="diagram-intro">
+                            <p>Illustrate cross-team handshakes for priority programs so leaders can monitor readiness, escalation points, and contingency plays.</p>
+                        </div>
+                        <div class="diagram-grid">
+                            <article class="diagram-card">
+                                <header class="diagram-card-header">
+                                    <div>
+                                        <h3>Emergency Response Play</h3>
+                                        <p>Links municipalities, command center, field teams, and analytics for rapid situational awareness.</p>
+                                    </div>
+                                    <span class="diagram-tag">Operational</span>
+                                </header>
+                                <div class="diagram-preview" role="img" aria-label="Interaction overview placeholder for emergency response">
+                                    <div class="diagram-preview-placeholder">
+                                        <i class="fas fa-wave-square" aria-hidden="true"></i>
+                                        <span>Coordination Flow</span>
+                                    </div>
+                                </div>
+                                <ul class="diagram-highlights">
+                                    <li>Notification fan-out in under 5 minutes</li>
+                                    <li>Cross-agency command cadence</li>
+                                    <li>After-action insight loop</li>
+                                </ul>
+                            </article>
+                            <article class="diagram-card">
+                                <header class="diagram-card-header">
+                                    <div>
+                                        <h3>Vendor Escalation Path</h3>
+                                        <p>Shows how procurement, legal, and service owners coordinate on contract breaches.</p>
+                                    </div>
+                                </header>
+                                <div class="diagram-preview" role="img" aria-label="Interaction overview placeholder for vendor escalation">
+                                    <div class="diagram-preview-placeholder">
+                                        <i class="fas fa-sitemap" aria-hidden="true"></i>
+                                        <span>Escalation Map</span>
+                                    </div>
+                                </div>
+                                <dl class="diagram-metadata">
+                                    <div>
+                                        <dt>Owner</dt>
+                                        <dd>Procurement Office</dd>
+                                    </div>
+                                    <div>
+                                        <dt>Trigger Threshold</dt>
+                                        <dd>3 SLA misses</dd>
+                                    </div>
+                                    <div>
+                                        <dt>Contact Matrix</dt>
+                                        <dd>Updated monthly</dd>
+                                    </div>
+                                </dl>
+                            </article>
+                        </div>
+                    </div>
+
+                    <div id="diagrams-communication" class="sub-app">
+                        <div class="diagram-intro">
+                            <p>Document system-to-system message exchanges so integration teams can validate payload design, latency expectations, and retry strategies.</p>
+                        </div>
+                        <div class="diagram-grid">
+                            <article class="diagram-card">
+                                <header class="diagram-card-header">
+                                    <div>
+                                        <h3>Inspection Data Sync</h3>
+                                        <p>Sequence of events between mobile app, event bus, analytics lake, and compliance archive.</p>
+                                    </div>
+                                    <span class="diagram-tag">Stable</span>
+                                </header>
+                                <div class="diagram-preview" role="img" aria-label="Communication diagram placeholder for inspection data sync">
+                                    <div class="diagram-preview-placeholder">
+                                        <i class="fas fa-arrows-turn-to-dots" aria-hidden="true"></i>
+                                        <span>Message Flow</span>
+                                    </div>
+                                </div>
+                                <dl class="diagram-metadata">
+                                    <div>
+                                        <dt>Protocol</dt>
+                                        <dd>REST · Webhook</dd>
+                                    </div>
+                                    <div>
+                                        <dt>Latency Target</dt>
+                                        <dd>< 45 seconds</dd>
+                                    </div>
+                                    <div>
+                                        <dt>Error Budget</dt>
+                                        <dd>0.2%</dd>
+                                    </div>
+                                </dl>
+                            </article>
+                            <article class="diagram-card">
+                                <header class="diagram-card-header">
+                                    <div>
+                                        <h3>Payments Clearing</h3>
+                                        <p>Messaging topology between marketplace, payment gateway, ledger, and banking APIs.</p>
+                                    </div>
+                                </header>
+                                <div class="diagram-preview" role="img" aria-label="Communication diagram placeholder for payments clearing">
+                                    <div class="diagram-preview-placeholder">
+                                        <i class="fas fa-money-check-dollar" aria-hidden="true"></i>
+                                        <span>Settlement Flow</span>
+                                    </div>
+                                </div>
+                                <ul class="diagram-highlights">
+                                    <li>Idempotency + reconciliation logic</li>
+                                    <li>Fraud detection tap points</li>
+                                    <li>Alerting and retry schedules</li>
+                                </ul>
+                                <div class="diagram-card-footer">
+                                    <button class="btn btn-outline" type="button">Download Sequence</button>
+                                    <button class="btn btn-primary" type="button">Open API Spec</button>
+                                </div>
+                            </article>
                         </div>
                     </div>
                 </section>

@@ -135,6 +135,18 @@ body.dark-mode .tree-children {
     border-left-color: var(--border-dark);
 }
 
+.tree-empty {
+    padding: 24px;
+    text-align: center;
+    font-size: 14px;
+    color: var(--muted-light);
+    font-weight: 600;
+}
+
+body.dark-mode .tree-empty {
+    color: #cbd5f5;
+}
+
 /* Buttons used for selection within tree rows */
 .tree-row .btn.btn-outline {
     padding: 8px 16px;
@@ -242,6 +254,10 @@ body {
     background: var(--background-light);
     color: var(--text-light);
     display: flex;
+}
+
+body.body-locked {
+    overflow: hidden;
 }
 
 body.dark-mode {
@@ -824,6 +840,11 @@ body.dark-mode .permission-section-toggle span {
     z-index: 200;
 }
 
+#categoryImportOverlay {
+    align-items: center;
+    padding: 32px 16px;
+}
+
 .confirm-dialog {
     background: var(--card-light);
     border-radius: 16px;
@@ -842,6 +863,12 @@ body.dark-mode .confirm-dialog {
     display: flex;
     flex-direction: column;
     gap: 24px;
+}
+
+#categoryImportOverlay .import-dialog {
+    margin: 0 auto;
+    max-height: calc(100vh - 80px);
+    overflow-y: auto;
 }
 
 .import-dialog-header {
@@ -1077,7 +1104,8 @@ body.dark-mode .import-preview {
 }
 
 .import-preview-table {
-    overflow-x: auto;
+    overflow: auto;
+    max-height: min(360px, 45vh);
 }
 
 .import-preview-table table {
@@ -1833,6 +1861,10 @@ body.dark-mode .user-meta {
 #roleDirectoryView table td:first-child {
     min-width: 68px;
     width: 68px;
+    text-align: center;
+    color: var(--muted-light);
+    font-size: 16px;
+    font-weight: 600;
 }
 
 #roleDirectoryView table th:nth-child(4),
@@ -5058,6 +5090,286 @@ mark {
     .category-grid-header,
     .category-grid-row {
         width: 960px;
+    }
+}
+
+.diagram-intro {
+    margin-bottom: 24px;
+    padding: 18px 24px;
+    border-radius: 18px;
+    background: linear-gradient(135deg, rgba(37, 99, 235, 0.08), rgba(99, 102, 241, 0.12));
+    border: 1px solid rgba(37, 99, 235, 0.18);
+    font-size: 15px;
+    line-height: 1.6;
+}
+
+body.dark-mode .diagram-intro {
+    background: rgba(37, 99, 235, 0.16);
+    border-color: rgba(148, 163, 184, 0.28);
+}
+
+.diagram-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 24px;
+    align-items: stretch;
+}
+
+.diagram-card {
+    background: var(--card-light);
+    border-radius: 20px;
+    border: 1px solid var(--border-light);
+    box-shadow: 0 18px 44px rgba(15, 23, 42, 0.08);
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+}
+
+body.dark-mode .diagram-card {
+    background: var(--card-dark);
+    border-color: var(--border-dark);
+    box-shadow: 0 24px 54px rgba(2, 6, 23, 0.55);
+}
+
+.diagram-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 18px;
+}
+
+.diagram-card-header h3 {
+    margin: 0 0 6px;
+    font-size: 18px;
+}
+
+.diagram-card-header p {
+    margin: 0;
+    font-size: 14px;
+    color: var(--muted-light);
+    line-height: 1.5;
+}
+
+body.dark-mode .diagram-card-header p {
+    color: var(--muted-dark);
+}
+
+.diagram-tag {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 6px 14px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    background: rgba(37, 99, 235, 0.12);
+    color: var(--primary);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+
+.status-in-progress {
+    background: rgba(245, 158, 11, 0.14);
+    color: #b45309;
+}
+
+body.dark-mode .status-in-progress {
+    background: rgba(245, 158, 11, 0.32);
+    color: #fbbf24;
+}
+
+.diagram-preview {
+    border: 1px dashed rgba(37, 99, 235, 0.35);
+    border-radius: 16px;
+    padding: 28px;
+    background: rgba(37, 99, 235, 0.05);
+}
+
+body.dark-mode .diagram-preview {
+    border-color: rgba(148, 163, 184, 0.38);
+    background: rgba(148, 163, 184, 0.12);
+}
+
+.diagram-preview-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    color: var(--muted-light);
+    text-align: center;
+}
+
+.diagram-preview-placeholder i {
+    font-size: 32px;
+    color: var(--primary);
+}
+
+body.dark-mode .diagram-preview-placeholder {
+    color: var(--muted-dark);
+}
+
+.diagram-preview-placeholder span {
+    font-weight: 600;
+    letter-spacing: 0.02em;
+}
+
+.diagram-highlights {
+    margin: 0;
+    padding: 0 0 0 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    font-size: 14px;
+    line-height: 1.4;
+    color: var(--muted-light);
+}
+
+body.dark-mode .diagram-highlights {
+    color: var(--muted-dark);
+}
+
+.diagram-card-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    margin-top: auto;
+}
+
+.diagram-action-bar {
+    justify-content: flex-start;
+    gap: 16px;
+    margin-top: 32px;
+}
+
+.diagram-metadata {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 12px 18px;
+    margin: 0;
+}
+
+.diagram-metadata div {
+    background: rgba(37, 99, 235, 0.06);
+    border-radius: 12px;
+    padding: 12px 14px;
+}
+
+body.dark-mode .diagram-metadata div {
+    background: rgba(148, 163, 184, 0.16);
+}
+
+.diagram-metadata dt {
+    margin: 0 0 4px;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--muted-light);
+}
+
+body.dark-mode .diagram-metadata dt {
+    color: var(--muted-dark);
+}
+
+.diagram-metadata dd {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.diagram-briefing {
+    background: rgba(37, 99, 235, 0.08);
+    border: 1px solid rgba(37, 99, 235, 0.16);
+    border-radius: 18px;
+    padding: 20px 24px;
+}
+
+body.dark-mode .diagram-briefing {
+    background: rgba(37, 99, 235, 0.18);
+    border-color: rgba(148, 163, 184, 0.32);
+}
+
+.diagram-briefing h3 {
+    margin: 0 0 8px;
+}
+
+.diagram-timeline {
+    position: relative;
+    margin-top: 28px;
+    padding-left: 36px;
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+}
+
+.diagram-timeline::before {
+    content: '';
+    position: absolute;
+    left: 16px;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: rgba(37, 99, 235, 0.28);
+}
+
+body.dark-mode .diagram-timeline::before {
+    background: rgba(148, 163, 184, 0.4);
+}
+
+.timeline-entry {
+    display: flex;
+    gap: 16px;
+}
+
+.timeline-point {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--primary);
+    box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.18);
+    margin-top: 6px;
+}
+
+body.dark-mode .timeline-point {
+    box-shadow: 0 0 0 4px rgba(148, 163, 184, 0.28);
+}
+
+.timeline-content h4 {
+    margin: 0 0 6px;
+    font-size: 16px;
+}
+
+.timeline-content p {
+    margin: 0 0 8px;
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--muted-light);
+}
+
+body.dark-mode .timeline-content p {
+    color: var(--muted-dark);
+}
+
+.timeline-meta {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--muted-light);
+}
+
+body.dark-mode .timeline-meta {
+    color: var(--muted-dark);
+}
+
+@media (max-width: 640px) {
+    .diagram-card-footer {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .diagram-grid {
+        grid-template-columns: 1fr;
     }
 }
 
