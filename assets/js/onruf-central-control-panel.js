@@ -78,9 +78,8 @@ function buildCategoryDisplayPath(entry, categories) {
         }
         current = lookup.get(canonicalize(parentRef)) || null;
     }
-    return path.join(' / ');
+        return path.join(' / ');
 }
-
 function buildCategoryModalHierarchy(items) {
     const nodes = new Map();
     const aliasLookup = new Map();
@@ -497,6 +496,11 @@ const AUCTION_PERIOD_UNIT_LABELS = new Map(AUCTION_PERIOD_UNIT_OPTIONS.map(optio
 let auctionPeriodsWorkingCopy = [];
 let auctionPeriodsPendingFocusIndex = null;
 
+let subSpecificationWorkingCopy = [];
+let subSpecificationPendingFocusIndex = null;
+
+let specificationCategoriesWorkingSet = new Set();
+
 function sanitizeAuctionPeriodEntry(entry) {
     if (!entry) return null;
     const unitRaw = typeof entry.unit === 'string' ? entry.unit.trim().toLowerCase() : '';
@@ -863,6 +867,633 @@ const CATEGORY_TOGGLE_SECTIONS = [
     }
 ];
 
+function sanitizeSubSpecificationEntry(entry) {
+    if (!entry || typeof entry !== 'object') {
+        return null;
+    }
+    const nameArabic = typeof entry.nameArabic === 'string' ? entry.nameArabic.trim() : '';
+    const nameEnglish = typeof entry.nameEnglish === 'string' ? entry.nameEnglish.trim() : '';
+    if (!nameArabic && !nameEnglish) {
+        return null;
+    }
+    return { nameArabic, nameEnglish };
+}
+
+function sanitizeSubSpecificationList(entries) {
+    if (entries == null) {
+        return [];
+    }
+    let source = entries;
+    if (typeof source === 'string') {
+        const trimmed = source.trim();
+        if (!trimmed) {
+            return [];
+        }
+        try {
+            source = JSON.parse(trimmed);
+        } catch (error) {
+            console.warn('Unable to parse stored sub specification payload:', error);
+            return [];
+        }
+    }
+    if (!Array.isArray(source)) {
+        return [];
+    }
+    const seen = new Set();
+    const sanitized = [];
+    source.forEach(item => {
+        const normalized = sanitizeSubSpecificationEntry(item);
+        if (!normalized) {
+            return;
+        }
+        const key = `${normalized.nameEnglish.toLowerCase()}|${normalized.nameArabic.toLowerCase()}`;
+        if (seen.has(key)) {
+            return;
+        }
+        seen.add(key);
+        sanitized.push(normalized);
+    });
+    return sanitized.slice(0, 60);
+}
+
+function formatSubSpecificationSummary(entries) {
+    const sanitized = sanitizeSubSpecificationList(entries);
+    if (!sanitized.length) {
+        return '';
+    }
+    return sanitized
+        .map(entry => {
+            if (entry.nameEnglish && entry.nameArabic && entry.nameEnglish !== entry.nameArabic) {
+                return `${entry.nameEnglish} (${entry.nameArabic})`;
+            }
+            return entry.nameEnglish || entry.nameArabic;
+        })
+        .join(', ');
+}
+
+function getSubSpecificationInputElement() {
+    return document.getElementById('specificationSubSpecificationsInput');
+}
+
+function setSubSpecificationsInput(entries) {
+    const input = getSubSpecificationInputElement();
+    if (!input) {
+        return;
+    }
+    const sanitized = sanitizeSubSpecificationList(entries);
+    if (!sanitized.length) {
+        input.value = '';
+        if (input.dataset) {
+            delete input.dataset.subSpecifications;
+        }
+        return;
+    }
+    input.value = formatSubSpecificationSummary(sanitized);
+    if (input.dataset) {
+        input.dataset.subSpecifications = JSON.stringify(sanitized);
+    }
+}
+
+function getSubSpecificationsFromInput() {
+    const input = getSubSpecificationInputElement();
+    if (!input || !input.dataset || !input.dataset.subSpecifications) {
+        return [];
+    }
+    try {
+        const parsed = JSON.parse(input.dataset.subSpecifications);
+        return sanitizeSubSpecificationList(parsed);
+    } catch (error) {
+        console.warn('Unable to parse stored sub specification dataset:', error);
+        return [];
+    }
+}
+
+function getSpecificationCategoriesInputElement() {
+    return document.getElementById('specificationCategoriesInput');
+}
+
+function getSpecificationCategoriesFromInput() {
+    const input = getSpecificationCategoriesInputElement();
+    if (!input || !input.dataset || !input.dataset.categoryIds) {
+        return [];
+    }
+    try {
+        const parsed = JSON.parse(input.dataset.categoryIds);
+        return Array.isArray(parsed) ? parsed.filter(value => typeof value === 'string' && value.trim()) : [];
+    } catch (error) {
+        console.warn('Unable to parse stored specification category dataset:', error);
+        return [];
+    }
+}
+
+function setSpecificationCategoriesInput(selection, { updateDisplay = true } = {}) {
+    const input = getSpecificationCategoriesInputElement();
+    if (!input) {
+        return;
+    }
+    const uniqueIds = Array.from(new Set(Array.isArray(selection) ? selection.filter(Boolean) : []));
+    if (input.dataset) {
+        if (uniqueIds.length) {
+            input.dataset.categoryIds = JSON.stringify(uniqueIds);
+        } else {
+            delete input.dataset.categoryIds;
+        }
+    }
+    if (!updateDisplay) {
+        return;
+    }
+    if (!Array.isArray(categories) || !categories.length) {
+        input.value = uniqueIds.length ? uniqueIds.join(', ') : '';
+        return;
+    }
+    const lookup = new Map();
+    categories.forEach(category => {
+        if (!category || typeof category.id !== 'string') {
+            return;
+        }
+        lookup.set(category.id, typeof getCategoryDisplayName === 'function'
+            ? getCategoryDisplayName(category)
+            : (category.nameEnglish || category.nameArabic || category.categoryCode || category.id));
+    });
+    const labels = uniqueIds.map(id => lookup.get(id) || id);
+    input.value = labels.length ? labels.join(', ') : '';
+}
+
+function sanitizeSpecificationCategorySelection(selection) {
+    if (!selection) {
+        return [];
+    }
+    if (!Array.isArray(selection)) {
+        return sanitizeSpecificationCategorySelection(String(selection).split(','));
+    }
+    const normalized = selection
+        .map(value => (typeof value === 'string' ? value.trim() : ''))
+        .filter(Boolean);
+    const unique = Array.from(new Set(normalized));
+    return unique;
+}
+
+function buildSpecificationCategoriesModalRow(category) {
+    if (!category || typeof category.id !== 'string') {
+        return null;
+    }
+    const label = typeof getCategoryDisplayName === 'function'
+        ? getCategoryDisplayName(category)
+        : (category.nameEnglish || category.nameArabic || category.categoryCode || category.id);
+    const depth = categoryDepthLookup.get(category.id) || 0;
+    const code = category.categoryCode || '';
+    const statusLabel = getCategoryStatusLabel(category.status);
+    const statusClass = getCategoryStatusClass(category.status);
+    const selected = specificationCategoriesWorkingSet.has(category.id);
+    const item = document.createElement('button');
+    item.type = 'button';
+    item.className = `category-picker-item${selected ? ' is-selected' : ''}`;
+    item.dataset.categoryId = category.id;
+    item.innerHTML = `
+        <span class="category-picker-label" style="padding-left:${depth * 18}px;">
+            <span class="category-picker-name">${escapeHtml(label)}</span>
+            ${code ? `<span class="category-picker-code">${escapeHtml(code)}</span>` : ''}
+        </span>
+        <span class="category-picker-meta">
+            <span class="${statusClass}">${escapeHtml(statusLabel)}</span>
+        </span>
+    `;
+    return item;
+}
+
+function renderSpecificationCategoriesModalOptions(filterTerm = '') {
+    const listContainer = document.getElementById('specificationCategoriesModalList');
+    if (!listContainer) {
+        return;
+    }
+    const normalizedTerm = (filterTerm || '').trim().toLowerCase();
+    listContainer.innerHTML = '';
+
+    if (!Array.isArray(categories) || !categories.length) {
+        listContainer.innerHTML = '<div class="category-picker-empty">No categories available. Create a category first.</div>';
+        return;
+    }
+
+    const matches = categories
+        .filter(Boolean)
+        .filter(category => {
+            if (!normalizedTerm) {
+                return true;
+            }
+            const tokens = [
+                category.nameEnglish,
+                category.nameArabic,
+                category.categoryCode,
+                category.id,
+                category.description,
+                category.englishDescription
+            ].map(value => (typeof value === 'string' ? value.trim().toLowerCase() : '')).filter(Boolean);
+            return tokens.some(value => value.includes(normalizedTerm));
+        })
+        .sort((a, b) => {
+            const labelA = typeof getCategoryDisplayName === 'function'
+                ? (getCategoryDisplayName(a) || '')
+                : (a.nameEnglish || a.nameArabic || a.categoryCode || a.id || '');
+            const labelB = typeof getCategoryDisplayName === 'function'
+                ? (getCategoryDisplayName(b) || '')
+                : (b.nameEnglish || b.nameArabic || b.categoryCode || b.id || '');
+            return labelA.toLowerCase().localeCompare(labelB.toLowerCase(), undefined, { sensitivity: 'base' });
+        });
+
+    if (!matches.length) {
+        listContainer.innerHTML = `<div class="category-picker-empty">No categories match “${escapeHtml(normalizedTerm)}”.</div>`;
+        return;
+    }
+
+    const fragment = document.createDocumentFragment();
+    matches.forEach(category => {
+        const row = buildSpecificationCategoriesModalRow(category);
+        if (row) {
+            fragment.appendChild(row);
+        }
+    });
+    listContainer.appendChild(fragment);
+
+    updateSpecificationCategoriesModalSummary();
+}
+
+function updateSpecificationCategoriesModalSummary() {
+    const summary = document.getElementById('specificationCategoriesModalSummary');
+    if (!summary) {
+        return;
+    }
+    const count = specificationCategoriesWorkingSet.size;
+    summary.textContent = count
+        ? `${count} categor${count === 1 ? 'y' : 'ies'} selected.`
+        : 'No categories selected yet.';
+}
+
+function openSpecificationCategoriesModal() {
+    const modal = document.getElementById('specificationCategoriesModal');
+    if (!modal) {
+        return;
+    }
+    const existing = getSpecificationCategoriesFromInput();
+    specificationCategoriesWorkingSet = new Set(existing);
+    renderSpecificationCategoriesModalOptions();
+    modal.classList.remove('hidden');
+    document.body.classList.add('modal-open');
+    setTimeout(() => {
+        const searchInput = document.getElementById('specificationCategoriesModalSearch');
+        searchInput?.focus();
+    }, 30);
+}
+
+function closeSpecificationCategoriesModal() {
+    const modal = document.getElementById('specificationCategoriesModal');
+    if (!modal) {
+        return;
+    }
+    modal.classList.add('hidden');
+    document.body.classList.remove('modal-open');
+    renderSpecificationCategoriesModalOptions('');
+}
+
+function applySpecificationCategoriesSelection() {
+    const selectedIds = Array.from(specificationCategoriesWorkingSet);
+    if (!selectedIds.length) {
+        showNotification('warning', 'Select at least one category for this specification.', 3000, 'specificationNotificationArea');
+        return;
+    }
+    setSpecificationCategoriesInput(selectedIds, { updateDisplay: true });
+    closeSpecificationCategoriesModal();
+}
+
+function initializeSpecificationCategoriesPicker() {
+    const modal = document.getElementById('specificationCategoriesModal');
+    if (!modal || modal.dataset.initialized === 'true') {
+        return;
+    }
+
+    const triggerBtn = document.getElementById('openSpecificationCategoriesModalBtn');
+    const displayInput = document.getElementById('specificationCategoriesInput');
+    const applyBtn = document.getElementById('applySpecificationCategoriesBtn');
+    const cancelBtn = document.getElementById('cancelSpecificationCategoriesBtn');
+    const searchInput = document.getElementById('specificationCategoriesModalSearch');
+    const listContainer = document.getElementById('specificationCategoriesModalList');
+
+    const openHandler = event => {
+        event?.preventDefault();
+        if (!Array.isArray(categories) || !categories.length) {
+            showNotification('info', 'No categories available yet. Create a category first.', 3200, 'specificationNotificationArea');
+            return;
+        }
+        openSpecificationCategoriesModal();
+    };
+
+    triggerBtn?.addEventListener('click', openHandler);
+    displayInput?.addEventListener('click', openHandler);
+    displayInput?.addEventListener('keydown', event => {
+        if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            openHandler(event);
+        }
+    });
+
+    applyBtn?.addEventListener('click', () => {
+        applySpecificationCategoriesSelection();
+    });
+
+    cancelBtn?.addEventListener('click', () => {
+        closeSpecificationCategoriesModal();
+    });
+
+    modal.addEventListener('click', event => {
+        if (event.target === modal) {
+            closeSpecificationCategoriesModal();
+        }
+    });
+
+    document.addEventListener('keydown', event => {
+        if (event.key === 'Escape' && !modal.classList.contains('hidden')) {
+            closeSpecificationCategoriesModal();
+        }
+    });
+
+    if (searchInput) {
+        searchInput.addEventListener('input', event => {
+            renderSpecificationCategoriesModalOptions(event.target.value);
+        });
+    }
+
+    if (listContainer) {
+        listContainer.addEventListener('click', event => {
+            const item = event.target.closest('.category-picker-item');
+            if (!item) {
+                return;
+            }
+            const categoryId = item.dataset.categoryId;
+            if (!categoryId) {
+                return;
+            }
+            if (specificationCategoriesWorkingSet.has(categoryId)) {
+                specificationCategoriesWorkingSet.delete(categoryId);
+                item.classList.remove('is-selected');
+            } else {
+                specificationCategoriesWorkingSet.add(categoryId);
+                item.classList.add('is-selected');
+            }
+            updateSpecificationCategoriesModalSummary();
+        });
+    }
+
+    modal.dataset.initialized = 'true';
+}
+
+function closeSubSpecificationModal() {
+    const modal = document.getElementById('subSpecificationModal');
+    if (!modal) {
+        return;
+    }
+    modal.classList.add('hidden');
+    document.body.classList.remove('modal-open');
+    subSpecificationWorkingCopy = [];
+    subSpecificationPendingFocusIndex = null;
+}
+
+function handleSubSpecificationNameChange(index, field, nextValue) {
+    if (!Array.isArray(subSpecificationWorkingCopy) || !subSpecificationWorkingCopy[index]) {
+        return;
+    }
+    subSpecificationWorkingCopy[index][field] = typeof nextValue === 'string' ? nextValue : '';
+}
+
+function removeSubSpecificationRow(index) {
+    if (!Array.isArray(subSpecificationWorkingCopy)) {
+        subSpecificationWorkingCopy = [];
+    }
+    subSpecificationWorkingCopy.splice(index, 1);
+    const nextFocusIndex = Math.min(index, subSpecificationWorkingCopy.length - 1);
+    subSpecificationPendingFocusIndex = Number.isFinite(nextFocusIndex) && nextFocusIndex >= 0 ? nextFocusIndex : null;
+    renderSubSpecificationRows();
+}
+
+function addSubSpecificationRow(afterIndex) {
+    if (!Array.isArray(subSpecificationWorkingCopy)) {
+        subSpecificationWorkingCopy = [];
+    }
+    const newEntry = { nameArabic: '', nameEnglish: '' };
+    if (Number.isInteger(afterIndex) && afterIndex >= -1 && afterIndex < subSpecificationWorkingCopy.length) {
+        subSpecificationWorkingCopy.splice(afterIndex + 1, 0, newEntry);
+        subSpecificationPendingFocusIndex = afterIndex + 1;
+    } else {
+        subSpecificationWorkingCopy.push(newEntry);
+        subSpecificationPendingFocusIndex = subSpecificationWorkingCopy.length - 1;
+    }
+    renderSubSpecificationRows();
+}
+
+function renderSubSpecificationRows() {
+    const container = document.getElementById('subSpecificationRows');
+    if (!container) {
+        return;
+    }
+    container.innerHTML = '';
+
+    if (!Array.isArray(subSpecificationWorkingCopy) || !subSpecificationWorkingCopy.length) {
+        const emptyState = document.createElement('div');
+        emptyState.style = 'display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px;border:1px dashed #d1d5db;border-radius:8px;color:#6b7280;font-size:14px;';
+        const message = document.createElement('span');
+        message.textContent = 'No sub specifications added yet.';
+        const addBtn = document.createElement('button');
+        addBtn.type = 'button';
+        addBtn.className = 'btn btn-outline';
+        addBtn.style = 'padding:6px 10px;';
+        addBtn.textContent = '+';
+        addBtn.setAttribute('aria-label', 'Add sub specification');
+        addBtn.addEventListener('click', () => {
+            addSubSpecificationRow(-1);
+        });
+        emptyState.appendChild(message);
+        emptyState.appendChild(addBtn);
+        container.appendChild(emptyState);
+        return;
+    }
+
+    const focusIndex = Number.isInteger(subSpecificationPendingFocusIndex) ? subSpecificationPendingFocusIndex : null;
+    subSpecificationPendingFocusIndex = null;
+
+    subSpecificationWorkingCopy.forEach((entry, index) => {
+        const row = document.createElement('div');
+        row.style = 'display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;';
+
+        const arabicWrapper = document.createElement('div');
+        arabicWrapper.style = 'flex:1;min-width:220px;display:flex;flex-direction:column;gap:6px;';
+        const arabicLabel = document.createElement('label');
+        arabicLabel.className = 'form-label';
+        arabicLabel.textContent = 'Arabic Name';
+        arabicLabel.setAttribute('for', `subSpecificationArabic-${index}`);
+        const arabicInput = document.createElement('input');
+        arabicInput.type = 'text';
+        arabicInput.className = 'form-input';
+        arabicInput.id = `subSpecificationArabic-${index}`;
+        arabicInput.placeholder = 'مثال: خيار فرعي';
+        arabicInput.dir = 'rtl';
+        arabicInput.value = entry.nameArabic || '';
+        arabicInput.addEventListener('input', event => {
+            handleSubSpecificationNameChange(index, 'nameArabic', event.target.value);
+        });
+        arabicWrapper.appendChild(arabicLabel);
+        arabicWrapper.appendChild(arabicInput);
+
+        const englishWrapper = document.createElement('div');
+        englishWrapper.style = 'flex:1;min-width:220px;display:flex;flex-direction:column;gap:6px;';
+        const englishLabel = document.createElement('label');
+        englishLabel.className = 'form-label';
+        englishLabel.textContent = 'English Name';
+        englishLabel.setAttribute('for', `subSpecificationEnglish-${index}`);
+        const englishInput = document.createElement('input');
+        englishInput.type = 'text';
+        englishInput.className = 'form-input';
+        englishInput.id = `subSpecificationEnglish-${index}`;
+        englishInput.placeholder = 'e.g. Sub Specification';
+        englishInput.dir = 'ltr';
+        englishInput.value = entry.nameEnglish || '';
+        englishInput.addEventListener('input', event => {
+            handleSubSpecificationNameChange(index, 'nameEnglish', event.target.value);
+        });
+        englishWrapper.appendChild(englishLabel);
+        englishWrapper.appendChild(englishInput);
+
+        const actionsWrapper = document.createElement('div');
+        actionsWrapper.style = 'display:flex;align-items:center;gap:8px;min-width:88px;padding-bottom:4px;';
+        const removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.className = 'btn btn-outline';
+        removeBtn.style = 'padding:6px 10px;';
+        removeBtn.textContent = '-';
+        removeBtn.setAttribute('aria-label', 'Remove sub specification');
+        removeBtn.addEventListener('click', () => {
+            removeSubSpecificationRow(index);
+        });
+        const addBtn = document.createElement('button');
+        addBtn.type = 'button';
+        addBtn.className = 'btn btn-outline';
+        addBtn.style = 'padding:6px 10px;';
+        addBtn.textContent = '+';
+        addBtn.setAttribute('aria-label', 'Add sub specification');
+        addBtn.addEventListener('click', () => {
+            addSubSpecificationRow(index);
+        });
+        actionsWrapper.appendChild(removeBtn);
+        actionsWrapper.appendChild(addBtn);
+
+        row.appendChild(arabicWrapper);
+        row.appendChild(englishWrapper);
+        row.appendChild(actionsWrapper);
+
+        container.appendChild(row);
+    });
+
+    if (focusIndex !== null) {
+        const focusTarget = container.querySelector(`#subSpecificationEnglish-${focusIndex}`) || container.querySelector(`#subSpecificationArabic-${focusIndex}`);
+        if (focusTarget) {
+            setTimeout(() => focusTarget.focus(), 30);
+        }
+    }
+}
+
+function openSubSpecificationModal() {
+    const modal = document.getElementById('subSpecificationModal');
+    if (!modal) {
+        return;
+    }
+    const existingEntries = getSubSpecificationsFromInput();
+    subSpecificationWorkingCopy = existingEntries.length
+        ? existingEntries.map(entry => ({ ...entry }))
+        : [];
+    subSpecificationPendingFocusIndex = null;
+    renderSubSpecificationRows();
+    modal.classList.remove('hidden');
+    document.body.classList.add('modal-open');
+    setTimeout(() => {
+        const firstInput = modal.querySelector('#subSpecificationEnglish-0') || modal.querySelector('#subSpecificationArabic-0');
+        if (firstInput) {
+            firstInput.focus();
+        }
+    }, 30);
+}
+
+function applySubSpecificationSelection() {
+    const modal = document.getElementById('subSpecificationModal');
+    if (!modal) {
+        return;
+    }
+    const sanitized = sanitizeSubSpecificationList(subSpecificationWorkingCopy);
+    if (subSpecificationWorkingCopy.length && sanitized.length !== subSpecificationWorkingCopy.length) {
+        const blankIndex = subSpecificationWorkingCopy.findIndex(item => !item || (!item.nameArabic && !item.nameEnglish));
+        if (blankIndex !== -1) {
+            const focusTarget = modal.querySelector(`#subSpecificationEnglish-${blankIndex}`) || modal.querySelector(`#subSpecificationArabic-${blankIndex}`);
+            if (focusTarget) {
+                focusTarget.focus();
+            }
+        }
+        showNotification('warning', 'Each sub specification needs an Arabic or English name.', 3200, 'specificationNotificationArea');
+        return;
+    }
+    setSubSpecificationsInput(sanitized);
+    closeSubSpecificationModal();
+}
+
+function initializeSubSpecificationPicker() {
+    const modal = document.getElementById('subSpecificationModal');
+    if (!modal || modal.dataset.initialized === 'true') {
+        return;
+    }
+
+    const openBtn = document.getElementById('openSubSpecificationModalBtn');
+    const input = document.getElementById('specificationSubSpecificationsInput');
+    const applyBtn = document.getElementById('applySubSpecificationBtn');
+    const cancelBtn = document.getElementById('cancelSubSpecificationBtn');
+
+    const openHandler = event => {
+        event?.preventDefault();
+        openSubSpecificationModal();
+    };
+
+    if (openBtn) {
+        openBtn.addEventListener('click', openHandler);
+    }
+    if (input) {
+        input.addEventListener('click', openHandler);
+        input.addEventListener('keydown', event => {
+            if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                openSubSpecificationModal();
+            }
+        });
+    }
+    if (applyBtn) {
+        applyBtn.addEventListener('click', () => {
+            applySubSpecificationSelection();
+        });
+    }
+    if (cancelBtn) {
+        cancelBtn.addEventListener('click', () => {
+            closeSubSpecificationModal();
+        });
+    }
+
+    modal.addEventListener('click', event => {
+        if (event.target === modal) {
+            closeSubSpecificationModal();
+        }
+    });
+
+    document.addEventListener('keydown', event => {
+        if (event.key === 'Escape' && !modal.classList.contains('hidden')) {
+            closeSubSpecificationModal();
+        }
+    });
+
+    modal.dataset.initialized = 'true';
+}
+
 function applyCategoryPricingToggleStates() {
     CATEGORY_TOGGLE_SECTIONS.forEach(config => {
         const toggle = document.getElementById(config.toggleId);
@@ -937,6 +1568,9 @@ const state = {
     activeCategoryDetailId: null,
     permissionCatalog: [],
     categorySearchTerm: '',
+    specificationSearchTerm: '',
+    specificationBuilderMode: 'create',
+    editingSpecificationId: null,
     categoryBuilderMode: 'create',
     editingCategoryId: null,
     registrationFlow: {
@@ -1558,8 +2192,60 @@ const defaultUsers = [
 
 const defaultCategories = [];
 
+const defaultSpecifications = [
+    {
+        id: 'SPEC-142',
+        name: 'Maximum Load Rating',
+        categoryLabels: ['Electrical Safety'],
+        dataType: 'number',
+        collectionFrequency: 'per-inspection',
+        validationRule: 'Capture inspection-certified rating value.',
+        isRequired: true,
+        version: 'v2.1',
+        status: 'active',
+        createdAt: '2025-01-15T08:00:00.000Z'
+    },
+    {
+        id: 'SPEC-213',
+        name: 'Food Handling Certificate',
+        categoryLabels: ['Food Hygiene'],
+        dataType: 'dropdownlist',
+        collectionFrequency: 'per-inspection',
+        validationRule: 'Upload current municipality certificate.',
+        isRequired: true,
+        version: 'v1.4',
+        status: 'active',
+        createdAt: '2025-01-10T08:00:00.000Z'
+    },
+    {
+        id: 'SPEC-321',
+        name: 'Evacuation Drill Date',
+        categoryLabels: ['Fire Readiness'],
+        dataType: 'short-text',
+        collectionFrequency: 'quarterly',
+        validationRule: 'Record last completed drill date.',
+        isRequired: false,
+        version: 'v1.0',
+        status: 'monitoring',
+        createdAt: '2025-01-05T08:00:00.000Z'
+    },
+    {
+        id: 'SPEC-404',
+        name: 'Water Potability Index',
+        categoryLabels: ['Water Quality'],
+        dataType: 'number',
+        collectionFrequency: 'monthly',
+        validationRule: 'Sample must score >= 0.85.',
+        isRequired: true,
+        version: 'v3.2',
+        status: 'draft',
+        createdAt: '2025-01-01T08:00:00.000Z'
+    }
+];
+
 let categories = [];
 let users = [];
+let specifications = [];
 
 const platformDirectory = [
     {
@@ -1653,6 +2339,7 @@ const monthlyPerformance = [
 const ROLES_STORAGE_KEY = 'onruf_roles_v1';
 const USERS_STORAGE_KEY = 'onruf_users_v1';
 const CATEGORIES_STORAGE_KEY = 'onruf_categories_v1';
+const SPECIFICATIONS_STORAGE_KEY = 'onruf_specifications_v1';
 const SESSION_STORAGE_KEY = 'onruf_active_session_v1';
 const DATA_RESET_VERSION = '20241005-super-admin-seed';
 const DATA_RESET_KEY = 'onruf_data_reset_version';
@@ -2512,6 +3199,341 @@ function normalizeCategoryPayload(category, index = 0) {
     };
 }
 
+function normalizeSpecificationPayload(specification, index = 0) {
+    if (!specification || typeof specification !== 'object') {
+        return null;
+    }
+
+    const fallbackIndex = Number.isInteger(index) && index >= 0 ? index : 0;
+    const rawId = typeof specification.id === 'string' ? specification.id.trim().toUpperCase() : '';
+    const id = /^SPEC-\d{3,}$/i.test(rawId) ? rawId : `SPEC-${String(fallbackIndex + 1).padStart(3, '0')}`;
+
+    const normalizeText = value => (typeof value === 'string' ? value.trim() : '');
+
+    const arabicNameCandidates = [
+        specification.nameArabic,
+        specification.name_ar,
+        specification.arabicName,
+        specification.titleArabic
+    ].map(normalizeText).filter(Boolean);
+
+    const englishNameCandidates = [
+        specification.nameEnglish,
+        specification.name_en,
+        specification.englishName,
+        specification.titleEnglish
+    ].map(normalizeText).filter(Boolean);
+
+    const legacyNameCandidates = [
+        specification.name,
+        specification.specification,
+        specification.title
+    ].map(normalizeText).filter(Boolean);
+
+    const nameArabic = arabicNameCandidates[0] || '';
+    let nameEnglish = englishNameCandidates[0] || '';
+    const legacyName = legacyNameCandidates[0] || '';
+    if (!nameEnglish && legacyName && (!nameArabic || legacyName !== nameArabic)) {
+        nameEnglish = legacyName;
+    }
+
+    const name = nameEnglish || legacyName || nameArabic || `Specification ${fallbackIndex + 1}`;
+
+    const descriptionArabicCandidates = [
+        specification.descriptionArabic,
+        specification.description_ar,
+        specification.arabicDescription,
+        specification.descriptionAr
+    ].map(normalizeText).filter(Boolean);
+
+    const descriptionEnglishCandidates = [
+        specification.descriptionEnglish,
+        specification.description_en,
+        specification.englishDescription,
+        specification.descriptionEn
+    ].map(normalizeText).filter(Boolean);
+
+    const placeholderArabicCandidates = [
+        specification.placeholderArabic,
+        specification.placeholder_ar,
+        specification.arabicPlaceholder,
+        specification.placeholderAr
+    ].map(normalizeText).filter(Boolean);
+
+    const placeholderEnglishCandidates = [
+        specification.placeholderEnglish,
+        specification.placeholder_en,
+        specification.englishPlaceholder,
+        specification.placeholderEn
+    ].map(normalizeText).filter(Boolean);
+
+    const descriptionArabic = descriptionArabicCandidates[0] || '';
+    const descriptionEnglish = descriptionEnglishCandidates[0] || '';
+    const placeholderArabic = placeholderArabicCandidates[0] || '';
+    const placeholderEnglish = placeholderEnglishCandidates[0] || '';
+
+    let dataType = 'short-text';
+    const typeCandidates = [specification.dataType, specification.type];
+    for (const candidate of typeCandidates) {
+        const canonical = normalizeSpecificationDataType(candidate, '');
+        if (canonical) {
+            dataType = canonical;
+            break;
+        }
+    }
+
+    const allowedFrequencies = new Set(['per-inspection', 'daily', 'weekly', 'biweekly', 'monthly', 'quarterly', 'biannually', 'annually', 'ad-hoc']);
+    let collectionFrequency = 'per-inspection';
+    const frequencyCandidates = [specification.collectionFrequency, specification.frequency];
+    for (const candidate of frequencyCandidates) {
+        if (typeof candidate !== 'string') {
+            continue;
+        }
+        const normalized = candidate.trim().toLowerCase();
+        if (!normalized) {
+            continue;
+        }
+        collectionFrequency = normalized;
+        break;
+    }
+
+    const validationRuleCandidates = [specification.validationRule, specification.validation];
+    const validationRule = validationRuleCandidates
+        .map(value => (typeof value === 'string' ? value.trim() : ''))
+        .find(Boolean) || '';
+
+    let isRequired = false;
+    if (typeof specification.isRequired === 'boolean') {
+        isRequired = specification.isRequired;
+    } else if (typeof specification.required === 'string') {
+        const normalized = specification.required.trim().toLowerCase();
+        isRequired = ['yes', 'true', '1', 'required'].includes(normalized);
+    } else if (typeof specification.required === 'number') {
+        isRequired = specification.required !== 0;
+    } else if (specification.required === true) {
+        isRequired = true;
+    }
+
+    const version = typeof specification.version === 'string' && specification.version.trim()
+        ? specification.version.trim()
+        : 'v1.0';
+
+    const allowedStatuses = new Set(['draft', 'active', 'inactive', 'monitoring', 'archived']);
+    let status = typeof specification.status === 'string' ? specification.status.trim().toLowerCase() : 'active';
+    if (!allowedStatuses.has(status)) {
+        status = 'active';
+    }
+
+    const parseTimestamp = value => {
+        if (typeof value !== 'string') {
+            return null;
+        }
+        const trimmed = value.trim();
+        if (!trimmed) {
+            return null;
+        }
+        const parsed = Date.parse(trimmed);
+        if (!Number.isFinite(parsed)) {
+            return null;
+        }
+        return new Date(parsed).toISOString();
+    };
+
+    let createdAt = parseTimestamp(specification.createdAt);
+    let updatedAt = parseTimestamp(specification.updatedAt);
+    if (!createdAt && updatedAt) {
+        createdAt = updatedAt;
+    }
+    if (!createdAt) {
+        createdAt = new Date().toISOString();
+    }
+    if (!updatedAt) {
+        updatedAt = createdAt;
+    }
+
+    const referenceLookup = buildSpecificationCategoryReferenceLookup();
+    const labelLookup = new Map();
+    if (Array.isArray(categories)) {
+        categories.forEach(category => {
+            if (!category || typeof category.id !== 'string') {
+                return;
+            }
+            const label = typeof getCategoryDisplayName === 'function'
+                ? getCategoryDisplayName(category)
+                : (category.nameEnglish || category.nameArabic || category.categoryCode || category.id);
+            if (label) {
+                labelLookup.set(category.id, label);
+            }
+        });
+    }
+
+    const fallbackLabelSet = new Set(
+        Array.isArray(specification.categoryLabels)
+            ? specification.categoryLabels
+                .map(value => (typeof value === 'string' ? value.trim() : ''))
+                .filter(Boolean)
+            : []
+    );
+
+    const rawReferences = [];
+
+    const appendReference = value => {
+        if (value == null) {
+            return;
+        }
+        if (Array.isArray(value)) {
+            value.forEach(entry => appendReference(entry));
+            return;
+        }
+        if (typeof value === 'string') {
+            value
+                .split(/[;,]/)
+                .map(entry => entry.trim())
+                .filter(Boolean)
+                .forEach(entry => rawReferences.push(entry));
+            return;
+        }
+        if (typeof value === 'number') {
+            rawReferences.push(String(value));
+        }
+    };
+
+    appendReference(specification.categoryIds);
+    appendReference(specification.categories);
+    appendReference(specification.category);
+    if (!fallbackLabelSet.size) {
+        appendReference(specification.categoryLabels);
+    } else {
+        fallbackLabelSet.forEach(entry => rawReferences.push(entry));
+    }
+
+    const categoryIds = [];
+    const categoryLabels = [];
+    const seenIds = new Set();
+
+    rawReferences.forEach(reference => {
+        const trimmedReference = typeof reference === 'string' ? reference.trim() : String(reference).trim();
+        if (!trimmedReference) {
+            return;
+        }
+        const normalizedReference = trimmedReference.toLowerCase();
+        const matchedId = referenceLookup.get(normalizedReference);
+        if (matchedId && !seenIds.has(matchedId)) {
+            seenIds.add(matchedId);
+            categoryIds.push(matchedId);
+            const label = labelLookup.get(matchedId) || trimmedReference;
+            categoryLabels.push(label);
+        } else if (!matchedId) {
+            fallbackLabelSet.add(trimmedReference);
+        }
+    });
+
+    const finalLabels = categoryLabels.length ? categoryLabels : Array.from(fallbackLabelSet);
+
+    const subSpecificationCandidates = [
+        specification.subSpecifications,
+        specification.subSpecificationOptions,
+        specification.subSpecOptions,
+        specification.sub_specs,
+        specification.subSpecs
+    ];
+    let subSpecifications = [];
+    for (const candidate of subSpecificationCandidates) {
+        const sanitized = sanitizeSubSpecificationList(candidate);
+        if (sanitized.length) {
+            subSpecifications = sanitized;
+            break;
+        }
+    }
+    const subSpecificationSummary = typeof specification.subSpecificationSummary === 'string' && specification.subSpecificationSummary.trim()
+        ? specification.subSpecificationSummary.trim()
+        : formatSubSpecificationSummary(subSpecifications);
+
+    const categoryIdCandidates = [
+        specification.categoryIds,
+        specification.categories,
+        specification.categorySelections
+    ];
+    let normalizedCategoryIds = categoryIds;
+    if (!normalizedCategoryIds.length) {
+        for (const candidate of categoryIdCandidates) {
+            const sanitized = sanitizeSpecificationCategorySelection(candidate);
+            if (sanitized.length) {
+                normalizedCategoryIds = sanitized;
+                break;
+            }
+        }
+    }
+    if (!arraysAreEqual(normalizedCategoryIds, categoryIds)) {
+        normalizedCategoryIds = sanitizeSpecificationCategorySelection(normalizedCategoryIds);
+    }
+
+    const finalCategoryIds = normalizedCategoryIds.length ? normalizedCategoryIds : categoryIds;
+    const finalCategoryLabels = finalLabels.length ? finalLabels : finalCategoryIds.map(id => labelLookup.get(id) || id);
+
+    return {
+        id,
+        name,
+        nameArabic,
+        nameEnglish,
+        dataType,
+        collectionFrequency,
+        validationRule,
+        isRequired,
+        version,
+        status,
+        categoryIds: finalCategoryIds,
+        categoryLabels: finalCategoryLabels,
+        descriptionArabic,
+        descriptionEnglish,
+        placeholderArabic,
+        placeholderEnglish,
+        subSpecifications,
+        subSpecificationSummary,
+        createdAt,
+        updatedAt
+    };
+}
+
+function buildSpecificationCategoryReferenceLookup() {
+    const lookup = new Map();
+    if (!Array.isArray(categories)) {
+        return lookup;
+    }
+    categories.forEach(category => {
+        if (!category) {
+            return;
+        }
+        const id = typeof category.id === 'string' ? category.id.trim() : '';
+        if (id) {
+            const normalizedId = id.toLowerCase();
+            if (normalizedId) {
+                lookup.set(normalizedId, id);
+            }
+            const canonicalId = normalizeCategoryCodeCandidate(id);
+            if (canonicalId && !lookup.has(canonicalId)) {
+                lookup.set(canonicalId, id);
+            }
+        }
+        const code = typeof category.categoryCode === 'string' ? category.categoryCode.trim() : '';
+        if (code) {
+            const normalizedCode = normalizeCategoryCodeCandidate(code);
+            if (normalizedCode) {
+                lookup.set(normalizedCode, id || code);
+            }
+        }
+        const nameEnglish = typeof category.nameEnglish === 'string' ? category.nameEnglish.trim() : '';
+        if (nameEnglish) {
+            lookup.set(nameEnglish.toLowerCase(), id || nameEnglish);
+        }
+        const nameArabic = typeof category.nameArabic === 'string' ? category.nameArabic.trim() : '';
+        if (nameArabic) {
+            lookup.set(nameArabic.toLowerCase(), id || nameArabic);
+        }
+    });
+    return lookup;
+}
+
 function loadRolesFromStorage() {
     try {
         const raw = localStorage.getItem(ROLES_STORAGE_KEY);
@@ -2593,6 +3615,34 @@ function saveCategoriesToStorage() {
         localStorage.setItem(CATEGORIES_STORAGE_KEY, serialized);
     } catch (error) {
         console.warn('Unable to save categories to storage:', error);
+    }
+}
+
+function loadSpecificationsFromStorage() {
+    try {
+        const raw = localStorage.getItem(SPECIFICATIONS_STORAGE_KEY);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed) || !parsed.length) return null;
+        const normalized = parsed
+            .map((entry, index) => normalizeSpecificationPayload(entry, index))
+            .filter(Boolean);
+        return normalized.length ? normalized : null;
+    } catch (error) {
+        console.warn('Unable to load specifications from storage:', error);
+        return null;
+    }
+}
+
+function saveSpecificationsToStorage() {
+    try {
+        if (!Array.isArray(specifications)) {
+            return;
+        }
+        const serialized = JSON.stringify(specifications);
+        localStorage.setItem(SPECIFICATIONS_STORAGE_KEY, serialized);
+    } catch (error) {
+        console.warn('Unable to save specifications dataset:', error);
     }
 }
 
@@ -3089,6 +4139,15 @@ function setCategoryModuleTitle(title) {
     titleEl.textContent = text;
 }
 
+function setSpecificationModuleTitle(title) {
+    const titleEl = document.getElementById('specificationModuleTitle');
+    if (!titleEl) {
+        return;
+    }
+    const text = typeof title === 'string' && title.trim() ? title.trim() : 'Specification Library';
+    titleEl.textContent = text;
+}
+
 function setUsersModuleTitle(title) {
     const titleEl = document.getElementById('usersModuleTitle');
     if (!titleEl) {
@@ -3223,6 +4282,18 @@ function initializeApp() {
         saveCategoriesToStorage();
     }
 
+    const storedSpecifications = loadSpecificationsFromStorage();
+    if (storedSpecifications && storedSpecifications.length) {
+        specifications = storedSpecifications;
+    } else {
+        specifications = defaultSpecifications
+            .map((specification, index) => normalizeSpecificationPayload(specification, index))
+            .filter(Boolean);
+        saveSpecificationsToStorage();
+    }
+
+    syncCategorySpecificationCounts({ persistCategories: true, persistSpecifications: true, refreshView: false });
+
     if (!ensureSessionUserIsActive()) {
         return;
     }
@@ -3262,6 +4333,11 @@ function initializeApp() {
         categorySearchInput.value = state.categorySearchTerm || '';
     }
 
+    const specificationSearchInput = document.getElementById('specificationSearch');
+    if (specificationSearchInput) {
+        specificationSearchInput.value = state.specificationSearchTerm || '';
+    }
+
     setupCategoryConfirmOverlay();
     setupRoleConfirmOverlay();
     setupRolePromptOverlay();
@@ -3272,6 +4348,10 @@ function initializeApp() {
 
     applyRequiredFieldIndicators();
     syncAccountEditLayout();
+    renderSpecificationList();
+    updateSpecificationCategoryOptions();
+    resetSpecificationForm();
+    hideSpecificationBuilder({ resetForm: false });
 }
 
 function applyRequiredFieldIndicators() {
@@ -3325,6 +4405,7 @@ function setupEventListeners() {
                     if (specList) {
                         specList.classList.remove('hidden');
                     }
+                    hideSpecificationBuilder();
                 }
             }
             updateBreadcrumb();
@@ -3369,6 +4450,8 @@ function setupEventListeners() {
 
     initializeCategoryFormToggles();
     initializeAuctionPeriodsPicker();
+    initializeSubSpecificationPicker();
+    initializeSpecificationCategoriesPicker();
 
     const categoryImageInput = document.getElementById('categoryImageInput');
     if (categoryImageInput) {
@@ -3573,6 +4656,43 @@ function setupEventListeners() {
     if (!categoryGlobalDeselectHandlerBound) {
         document.addEventListener('click', handleGlobalCategoryDeselect);
         categoryGlobalDeselectHandlerBound = true;
+    }
+
+    const addSpecificationBtn = document.getElementById('addSpecificationBtn');
+    if (addSpecificationBtn && addSpecificationBtn.dataset.bound !== 'true') {
+        addSpecificationBtn.addEventListener('click', () => {
+            showSpecificationBuilder('create');
+        });
+        addSpecificationBtn.dataset.bound = 'true';
+    }
+
+    const specificationForm = document.getElementById('specificationForm');
+    if (specificationForm && specificationForm.dataset.bound !== 'true') {
+        specificationForm.addEventListener('submit', handleSpecificationFormSubmit);
+        specificationForm.dataset.bound = 'true';
+    }
+
+    const cancelSpecificationFormBtn = document.getElementById('cancelSpecificationFormBtn');
+    if (cancelSpecificationFormBtn && cancelSpecificationFormBtn.dataset.bound !== 'true') {
+        cancelSpecificationFormBtn.addEventListener('click', event => {
+            event.preventDefault();
+            hideSpecificationBuilder();
+        });
+        cancelSpecificationFormBtn.dataset.bound = 'true';
+    }
+
+    const specificationSearch = document.getElementById('specificationSearch');
+    if (specificationSearch && specificationSearch.dataset.bound !== 'true') {
+        const triggerSpecificationSearch = () => handleSpecificationSearch(specificationSearch.value);
+        specificationSearch.addEventListener('input', triggerSpecificationSearch);
+        specificationSearch.addEventListener('search', triggerSpecificationSearch);
+        specificationSearch.dataset.bound = 'true';
+    }
+
+    const specificationTableBody = document.getElementById('specificationsTableBody');
+    if (specificationTableBody && specificationTableBody.dataset.bound !== 'true') {
+        specificationTableBody.addEventListener('click', handleSpecificationTableClick);
+        specificationTableBody.dataset.bound = 'true';
     }
 
     const cancelRoleFormBtn = document.getElementById('cancelRoleFormBtn');
@@ -3928,6 +5048,10 @@ function updateBreadcrumb(sectionId = state.currentSection) {
         if (builder && !builder.classList.contains('hidden')) {
             appLabel = state.categoryBuilderMode === 'edit' ? 'Edit Category' : 'Add New Category';
         }
+        const specificationBuilder = document.getElementById('specificationBuilderView');
+        if (specificationBuilder && !specificationBuilder.classList.contains('hidden')) {
+            appLabel = state.specificationBuilderMode === 'edit' ? 'Edit Specification' : 'Add New Specification';
+        }
     }
 
     breadcrumb.textContent = `Control Panel / ${sectionLabel} / ${appLabel}`;
@@ -3983,9 +5107,7 @@ function getCategoryStatusFilterGroup(status) {
 
 function updateCategoryBadges() {
     const totalCategories = Array.isArray(categories) ? categories.length : 0;
-    const totalSpecifications = Array.isArray(categories)
-        ? categories.reduce((sum, entry) => sum + (Number.isFinite(entry.specificationCount) ? entry.specificationCount : 0), 0)
-        : 0;
+    const totalSpecifications = Array.isArray(specifications) ? specifications.length : 0;
 
     const deleteAllBtn = document.getElementById('categoryDeleteAllBtn');
     if (deleteAllBtn) {
@@ -4028,6 +5150,834 @@ function deleteAllCategories({ refresh = true } = {}) {
 
 function renderCategoriesTable() {
     refreshCategoryDirectoryView({ rebuildCaches: true, resetScroll: true });
+}
+
+function showSpecificationBuilder(mode = 'create', specification = null) {
+    const listView = document.getElementById('specificationsListView');
+    const builder = document.getElementById('specificationBuilderView');
+    const actions = document.getElementById('specificationActions');
+    const search = document.getElementById('specificationSearchContainer');
+    if (!builder || !listView) {
+        return;
+    }
+
+    const isEditMode = mode === 'edit' && specification && typeof specification.id === 'string';
+    state.specificationBuilderMode = isEditMode ? 'edit' : 'create';
+    state.editingSpecificationId = isEditMode ? specification.id : null;
+
+    setSpecificationModuleTitle(isEditMode ? 'Edit Specification' : 'Add New Specification');
+
+    resetSpecificationForm({ focus: !isEditMode });
+
+    if (isEditMode) {
+        populateSpecificationForm(specification);
+    }
+
+    updateSpecificationCategoryOptions();
+
+    builder.classList.remove('hidden');
+    listView.classList.add('hidden');
+    if (actions) {
+        actions.classList.add('hidden');
+    }
+    if (search) {
+        search.classList.add('hidden');
+    }
+
+    if (typeof builder.scrollIntoView === 'function') {
+        const rect = builder.getBoundingClientRect();
+        if (rect.top < 0) {
+            builder.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+    }
+
+    if (isEditMode) {
+        const preferredFocus = document.getElementById('specificationNameEnglishInput') || document.getElementById('specificationNameArabicInput');
+        preferredFocus?.focus({ preventScroll: true });
+    }
+
+    const categoriesSection = document.getElementById('categories');
+    if (categoriesSection && categoriesSection.classList.contains('active')) {
+        updateBreadcrumb();
+    }
+}
+
+function hideSpecificationBuilder({ resetForm = true } = {}) {
+    const listView = document.getElementById('specificationsListView');
+    const builder = document.getElementById('specificationBuilderView');
+    const actions = document.getElementById('specificationActions');
+    const search = document.getElementById('specificationSearchContainer');
+    if (!builder || !listView) {
+        return;
+    }
+
+    if (resetForm) {
+        resetSpecificationForm();
+    }
+
+    builder.classList.add('hidden');
+    listView.classList.remove('hidden');
+    if (actions) {
+        actions.classList.remove('hidden');
+    }
+    if (search) {
+        search.classList.remove('hidden');
+    }
+
+    state.specificationBuilderMode = 'create';
+    state.editingSpecificationId = null;
+
+    setSpecificationModuleTitle('Specification Library');
+
+    const categoriesSection = document.getElementById('categories');
+    if (categoriesSection && categoriesSection.classList.contains('active')) {
+        updateBreadcrumb();
+    }
+}
+
+function arraysAreEqual(a, b) {
+    if (a === b) {
+        return true;
+    }
+    if (!Array.isArray(a) || !Array.isArray(b)) {
+        return false;
+    }
+    if (a.length !== b.length) {
+        return false;
+    }
+    for (let index = 0; index < a.length; index += 1) {
+        if (a[index] !== b[index]) {
+            return false;
+        }
+    }
+    return true;
+}
+
+function refreshSpecificationCategoryAssignments({ persist = false } = {}) {
+    if (!Array.isArray(specifications) || !specifications.length) {
+        return false;
+    }
+
+    const normalizedEntries = specifications
+        .map((entry, index) => normalizeSpecificationPayload(entry, index))
+        .filter(Boolean);
+
+    let changed = false;
+
+    if (normalizedEntries.length !== specifications.length) {
+        specifications = normalizedEntries;
+        changed = true;
+    } else {
+        normalizedEntries.forEach((entry, index) => {
+            const current = specifications[index];
+            if (!current) {
+                specifications[index] = entry;
+                changed = true;
+                return;
+            }
+            const keysToSync = [
+                'id',
+                'name',
+                'nameArabic',
+                'nameEnglish',
+                'descriptionArabic',
+                'descriptionEnglish',
+                'placeholderArabic',
+                'placeholderEnglish',
+                'dataType',
+                'collectionFrequency',
+                'validationRule',
+                'isRequired',
+                'version',
+                'status',
+                'categoryIds',
+                'categoryLabels',
+                'subSpecifications',
+                'subSpecificationSummary',
+                'createdAt',
+                'updatedAt'
+            ];
+            keysToSync.forEach(key => {
+                if (Array.isArray(entry[key])) {
+                    if (!arraysAreEqual(entry[key], current[key])) {
+                        current[key] = [...entry[key]];
+                        changed = true;
+                    }
+                } else if (entry[key] !== current[key]) {
+                    current[key] = entry[key];
+                    changed = true;
+                }
+            });
+        });
+    }
+
+    if (changed && persist) {
+        saveSpecificationsToStorage();
+    }
+
+    return changed;
+}
+
+function syncCategorySpecificationCounts({ persistCategories = true, persistSpecifications = false, refreshView = true } = {}) {
+    const assignmentsChanged = refreshSpecificationCategoryAssignments({ persist: persistSpecifications });
+
+    if (!Array.isArray(categories) || !categories.length) {
+        updateCategoryBadges();
+        return assignmentsChanged;
+    }
+
+    const countLookup = new Map();
+    categories.forEach(category => {
+        if (!category || typeof category.id !== 'string') {
+            return;
+        }
+        countLookup.set(category.id, 0);
+    });
+
+    if (Array.isArray(specifications)) {
+        specifications.forEach(specification => {
+            const links = Array.isArray(specification.categoryIds) ? specification.categoryIds : [];
+            links.forEach(link => {
+                const trimmed = typeof link === 'string' ? link.trim() : '';
+                if (!trimmed) {
+                    return;
+                }
+                if (countLookup.has(trimmed)) {
+                    countLookup.set(trimmed, countLookup.get(trimmed) + 1);
+                }
+            });
+        });
+    }
+
+    let updated = false;
+    categories.forEach(category => {
+        if (!category || typeof category.id !== 'string') {
+            return;
+        }
+        const nextCount = countLookup.get(category.id) || 0;
+        if (!Number.isFinite(category.specificationCount) || category.specificationCount !== nextCount) {
+            category.specificationCount = nextCount;
+            updated = true;
+        }
+    });
+
+    if (updated && persistCategories) {
+        saveCategoriesToStorage();
+    }
+
+    updateCategoryBadges();
+
+    if (updated && refreshView) {
+        refreshCategoryDirectoryView({ rebuildCaches: false, keepScroll: true });
+        if (state.activeCategoryDetailId) {
+            renderCategoryRelatedDrawer(state.activeCategoryDetailId);
+        }
+    }
+
+    return updated || assignmentsChanged;
+}
+
+function generateSpecificationId() {
+    const existingNumbers = Array.isArray(specifications)
+        ? specifications
+            .map(entry => {
+                if (!entry || typeof entry.id !== 'string') {
+                    return null;
+                }
+                const match = entry.id.match(/SPEC-(\d+)/i);
+                if (!match) {
+                    return null;
+                }
+                const parsed = Number.parseInt(match[1], 10);
+                return Number.isFinite(parsed) ? parsed : null;
+            })
+            .filter(Number.isFinite)
+        : [];
+    const highest = existingNumbers.length ? Math.max(...existingNumbers) : 0;
+    const next = Number.isFinite(highest) ? highest + 1 : 1;
+    return `SPEC-${String(next).padStart(3, '0')}`;
+}
+
+const SPECIFICATION_TYPE_ALIASES = new Map([
+    ['dropdownlist', 'dropdownlist'],
+    ['dropdown list', 'dropdownlist'],
+    ['dropdown-list', 'dropdownlist'],
+    ['dropdown', 'dropdownlist'],
+    ['short-text', 'short-text'],
+    ['short text', 'short-text'],
+    ['short', 'short-text'],
+    ['text', 'short-text'],
+    ['long-text', 'long-text'],
+    ['long text', 'long-text'],
+    ['paragraph', 'long-text'],
+    ['paragraph-text', 'long-text'],
+    ['number', 'number'],
+    ['numeric', 'number'],
+    ['radio', 'radio'],
+    ['checkbox', 'checkbox'],
+    ['boolean', 'checkbox'],
+    ['bool', 'checkbox'],
+    ['document', 'document'],
+    ['file', 'document'],
+    ['date', 'short-text']
+]);
+
+const SPECIFICATION_TYPE_LABELS = new Map([
+    ['dropdownlist', 'Dropdown List'],
+    ['short-text', 'Short Text'],
+    ['long-text', 'Long Text'],
+    ['number', 'Number'],
+    ['radio', 'Radio'],
+    ['checkbox', 'Checkbox'],
+    ['document', 'Document']
+]);
+
+function normalizeSpecificationDataType(value, fallback = 'short-text') {
+    if (typeof value !== 'string') {
+        return fallback;
+    }
+    const normalized = value.trim().toLowerCase();
+    if (!normalized) {
+        return fallback;
+    }
+    return SPECIFICATION_TYPE_ALIASES.get(normalized) || fallback;
+}
+
+function formatSpecificationType(type) {
+    const canonical = normalizeSpecificationDataType(type, 'short-text');
+    if (SPECIFICATION_TYPE_LABELS.has(canonical)) {
+        return SPECIFICATION_TYPE_LABELS.get(canonical);
+    }
+    return canonical
+        .split(/[\s_-]+/)
+        .filter(Boolean)
+        .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(' ') || 'Short Text';
+}
+
+function formatTruncatedText(value, maxLength = 120) {
+    const text = typeof value === 'string' ? value.trim() : '';
+    if (!text) {
+        return { display: '—', full: '' };
+    }
+    if (text.length <= maxLength) {
+        return { display: text, full: text };
+    }
+    return {
+        display: `${text.slice(0, Math.max(0, maxLength - 3))}...`,
+        full: text
+    };
+}
+
+function formatSpecificationStatus(status) {
+    if (status === null || status === undefined) {
+        return 'Active';
+    }
+    const normalized = String(status)
+        .trim()
+        .toLowerCase();
+    if (!normalized) {
+        return 'Active';
+    }
+    return normalized
+        .split(/[\s_-]+/)
+        .filter(Boolean)
+        .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(' ');
+}
+
+function getSpecificationStatusClass(status) {
+    const normalized = typeof status === 'string' ? status.trim().toLowerCase() : '';
+    if (normalized === 'active') {
+        return 'success';
+    }
+    if (normalized === 'monitoring') {
+        return 'info';
+    }
+    if (normalized === 'archived') {
+        return 'danger';
+    }
+    if (normalized === 'draft' || normalized === 'inactive') {
+        return 'warning';
+    }
+    return 'info';
+}
+
+function formatSpecificationCategories(specification) {
+    if (!specification) {
+        return 'Unassigned';
+    }
+    const labels = Array.isArray(specification.categoryLabels)
+        ? specification.categoryLabels
+            .map(label => (typeof label === 'string' ? label.trim() : ''))
+            .filter(Boolean)
+        : [];
+    if (labels.length) {
+        return labels.join(', ');
+    }
+    const identifiers = Array.isArray(specification.categoryIds)
+        ? specification.categoryIds
+            .map(id => (typeof id === 'string' ? id.trim() : ''))
+            .filter(Boolean)
+        : [];
+    if (identifiers.length) {
+        return identifiers.join(', ');
+    }
+    return 'Unassigned';
+}
+
+function specificationMatchesSearch(specification, searchTerm) {
+    if (!searchTerm) {
+        return true;
+    }
+    const tokens = searchTerm.split(/\s+/).filter(Boolean);
+    if (!tokens.length) {
+        return true;
+    }
+    const haystackParts = [
+        specification.id,
+        specification.name,
+        specification.nameEnglish,
+        specification.nameArabic,
+        specification.descriptionEnglish,
+        specification.descriptionArabic,
+        specification.placeholderEnglish,
+        specification.placeholderArabic,
+        specification.subSpecificationSummary,
+        specification.version,
+        specification.status,
+        specification.dataType,
+        specification.collectionFrequency,
+        specification.validationRule,
+        specification.isRequired ? 'yes required mandatory' : 'no optional'
+    ];
+    if (Array.isArray(specification.subSpecifications)) {
+        specification.subSpecifications.forEach(entry => {
+            if (!entry || typeof entry !== 'object') {
+                return;
+            }
+            haystackParts.push(entry.nameEnglish);
+            haystackParts.push(entry.nameArabic);
+        });
+    }
+    if (Array.isArray(specification.categoryLabels)) {
+        haystackParts.push(...specification.categoryLabels);
+    }
+    const haystack = haystackParts
+        .map(value => (value === null || value === undefined ? '' : String(value).toLowerCase()))
+        .join(' ');
+    return tokens.every(token => haystack.includes(token.toLowerCase()));
+}
+
+function renderSpecificationList() {
+    const tableBody = document.getElementById('specificationsTableBody');
+    if (!tableBody) {
+        updateCategoryBadges();
+        return;
+    }
+
+    const snapshot = Array.isArray(specifications) ? specifications.slice() : [];
+    const searchTerm = (state.specificationSearchTerm || '').trim().toLowerCase();
+    const filtered = searchTerm
+        ? snapshot.filter(entry => specificationMatchesSearch(entry, searchTerm))
+        : snapshot;
+
+    filtered.sort((a, b) => {
+        const timeA = Date.parse(a && a.createdAt ? a.createdAt : '') || 0;
+        const timeB = Date.parse(b && b.createdAt ? b.createdAt : '') || 0;
+        if (timeB !== timeA) {
+            return timeB - timeA;
+        }
+        const idA = a && typeof a.id === 'string' ? a.id : '';
+        const idB = b && typeof b.id === 'string' ? b.id : '';
+        return idA.localeCompare(idB);
+    });
+
+    if (!filtered.length) {
+        tableBody.innerHTML = '<tr><td colspan="9" style="padding:16px;text-align:center;color:#6b7280;">No specifications recorded yet.</td></tr>';
+        updateCategoryBadges();
+        return;
+    }
+
+    const rows = filtered.map((entry, index) => {
+        const rowNumber = index + 1;
+        const categoriesLabel = formatSpecificationCategories(entry);
+        const requiredLabel = entry.isRequired ? 'Yes' : 'No';
+        const statusLabel = formatSpecificationStatus(entry.status);
+        const statusClass = getSpecificationStatusClass(entry.status);
+        const displayName = entry.nameEnglish || entry.name || entry.nameArabic || '—';
+        const descriptionPreferred = entry.descriptionEnglish || entry.descriptionArabic || '';
+        const descriptionInfo = formatTruncatedText(descriptionPreferred, 120);
+        const descriptionTitleAttr = descriptionInfo.full ? ` title="${escapeAttribute(descriptionInfo.full)}"` : '';
+        const categoriesTitleAttr = categoriesLabel ? ` title="${escapeAttribute(categoriesLabel)}"` : '';
+        const subSummarySource = entry.subSpecificationSummary && entry.subSpecificationSummary.trim()
+            ? entry.subSpecificationSummary.trim()
+            : formatSubSpecificationSummary(entry.subSpecifications);
+        const subSummaryInfo = formatTruncatedText(subSummarySource, 120);
+        const subSummaryTitleAttr = subSummaryInfo.full ? ` title="${escapeAttribute(subSummaryInfo.full)}"` : '';
+        const specIdAttribute = entry.id ? escapeAttribute(entry.id) : '';
+    const canonicalStatus = typeof entry.status === 'string' ? entry.status.trim().toLowerCase() : 'active';
+    const isActive = canonicalStatus === 'active';
+    const isInactive = canonicalStatus === 'inactive';
+    const activateDisabled = isActive ? ' disabled' : '';
+    const deactivateDisabled = isInactive ? ' disabled' : '';
+        return `
+            <tr>
+                <td>${rowNumber}</td>
+                <td>${escapeHtml(displayName)}</td>
+                <td${descriptionTitleAttr}>${escapeHtml(descriptionInfo.display)}</td>
+                <td${categoriesTitleAttr}>${escapeHtml(categoriesLabel || '—')}</td>
+                <td>${escapeHtml(formatSpecificationType(entry.dataType))}</td>
+                <td>${escapeHtml(requiredLabel)}</td>
+                <td><span class="status-pill ${statusClass}">${escapeHtml(statusLabel)}</span></td>
+                <td${subSummaryTitleAttr}>${escapeHtml(subSummaryInfo.display)}</td>
+                <td>
+                    <div class="action-group">
+                        <button type="button" class="action-btn edit with-label" data-action="modify" data-spec-id="${specIdAttribute}">
+                            <i class="fas fa-pen"></i>
+                            <span>Modify</span>
+                        </button>
+                        <button type="button" class="action-btn activate with-label${activateDisabled}" data-action="activate" data-spec-id="${specIdAttribute}"${activateDisabled}>
+                            <i class="fas fa-circle-check"></i>
+                            <span>Activate</span>
+                        </button>
+                        <button type="button" class="action-btn deactivate with-label${deactivateDisabled}" data-action="deactivate" data-spec-id="${specIdAttribute}"${deactivateDisabled}>
+                            <i class="fas fa-power-off"></i>
+                            <span>Deactivate</span>
+                        </button>
+                    </div>
+                </td>
+            </tr>
+        `;
+    }).join('');
+
+    tableBody.innerHTML = rows;
+    updateCategoryBadges();
+}
+
+function handleSpecificationSearch(term) {
+    state.specificationSearchTerm = typeof term === 'string' ? term.trim() : '';
+    renderSpecificationList();
+}
+
+function handleSpecificationTableClick(event) {
+    const trigger = event.target.closest('button[data-spec-id][data-action]');
+    if (!trigger) {
+        return;
+    }
+
+    event.preventDefault();
+
+    const specId = trigger.dataset.specId || '';
+    const action = (trigger.dataset.action || '').trim().toLowerCase();
+    if (!specId || !action) {
+        return;
+    }
+
+    if (action === 'modify') {
+        startSpecificationEdit(specId);
+        return;
+    }
+
+    if (action === 'activate') {
+        updateSpecificationStatus(specId, 'active');
+        return;
+    }
+
+    if (action === 'deactivate') {
+        updateSpecificationStatus(specId, 'inactive');
+    }
+}
+
+function startSpecificationEdit(specId) {
+    if (!specId) {
+        return;
+    }
+
+    const specification = Array.isArray(specifications)
+        ? specifications.find(entry => entry && entry.id === specId)
+        : null;
+
+    if (!specification) {
+        showNotification('warning', 'The selected specification is no longer available.', 3200, 'specificationNotificationArea');
+        renderSpecificationList();
+        return;
+    }
+
+    showSpecificationBuilder('edit', specification);
+}
+
+function updateSpecificationStatus(specId, nextStatus) {
+    if (!specId) {
+        return;
+    }
+    const normalizedStatus = typeof nextStatus === 'string' ? nextStatus.trim().toLowerCase() : '';
+    if (!['active', 'inactive'].includes(normalizedStatus)) {
+        return;
+    }
+
+    const specificationIndex = Array.isArray(specifications)
+        ? specifications.findIndex(entry => entry && entry.id === specId)
+        : -1;
+
+    if (specificationIndex === -1) {
+        showNotification('warning', 'The selected specification is no longer available.', 3200, 'specificationNotificationArea');
+        renderSpecificationList();
+        return;
+    }
+
+    const specification = specifications[specificationIndex];
+    const currentStatus = typeof specification.status === 'string' ? specification.status.trim().toLowerCase() : 'active';
+    if (currentStatus === normalizedStatus) {
+        const alreadyMessage = normalizedStatus === 'active'
+            ? 'This specification is already active.'
+            : 'This specification is already inactive.';
+        showNotification('info', alreadyMessage, 2800, 'specificationNotificationArea');
+        return;
+    }
+
+    specification.status = normalizedStatus;
+    specification.updatedAt = new Date().toISOString();
+    saveSpecificationsToStorage();
+    renderSpecificationList();
+    const message = normalizedStatus === 'active'
+        ? 'Specification activated successfully.'
+        : 'Specification deactivated successfully.';
+    showNotification('success', message, 3000, 'specificationNotificationArea');
+}
+
+function updateSpecificationCategoryOptions() {
+    renderSpecificationCategoriesModalOptions();
+    const selectedIds = getSpecificationCategoriesFromInput();
+    setSpecificationCategoriesInput(selectedIds, { updateDisplay: true });
+}
+
+function resetSpecificationForm(options = {}) {
+    const focus = options && options.focus === true;
+    const form = document.getElementById('specificationForm');
+    if (!form) {
+        return;
+    }
+    if (typeof form.reset === 'function') {
+        form.reset();
+    }
+    const categoriesSelect = document.getElementById('specificationCategoriesInput');
+    if (categoriesSelect) {
+        Array.from(categoriesSelect.options || []).forEach(option => {
+            option.selected = false;
+        });
+    }
+    const requiredToggle = document.getElementById('specificationRequiredInput');
+    if (requiredToggle) {
+        requiredToggle.checked = false;
+    }
+    const descriptionArInput = document.getElementById('specificationDescriptionArInput');
+    if (descriptionArInput) {
+        descriptionArInput.value = '';
+    }
+    const descriptionEnInput = document.getElementById('specificationDescriptionEnInput');
+    if (descriptionEnInput) {
+        descriptionEnInput.value = '';
+    }
+    const placeholderArInput = document.getElementById('specificationPlaceholderArInput');
+    if (placeholderArInput) {
+        placeholderArInput.value = '';
+    }
+    const placeholderEnInput = document.getElementById('specificationPlaceholderEnInput');
+    if (placeholderEnInput) {
+        placeholderEnInput.value = '';
+    }
+    setSpecificationCategoriesInput([], { updateDisplay: true });
+    setSubSpecificationsInput([]);
+    if (focus) {
+        const nameArabicInput = document.getElementById('specificationNameArabicInput');
+        const nameEnglishInput = document.getElementById('specificationNameEnglishInput');
+        const focusTarget = nameArabicInput || nameEnglishInput;
+        if (focusTarget && document.activeElement !== focusTarget) {
+            try {
+                focusTarget.focus({ preventScroll: true });
+            } catch (error) {
+                focusTarget.focus();
+            }
+        }
+    }
+}
+
+function populateSpecificationForm(specification) {
+    if (!specification || typeof specification !== 'object') {
+        return;
+    }
+
+    const nameArabicInput = document.getElementById('specificationNameArabicInput');
+    if (nameArabicInput) {
+        nameArabicInput.value = specification.nameArabic || '';
+    }
+
+    const nameEnglishInput = document.getElementById('specificationNameEnglishInput');
+    if (nameEnglishInput) {
+        nameEnglishInput.value = specification.nameEnglish || specification.name || '';
+    }
+
+    const descriptionArInput = document.getElementById('specificationDescriptionArInput');
+    if (descriptionArInput) {
+        descriptionArInput.value = specification.descriptionArabic || '';
+    }
+
+    const descriptionEnInput = document.getElementById('specificationDescriptionEnInput');
+    if (descriptionEnInput) {
+        descriptionEnInput.value = specification.descriptionEnglish || '';
+    }
+
+    const placeholderArInput = document.getElementById('specificationPlaceholderArInput');
+    if (placeholderArInput) {
+        placeholderArInput.value = specification.placeholderArabic || '';
+    }
+
+    const placeholderEnInput = document.getElementById('specificationPlaceholderEnInput');
+    if (placeholderEnInput) {
+        placeholderEnInput.value = specification.placeholderEnglish || '';
+    }
+
+    const typeSelect = document.getElementById('specificationTypeInput');
+    if (typeSelect) {
+        const canonicalType = normalizeSpecificationDataType(specification.dataType);
+        const hasOption = Array.from(typeSelect.options || []).some(option => option.value === canonicalType);
+        if (hasOption) {
+            typeSelect.value = canonicalType;
+        } else if (typeSelect.options && typeSelect.options.length) {
+            typeSelect.selectedIndex = 0;
+        }
+    }
+
+    const requiredToggle = document.getElementById('specificationRequiredInput');
+    if (requiredToggle) {
+        requiredToggle.checked = !!specification.isRequired;
+    }
+
+    const categoryIds = Array.isArray(specification.categoryIds) ? specification.categoryIds.filter(Boolean) : [];
+    specificationCategoriesWorkingSet = new Set(categoryIds);
+    setSpecificationCategoriesInput(categoryIds, { updateDisplay: true });
+
+    const subSpecifications = Array.isArray(specification.subSpecifications) ? specification.subSpecifications : [];
+    setSubSpecificationsInput(subSpecifications);
+}
+
+function handleSpecificationFormSubmit(event) {
+    event.preventDefault();
+
+    const nameArabicInput = document.getElementById('specificationNameArabicInput');
+    const descriptionArInput = document.getElementById('specificationDescriptionArInput');
+    const placeholderArInput = document.getElementById('specificationPlaceholderArInput');
+    const nameEnglishInput = document.getElementById('specificationNameEnglishInput');
+    const descriptionEnInput = document.getElementById('specificationDescriptionEnInput');
+    const placeholderEnInput = document.getElementById('specificationPlaceholderEnInput');
+    const typeSelect = document.getElementById('specificationTypeInput');
+    const requiredInput = document.getElementById('specificationRequiredInput');
+
+    if ((!nameArabicInput && !nameEnglishInput) || !typeSelect) {
+        showNotification('error', 'Specification form is missing required inputs.', 3200, 'specificationNotificationArea');
+        return;
+    }
+
+    const nameArabic = nameArabicInput ? nameArabicInput.value.trim() : '';
+    const nameEnglish = nameEnglishInput ? nameEnglishInput.value.trim() : '';
+    const descriptionArabic = descriptionArInput ? descriptionArInput.value.trim() : '';
+    const descriptionEnglish = descriptionEnInput ? descriptionEnInput.value.trim() : '';
+    const placeholderArabic = placeholderArInput ? placeholderArInput.value.trim() : '';
+    const placeholderEnglish = placeholderEnInput ? placeholderEnInput.value.trim() : '';
+    const subSpecifications = getSubSpecificationsFromInput();
+
+    if (!nameArabic && !nameEnglish) {
+        showNotification('warning', 'Enter the specification name in Arabic or English before saving.', 3200, 'specificationNotificationArea');
+        const focusTarget = nameEnglishInput || nameArabicInput;
+        focusTarget?.focus();
+        return;
+    }
+    const displayName = nameEnglish || nameArabic;
+
+    const selectedCategoryIds = getSpecificationCategoriesFromInput();
+
+    if (!selectedCategoryIds.length) {
+        showNotification('warning', 'Select at least one category for this specification.', 3200, 'specificationNotificationArea');
+        const categoriesInput = getSpecificationCategoriesInputElement();
+        categoriesInput?.focus();
+        return;
+    }
+
+    const labelLookup = new Map();
+    if (Array.isArray(categories)) {
+        categories.forEach(category => {
+            if (!category || typeof category.id !== 'string') {
+                return;
+            }
+            const label = typeof getCategoryDisplayName === 'function'
+                ? getCategoryDisplayName(category)
+                : (category.nameEnglish || category.nameArabic || category.categoryCode || category.id);
+            if (label) {
+                labelLookup.set(category.id, label);
+            }
+        });
+    }
+
+    const categoryLabels = selectedCategoryIds.map(identifier => labelLookup.get(identifier) || identifier);
+
+    const dataType = normalizeSpecificationDataType(typeSelect.value);
+    const collectionFrequency = 'per-inspection';
+    const validationRule = '';
+    const isRequired = requiredInput ? !!requiredInput.checked : true;
+    const nowIso = new Date().toISOString();
+    const isEditMode = state.specificationBuilderMode === 'edit' && typeof state.editingSpecificationId === 'string';
+    const existingIndex = isEditMode && Array.isArray(specifications)
+        ? specifications.findIndex(entry => entry && entry.id === state.editingSpecificationId)
+        : -1;
+    const existingSpecification = existingIndex !== -1 ? specifications[existingIndex] : null;
+
+    if (isEditMode && !existingSpecification) {
+        showNotification('warning', 'The specification you were editing is no longer available.', 3200, 'specificationNotificationArea');
+        hideSpecificationBuilder({ resetForm: true });
+        renderSpecificationList();
+        return;
+    }
+
+    const specPayload = {
+        id: existingSpecification ? existingSpecification.id : generateSpecificationId(),
+        name: displayName,
+        nameArabic,
+        nameEnglish,
+        descriptionArabic,
+        descriptionEnglish,
+        placeholderArabic,
+        placeholderEnglish,
+        dataType,
+        collectionFrequency,
+        validationRule,
+        isRequired,
+        version: existingSpecification && existingSpecification.version ? existingSpecification.version : 'v1.0',
+        status: existingSpecification && existingSpecification.status ? existingSpecification.status : 'active',
+        categoryIds: selectedCategoryIds,
+        categoryLabels,
+        subSpecifications,
+        subSpecificationSummary: formatSubSpecificationSummary(subSpecifications),
+        createdAt: existingSpecification && existingSpecification.createdAt ? existingSpecification.createdAt : nowIso,
+        updatedAt: nowIso
+    };
+
+    const normalized = normalizeSpecificationPayload(specPayload, existingSpecification ? existingIndex : specifications.length);
+    if (existingSpecification && existingIndex !== -1) {
+        specifications[existingIndex] = normalized;
+    } else {
+        if (!Array.isArray(specifications)) {
+            specifications = [];
+        }
+        specifications.push(normalized);
+    }
+
+    syncCategorySpecificationCounts({ persistCategories: true, persistSpecifications: false });
+    saveSpecificationsToStorage();
+    renderSpecificationList();
+    hideSpecificationBuilder();
+    const successMessage = existingSpecification ? 'Specification updated successfully.' : 'Specification blueprint saved.';
+    showNotification('success', successMessage, 3200, 'specificationNotificationArea');
 }
 
 function resolveCategoryByIdentifier(identifier) {
@@ -4150,6 +6100,16 @@ function rebuildCategoryCaches() {
     traverse(CATEGORY_TREE_ROOT_ID, 0);
 
     updateCategoryDepthFilterOptions();
+
+    updateSpecificationCategoryOptions();
+    const specificationUpdate = syncCategorySpecificationCounts({
+        persistCategories: true,
+        persistSpecifications: true,
+        refreshView: false
+    });
+    if (specificationUpdate) {
+        renderSpecificationList();
+    }
 }
 
 function getCategoryParentId(category) {
@@ -4761,6 +6721,12 @@ function buildCategoryGridRow(category, displayIndex, relativeDepth) {
     const parentDisplay = !parentIdForRow || parentIdForRow === CATEGORY_TREE_ROOT_ID
         ? '–'
         : resolveCategoryParentLabel(category);
+    const statusGroup = getCategoryStatusFilterGroup(category.status);
+    const isActive = statusGroup === 'active';
+    const toggleAction = isActive ? 'deactivate' : 'activate';
+    const toggleClass = isActive ? 'deactivate' : 'activate';
+    const toggleIcon = isActive ? 'fa-power-off' : 'fa-rotate-right';
+    const toggleLabel = isActive ? 'Deactivate category' : 'Activate category';
     return `
         <div class="category-grid-row${isSelected ? ' is-selected' : ''}" role="row" data-category-row="${escapeAttribute(category.id)}" style="--depth:${relativeDepth}">
             <div class="grid-cell index" data-column="index">
@@ -4783,6 +6749,16 @@ function buildCategoryGridRow(category, displayIndex, relativeDepth) {
             </div>
             <div class="grid-cell created" data-column="created">
                 ${formatCategoryCreatedMeta(category)}
+            </div>
+            <div class="grid-cell actions" data-column="actions">
+                <div class="action-group">
+                    <button type="button" class="action-btn edit" data-category-action="edit" data-category-id="${escapeAttribute(category.id)}" title="Modify category" aria-label="Modify category">
+                        <i class="fas fa-pen"></i>
+                    </button>
+                    <button type="button" class="action-btn ${toggleClass}" data-category-action="${toggleAction}" data-category-id="${escapeAttribute(category.id)}" title="${escapeAttribute(toggleLabel)}" aria-label="${escapeAttribute(toggleLabel)}">
+                        <i class="fas ${toggleIcon}"></i>
+                    </button>
+                </div>
             </div>
         </div>
     `;
@@ -6725,6 +8701,45 @@ function refreshCategoryDirectoryView({ rebuildCaches = false, resetScroll = fal
     updateCategoryCompareDrawer();
 }
 
+async function handleCategoryRowAction(categoryId, action) {
+    const normalizedAction = typeof action === 'string' ? action.trim().toLowerCase() : '';
+    if (!categoryId || !normalizedAction) {
+        return;
+    }
+
+    if (normalizedAction === 'compare') {
+        handleCategoryCompareRequest(categoryId);
+        return;
+    }
+
+    const category = resolveCategoryByIdentifier(categoryId);
+    if (!category) {
+        showNotification('error', 'Selected category could not be found.', 3200, 'categoryNotificationArea');
+        return;
+    }
+
+    if (normalizedAction === 'edit' || normalizedAction === 'modify') {
+        showCategoryBuilder('edit', category);
+        highlightCategoryRow(category.id);
+        return;
+    }
+
+    if (normalizedAction === 'activate') {
+        const success = await activateCategoryEntry(category);
+        if (success) {
+            setTimeout(() => highlightCategoryRow(category.id), 180);
+        }
+        return;
+    }
+
+    if (normalizedAction === 'deactivate' || normalizedAction === 'archive') {
+        const success = await deactivateCategoryEntry(category);
+        if (success) {
+            setTimeout(() => highlightCategoryRow(category.id), 180);
+        }
+    }
+}
+
 function handleCategoryCompareRequest(categoryId) {
     if (!state.categoryCompareMode) {
         toggleCategoryCompareMode(true);
@@ -6753,19 +8768,8 @@ function handleCategoryGridClick(event) {
     if (actionBtn) {
         const action = (actionBtn.dataset.categoryAction || '').toLowerCase();
         const categoryId = actionBtn.dataset.categoryId;
-        if (action === 'compare') {
-            handleCategoryCompareRequest(categoryId);
-            return;
-        }
-        if (action === 'edit') {
-            const category = resolveCategoryByIdentifier(categoryId);
-            if (!category) {
-                showNotification('error', 'Selected category could not be found.', 3200, 'categoryNotificationArea');
-                return;
-            }
-            showCategoryBuilder('edit', category);
-            highlightCategoryRow(category.id);
-            return;
+        if (categoryId) {
+            handleCategoryRowAction(categoryId, action);
         }
         return;
     }
@@ -6862,6 +8866,77 @@ function handleCategoryGridClick(event) {
     }
 }
 
+async function activateCategoryEntry(category) {
+    if (!category) {
+        return false;
+    }
+
+    const confirmation = await showCategoryConfirm('Are You Sure You Want to Activate the Category Again?', 'OK', 'Cancel');
+    if (!confirmation) {
+        return false;
+    }
+
+    const parentId = categoryParentLookup.get(category.id) || getCategoryParentId(category);
+    const hasParent = parentId && parentId !== CATEGORY_TREE_ROOT_ID;
+    if (hasParent) {
+        const parentCategory = categoryLookupById.get(parentId);
+        if (parentCategory && getCategoryStatusFilterGroup(parentCategory.status) !== 'active') {
+            showNotification('warning', 'This Category Cannot be Activated Because the Parent Category is Inactive', 4200, 'categoryNotificationArea');
+            return false;
+        }
+    }
+
+    category.status = 'active';
+    category.updatedAt = new Date().toISOString();
+
+    saveCategoriesToStorage();
+    refreshCategoryDirectoryView({ rebuildCaches: true, resetScroll: false, keepScroll: true });
+    updateCategorySelectionSummary();
+    showNotification('success', 'Category Activated Successfully', 3200, 'categoryNotificationArea');
+
+    return true;
+}
+
+async function deactivateCategoryEntry(category) {
+    if (!category) {
+        return false;
+    }
+
+    const initialConfirmation = await showCategoryConfirm('Are You Sure You Want to Deactivate this Category?', 'OK', 'Cancel');
+    if (!initialConfirmation) {
+        return false;
+    }
+
+    const descendants = collectCategoryDescendants(category.id);
+    const activeDescendants = descendants.filter(entry => getCategoryStatusFilterGroup(entry.status) === 'active');
+
+    if (activeDescendants.length) {
+        const pluralSuffix = activeDescendants.length === 1 ? 'y' : 'ies';
+        const warningMessage = `This Category Contains ${activeDescendants.length} Active Subcategor${pluralSuffix}. All of Them Will be Disabled. Do You Want to Continue?`;
+        const proceed = await showCategoryConfirm(warningMessage, 'OK', 'Cancel');
+        if (!proceed) {
+            return false;
+        }
+    }
+
+    const timestamp = new Date().toISOString();
+    const categoriesToDeactivate = activeDescendants.length ? [category, ...descendants] : [category];
+    categoriesToDeactivate.forEach(entry => {
+        if (!entry) {
+            return;
+        }
+        entry.status = 'inactive';
+        entry.updatedAt = timestamp;
+    });
+
+    saveCategoriesToStorage();
+    refreshCategoryDirectoryView({ rebuildCaches: true, resetScroll: false, keepScroll: true });
+    updateCategorySelectionSummary();
+    showNotification('success', 'Category Deactivated Successfully', 3200, 'categoryNotificationArea');
+
+    return true;
+}
+
 async function handleCategoryBulkAction(action) {
     if (!state.categorySelectedIds.size) {
         showNotification('info', 'Select a category to continue.', 3200, 'categoryNotificationArea');
@@ -6917,63 +8992,18 @@ async function handleCategoryBulkAction(action) {
         }
 
         const [category] = payload;
-
         if (action === 'activate') {
-            const confirmation = await showCategoryConfirm('Are You Sure You Want to Activate the Category Again?', 'OK', 'Cancel');
-            if (!confirmation) {
-                return;
+            const success = await activateCategoryEntry(category);
+            if (success) {
+                setTimeout(() => highlightCategoryRow(category.id), 180);
             }
-
-            const parentId = categoryParentLookup.get(category.id) || getCategoryParentId(category);
-            const hasParent = parentId && parentId !== CATEGORY_TREE_ROOT_ID;
-            if (hasParent) {
-                const parentCategory = categoryLookupById.get(parentId);
-                if (parentCategory && getCategoryStatusFilterGroup(parentCategory.status) !== 'active') {
-                    showNotification('warning', 'This Category Cannot be Activated Because the Parent Category is Inactive', 4200, 'categoryNotificationArea');
-                    return;
-                }
-            }
-
-            category.status = 'active';
-            category.updatedAt = new Date().toISOString();
-            saveCategoriesToStorage();
-            refreshCategoryDirectoryView({ rebuildCaches: true, resetScroll: false, keepScroll: true });
-            updateCategorySelectionSummary();
-            showNotification('success', 'Category Activated Successfully', 3200, 'categoryNotificationArea');
             return;
         }
 
-        const initialConfirmation = await showCategoryConfirm('Are You Sure You Want to Deactivate this Category?', 'OK', 'Cancel');
-        if (!initialConfirmation) {
-            return;
+        const success = await deactivateCategoryEntry(category);
+        if (success) {
+            setTimeout(() => highlightCategoryRow(category.id), 180);
         }
-
-        const descendants = collectCategoryDescendants(category.id);
-        const activeDescendants = descendants.filter(entry => getCategoryStatusFilterGroup(entry.status) === 'active');
-
-        if (activeDescendants.length) {
-            const pluralSuffix = activeDescendants.length === 1 ? 'y' : 'ies';
-            const warningMessage = `This Category Contains ${activeDescendants.length} Active Subcategor${pluralSuffix}. All of Them Will be Disabled. Do You Want to Continue?`;
-            const proceed = await showCategoryConfirm(warningMessage, 'OK', 'Cancel');
-            if (!proceed) {
-                return;
-            }
-        }
-
-        const timestamp = new Date().toISOString();
-        const categoriesToDeactivate = activeDescendants.length ? [category, ...descendants] : [category];
-        categoriesToDeactivate.forEach(entry => {
-            if (!entry) {
-                return;
-            }
-            entry.status = 'inactive';
-            entry.updatedAt = timestamp;
-        });
-
-        saveCategoriesToStorage();
-        refreshCategoryDirectoryView({ rebuildCaches: true, resetScroll: false, keepScroll: true });
-        updateCategorySelectionSummary();
-        showNotification('success', 'Category Deactivated Successfully', 3200, 'categoryNotificationArea');
         return;
     }
 }

@@ -754,26 +754,6 @@
                                             <i class="fas fa-search"></i>
                                             <input type="text" id="categoryDetailSearchInput" placeholder="Filter by name, code, or description" aria-label="Filter categories" />
                                         </div>
-                                    </div>
-                                    <div class="detail-quick-actions" id="categoryQuickActions">
-                                        <div class="quick-action-group action-group">
-                                            <button type="button" class="action-btn with-label activate" id="categoryBulkActivateBtn" disabled aria-label="Activate selected categories" title="Activate selected categories">
-                                                <i class="fas fa-rotate-right"></i>
-                                                <span>Activate</span>
-                                            </button>
-                                            <button type="button" class="action-btn with-label deactivate" id="categoryBulkArchiveBtn" disabled aria-label="Deactivate selected categories" title="Deactivate selected categories">
-                                                <i class="fas fa-power-off"></i>
-                                                <span>Deactivate</span>
-                                            </button>
-                                            <button type="button" class="action-btn with-label edit" id="categoryBulkModifyBtn" disabled aria-label="Modify selected category" title="Modify selected category">
-                                                <i class="fas fa-pen"></i>
-                                                <span>Modify</span>
-                                            </button>
-                                            <button type="button" class="action-btn with-label delete" id="categoryDeleteAllBtn" aria-label="Delete all categories" title="Delete all categories">
-                                                <i class="fas fa-trash"></i>
-                                                <span>Delete All</span>
-                                            </button>
-                                        </div>
                                         <div class="detail-filters">
                                             <span class="filter-label" aria-hidden="true">Filter:</span>
                                             <label class="filter-control" for="categoryStatusFilter">Status
@@ -803,6 +783,7 @@
                                             <div class="grid-cell parent" data-column="parent">Parent</div>
                                             <div class="grid-cell status" data-column="status">Status</div>
                                             <div class="grid-cell created" data-column="created">Created</div>
+                                            <div class="grid-cell actions" data-column="actions">Actions</div>
                                         </div>
                                         <div class="category-grid-body" id="categoryGridBody" role="rowgroup" tabindex="0"></div>
                                     </div>
@@ -1094,140 +1075,146 @@
                     </div>
 
                     <div id="categories-app2" class="sub-app">
-                        <div id="specificationsListView">
-                            <div class="users-header">
-                                <div class="header-stack">
-                                    <h2 class="module-title">Specification Library</h2>
-                                    <div class="search-box">
-                                        <i class="fas fa-search"></i>
-                                        <input type="text" id="specificationSearch" placeholder="Search by Specification, Category, Type, Version, or Status" />
-                                    </div>
-                                </div>
-                                <div class="users-actions">
-                                    <button class="btn btn-primary" id="addSpecificationBtn">
-                                        <i class="fas fa-file-circle-plus"></i>
-                                        Add Specification
-                                    </button>
-                                    <button class="btn btn-outline" id="specificationTemplateBtn">
-                                        <i class="fas fa-table-list"></i>
-                                        Open Template Gallery
-                                    </button>
+                        <div id="specificationNotificationArea" class="notification-area"></div>
+                        <div class="users-header" id="specificationHeader">
+                            <div class="header-stack">
+                                <h2 class="module-title" id="specificationModuleTitle">Specification Library</h2>
+                                <div class="search-box" id="specificationSearchContainer">
+                                    <i class="fas fa-search"></i>
+                                    <input type="text" id="specificationSearch" placeholder="Search by Specification, Category, Type, Version, or Status" />
                                 </div>
                             </div>
+                            <div class="users-actions" id="specificationActions">
+                                <button class="btn btn-primary" id="addSpecificationBtn">
+                                    <i class="fas fa-file-circle-plus"></i>
+                                    Add Specification
+                                </button>
+                                <button class="btn btn-outline" id="specificationTemplateBtn">
+                                    <i class="fas fa-table-list"></i>
+                                    Open Template Gallery
+                                </button>
+                            </div>
+                        </div>
+                        <div id="specificationsListView">
                             <div class="table-shell">
                                 <table>
                                     <thead>
                                         <tr>
-                                            <th>ID</th>
+                                            <th>#</th>
                                             <th>Specification</th>
-                                            <th>Category</th>
-                                            <th>Data Type</th>
-                                            <th>Required</th>
-                                            <th>Version</th>
+                                            <th>Description</th>
+                                            <th>Categories</th>
+                                            <th>Type</th>
+                                            <th>IsRequired</th>
                                             <th>Status</th>
+                                            <th>Sub Specifications</th>
+                                            <th>Actions</th>
                                         </tr>
                                     </thead>
-                                    <tbody>
-                                        <tr>
-                                            <td>SPEC-142</td>
-                                            <td>Maximum Load Rating</td>
-                                            <td>Electrical Safety</td>
-                                            <td>Numeric</td>
-                                            <td>Yes</td>
-                                            <td>v2.1</td>
-                                            <td><span class="status-pill success">Active</span></td>
-                                        </tr>
-                                        <tr>
-                                            <td>SPEC-213</td>
-                                            <td>Food Handling Certificate</td>
-                                            <td>Food Hygiene</td>
-                                            <td>Document</td>
-                                            <td>Yes</td>
-                                            <td>v1.4</td>
-                                            <td><span class="status-pill success">Active</span></td>
-                                        </tr>
-                                        <tr>
-                                            <td>SPEC-321</td>
-                                            <td>Evacuation Drill Date</td>
-                                            <td>Fire Readiness</td>
-                                            <td>Date</td>
-                                            <td>No</td>
-                                            <td>v1.0</td>
-                                            <td><span class="status-pill info">Monitoring</span></td>
-                                        </tr>
-                                        <tr>
-                                            <td>SPEC-404</td>
-                                            <td>Water Potability Index</td>
-                                            <td>Water Quality</td>
-                                            <td>Numeric</td>
-                                            <td>Yes</td>
-                                            <td>v3.2</td>
-                                            <td><span class="status-pill warning">Draft</span></td>
-                                        </tr>
-                                    </tbody>
+                                    <tbody id="specificationsTableBody"></tbody>
                                 </table>
                             </div>
                         </div>
 
-                        <div class="form-card" style="margin-top: 24px;">
-                            <div style="display:flex; justify-content: space-between; align-items:flex-start; gap:24px; flex-wrap: wrap;">
-                                <div style="flex:1 1 320px;">
-                                    <h3 style="margin:0 0 8px;">Specification Blueprint</h3>
-                                    <p class="section-subtitle" style="margin:0 0 16px;">Link data types, collection cadence, and validation rules to keep municipalities aligned.</p>
-                                    <p class="helper-text" style="margin:0 0 8px;">Synchronise schema updates with integration partners.</p>
-                                    <p class="helper-text" style="margin:0 0 8px;">Auto-assign audit ownership based on category steward.</p>
-                                    <p class="helper-text" style="margin:0;">Generate localisation drafts for Arabic and English simultaneously.</p>
-                                </div>
-                                <div style="flex:1 1 320px;">
-                                    <form id="specificationForm" class="form-grid" novalidate>
-                                        <div class="form-group">
-                                            <label class="form-label" for="specificationNameInput">Specification Name</label>
-                                            <input type="text" id="specificationNameInput" class="form-input" placeholder="e.g. Evacuation Assembly Point" required />
+                        <div id="specificationBuilderView" class="specification-builder hidden">
+                            <div class="form-card">
+                                <form id="specificationForm" class="form-grid" novalidate>
+                                    <div class="form-group" style="grid-column: 1;">
+                                        <label class="form-label" for="specificationNameArabicInput">Specification Name (Arabic)</label>
+                                        <input type="text" id="specificationNameArabicInput" class="form-input" placeholder="مثال: نقطة تجمع الإخلاء" />
+                                    </div>
+                                    <div class="form-group" style="grid-column: 2;">
+                                        <label class="form-label" for="specificationDescriptionArInput">Description (Ar)</label>
+                                        <textarea id="specificationDescriptionArInput" placeholder="أدخل وصفًا عربيًا للمواصفة"></textarea>
+                                    </div>
+                                    <div class="form-group" style="grid-column: 3;">
+                                        <label class="form-label" for="specificationPlaceholderArInput">Place Holder (Ar)</label>
+                                        <input type="text" id="specificationPlaceholderArInput" class="form-input" placeholder="أدخل النص الإرشادي" />
+                                    </div>
+                                    <div class="form-group" style="grid-column: 1;">
+                                        <label class="form-label" for="specificationNameEnglishInput">Specification Name (English)</label>
+                                        <input type="text" id="specificationNameEnglishInput" class="form-input" placeholder="e.g. Evacuation Assembly Point" />
+                                    </div>
+                                    <div class="form-group" style="grid-column: 2;">
+                                        <label class="form-label" for="specificationDescriptionEnInput">Description (En)</label>
+                                        <textarea id="specificationDescriptionEnInput" placeholder="Enter an English description for the specification"></textarea>
+                                    </div>
+                                    <div class="form-group" style="grid-column: 3;">
+                                        <label class="form-label" for="specificationPlaceholderEnInput">Place Holder (En)</label>
+                                        <input type="text" id="specificationPlaceholderEnInput" class="form-input" placeholder="Enter guidance text" />
+                                    </div>
+                                    <div class="form-group" style="grid-column: 1; width: 200%;">
+                                        <label class="form-label" for="specificationCategoriesInput">Categories</label>
+                                        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                                            <button type="button" class="btn btn-secondary" id="openSpecificationCategoriesModalBtn" style="white-space:nowrap;">Select Categories</button>
+                                            <input type="text" id="specificationCategoriesInput" class="form-input" placeholder="Select categories" readonly style="background:#f9fafb; cursor:pointer; flex:1; min-width:280px;" />
                                         </div>
-                                        <div class="form-group">
-                                            <label class="form-label" for="specificationCategoryInput">Category</label>
-                                            <select id="specificationCategoryInput" class="form-select">
-                                                <option value="Electrical Safety">Electrical Safety</option>
-                                                <option value="Food Hygiene">Food Hygiene</option>
-                                                <option value="Fire Readiness">Fire Readiness</option>
-                                                <option value="Water Quality">Water Quality</option>
-                                            </select>
+                                    </div>
+                                    <div class="form-group" style="grid-column: 3; width: 200%;">
+                                        <label class="form-label" for="specificationSubSpecificationsInput">Sub Specifications</label>
+                                        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                                            <button type="button" class="btn btn-secondary" id="openSubSpecificationModalBtn" style="white-space:nowrap;">Add SubSpecification</button>
+                                            <input type="text" class="form-input" id="specificationSubSpecificationsInput" placeholder="Add sub specifications" readonly style="background:#f9fafb; cursor:pointer; flex:1; min-width:260px;" />
                                         </div>
-                                        <div class="form-group">
-                                            <label class="form-label" for="specificationTypeInput">Data Type</label>
-                                            <select id="specificationTypeInput" class="form-select">
-                                                <option value="numeric">Numeric</option>
-                                                <option value="text">Text</option>
-                                                <option value="date">Date</option>
-                                                <option value="document">Document</option>
-                                                <option value="boolean">Boolean</option>
-                                            </select>
+                                    </div>
+                                    <div id="specificationCategoriesModal" class="modal hidden" tabindex="-1" role="dialog" aria-modal="true" style="position:fixed;z-index:1000;left:0;top:0;width:100vw;height:100vh;background:rgba(0,0,0,0.25);display:flex;align-items:center;justify-content:center;">
+                                        <div class="modal-content" role="document" style="background:#fff;padding:24px 32px;border-radius:12px;min-width:360px;max-width:640px;max-height:80vh;overflow:auto;box-shadow:0 8px 32px rgba(0,0,0,0.18);">
+                                            <h2 style="margin-top:0;font-size:20px;margin-bottom:8px;">Assign Categories</h2>
+                                            <p style="margin-top:0;margin-bottom:16px;color:#4b5563;font-size:14px;">Search and select every category that should include this specification.</p>
+                                            <div class="category-picker" style="display:flex;flex-direction:column;gap:12px;">
+                                                <div class="category-picker-search" style="position:relative;">
+                                                    <i class="fas fa-search" aria-hidden="true" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:#9ca3af;"></i>
+                                                    <input type="search" id="specificationCategoriesModalSearch" class="form-input" placeholder="Search categories" style="padding-left:36px; width: 100%;" />
+                                                </div>
+                                                <div id="specificationCategoriesModalList" class="category-picker-list" style="display:flex;flex-direction:column;gap:8px;max-height:320px;overflow:auto;padding-right:4px;"></div>
+                                                <div id="specificationCategoriesModalSummary" style="font-size:13px;color:#4b5563;">No categories selected yet.</div>
+                                            </div>
+                                            <div style="display:flex; justify-content:flex-end; gap:12px; margin-top:24px;">
+                                                <button type="button" class="btn btn-outline" id="cancelSpecificationCategoriesBtn">Cancel</button>
+                                                <button type="button" class="btn btn-primary" id="applySpecificationCategoriesBtn">Apply</button>
+                                            </div>
                                         </div>
-                                        <div class="form-group">
-                                            <label class="form-label" for="specificationFrequencyInput">Collection Frequency</label>
-                                            <select id="specificationFrequencyInput" class="form-select">
-                                                <option value="per-inspection">Per Inspection</option>
-                                                <option value="weekly">Weekly</option>
-                                                <option value="monthly">Monthly</option>
-                                                <option value="quarterly">Quarterly</option>
-                                            </select>
+                                    </div>
+                                    <div id="subSpecificationModal" class="modal hidden" tabindex="-1" role="dialog" aria-modal="true" style="position:fixed;z-index:1000;left:0;top:0;width:100vw;height:100vh;background:rgba(0,0,0,0.25);display:flex;align-items:center;justify-content:center;">
+                                        <div class="modal-content" role="document" style="background:#fff;padding:24px 32px;border-radius:12px;min-width:360px;max-width:640px;max-height:80vh;overflow:auto;box-shadow:0 8px 32px rgba(0,0,0,0.18);">
+                                            <h2 style="margin-top:0;font-size:20px;margin-bottom:16px;">Sub Specifications</h2>
+                                            <p style="margin-top:0;margin-bottom:16px;color:#4b5563;font-size:14px;">Capture localized labels for each sub specification option.</p>
+                                            <div id="subSpecificationRows" style="display:flex; flex-direction:column; gap:12px;"></div>
+                                            <div style="display:flex; justify-content:flex-end; gap:12px; margin-top:24px;">
+                                                <button type="button" class="btn btn-outline" id="cancelSubSpecificationBtn">Cancel</button>
+                                                <button type="button" class="btn btn-primary" id="applySubSpecificationBtn">Apply</button>
+                                            </div>
                                         </div>
-                                        <div class="form-group">
-                                            <label class="form-label" for="specificationValidationInput">Validation Rule</label>
-                                            <input type="text" id="specificationValidationInput" class="form-input" placeholder="e.g. Must include geo-tagged evidence" />
-                                        </div>
-                                        <div class="form-group" style="grid-column: 1 / -1; display:flex; justify-content:flex-end; gap:12px;">
-                                            <button type="button" class="btn btn-outline" id="specificationResetBtn">
-                                                <i class="fas fa-rotate-left"></i>
-                                                Reset
-                                            </button>
-                                            <button type="submit" class="btn btn-primary" id="specificationSubmitBtn">
-                                                <i class="fas fa-flask"></i>
-                                                Save Blueprint
-                                            </button>
-                                        </div>
-                                    </form>
-                                </div>
+                                    </div>
+                                    <div class="form-group" style="grid-column: 1;">
+                                        <label class="form-label" for="specificationTypeInput">Data Type</label>
+                                        <select id="specificationTypeInput" class="form-select">
+                                            <option value="dropdownlist">Dropdown List</option>
+                                            <option value="short-text">Short Text</option>
+                                            <option value="long-text">Long Text</option>
+                                            <option value="number">Number</option>
+                                            <option value="radio">Radio</option>
+                                            <option value="checkbox">Checkbox</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group"  style="grid-column: 1;">
+                                        <span class="form-label">Required?</span>
+                                        <label class="toggle-switch" style="margin-top:6px;">
+                                            <input type="checkbox" id="specificationRequiredInput" aria-label="Mark specification as required" />
+                                            <span class="toggle-slider"></span>
+                                        </label>
+                                    </div>
+                                    <div style="grid-column: 1 / -1; display:flex; justify-content:flex-end; gap:12px;">
+                                        <button type="button" class="btn btn-outline" id="cancelSpecificationFormBtn">
+                                            <i class="fas fa-xmark"></i>
+                                            Cancel
+                                        </button>
+                                        <button type="submit" class="btn btn-primary" id="specificationSubmitBtn">
+                                            <i class="fas fa-floppy-disk"></i>
+                                            Add
+                                        </button>
+                                    </div>
+                                </form>
                             </div>
                         </div>
                     </div>
