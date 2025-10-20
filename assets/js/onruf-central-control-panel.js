@@ -5718,22 +5718,611 @@ function downloadCategoryImportTemplate() {
             'Yes'
         ]
     ];
+
+    const triggerDownload = (blob, filename) => {
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    };
+
+    const convertToCsv = rows => rows
+        .map(row => row
+            .map(cell => {
+                const text = cell == null ? '' : String(cell);
+                return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+            })
+            .join(','))
+        .join('\r\n');
+
+    const csvContent = convertToCsv([header, ...sampleRows]);
+    const csvBlob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    triggerDownload(csvBlob, 'Category_Import_Template.csv');
+
     const headerHtml = header.map(cell => `<th>${escapeHtml(cell)}</th>`).join('');
     const rowsHtml = sampleRows
         .map(row => `<tr>${row.map(cell => `<td>${escapeHtml(cell)}</td>`).join('')}</tr>`)
         .join('');
     const workbookHtml = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Category Import Template</title><style>table{border-collapse:collapse;font-family:Arial,Helvetica,sans-serif;font-size:13px;}th,td{border:1px solid #d1d5db;padding:6px 10px;text-align:left;}th{background:#f1f5f9;font-weight:600;}</style></head><body><table><thead><tr>${headerHtml}</tr></thead><tbody>${rowsHtml}</tbody></table></body></html>`;
 
-    const blob = new Blob([workbookHtml], { type: 'application/vnd.ms-excel;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = 'Category_Import_Template.xls';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-    setCategoryImportStatus('Template downloaded. Edit it in Excel and re-upload when ready.', 'success');
+    const xlsBlob = new Blob([workbookHtml], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+    triggerDownload(xlsBlob, 'Category_Import_Template.xls');
+
+    setCategoryImportStatus('Templates downloaded. CSV and Excel versions ready.', 'success');
+}
+
+const CATEGORY_IMPORT_FULL_ROW_LIMIT = Number.MAX_SAFE_INTEGER;
+
+function readCategoryImportFileAsText(file) {
+    return new Promise((resolve, reject) => {
+        if (!file) {
+            reject(new Error('No file provided.'));
+            return;
+        }
+        const reader = new FileReader();
+        reader.onload = () => {
+            resolve(typeof reader.result === 'string' ? reader.result : '');
+        };
+        reader.onerror = () => {
+            reject(new Error('Unable to read the file.'));
+        };
+        reader.readAsText(file);
+    });
+}
+
+function readCategoryImportFileAsArrayBuffer(file) {
+    return new Promise((resolve, reject) => {
+        if (!file) {
+            reject(new Error('No file provided.'));
+            return;
+        }
+        const reader = new FileReader();
+        reader.onload = () => {
+            const { result } = reader;
+            if (result instanceof ArrayBuffer) {
+                resolve(result);
+                return;
+            }
+            if (ArrayBuffer.isView(result) && result.buffer instanceof ArrayBuffer) {
+                resolve(result.buffer);
+                return;
+            }
+            resolve(result);
+        };
+        reader.onerror = () => {
+            reject(new Error('Unable to read the file.'));
+        };
+        reader.readAsArrayBuffer(file);
+    });
+}
+
+async function parseFullCategoryImportFile(file, format) {
+    if (!file) {
+        throw new Error('No import file selected.');
+    }
+    const normalizedFormat = typeof format === 'string' ? format.trim().toLowerCase() : '';
+    if (normalizedFormat === 'xlsx') {
+        await ensureCategoryImportXlsxParser();
+        const buffer = await readCategoryImportFileAsArrayBuffer(file);
+        return parseCategoryXlsxPreview(buffer, CATEGORY_IMPORT_FULL_ROW_LIMIT);
+    }
+    const text = await readCategoryImportFileAsText(file);
+    const effectiveFormat = normalizedFormat === 'xls' ? 'xls' : 'csv';
+    return parseCategoryWorkbookPreview(text, effectiveFormat, CATEGORY_IMPORT_FULL_ROW_LIMIT);
+}
+
+function parseCategoryImportNumber(value) {
+    if (typeof value === 'number') {
+        return Number.isFinite(value) ? value : 0;
+    }
+    if (typeof value !== 'string') {
+        return 0;
+    }
+    const trimmed = value.trim();
+    if (!trimmed) {
+        return 0;
+    }
+    const normalized = trimmed
+        .replace(/[^0-9.,-]/g, '')
+        .replace(/,/g, '');
+    const parsed = Number.parseFloat(normalized);
+    return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function parseCategoryImportInteger(value) {
+    const numeric = parseCategoryImportNumber(value);
+    if (!Number.isFinite(numeric)) {
+        return 0;
+    }
+    return Math.round(numeric);
+}
+
+function parseCategoryImportBoolean(value) {
+    if (typeof value === 'boolean') {
+        return value;
+    }
+    if (typeof value === 'number') {
+        return value !== 0;
+    }
+    if (typeof value !== 'string') {
+        return false;
+    }
+    const normalized = value.trim().toLowerCase();
+    if (!normalized) {
+        return false;
+    }
+    if (['yes', 'y', 'true', '1', 'enable', 'enabled', 'active'].includes(normalized)) {
+        return true;
+    }
+    if (['no', 'n', 'false', '0', 'disable', 'disabled', 'inactive'].includes(normalized)) {
+        return false;
+    }
+    return false;
+}
+
+function parseCategoryImportMinimumBid(value) {
+    const amount = parseCategoryImportNumber(value);
+    let sellerCanModify = false;
+    if (typeof value === 'string') {
+        const normalized = value.trim().toLowerCase();
+        if (normalized) {
+            if (/(yes|y|true|allow)/.test(normalized)) {
+                sellerCanModify = true;
+            }
+            if (/(no|n|false|deny)/.test(normalized)) {
+                sellerCanModify = false;
+            }
+        }
+    }
+    return {
+        amount: Number.isFinite(amount) ? amount : 0,
+        sellerCanModify
+    };
+}
+
+function normalizeCategoryImportFeeDue(value) {
+    if (typeof value === 'string') {
+        const normalized = value.trim().toLowerCase();
+        if (!normalized) {
+            return 'on-publish';
+        }
+        if (normalized.includes('after')) {
+            return 'after-sales';
+        }
+        if (normalized.includes('publish')) {
+            return 'on-publish';
+        }
+        if (normalized.includes('approval')) {
+            return 'on-approval';
+        }
+        if (normalized.includes('listing')) {
+            return 'on-publish';
+        }
+        return normalized.replace(/\s+/g, '-');
+    }
+    return 'on-publish';
+}
+
+function normalizeCategoryImportFeeType(value) {
+    if (typeof value === 'string') {
+        const normalized = value.trim().toLowerCase();
+        if (!normalized) {
+            return 'fixed';
+        }
+        if (normalized.includes('percent')) {
+            return 'percentage';
+        }
+        if (normalized.includes('fixed') || normalized.includes('flat')) {
+            return 'fixed';
+        }
+        return normalized.replace(/\s+/g, '-');
+    }
+    return 'fixed';
+}
+
+function parseCategoryImportAuctionPeriods(value) {
+    if (!value) {
+        return [];
+    }
+    if (Array.isArray(value)) {
+        return value;
+    }
+    const text = typeof value === 'string' ? value.trim() : String(value || '').trim();
+    if (!text) {
+        return [];
+    }
+    try {
+        const parsed = JSON.parse(text);
+        if (Array.isArray(parsed)) {
+            return parsed;
+        }
+    } catch (error) {
+        // fall through to token parsing
+    }
+    const tokens = text.split(/[|,;/]+/).map(token => token.trim()).filter(Boolean);
+    if (!tokens.length) {
+        return [];
+    }
+    const result = [];
+    tokens.forEach(token => {
+        const match = token.match(/-?\d+(?:\.\d+)?/);
+        if (!match) {
+            return;
+        }
+        const numeric = Number.parseFloat(match[0]);
+        if (!Number.isFinite(numeric) || numeric <= 0) {
+            return;
+        }
+        if (/hour|hr|h\b/i.test(token)) {
+            const converted = numeric / 24;
+            const rounded = Math.max(1, Math.round(converted));
+            result.push({ unit: 'day', value: rounded });
+            return;
+        }
+        let unit = 'day';
+        if (/week|wk|w\b/i.test(token)) {
+            unit = 'week';
+        } else if (/month|mo|mth/i.test(token)) {
+            unit = 'month';
+        } else if (/year|yr|y\b/i.test(token)) {
+            unit = 'year';
+        }
+        const rounded = Math.max(1, Math.round(numeric));
+        result.push({ unit, value: rounded });
+    });
+    return result;
+}
+
+function createCategoryImportLookup(dataset) {
+    const lookup = new Map();
+
+    const register = category => {
+        if (!category) {
+            return;
+        }
+        const keys = [];
+        if (category.id) {
+            keys.push(String(category.id));
+        }
+        if (category.categoryCode) {
+            const code = String(category.categoryCode);
+            keys.push(code);
+            const normalized = normalizeCategoryCodeCandidate(code);
+            if (normalized) {
+                keys.push(normalized);
+                if (normalized.endsWith('.')) {
+                    const withoutDot = normalized.slice(0, -1);
+                    if (withoutDot) {
+                        keys.push(withoutDot);
+                    }
+                }
+            }
+        }
+        if (category.nameEnglish) {
+            keys.push(String(category.nameEnglish));
+        }
+        if (category.nameArabic) {
+            keys.push(String(category.nameArabic));
+        }
+
+        keys.forEach(key => {
+            const normalized = String(key || '').trim().toLowerCase();
+            if (normalized) {
+                lookup.set(normalized, category);
+            }
+        });
+    };
+
+    if (Array.isArray(dataset)) {
+        dataset.forEach(register);
+    }
+
+    return {
+        register,
+        find(identifier) {
+            if (identifier == null) {
+                return null;
+            }
+            const normalized = String(identifier).trim().toLowerCase();
+            if (!normalized) {
+                return null;
+            }
+            return lookup.get(normalized) || null;
+        }
+    };
+}
+
+function buildCategoryImportRecord(cells, getIndex, lookup) {
+    const readCell = label => {
+        const index = getIndex(label);
+        if (index === undefined) {
+            return '';
+        }
+        return cells[index];
+    };
+
+    const toText = value => {
+        if (value == null) {
+            return '';
+        }
+        if (typeof value === 'string') {
+            return value.trim();
+        }
+        if (typeof value === 'number') {
+            return Number.isFinite(value) ? String(value) : '';
+        }
+        return String(value).trim();
+    };
+
+    const hasValue = text => text.length > 0;
+
+    const codeRawText = toText(readCell('category code'));
+    const nameArabicText = toText(readCell('category name (arabic)'));
+    const nameEnglishText = toText(readCell('category name (english)'));
+    const descArabicText = toText(readCell('description (arabic)'));
+    const descEnglishText = toText(readCell('description (english)'));
+    const parentRawText = toText(readCell('parent category'));
+    const feeDueRaw = readCell('ad publishing fees due date');
+    const feeTypeRaw = readCell('ad publishing fees type');
+    const feeAmountRaw = readCell('ad publishing fees');
+    const freeImagesRaw = readCell('free images count per ad');
+    const extraImageFeeRaw = readCell('additional image fees');
+    const freeVideosRaw = readCell('free video links count per ad');
+    const extraVideoFeeRaw = readCell('additional video link fees');
+    const subtitleFeeRaw = readCell('subtitle fees');
+    const fixedToggleRaw = readCell('enable fixed sale price option');
+    const fixedFeeRaw = readCell('enable fixed sale price option fees');
+    const negotiationToggleRaw = readCell('enable negotiable price option');
+    const negotiationFeeRaw = readCell('enable negotiable price option fees');
+    const auctionToggleRaw = readCell('enable public auction option');
+    const auctionFeeRaw = readCell('enable public auction option fees');
+    const auctionTimeFeeRaw = readCell('auction closing time option fees');
+    const auctionPeriodsRaw = readCell('default auction closing periods');
+    const minimumBidRaw = readCell('minimum bid (value, seller can modify?)');
+    const showOnHomeRaw = readCell('show on home page?');
+    const isRealEstateRaw = readCell('is real estate?');
+
+    const parentCategory = parentRawText ? lookup.find(parentRawText) : null;
+    const parentCategoryId = parentCategory && parentCategory.id ? parentCategory.id : '';
+    const parentLabel = parentCategory ? getCategoryDisplayName(parentCategory) : parentRawText;
+
+    const supportsFixedPrice = parseCategoryImportBoolean(fixedToggleRaw);
+    const supportsNegotiation = parseCategoryImportBoolean(negotiationToggleRaw);
+    const supportsAuction = parseCategoryImportBoolean(auctionToggleRaw);
+
+    const feeAmount = parseCategoryImportNumber(feeAmountRaw);
+    const fixedSaleFee = supportsFixedPrice ? parseCategoryImportNumber(fixedFeeRaw) : 0;
+    const negotiationFee = supportsNegotiation ? parseCategoryImportNumber(negotiationFeeRaw) : 0;
+    const auctionFee = supportsAuction ? parseCategoryImportNumber(auctionFeeRaw) : 0;
+    const auctionTimeFee = supportsAuction ? parseCategoryImportNumber(auctionTimeFeeRaw) : 0;
+    const minBid = supportsAuction ? parseCategoryImportMinimumBid(minimumBidRaw) : { amount: 0, sellerCanModify: false };
+    const auctionPeriods = supportsAuction ? parseCategoryImportAuctionPeriods(auctionPeriodsRaw) : [];
+
+    const freeImagesCount = parseCategoryImportInteger(freeImagesRaw);
+    const extraImageFee = parseCategoryImportNumber(extraImageFeeRaw);
+    const freeVideosCount = parseCategoryImportInteger(freeVideosRaw);
+    const extraVideoFee = parseCategoryImportNumber(extraVideoFeeRaw);
+    const subtitleFee = parseCategoryImportNumber(subtitleFeeRaw);
+    const showAtHome = parseCategoryImportBoolean(showOnHomeRaw);
+    const isRealEstate = parseCategoryImportBoolean(isRealEstateRaw);
+
+    const presence = {
+        nameArabic: hasValue(nameArabicText),
+        nameEnglish: hasValue(nameEnglishText),
+        arabicDescription: hasValue(descArabicText),
+        englishDescription: hasValue(descEnglishText),
+        parentCategoryId: hasValue(parentRawText),
+        adPublishingFeeDue: hasValue(toText(feeDueRaw)),
+        adPublishingFeeType: hasValue(toText(feeTypeRaw)),
+        adPublishingFeeAmount: hasValue(toText(feeAmountRaw)),
+        freeProductImagesCount: hasValue(toText(freeImagesRaw)),
+        extraProductImageFee: hasValue(toText(extraImageFeeRaw)),
+        freeProductVideosCount: hasValue(toText(freeVideosRaw)),
+        extraProductVideoFee: hasValue(toText(extraVideoFeeRaw)),
+        subtitleFee: hasValue(toText(subtitleFeeRaw)),
+        supportsFixedPrice: hasValue(toText(fixedToggleRaw)),
+        fixedPriceSaleFee: hasValue(toText(fixedFeeRaw)),
+        supportsNegotiation: hasValue(toText(negotiationToggleRaw)),
+        negotiationFee: hasValue(toText(negotiationFeeRaw)),
+        supportsAuction: hasValue(toText(auctionToggleRaw)),
+        auctionFee: hasValue(toText(auctionFeeRaw)),
+        auctionClosingTimeFee: hasValue(toText(auctionTimeFeeRaw)),
+        auctionClosingPeriods: hasValue(toText(auctionPeriodsRaw)),
+        minimumBidValue: hasValue(toText(minimumBidRaw)),
+        minimumBidSellerCanModify: hasValue(toText(minimumBidRaw)),
+        showAtHome: hasValue(toText(showOnHomeRaw)),
+        isRealEstate: hasValue(toText(isRealEstateRaw))
+    };
+
+    const fields = {
+        categoryCode: codeRawText,
+        nameArabic: nameArabicText,
+        nameEnglish: nameEnglishText || nameArabicText,
+        arabicDescription: descArabicText,
+        englishDescription: descEnglishText,
+        description: descEnglishText,
+        parent: parentLabel,
+        parentCategoryId,
+        adPublishingFeeDue: normalizeCategoryImportFeeDue(feeDueRaw),
+        adPublishingFeeType: normalizeCategoryImportFeeType(feeTypeRaw),
+        adPublishingFeeAmount: feeAmount,
+        productFeeDueTime: normalizeCategoryImportFeeDue(feeDueRaw),
+        productPriceType: normalizeCategoryImportFeeType(feeTypeRaw),
+        productPublishPrice: feeAmount,
+        freeProductImagesCount: freeImagesCount,
+        extraProductImageFee: extraImageFee,
+        freeProductVideosCount: freeVideosCount,
+        extraProductVideoFee: extraVideoFee,
+        subtitleFee,
+        supportsFixedPrice,
+        fixedPriceSaleFee: fixedSaleFee,
+        supportsNegotiation,
+        negotiationFee,
+        supportsAuction,
+        auctionFee,
+        auctionClosingTimeFee: auctionTimeFee,
+        auctionClosingPeriods: auctionPeriods,
+        minimumBidValue: minBid.amount,
+        minimumBidSellerCanModify: minBid.sellerCanModify,
+        showAtHome,
+        isRealEstate,
+        status: 'published',
+        notifyOnStatusChange: true,
+        syncAutomation: false,
+        specificationCount: 0,
+        owner: ''
+    };
+
+    return {
+        codeRaw: codeRawText,
+        fields,
+        presence,
+        parentCategory,
+        parentCategoryId,
+        parentLabel
+    };
+}
+
+function applyCategoryImportLocally(parsed, validation) {
+    if (!parsed || !Array.isArray(parsed.header) || !parsed.header.length) {
+        throw new Error('No header row detected.');
+    }
+    const rows = Array.isArray(parsed.rows) ? parsed.rows : [];
+    if (!rows.length) {
+        return {
+            createdCount: 0,
+            updatedCount: 0,
+            skippedCount: 0,
+            warnings: []
+        };
+    }
+
+    if (!categoryLookupById.size) {
+        rebuildCategoryCaches();
+    }
+
+    const { getIndex } = buildCategoryImportColumnIndex(parsed.header);
+    const lookup = createCategoryImportLookup(categories);
+    const rowMetadata = validation && Array.isArray(validation.rowMetadata) ? validation.rowMetadata : [];
+    const inferredWarnings = [
+        ...(Array.isArray(parsed.warnings) ? parsed.warnings : []),
+        ...(validation && Array.isArray(validation.warnings) ? validation.warnings : [])
+    ];
+
+    const createdRecords = [];
+    const updatedRecords = [];
+    const skippedRows = [];
+    const warningMessages = [...inferredWarnings];
+
+    const actorName = state.activeSession && state.activeSession.user
+        ? (state.activeSession.user.name
+            || [state.activeSession.user.firstName, state.activeSession.user.lastName].filter(Boolean).join(' ')
+            || state.activeSession.user.email
+            || 'Central Admin')
+        : 'Central Admin';
+
+    rows.forEach((cells, rowIndex) => {
+        const meta = rowMetadata[rowIndex] || { issues: [], severity: 'ok' };
+        if (meta.severity === 'error') {
+            const reason = Array.isArray(meta.issues) && meta.issues.length ? meta.issues[0] : 'Validation error';
+            skippedRows.push({ row: rowIndex + 1, reason });
+            warningMessages.push(`Row ${rowIndex + 1}: ${reason}`);
+            return;
+        }
+        if (meta.severity === 'warning' && Array.isArray(meta.issues) && meta.issues.length) {
+            warningMessages.push(`Row ${rowIndex + 1}: ${meta.issues[0]}`);
+        }
+
+        const record = buildCategoryImportRecord(cells, getIndex, lookup);
+        const hasName = (record.fields.nameEnglish && record.fields.nameEnglish.trim())
+            || (record.fields.nameArabic && record.fields.nameArabic.trim());
+        if (!hasName) {
+            skippedRows.push({ row: rowIndex + 1, reason: 'Category name is missing.' });
+            warningMessages.push(`Row ${rowIndex + 1}: Category name is missing.`);
+            return;
+        }
+
+        const codeCandidate = record.codeRaw ? normalizeCategoryCodeCandidate(record.codeRaw) : '';
+        const existingCategory = codeCandidate ? lookup.find(codeCandidate) : null;
+
+        if (existingCategory) {
+            const mergedPayload = { ...existingCategory };
+            Object.keys(record.fields).forEach(key => {
+                if (record.presence[key]) {
+                    mergedPayload[key] = record.fields[key];
+                }
+            });
+
+            if (!record.presence.parentCategoryId) {
+                mergedPayload.parentCategoryId = getCategoryParentId(existingCategory);
+                mergedPayload.parent = existingCategory.parent;
+            } else {
+                mergedPayload.parentCategoryId = record.parentCategoryId || '';
+                mergedPayload.parent = record.parentLabel || '';
+            }
+
+            mergedPayload.id = existingCategory.id;
+            mergedPayload.categoryCode = existingCategory.categoryCode;
+            mergedPayload.createdAt = existingCategory.createdAt;
+            mergedPayload.createdBy = existingCategory.createdBy || actorName;
+
+            const normalized = normalizeCategoryPayload(mergedPayload, categories.indexOf(existingCategory));
+            normalized.imageDataUrl = existingCategory.imageDataUrl || '';
+            normalized.imageName = existingCategory.imageName || '';
+            normalized.updatedAt = new Date().toISOString();
+
+            Object.assign(existingCategory, normalized);
+            lookup.register(existingCategory);
+            updatedRecords.push(existingCategory);
+            return;
+        }
+
+        const parentCategoryId = record.parentCategoryId || '';
+        const parentLabel = record.parentLabel || '';
+
+        let candidateCode = ensureCategoryCodeTrailingDot(record.fields.categoryCode || '');
+        if (!candidateCode) {
+            candidateCode = generateSequentialCategoryCode(parentCategoryId, parentLabel, categories);
+        }
+
+        const newRecordRaw = {
+            ...record.fields,
+            id: generateCategoryId(),
+            categoryCode: candidateCode || generateTopLevelCategoryCode(categories),
+            parentCategoryId,
+            parent: parentLabel,
+            createdAt: new Date().toISOString(),
+            createdBy: actorName
+        };
+
+        const normalizedNew = normalizeCategoryPayload(newRecordRaw, categories.length);
+        categories.unshift(normalizedNew);
+        lookup.register(normalizedNew);
+        createdRecords.push(normalizedNew);
+    });
+
+    if (createdRecords.length || updatedRecords.length) {
+        saveCategoriesToStorage();
+        refreshCategoryDirectoryView({ rebuildCaches: true, resetScroll: true });
+    } else if (warningMessages.length || skippedRows.length) {
+        refreshCategoryDirectoryView({ rebuildCaches: true, resetScroll: false });
+    }
+
+    const uniqueWarnings = warningMessages
+        .map(message => (message || '').trim())
+        .filter(Boolean);
+    const dedupedWarnings = Array.from(new Set(uniqueWarnings));
+
+    return {
+        createdCount: createdRecords.length,
+        updatedCount: updatedRecords.length,
+        skippedCount: skippedRows.length,
+        warnings: dedupedWarnings
+    };
 }
 
 async function submitCategoryImport() {
@@ -5773,11 +6362,52 @@ async function submitCategoryImport() {
     setCategoryImportStatus('Uploading import...', 'info');
 
     if (!CATEGORY_IMPORT_ENDPOINT) {
-        window.setTimeout(() => {
-            showNotification('success', `Import preview ready for ${displayCount} ${noun} from ${fileName}. Connect your backend endpoint to complete the sync.`, 4600, 'categoryNotificationArea');
+        try {
+            setCategoryImportStatus('Processing import locally...', 'info');
+            const parsedFull = await parseFullCategoryImportFile(categoryImportState.file, categoryImportState.format);
+            const parsingErrors = Array.isArray(parsedFull.errors) ? parsedFull.errors.filter(Boolean) : [];
+            if (parsingErrors.length) {
+                throw new Error(parsingErrors[0]);
+            }
+            const validation = validateCategoryImportRows(parsedFull.header, parsedFull.rows);
+            if (validation.errors && validation.errors.length) {
+                throw new Error(validation.errors[0]);
+            }
+
+            const importResult = applyCategoryImportLocally(parsedFull, validation);
+            setCategoryImportStatus('Import completed.', 'success');
             closeCategoryImportOverlay();
             setCategoryImportSubmitting(false);
-        }, 900);
+
+            const outcomeParts = [];
+            if (importResult.createdCount) {
+                outcomeParts.push(`${importResult.createdCount} new ${importResult.createdCount === 1 ? 'category' : 'categories'}`);
+            }
+            if (importResult.updatedCount) {
+                outcomeParts.push(`${importResult.updatedCount} updated ${importResult.updatedCount === 1 ? 'category' : 'categories'}`);
+            }
+            const fileLabel = fileName || 'your file';
+            const summaryMessage = outcomeParts.length
+                ? `Imported ${outcomeParts.join(', ')} from ${fileLabel}.`
+                : `Import completed. No changes detected in ${fileLabel}.`;
+            const summaryTone = outcomeParts.length ? 'success' : 'info';
+            showNotification(summaryTone, summaryMessage, 4600, 'categoryNotificationArea');
+
+            if (importResult.skippedCount) {
+                const skippedMessage = `${importResult.skippedCount} row${importResult.skippedCount === 1 ? '' : 's'} skipped due to validation issues.`;
+                showNotification('warning', skippedMessage, 4600, 'categoryNotificationArea');
+            }
+
+            if (importResult.warnings && importResult.warnings.length) {
+                showNotification('info', importResult.warnings[0], 4600, 'categoryNotificationArea');
+            }
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Unable to import categories.';
+            setCategoryImportStatus(`Import failed: ${message}`, 'error');
+            showNotification('error', 'Import failed. Review the highlighted rows or fix the template and try again.', 4600, 'categoryNotificationArea');
+            console.error('Local category import failed:', error);
+            setCategoryImportSubmitting(false);
+        }
         return;
     }
 
