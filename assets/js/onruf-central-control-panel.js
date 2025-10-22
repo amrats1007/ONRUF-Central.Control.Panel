@@ -39,9 +39,9 @@ function normalizeCategoryModalKey(entry) {
 
 function buildCategoryDisplayPath(entry, categories) {
     if (!entry) return '';
-    const registry = Array.isArray(categories) ? categories : []; 
+    const registry = Array.isArray(categories) ? categories : [];
     const lookup = new Map();
-    const canonicalize = value => typeof value === 'string' ? value.trim().toLowerCase() : '';
+    const canonicalize = value => (typeof value === 'string' ? value.trim().toLowerCase() : '');
 
     registry.forEach(item => {
         const key = normalizeCategoryModalKey(item);
@@ -78,14 +78,13 @@ function buildCategoryDisplayPath(entry, categories) {
         }
         current = lookup.get(canonicalize(parentRef)) || null;
     }
-        return path.join(' / ');
+    return path.join(' / ');
 }
+
 function buildCategoryModalHierarchy(items) {
     const nodes = new Map();
     const aliasLookup = new Map();
-
-    // Keep a loose alias index so IDs, English labels, and legacy strings resolve to the same node.
-    const canonicalize = value => typeof value === 'string' ? value.trim().toLowerCase() : '';
+    const canonicalize = value => (typeof value === 'string' ? value.trim().toLowerCase() : '');
 
     const registerAliases = (node, ...aliases) => {
         aliases.forEach(alias => {
@@ -99,13 +98,7 @@ function buildCategoryModalHierarchy(items) {
     };
 
     const createNode = (key, entry, synthetic) => {
-        const node = {
-            key,
-            entry,
-            synthetic,
-            children: [],
-            parentKey: null
-        };
+        const node = { key, entry, synthetic, children: [], parentKey: null };
         nodes.set(key, node);
         const entryId = entry && typeof entry.id === 'string' ? entry.id : null;
         const entryNameEn = entry && typeof entry.nameEnglish === 'string' ? entry.nameEnglish : null;
@@ -169,7 +162,9 @@ function buildCategoryModalHierarchy(items) {
         const syntheticEntry = {
             id: trimmed,
             nameEnglish: trimmed,
-            nameArabic: sourceEntry && typeof sourceEntry.parentArabic === 'string' ? sourceEntry.parentArabic.trim() : '',
+            nameArabic: sourceEntry && typeof sourceEntry.parentArabic === 'string'
+                ? sourceEntry.parentArabic.trim()
+                : '',
             synthetic: true
         };
         return createNode(trimmed, syntheticEntry, true);
@@ -209,9 +204,11 @@ function buildCategoryModalHierarchy(items) {
         const bn = (b.entry.nameEnglish || b.entry.nameArabic || b.entry.id || '').toLowerCase();
         return an.localeCompare(bn);
     };
+
     const sortTree = node => {
         node.children.sort(byPositionThenName).forEach(sortTree);
     };
+
     roots.sort(byPositionThenName).forEach(sortTree);
     return roots;
 }
@@ -237,7 +234,8 @@ function renderCategoryModalTree(items, onSelect, options = {}) {
         const li = document.createElement('li');
         li.className = 'tree-node';
         const hasChildren = Array.isArray(node.children) && node.children.length > 0;
-        const label = node.entry.nameEnglish || node.entry.nameArabic || node.entry.id || '';
+    const label = node.entry.nameEnglish || node.entry.nameArabic || node.entry.id || '';
+    const code = typeof node.entry.categoryCode === 'string' ? node.entry.categoryCode.trim() : '';
 
         const row = document.createElement('div');
         row.className = 'tree-row';
@@ -266,7 +264,17 @@ function renderCategoryModalTree(items, onSelect, options = {}) {
         if (hasChildren) {
             labelBtn.classList.add('has-children');
         }
-        labelBtn.textContent = label;
+        labelBtn.textContent = '';
+        if (code) {
+            const codeBadge = document.createElement('span');
+            codeBadge.className = 'category-code-badge';
+            codeBadge.textContent = code;
+            labelBtn.appendChild(codeBadge);
+        }
+        const nameSpan = document.createElement('span');
+        nameSpan.className = 'tree-label-text';
+        nameSpan.textContent = label;
+        labelBtn.appendChild(nameSpan);
         labelBtn.setAttribute('aria-haspopup', hasChildren ? 'true' : 'false');
         if (!hasChildren) {
             labelBtn.setAttribute('aria-expanded', 'false');
@@ -277,7 +285,8 @@ function renderCategoryModalTree(items, onSelect, options = {}) {
         selectBtn.type = 'button';
         selectBtn.className = 'btn btn-primary tree-select';
         selectBtn.textContent = 'Select';
-    selectBtn.setAttribute('aria-label', `Select ${label}`.trim());
+        const ariaLabel = code ? `Select ${label} (${code})` : `Select ${label}`;
+        selectBtn.setAttribute('aria-label', ariaLabel.trim());
         row.appendChild(selectBtn);
 
         li.appendChild(row);
@@ -359,9 +368,11 @@ let categoryModalSelectedKey = null;
 function setupCategoryModal() {
     const openBtn = document.getElementById('openCategoryModalBtn');
     const modal = document.getElementById('categoryModal');
-    const closeBtn = document.getElementById('closeCategoryModalBtn');
+    const cancelBtn = modal.querySelector('[data-category-modal-cancel]');
     const input = document.getElementById('categoryParentInput');
-    if (!openBtn || !modal || !closeBtn || !input) return;
+    if (!openBtn || !modal || !input) {
+        return;
+    }
 
     const closeModal = () => {
         modal.classList.add('hidden');
@@ -373,9 +384,11 @@ function setupCategoryModal() {
             closeModal();
             return;
         }
+
         const label = entry.nameEnglish || entry.nameArabic || entry.id || '';
         const pathLabel = buildCategoryDisplayPath(entry, categories) || label;
         input.value = pathLabel;
+
         if (entry.id) {
             input.dataset.parentCategoryId = entry.id;
             input.dataset.parentCategoryLabel = label;
@@ -383,6 +396,7 @@ function setupCategoryModal() {
             delete input.dataset.parentCategoryId;
             delete input.dataset.parentCategoryLabel;
         }
+
         categoryModalSelectedKey = normalizeCategoryModalKey(entry);
         closeModal();
     };
@@ -392,6 +406,7 @@ function setupCategoryModal() {
         if (!target || !Array.isArray(categories)) {
             return null;
         }
+
         return categories.find(cat => {
             const english = typeof cat.nameEnglish === 'string' ? cat.nameEnglish.trim().toLowerCase() : '';
             const arabic = typeof cat.nameArabic === 'string' ? cat.nameArabic.trim().toLowerCase() : '';
@@ -404,6 +419,7 @@ function setupCategoryModal() {
         if (!modal.classList.contains('hidden')) {
             return;
         }
+
         modal.classList.remove('hidden');
         document.body.classList.add('modal-open');
 
@@ -420,10 +436,12 @@ function setupCategoryModal() {
             if (!categoryModalSelectedKey || !Array.isArray(categories)) {
                 return;
             }
+
             const selectedKeyValue = String(categoryModalSelectedKey).trim();
             if (!selectedKeyValue) {
                 return;
             }
+
             const registry = new Map();
             const addKey = (key, entry) => {
                 const trimmed = typeof key === 'string' ? key.trim() : '';
@@ -432,20 +450,25 @@ function setupCategoryModal() {
                     registry.set(trimmed.toLowerCase(), entry);
                 }
             };
+
             categories.forEach(cat => {
                 addKey(normalizeCategoryModalKey(cat), cat);
                 addKey(cat.id, cat);
                 addKey(cat.nameEnglish, cat);
                 addKey(cat.nameArabic, cat);
             });
+
             let current = registry.get(selectedKeyValue) || registry.get(selectedKeyValue.toLowerCase()) || null;
             const visited = new Set();
+
             while (current && typeof current.parent === 'string' && current.parent.trim()) {
                 const parentKey = current.parent.trim();
                 expandedKeys.add(parentKey);
+
                 if (visited.has(parentKey)) {
                     break;
                 }
+
                 visited.add(parentKey);
                 current = registry.get(parentKey) || registry.get(parentKey.toLowerCase()) || null;
             }
@@ -453,9 +476,11 @@ function setupCategoryModal() {
 
         ensureSelectionPathVisible();
 
-        renderCategoryModalTree(Array.isArray(categories) ? categories : [], cat => {
-            selectCategory(cat);
-        }, { expandedKeys, selectedKey: categoryModalSelectedKey });
+        renderCategoryModalTree(
+            Array.isArray(categories) ? categories : [],
+            cat => selectCategory(cat),
+            { expandedKeys, selectedKey: categoryModalSelectedKey }
+        );
     };
 
     openBtn.addEventListener('click', openModal);
@@ -466,15 +491,16 @@ function setupCategoryModal() {
             openModal();
         }
     });
-    closeBtn.addEventListener('click', closeModal);
+    if (cancelBtn) {
+        cancelBtn.addEventListener('click', closeModal);
+    }
 
-    // Close on backdrop click
     modal.addEventListener('click', event => {
         if (event.target === modal) {
             closeModal();
         }
     });
-    // Close with ESC
+
     document.addEventListener('keydown', event => {
         if (event.key === 'Escape' && !modal.classList.contains('hidden')) {
             closeModal();
@@ -485,6 +511,7 @@ function setupCategoryModal() {
 document.addEventListener('DOMContentLoaded', setupCategoryModal);
 
 const AUCTION_PERIOD_UNIT_OPTIONS = [
+    { value: 'hour', label: 'Hour' },
     { value: 'day', label: 'Day' },
     { value: 'week', label: 'Week' },
     { value: 'month', label: 'Month' },
@@ -521,8 +548,8 @@ function sanitizeAuctionPeriodList(entries) {
         .filter(item => item !== null);
 }
 
-function parseAuctionPeriods(value, fallbackUnit = 'day') {
-    const normalizedFallback = AUCTION_PERIOD_UNIT_LABELS.has(fallbackUnit) ? fallbackUnit : 'day';
+function parseAuctionPeriods(value, fallbackUnit = 'hour') {
+    const normalizedFallback = AUCTION_PERIOD_UNIT_LABELS.has(fallbackUnit) ? fallbackUnit : 'hour';
     if (Array.isArray(value)) {
         return sanitizeAuctionPeriodList(value);
     }
@@ -641,7 +668,7 @@ function addAuctionPeriodRow(afterIndex) {
     if (!Array.isArray(auctionPeriodsWorkingCopy)) {
         auctionPeriodsWorkingCopy = [];
     }
-    const newEntry = { unit: 'day', value: 1 };
+    const newEntry = { unit: 'hour', value: 1 };
     if (Number.isInteger(afterIndex) && afterIndex >= -1 && afterIndex < auctionPeriodsWorkingCopy.length) {
         auctionPeriodsWorkingCopy.splice(afterIndex + 1, 0, newEntry);
         auctionPeriodsPendingFocusIndex = afterIndex + 1;
@@ -1566,11 +1593,14 @@ const state = {
     userDraft: null,
     activeRoleDetailId: null,
     activeCategoryDetailId: null,
+    activeCategorySpecificationId: null,
     permissionCatalog: [],
     categorySearchTerm: '',
     specificationSearchTerm: '',
     specificationBuilderMode: 'create',
     editingSpecificationId: null,
+    activeSpecificationDetailId: null,
+    specificationDetailView: 'sub-specifications',
     categoryBuilderMode: 'create',
     editingCategoryId: null,
     registrationFlow: {
@@ -1588,13 +1618,14 @@ const state = {
 const CATEGORY_TREE_ROOT_ID = 'root';
 const CATEGORY_MAX_DEPTH = 7;
 const CATEGORY_REVIEW_STATUSES = new Set(['draft', 'in-review']);
-const CATEGORY_DEFAULT_VISIBLE_COLUMNS = ['index', 'code', 'name', 'description', 'parent', 'status', 'created'];
+const CATEGORY_DEFAULT_VISIBLE_COLUMNS = ['index', 'code', 'name', 'description', 'parent', 'specifications', 'status', 'created'];
 const CATEGORY_COLUMN_DEFINITIONS = [
     { id: 'index', label: '#', locked: true, exportable: true },
     { id: 'code', label: 'Code', exportable: true },
     { id: 'name', label: 'Name', exportable: true },
     { id: 'description', label: 'Description', exportable: true },
     { id: 'parent', label: 'Parent', exportable: true },
+    { id: 'specifications', label: 'Specifications', exportable: true },
     { id: 'status', label: 'Status', exportable: true },
     { id: 'created', label: 'Created', exportable: true }
 ];
@@ -1617,6 +1648,7 @@ const CATEGORY_EXPORT_COLUMNS = [
     { id: 'categoryNameEnglish', label: 'Category Name (English)', value: category => category.nameEnglish || category.englishName || '' },
     { id: 'descriptionEnglish', label: 'Description (English)', value: category => category.englishDescription || category.description || '' },
     { id: 'parentCategory', label: 'Parent Category', value: category => resolveCategoryParentLabel(category) },
+    { id: 'specificationCount', label: 'Specification Count', value: category => (Number.isFinite(category.specificationCount) ? category.specificationCount : 0) },
     { id: 'categoryStatus', label: 'Category Status', value: category => getCategoryStatusLabel(category.status) },
     { id: 'creationDate', label: 'Creation Date', value: category => formatDateForDisplay(category.createdAt) || '' },
     { id: 'createdBy', label: 'Created By', value: category => category.createdBy || category.owner || '' },
@@ -2175,7 +2207,7 @@ const defaultUsers = [
         phone: '+966500000001',
         employeeId: 'CSA-001',
         permissionSummary: 'Full platform access',
-        created: '2025-10-05',
+        created: '2025-10-05T00:00:00.000Z',
         lastLogin: 'Never',
         auth: {
             passwordHash: 'QWRtaW5AMTIz',
@@ -2343,7 +2375,7 @@ const SPECIFICATIONS_STORAGE_KEY = 'onruf_specifications_v1';
 const SESSION_STORAGE_KEY = 'onruf_active_session_v1';
 const DATA_RESET_VERSION = '20241005-super-admin-seed';
 const DATA_RESET_KEY = 'onruf_data_reset_version';
-const CATEGORY_RESET_VERSION = '20251019-delete-all-categories';
+const CATEGORY_RESET_VERSION = '20251021-delete-all-categories';
 const CATEGORY_RESET_KEY = 'onruf_category_reset_version';
 const INVITATION_VALIDITY_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -2801,6 +2833,23 @@ function normalizeUserPayload(user, index = 0) {
     const photoFileName = typeof user.photoFileName === 'string' ? user.photoFileName.trim() : '';
     const photoUrl = typeof user.photoUrl === 'string' ? user.photoUrl.trim() : '';
 
+    const createdSource = user.createdAt || user.created || null;
+    let createdIso = null;
+    let createdValue = '';
+    if (createdSource) {
+        const parsedTimestamp = Date.parse(createdSource);
+        if (Number.isFinite(parsedTimestamp)) {
+            createdIso = new Date(parsedTimestamp).toISOString();
+            createdValue = createdIso;
+        } else if (typeof createdSource === 'string' && createdSource.trim()) {
+            createdValue = createdSource.trim();
+        }
+    }
+    if (!createdValue) {
+        createdIso = new Date().toISOString();
+        createdValue = createdIso;
+    }
+
     let createdBy = null;
     if (typeof user.createdBy === 'number' && Number.isFinite(user.createdBy)) {
         createdBy = Math.trunc(user.createdBy);
@@ -2823,7 +2872,8 @@ function normalizeUserPayload(user, index = 0) {
         lastName,
         employeeId,
         lastLogin: user.lastLogin || 'Never',
-        created: user.created || new Date().toLocaleDateString(),
+        created: createdValue,
+        createdAt: createdIso,
         phone: user.phone || '',
         department: user.department || '',
         permissionSummary: user.permissionSummary || '',
@@ -3011,6 +3061,26 @@ function generateSequentialCategoryCode(parentCategoryId, parentLabel, registry)
     return generateTopLevelCategoryCode(list);
 }
 
+function normalizeCategoryCreationMethod(value) {
+    if (value === null || value === undefined) {
+        return 'Manual';
+    }
+    const normalized = String(value).trim().toLowerCase();
+    if (!normalized) {
+        return 'Manual';
+    }
+    if (normalized.includes('import')) {
+        return 'Import';
+    }
+    if (normalized.includes('upload')) {
+        return 'Import';
+    }
+    if (normalized.includes('manual')) {
+        return 'Manual';
+    }
+    return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+}
+
 function normalizeCategoryPayload(category, index = 0) {
     if (!category || typeof category !== 'object') return null;
 
@@ -3140,6 +3210,13 @@ function normalizeCategoryPayload(category, index = 0) {
 
     const imageName = typeof category.imageName === 'string' ? category.imageName.trim() : '';
     const imageDataUrl = typeof category.imageDataUrl === 'string' ? category.imageDataUrl.trim() : '';
+    const rawCreationMethod = typeof category.createdMethod === 'string' && category.createdMethod.trim()
+        ? category.createdMethod
+        : typeof category.creationMethod === 'string' && category.creationMethod.trim()
+            ? category.creationMethod
+            : typeof category.createdVia === 'string' && category.createdVia.trim()
+                ? category.createdVia
+                : '';
 
     let createdAt = null;
     if (category.createdAt) {
@@ -3151,6 +3228,8 @@ function normalizeCategoryPayload(category, index = 0) {
     if (!createdAt) {
         createdAt = new Date().toISOString();
     }
+
+    const createdMethod = normalizeCategoryCreationMethod(rawCreationMethod);
 
     return {
         id,
@@ -3188,7 +3267,8 @@ function normalizeCategoryPayload(category, index = 0) {
         auctionClosingPeriodsUnit,
         productFeeDueTime,
         baseCategory,
-    createdBy,
+        createdBy,
+        createdMethod,
         supportsFixedPrice,
         supportsAuction,
         supportsNegotiation,
@@ -3339,6 +3419,97 @@ function normalizeSpecificationPayload(specification, index = 0) {
         return new Date(parsed).toISOString();
     };
 
+    const parseCreatorIdValue = value => {
+        if (value === null || value === undefined) {
+            return null;
+        }
+        if (Number.isInteger(value)) {
+            return value;
+        }
+        if (typeof value === 'number' && Number.isFinite(value)) {
+            return Math.trunc(value);
+        }
+        if (typeof value === 'string') {
+            const trimmed = value.trim();
+            if (!trimmed) {
+                return null;
+            }
+            if (/^\d+$/.test(trimmed)) {
+                const parsed = Number.parseInt(trimmed, 10);
+                return Number.isFinite(parsed) ? parsed : null;
+            }
+            return null;
+        }
+        if (typeof value === 'object') {
+            if (!value) {
+                return null;
+            }
+            if (Number.isInteger(value.id)) {
+                return value.id;
+            }
+            if (typeof value.id === 'number' && Number.isFinite(value.id)) {
+                return Math.trunc(value.id);
+            }
+            if (typeof value.id === 'string' && value.id.trim()) {
+                const parsed = Number.parseInt(value.id.trim(), 10);
+                if (Number.isFinite(parsed)) {
+                    return parsed;
+                }
+            }
+        }
+        return null;
+    };
+
+    const extractCreatorName = candidate => {
+        if (candidate === null || candidate === undefined) {
+            return '';
+        }
+        if (typeof candidate === 'string') {
+            const trimmed = candidate.trim();
+            if (!trimmed) {
+                return '';
+            }
+            return /^\d+$/.test(trimmed) ? '' : trimmed;
+        }
+        if (typeof candidate === 'object') {
+            if (!candidate) {
+                return '';
+            }
+            const parts = [];
+            if (typeof candidate.displayName === 'string') {
+                parts.push(candidate.displayName.trim());
+            }
+            if (typeof candidate.label === 'string') {
+                parts.push(candidate.label.trim());
+            }
+            if (typeof candidate.name === 'string') {
+                parts.push(candidate.name.trim());
+            }
+            if (typeof candidate.fullName === 'string') {
+                parts.push(candidate.fullName.trim());
+            }
+            if (typeof candidate.username === 'string') {
+                parts.push(candidate.username.trim());
+            }
+            const combined = [candidate.firstName, candidate.lastName]
+                .map(value => (typeof value === 'string' ? value.trim() : ''))
+                .filter(Boolean)
+                .join(' ');
+            if (combined) {
+                parts.push(combined);
+            }
+            for (const part of parts) {
+                if (part) {
+                    return part;
+                }
+            }
+            if (typeof candidate.email === 'string' && candidate.email.trim()) {
+                return candidate.email.trim();
+            }
+        }
+        return '';
+    };
+
     let createdAt = parseTimestamp(specification.createdAt);
     let updatedAt = parseTimestamp(specification.updatedAt);
     if (!createdAt && updatedAt) {
@@ -3349,6 +3520,55 @@ function normalizeSpecificationPayload(specification, index = 0) {
     }
     if (!updatedAt) {
         updatedAt = createdAt;
+    }
+
+    let createdById = parseCreatorIdValue(specification.createdById)
+        || parseCreatorIdValue(specification.createdByUserId)
+        || parseCreatorIdValue(specification.creatorId)
+        || parseCreatorIdValue(specification.ownerId);
+    if (!createdById) {
+        createdById = parseCreatorIdValue(specification.createdBy);
+    }
+
+    const creatorCandidates = [
+        specification.createdBy,
+        specification.createdByName,
+        specification.createdByAccount,
+        specification.createdByLabel,
+        specification.creatorName,
+        specification.creator,
+        specification.ownerName,
+        specification.owner,
+        specification.accountName,
+        specification.addedBy,
+        specification.createdByEmail
+    ];
+
+    let createdBy = '';
+    for (const candidate of creatorCandidates) {
+        const label = extractCreatorName(candidate);
+        if (label) {
+            createdBy = label;
+            break;
+        }
+    }
+
+    if (!createdBy && Number.isInteger(createdById)) {
+        const userRecord = Array.isArray(users)
+            ? users.find(entry => entry && entry.id === createdById)
+            : null;
+        if (userRecord) {
+            createdBy = resolveUserDisplayName(userRecord);
+        } else {
+            createdBy = `User #${createdById}`;
+        }
+    }
+
+    if (!createdBy) {
+        const fallback = extractCreatorName(specification.createdByEmail);
+        if (fallback) {
+            createdBy = fallback;
+        }
     }
 
     const referenceLookup = buildSpecificationCategoryReferenceLookup();
@@ -3408,7 +3628,6 @@ function normalizeSpecificationPayload(specification, index = 0) {
     }
 
     const categoryIds = [];
-    const categoryLabels = [];
     const seenIds = new Set();
 
     rawReferences.forEach(reference => {
@@ -3421,14 +3640,10 @@ function normalizeSpecificationPayload(specification, index = 0) {
         if (matchedId && !seenIds.has(matchedId)) {
             seenIds.add(matchedId);
             categoryIds.push(matchedId);
-            const label = labelLookup.get(matchedId) || trimmedReference;
-            categoryLabels.push(label);
         } else if (!matchedId) {
             fallbackLabelSet.add(trimmedReference);
         }
     });
-
-    const finalLabels = categoryLabels.length ? categoryLabels : Array.from(fallbackLabelSet);
 
     const subSpecificationCandidates = [
         specification.subSpecifications,
@@ -3468,8 +3683,32 @@ function normalizeSpecificationPayload(specification, index = 0) {
         normalizedCategoryIds = sanitizeSpecificationCategorySelection(normalizedCategoryIds);
     }
 
-    const finalCategoryIds = normalizedCategoryIds.length ? normalizedCategoryIds : categoryIds;
-    const finalCategoryLabels = finalLabels.length ? finalLabels : finalCategoryIds.map(id => labelLookup.get(id) || id);
+    const categoriesPresent = labelLookup.size > 0;
+    let finalCategoryIds = [];
+    if (categoriesPresent) {
+        const candidates = normalizedCategoryIds.length ? normalizedCategoryIds : categoryIds;
+        const seen = new Set();
+        candidates.forEach(entry => {
+            const trimmed = typeof entry === 'string' ? entry.trim() : String(entry || '').trim();
+            if (!trimmed) {
+                return;
+            }
+            const normalized = trimmed.toLowerCase();
+            const resolved = referenceLookup.get(normalized);
+            const canonical = typeof resolved === 'string' && resolved.trim() ? resolved.trim() : trimmed;
+            if (!canonical || seen.has(canonical) || !labelLookup.has(canonical)) {
+                return;
+            }
+            seen.add(canonical);
+            finalCategoryIds.push(canonical);
+        });
+    }
+
+    const finalCategoryLabels = categoriesPresent
+        ? finalCategoryIds.map(id => labelLookup.get(id) || id)
+        : [];
+
+    const normalizedCreatedById = Number.isInteger(createdById) ? createdById : null;
 
     return {
         id,
@@ -3491,7 +3730,9 @@ function normalizeSpecificationPayload(specification, index = 0) {
         subSpecifications,
         subSpecificationSummary,
         createdAt,
-        updatedAt
+        updatedAt,
+        createdBy,
+        createdById: normalizedCreatedById
     };
 }
 
@@ -3623,11 +3864,14 @@ function loadSpecificationsFromStorage() {
         const raw = localStorage.getItem(SPECIFICATIONS_STORAGE_KEY);
         if (!raw) return null;
         const parsed = JSON.parse(raw);
-        if (!Array.isArray(parsed) || !parsed.length) return null;
+        if (!Array.isArray(parsed)) return null;
         const normalized = parsed
             .map((entry, index) => normalizeSpecificationPayload(entry, index))
             .filter(Boolean);
-        return normalized.length ? normalized : null;
+        if (!normalized.length) {
+            return parsed.length ? null : [];
+        }
+        return normalized;
     } catch (error) {
         console.warn('Unable to load specifications from storage:', error);
         return null;
@@ -4144,7 +4388,7 @@ function setSpecificationModuleTitle(title) {
     if (!titleEl) {
         return;
     }
-    const text = typeof title === 'string' && title.trim() ? title.trim() : 'Specification Library';
+    const text = typeof title === 'string' && title.trim() ? title.trim() : 'Specifications';
     titleEl.textContent = text;
 }
 
@@ -4283,7 +4527,7 @@ function initializeApp() {
     }
 
     const storedSpecifications = loadSpecificationsFromStorage();
-    if (storedSpecifications && storedSpecifications.length) {
+    if (Array.isArray(storedSpecifications)) {
         specifications = storedSpecifications;
     } else {
         specifications = defaultSpecifications
@@ -4339,6 +4583,7 @@ function initializeApp() {
     }
 
     setupCategoryConfirmOverlay();
+    setupSpecificationConfirmOverlay();
     setupRoleConfirmOverlay();
     setupRolePromptOverlay();
     setupUserConfirmOverlay();
@@ -4400,7 +4645,7 @@ function setupEventListeners() {
                         // no-op
                     }
                 } else if (targetId === 'categories-app2') {
-                    // Specifications Management → ensure Specification Library list is visible
+                    // Specifications Management → ensure Specifications list is visible
                     const specList = document.querySelector('#categories-app2 #specificationsListView');
                     if (specList) {
                         specList.classList.remove('hidden');
@@ -4666,6 +4911,14 @@ function setupEventListeners() {
         addSpecificationBtn.dataset.bound = 'true';
     }
 
+    const specificationDeleteAllBtn = document.getElementById('specificationDeleteAllBtn');
+    if (specificationDeleteAllBtn && specificationDeleteAllBtn.dataset.bound !== 'true') {
+        specificationDeleteAllBtn.addEventListener('click', () => {
+            handleSpecificationDeleteAllRequest();
+        });
+        specificationDeleteAllBtn.dataset.bound = 'true';
+    }
+
     const specificationForm = document.getElementById('specificationForm');
     if (specificationForm && specificationForm.dataset.bound !== 'true') {
         specificationForm.addEventListener('submit', handleSpecificationFormSubmit);
@@ -4823,9 +5076,49 @@ function setupEventListeners() {
             }
         });
     }
+    const categorySpecificationOverlay = document.getElementById('categorySpecificationOverlay');
+    const categorySpecificationCloseBtn = document.getElementById('categorySpecificationCloseBtn');
+    if (categorySpecificationCloseBtn && categorySpecificationCloseBtn.dataset.bound !== 'true') {
+        categorySpecificationCloseBtn.addEventListener('click', hideCategorySpecificationOverlay);
+        categorySpecificationCloseBtn.dataset.bound = 'true';
+    }
+    if (categorySpecificationOverlay && categorySpecificationOverlay.dataset.bound !== 'true') {
+        categorySpecificationOverlay.addEventListener('click', event => {
+            if (event.target === categorySpecificationOverlay) {
+                hideCategorySpecificationOverlay();
+            }
+        });
+        categorySpecificationOverlay.dataset.bound = 'true';
+    }
+
+    const specificationDetailOverlay = document.getElementById('specificationDetailOverlay');
+    const specificationDetailCloseBtn = document.getElementById('specificationDetailCloseBtn');
+    if (specificationDetailCloseBtn && specificationDetailCloseBtn.dataset.bound !== 'true') {
+        specificationDetailCloseBtn.addEventListener('click', hideSpecificationSubSpecifications);
+        specificationDetailCloseBtn.dataset.bound = 'true';
+    }
+    if (specificationDetailOverlay && specificationDetailOverlay.dataset.bound !== 'true') {
+        specificationDetailOverlay.addEventListener('click', event => {
+            if (event.target === specificationDetailOverlay) {
+                hideSpecificationSubSpecifications();
+            }
+        });
+        specificationDetailOverlay.dataset.bound = 'true';
+    }
     document.addEventListener('keydown', event => {
-        if (event.key === 'Escape' && roleDetailOverlay && !roleDetailOverlay.classList.contains('hidden')) {
+        if (event.key !== 'Escape') {
+            return;
+        }
+        if (roleDetailOverlay && !roleDetailOverlay.classList.contains('hidden')) {
             hideRoleDetails();
+            return;
+        }
+        if (categorySpecificationOverlay && !categorySpecificationOverlay.classList.contains('hidden')) {
+            hideCategorySpecificationOverlay();
+            return;
+        }
+        if (specificationDetailOverlay && !specificationDetailOverlay.classList.contains('hidden')) {
+            hideSpecificationSubSpecifications();
         }
     });
 
@@ -4963,6 +5256,11 @@ function navigateToSection(sectionId) {
     if (sectionId !== 'users') {
         hideRoleDetails();
         hideUserForm();
+    }
+
+    if (sectionId !== 'categories') {
+        hideCategorySpecificationOverlay();
+        hideSpecificationSubSpecifications();
     }
 
     updateBreadcrumb(sectionId);
@@ -5125,6 +5423,11 @@ function updateCategoryBadges() {
         const label = totalSpecifications === 1 ? 'Specification' : 'Specifications';
         specificationBadge.textContent = `#${totalSpecifications} ${label}`;
     }
+
+    const specificationDeleteAllBtn = document.getElementById('specificationDeleteAllBtn');
+    if (specificationDeleteAllBtn) {
+        specificationDeleteAllBtn.disabled = totalSpecifications === 0;
+    }
 }
 
 function deleteAllCategories({ refresh = true } = {}) {
@@ -5139,12 +5442,65 @@ function deleteAllCategories({ refresh = true } = {}) {
     state.categoryCompareSelection = [];
     state.categoryCompareMode = false;
     state.categoryFilteredList = [];
+    state.activeCategoryDetailId = null;
+    state.activeCategorySpecificationId = null;
+    state.categoryExplorerExpanded = new Set([CATEGORY_TREE_ROOT_ID]);
+    state.categoryViewBranchId = CATEGORY_TREE_ROOT_ID;
+
+    const specsChanged = syncCategorySpecificationCounts({
+        persistCategories: true,
+        persistSpecifications: true,
+        refreshView: false
+    });
+
     rebuildCategoryCaches();
     updateCategorySelectionSummary();
+    renderCategoryRelatedDrawer(null);
+
     if (refresh) {
         refreshCategoryDirectoryView({ rebuildCaches: true, resetScroll: true });
     } else {
         updateCategoryBadges();
+        updateCategoryCompareDrawer();
+    }
+
+    if (specsChanged) {
+        renderSpecificationList();
+    }
+}
+
+function deleteAllSpecifications({ refresh = true } = {}) {
+    specifications = [];
+    try {
+        localStorage.removeItem(SPECIFICATIONS_STORAGE_KEY);
+    } catch (error) {
+        console.warn('Unable to clear stored specifications dataset:', error);
+    }
+    saveSpecificationsToStorage();
+    specificationCategoriesWorkingSet = new Set();
+    subSpecificationWorkingCopy = [];
+    subSpecificationPendingFocusIndex = null;
+    state.activeCategorySpecificationId = null;
+    hideSpecificationDetailOverlay();
+    hideSpecificationBuilder({ resetForm: true });
+    state.specificationSearchTerm = '';
+    const specSearchInput = document.getElementById('specificationSearch');
+    if (specSearchInput) {
+        specSearchInput.value = '';
+    }
+
+    syncCategorySpecificationCounts({
+        persistCategories: true,
+        persistSpecifications: false,
+        refreshView: true
+    });
+
+    if (refresh) {
+        renderSpecificationList();
+    } else {
+        updateCategoryBadges();
+        refreshSpecificationDetailOverlay();
+        refreshCategorySpecificationOverlay();
     }
 }
 
@@ -5166,6 +5522,15 @@ function showSpecificationBuilder(mode = 'create', specification = null) {
     state.editingSpecificationId = isEditMode ? specification.id : null;
 
     setSpecificationModuleTitle(isEditMode ? 'Edit Specification' : 'Add New Specification');
+
+    const submitLabel = document.getElementById('specificationSubmitLabel');
+    const submitIcon = document.getElementById('specificationSubmitIcon');
+    if (submitLabel) {
+        submitLabel.textContent = isEditMode ? 'Save' : 'Add';
+    }
+    if (submitIcon) {
+        submitIcon.className = isEditMode ? 'fas fa-floppy-disk' : 'fas fa-floppy-disk';
+    }
 
     resetSpecificationForm({ focus: !isEditMode });
 
@@ -5227,7 +5592,16 @@ function hideSpecificationBuilder({ resetForm = true } = {}) {
     state.specificationBuilderMode = 'create';
     state.editingSpecificationId = null;
 
-    setSpecificationModuleTitle('Specification Library');
+    setSpecificationModuleTitle('Specifications');
+
+    const submitLabel = document.getElementById('specificationSubmitLabel');
+    const submitIcon = document.getElementById('specificationSubmitIcon');
+    if (submitLabel) {
+        submitLabel.textContent = 'Add';
+    }
+    if (submitIcon) {
+        submitIcon.className = 'fas fa-floppy-disk';
+    }
 
     const categoriesSection = document.getElementById('categories');
     if (categoriesSection && categoriesSection.classList.contains('active')) {
@@ -5366,6 +5740,7 @@ function syncCategorySpecificationCounts({ persistCategories = true, persistSpec
     }
 
     updateCategoryBadges();
+    refreshCategorySpecificationOverlay();
 
     if (updated && refreshView) {
         refreshCategoryDirectoryView({ rebuildCaches: false, keepScroll: true });
@@ -5526,6 +5901,37 @@ function formatSpecificationCategories(specification) {
     return 'Unassigned';
 }
 
+function formatSpecificationCreatedMeta(specification) {
+    const createdLabelSource = specification && specification.createdAt
+        ? formatDateForDisplay(specification.createdAt, { includeTime: true })
+        : '';
+    const createdLabel = createdLabelSource || '—';
+
+    let creatorLabel = '—';
+    if (specification && typeof specification === 'object') {
+        if (typeof specification.createdBy === 'string' && specification.createdBy.trim()) {
+            creatorLabel = specification.createdBy.trim();
+        } else if (typeof specification.createdByName === 'string' && specification.createdByName.trim()) {
+            creatorLabel = specification.createdByName.trim();
+        } else if (typeof specification.creatorName === 'string' && specification.creatorName.trim()) {
+            creatorLabel = specification.creatorName.trim();
+        } else if (typeof specification.owner === 'string' && specification.owner.trim()) {
+            creatorLabel = specification.owner.trim();
+        } else if (Number.isInteger(specification.createdById)) {
+            const userRecord = Array.isArray(users)
+                ? users.find(entry => entry && entry.id === specification.createdById)
+                : null;
+            if (userRecord) {
+                creatorLabel = resolveUserDisplayName(userRecord);
+            } else {
+                creatorLabel = `User #${specification.createdById}`;
+            }
+        }
+    }
+
+    return `<div class="created-cell"><div class="created-date">${escapeHtml(createdLabel)}</div><div class="creator-name">${escapeHtml(creatorLabel || '—')}</div></div>`;
+}
+
 function specificationMatchesSearch(specification, searchTerm) {
     if (!searchTerm) {
         return true;
@@ -5549,7 +5955,10 @@ function specificationMatchesSearch(specification, searchTerm) {
         specification.dataType,
         specification.collectionFrequency,
         specification.validationRule,
-        specification.isRequired ? 'yes required mandatory' : 'no optional'
+        specification.isRequired ? 'yes required mandatory' : 'no optional',
+        specification.createdBy,
+        specification.createdByName,
+        specification.creatorName
     ];
     if (Array.isArray(specification.subSpecifications)) {
         specification.subSpecifications.forEach(entry => {
@@ -5573,6 +5982,7 @@ function renderSpecificationList() {
     const tableBody = document.getElementById('specificationsTableBody');
     if (!tableBody) {
         updateCategoryBadges();
+        refreshCategorySpecificationOverlay();
         return;
     }
 
@@ -5594,14 +6004,32 @@ function renderSpecificationList() {
     });
 
     if (!filtered.length) {
-        tableBody.innerHTML = '<tr><td colspan="9" style="padding:16px;text-align:center;color:#6b7280;">No specifications recorded yet.</td></tr>';
+    tableBody.innerHTML = '<tr><td colspan="10" style="padding:16px;text-align:center;color:#6b7280;">There is no Data Available</td></tr>';
         updateCategoryBadges();
+        refreshCategorySpecificationOverlay();
         return;
     }
 
     const rows = filtered.map((entry, index) => {
         const rowNumber = index + 1;
         const categoriesLabel = formatSpecificationCategories(entry);
+        const categoryIds = Array.isArray(entry.categoryIds)
+            ? entry.categoryIds.map(id => (typeof id === 'string' ? id.trim() : '')).filter(Boolean)
+            : [];
+        const categoryLabelsList = Array.isArray(entry.categoryLabels)
+            ? entry.categoryLabels.map(label => (typeof label === 'string' ? label.trim() : '')).filter(Boolean)
+            : [];
+        const categoryCount = categoryIds.length || categoryLabelsList.length;
+        const categoryCountDisplay = `${categoryCount} ${categoryCount === 1 ? 'category' : 'categories'}`;
+        const categoriesTooltip = categoriesLabel && categoriesLabel !== 'Unassigned'
+            ? categoriesLabel
+            : 'No categories assigned';
+        const categoryButtonLabel = categoryCount
+            ? `View ${categoryCountDisplay} for this specification`
+            : 'View categories (none assigned)';
+        const categoryButtonTitle = categoriesLabel && categoriesLabel !== 'Unassigned'
+            ? `${categoryButtonLabel}: ${categoriesLabel}`
+            : categoryButtonLabel;
         const requiredLabel = entry.isRequired ? 'Yes' : 'No';
         const statusLabel = formatSpecificationStatus(entry.status);
         const statusClass = getSpecificationStatusClass(entry.status);
@@ -5609,41 +6037,63 @@ function renderSpecificationList() {
         const descriptionPreferred = entry.descriptionEnglish || entry.descriptionArabic || '';
         const descriptionInfo = formatTruncatedText(descriptionPreferred, 120);
         const descriptionTitleAttr = descriptionInfo.full ? ` title="${escapeAttribute(descriptionInfo.full)}"` : '';
-        const categoriesTitleAttr = categoriesLabel ? ` title="${escapeAttribute(categoriesLabel)}"` : '';
         const subSummarySource = entry.subSpecificationSummary && entry.subSpecificationSummary.trim()
             ? entry.subSpecificationSummary.trim()
             : formatSubSpecificationSummary(entry.subSpecifications);
-        const subSummaryInfo = formatTruncatedText(subSummarySource, 120);
-        const subSummaryTitleAttr = subSummaryInfo.full ? ` title="${escapeAttribute(subSummaryInfo.full)}"` : '';
+        const subSummaryInfo = formatTruncatedText(subSummarySource, 160);
+        const subSpecifications = sanitizeSubSpecificationList(entry.subSpecifications);
+        const subSpecCountLabel = subSpecifications.length === 1
+            ? '1 option'
+            : `${subSpecifications.length} options`;
+        const subSpecButtonLabel = subSpecifications.length
+            ? `View ${subSpecCountLabel} for this specification`
+            : 'View sub-specifications (none configured)';
+        const subSpecButtonTitle = subSummaryInfo.full
+            ? `${subSpecButtonLabel}: ${subSummaryInfo.full}`
+            : subSpecButtonLabel;
+        const subSpecCountDisplay = subSpecifications.length === 1
+            ? '1 sub-specification'
+            : `${subSpecifications.length} sub-specifications`;
         const specIdAttribute = entry.id ? escapeAttribute(entry.id) : '';
-    const canonicalStatus = typeof entry.status === 'string' ? entry.status.trim().toLowerCase() : 'active';
-    const isActive = canonicalStatus === 'active';
-    const isInactive = canonicalStatus === 'inactive';
-    const activateDisabled = isActive ? ' disabled' : '';
-    const deactivateDisabled = isInactive ? ' disabled' : '';
+        const canonicalStatus = typeof entry.status === 'string' ? entry.status.trim().toLowerCase() : 'active';
+        const isActive = canonicalStatus === 'active';
+        const toggleClass = isActive ? 'deactivate' : 'activate';
+        const toggleIcon = isActive ? 'fa-power-off' : 'fa-rotate-right';
+        const toggleLabel = isActive ? 'Deactivate specification' : 'Activate specification';
+        const modifyLabel = 'Modify specification';
+        const createdMeta = formatSpecificationCreatedMeta(entry);
         return `
             <tr>
                 <td>${rowNumber}</td>
                 <td>${escapeHtml(displayName)}</td>
                 <td${descriptionTitleAttr}>${escapeHtml(descriptionInfo.display)}</td>
-                <td${categoriesTitleAttr}>${escapeHtml(categoriesLabel || '—')}</td>
+                <td>
+                    <div class="spec-category-cell">
+                        <span class="spec-category-count" title="${escapeAttribute(categoriesTooltip)}">${escapeHtml(categoryCountDisplay)}</span>
+                        <button type="button" class="action-btn view" data-action="view-categories" data-spec-id="${specIdAttribute}" title="${escapeAttribute(categoryButtonTitle)}" aria-label="${escapeAttribute(categoryButtonTitle)}">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </div>
+                </td>
                 <td>${escapeHtml(formatSpecificationType(entry.dataType))}</td>
                 <td>${escapeHtml(requiredLabel)}</td>
                 <td><span class="status-pill ${statusClass}">${escapeHtml(statusLabel)}</span></td>
-                <td${subSummaryTitleAttr}>${escapeHtml(subSummaryInfo.display)}</td>
+                <td>${createdMeta}</td>
+                <td>
+                    <div class="spec-subspec-cell">
+                        <span class="spec-subspec-count">${escapeHtml(subSpecCountDisplay)}</span>
+                        <button type="button" class="action-btn view" data-action="view-sub-specs" data-spec-id="${specIdAttribute}" title="${escapeAttribute(subSpecButtonTitle)}" aria-label="${escapeAttribute(subSpecButtonTitle)}">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </div>
+                </td>
                 <td>
                     <div class="action-group">
-                        <button type="button" class="action-btn edit with-label" data-action="modify" data-spec-id="${specIdAttribute}">
+                        <button type="button" class="action-btn edit" data-action="modify" data-spec-id="${specIdAttribute}" title="${escapeAttribute(modifyLabel)}" aria-label="${escapeAttribute(modifyLabel)}">
                             <i class="fas fa-pen"></i>
-                            <span>Modify</span>
                         </button>
-                        <button type="button" class="action-btn activate with-label${activateDisabled}" data-action="activate" data-spec-id="${specIdAttribute}"${activateDisabled}>
-                            <i class="fas fa-circle-check"></i>
-                            <span>Activate</span>
-                        </button>
-                        <button type="button" class="action-btn deactivate with-label${deactivateDisabled}" data-action="deactivate" data-spec-id="${specIdAttribute}"${deactivateDisabled}>
-                            <i class="fas fa-power-off"></i>
-                            <span>Deactivate</span>
+                        <button type="button" class="action-btn ${toggleClass}" data-action="toggle" data-spec-id="${specIdAttribute}" title="${escapeAttribute(toggleLabel)}" aria-label="${escapeAttribute(toggleLabel)}">
+                            <i class="fas ${toggleIcon}"></i>
                         </button>
                     </div>
                 </td>
@@ -5653,6 +6103,8 @@ function renderSpecificationList() {
 
     tableBody.innerHTML = rows;
     updateCategoryBadges();
+    refreshSpecificationDetailOverlay();
+    refreshCategorySpecificationOverlay();
 }
 
 function handleSpecificationSearch(term) {
@@ -5679,13 +6131,18 @@ function handleSpecificationTableClick(event) {
         return;
     }
 
-    if (action === 'activate') {
-        updateSpecificationStatus(specId, 'active');
+    if (action === 'view-sub-specs') {
+        showSpecificationSubSpecifications(specId);
         return;
     }
 
-    if (action === 'deactivate') {
-        updateSpecificationStatus(specId, 'inactive');
+    if (action === 'view-categories') {
+        showSpecificationCategories(specId);
+        return;
+    }
+
+    if (action === 'toggle') {
+        toggleSpecificationStatus(specId);
     }
 }
 
@@ -5744,6 +6201,540 @@ function updateSpecificationStatus(specId, nextStatus) {
         ? 'Specification activated successfully.'
         : 'Specification deactivated successfully.';
     showNotification('success', message, 3000, 'specificationNotificationArea');
+}
+
+function toggleSpecificationStatus(specId) {
+    if (!specId) {
+        return;
+    }
+
+    const specification = Array.isArray(specifications)
+        ? specifications.find(entry => entry && entry.id === specId)
+        : null;
+
+    if (!specification) {
+        showNotification('warning', 'The selected specification is no longer available.', 3200, 'specificationNotificationArea');
+        renderSpecificationList();
+        return;
+    }
+
+    const currentStatus = typeof specification.status === 'string' ? specification.status.trim().toLowerCase() : 'active';
+    const nextStatus = currentStatus === 'active' ? 'inactive' : 'active';
+    updateSpecificationStatus(specId, nextStatus);
+}
+
+function buildSpecificationSubSpecificationTableHtml(entries) {
+    const sanitized = sanitizeSubSpecificationList(entries);
+    if (!sanitized.length) {
+        return '<p class="spec-detail-empty">This specification does not include any sub-specifications yet.</p>';
+    }
+
+    const rows = sanitized.map((entry, index) => {
+        const english = entry.nameEnglish || '—';
+        const arabic = entry.nameArabic || '—';
+        return `
+            <tr>
+                <td>${index + 1}</td>
+                <td>${escapeHtml(english)}</td>
+                <td>${escapeHtml(arabic)}</td>
+            </tr>
+        `;
+    }).join('');
+
+    return `
+        <div class="spec-subspec-table-wrapper">
+            <table class="spec-subspec-table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Name (English)</th>
+                        <th>Name (Arabic)</th>
+                    </tr>
+                </thead>
+                <tbody>${rows}</tbody>
+            </table>
+        </div>
+    `;
+}
+
+function formatCategoryStatusLabel(status) {
+    if (status === null || status === undefined) {
+        return '';
+    }
+    const normalized = String(status).trim();
+    if (!normalized) {
+        return '';
+    }
+    return normalized
+        .split(/[\s_-]+/)
+        .filter(Boolean)
+        .map(part => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+        .join(' ');
+}
+
+function getSpecificationCategoryEntries(specification) {
+    if (!specification || typeof specification !== 'object') {
+        return [];
+    }
+
+    const categoryIds = Array.isArray(specification.categoryIds)
+        ? specification.categoryIds.map(id => (typeof id === 'string' ? id.trim() : '')).filter(Boolean)
+        : [];
+    const categoryLabels = Array.isArray(specification.categoryLabels)
+        ? specification.categoryLabels.map(label => (typeof label === 'string' ? label.trim() : '')).filter(Boolean)
+        : [];
+
+    const entries = [];
+    const seenIdentifiers = new Set();
+
+    categoryIds.forEach((identifier, index) => {
+        if (!identifier || seenIdentifiers.has(identifier)) {
+            return;
+        }
+        seenIdentifiers.add(identifier);
+
+        const category = resolveCategoryByIdentifier(identifier);
+        const fallbackLabel = categoryLabels[index] || '';
+        const label = category ? getCategoryDisplayName(category) : (fallbackLabel || identifier);
+        const path = category ? buildCategoryDisplayPath(category, categories) : '';
+        const code = category && typeof category.categoryCode === 'string' ? category.categoryCode : '';
+        const status = category && typeof category.status === 'string'
+            ? category.status
+            : category && typeof category.reviewStatus === 'string'
+                ? category.reviewStatus
+                : '';
+
+        entries.push({
+            id: identifier,
+            label,
+            path,
+            code,
+            status
+        });
+    });
+
+    if (categoryLabels.length) {
+        const seenLabels = new Set(entries.map(entry => (entry.label || '').toLowerCase()));
+        categoryLabels.forEach((label, index) => {
+            if (!label) {
+                return;
+            }
+            const key = label.toLowerCase();
+            if (seenLabels.has(key)) {
+                return;
+            }
+            seenLabels.add(key);
+            entries.push({
+                id: '',
+                label,
+                path: '',
+                code: '',
+                status: ''
+            });
+        });
+    }
+
+    return entries;
+}
+
+function buildSpecificationCategoryTableHtml(entries) {
+    if (!Array.isArray(entries) || !entries.length) {
+        return '<p class="spec-detail-empty">This specification is not assigned to any categories yet.</p>';
+    }
+
+    const rows = entries.map((entry, index) => {
+        const identifier = entry.code || entry.id;
+        const pathDisplay = entry.path || '';
+        const statusDisplay = formatCategoryStatusLabel(entry.status);
+        return `
+            <tr>
+                <td>${index + 1}</td>
+                <td>${escapeHtml(entry.label || '—')}</td>
+                <td>${escapeHtml(identifier || '—')}</td>
+                <td>${escapeHtml(pathDisplay || '—')}</td>
+                <td>${escapeHtml(statusDisplay || '—')}</td>
+            </tr>
+        `;
+    }).join('');
+
+    return `
+        <div class="spec-subspec-table-wrapper">
+            <table class="spec-subspec-table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Category</th>
+                        <th>Code</th>
+                        <th>Path</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>${rows}</tbody>
+            </table>
+        </div>
+    `;
+}
+
+function renderSpecificationCategoryContent(specification) {
+    const subtitleEl = document.getElementById('specificationDetailSubtitle');
+    const contentEl = document.getElementById('specificationDetailContent');
+    if (!subtitleEl || !contentEl) {
+        return;
+    }
+
+    const entries = getSpecificationCategoryEntries(specification);
+    if (!entries.length) {
+        subtitleEl.textContent = 'Categories: Unassigned';
+        contentEl.innerHTML = '<p class="spec-detail-empty">This specification is not assigned to any categories yet.</p>';
+        return;
+    }
+
+    subtitleEl.textContent = '';
+    contentEl.innerHTML = buildSpecificationCategoryTableHtml(entries);
+}
+
+function renderSpecificationSubSpecificationContent(specification) {
+    const subtitleEl = document.getElementById('specificationDetailSubtitle');
+    const contentEl = document.getElementById('specificationDetailContent');
+    if (!subtitleEl || !contentEl) {
+        return;
+    }
+
+    const categoriesLabel = formatSpecificationCategories(specification) || 'Unassigned';
+    subtitleEl.textContent = categoriesLabel === 'Unassigned'
+        ? 'Categories: Unassigned'
+        : `Categories: ${categoriesLabel}`;
+
+    const sanitized = sanitizeSubSpecificationList(specification.subSpecifications);
+    const tableHtml = buildSpecificationSubSpecificationTableHtml(sanitized);
+    contentEl.innerHTML = tableHtml;
+}
+
+function renderSpecificationDetailContent(specification, viewMode = 'sub-specifications') {
+    if (viewMode === 'categories') {
+        renderSpecificationCategoryContent(specification);
+    } else {
+        renderSpecificationSubSpecificationContent(specification);
+    }
+}
+
+function getCategorySpecificationEntries(categoryId) {
+    if (!categoryId || !Array.isArray(specifications) || !specifications.length) {
+        return [];
+    }
+
+    const normalizedId = String(categoryId).trim();
+    if (!normalizedId) {
+        return [];
+    }
+
+    const entries = [];
+    const seen = new Set();
+
+    specifications.forEach(specification => {
+        if (!specification || typeof specification !== 'object') {
+            return;
+        }
+        const links = Array.isArray(specification.categoryIds) ? specification.categoryIds : [];
+        const matchesCategory = links.some(link => {
+            if (typeof link !== 'string') {
+                return false;
+            }
+            return link.trim() === normalizedId;
+        });
+        if (!matchesCategory) {
+            return;
+        }
+        const specId = typeof specification.id === 'string' ? specification.id : '';
+        if (specId && seen.has(specId)) {
+            return;
+        }
+        if (specId) {
+            seen.add(specId);
+        }
+        const displayName = specification.nameEnglish || specification.name || specification.nameArabic || '—';
+        const typeLabel = formatSpecificationType(specification.dataType);
+        const statusLabel = formatSpecificationStatus(specification.status);
+        const statusClass = getSpecificationStatusClass(specification.status);
+        const description = (specification.descriptionEnglish || specification.descriptionArabic || '').trim();
+        const subSpecifications = sanitizeSubSpecificationList(specification.subSpecifications);
+        entries.push({
+            id: specId,
+            name: displayName,
+            typeLabel,
+            isRequired: specification.isRequired === true,
+            statusLabel,
+            statusClass,
+            description,
+            subSpecifications
+        });
+    });
+
+    entries.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+    return entries;
+}
+
+function buildCategorySpecificationTableHtml(entries) {
+    if (!Array.isArray(entries) || !entries.length) {
+        return '<p class="spec-detail-empty">Assign specifications to this category to see them listed here.</p>';
+    }
+
+    const rows = entries.map((entry, index) => {
+        const requiredLabel = entry.isRequired ? 'Yes' : 'No';
+        const descriptionAttr = entry.description
+            ? ` title="${escapeAttribute(entry.description)}"`
+            : '';
+        const subSpecifications = Array.isArray(entry.subSpecifications) ? entry.subSpecifications : [];
+        const subSpecLabel = subSpecifications
+            .map(item => {
+                const name = item && typeof item === 'object'
+                    ? (item.nameEnglish || item.name || item.nameArabic || '')
+                    : '';
+                return name.trim();
+            })
+            .filter(Boolean)
+            .join(', ');
+    const subSpecDisplay = subSpecLabel || '-';
+        return `
+            <tr>
+                <td>${index + 1}</td>
+                <td${descriptionAttr}>${escapeHtml(entry.name)}</td>
+                <td>${escapeHtml(entry.typeLabel)}</td>
+                <td>${escapeHtml(requiredLabel)}</td>
+                <td><span class="status-pill ${escapeHtml(entry.statusClass)}">${escapeHtml(entry.statusLabel)}</span></td>
+                <td><span class="category-spec-subtext">${escapeHtml(subSpecDisplay)}</span></td>
+            </tr>
+        `;
+    }).join('');
+
+    return `
+        <div class="spec-subspec-table-wrapper">
+            <table class="spec-subspec-table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Specification</th>
+                        <th>Type</th>
+                        <th>Required</th>
+                        <th>Status</th>
+                        <th>Sub-specifications</th>
+                    </tr>
+                </thead>
+                <tbody>${rows}</tbody>
+            </table>
+        </div>
+    `;
+}
+
+function renderCategorySpecificationOverlayContent(category) {
+    const contentEl = document.getElementById('categorySpecificationContent');
+    if (!contentEl) {
+        return;
+    }
+
+    const entries = getCategorySpecificationEntries(category && category.id);
+    if (!entries.length) {
+        contentEl.innerHTML = '<p class="spec-detail-empty">No specifications are currently assigned to this category.</p>';
+        return;
+    }
+
+    const tableHtml = buildCategorySpecificationTableHtml(entries);
+    contentEl.innerHTML = tableHtml;
+}
+
+function openCategorySpecificationOverlay(category) {
+    if (!category) {
+        return;
+    }
+
+    const overlay = document.getElementById('categorySpecificationOverlay');
+    const titleEl = document.getElementById('categorySpecificationTitle');
+    const closeBtn = document.getElementById('categorySpecificationCloseBtn');
+    if (!overlay || !titleEl) {
+        return;
+    }
+
+    const wasHidden = overlay.classList.contains('hidden');
+    const categoryId = typeof category.id === 'string'
+        ? category.id
+        : category && category.id !== undefined && category.id !== null
+            ? String(category.id)
+            : '';
+    state.activeCategorySpecificationId = categoryId || null;
+    overlay.dataset.activeCategory = categoryId;
+    overlay.classList.remove('hidden');
+
+    titleEl.textContent = getCategoryDisplayName(category) || 'Category Specifications';
+    renderCategorySpecificationOverlayContent(category);
+
+    if (wasHidden && closeBtn) {
+        try {
+            closeBtn.focus({ preventScroll: true });
+        } catch (error) {
+            closeBtn.focus();
+        }
+    }
+}
+
+function hideCategorySpecificationOverlay() {
+    const overlay = document.getElementById('categorySpecificationOverlay');
+    const titleEl = document.getElementById('categorySpecificationTitle');
+    const contentEl = document.getElementById('categorySpecificationContent');
+    if (!overlay || !titleEl || !contentEl) {
+        return;
+    }
+
+    overlay.classList.add('hidden');
+    overlay.dataset.activeCategory = '';
+    state.activeCategorySpecificationId = null;
+    titleEl.textContent = 'Category Specifications';
+    contentEl.innerHTML = '<p class="spec-detail-placeholder">Use the specifications column to review the specifications assigned to a category.</p>';
+}
+
+function refreshCategorySpecificationOverlay() {
+    const overlay = document.getElementById('categorySpecificationOverlay');
+    if (!overlay || overlay.classList.contains('hidden')) {
+        return;
+    }
+    const activeId = state.activeCategorySpecificationId;
+    if (!activeId) {
+        hideCategorySpecificationOverlay();
+        return;
+    }
+    const category = categoryLookupById instanceof Map ? categoryLookupById.get(activeId) : null;
+    if (!category) {
+        hideCategorySpecificationOverlay();
+        return;
+    }
+    renderCategorySpecificationOverlayContent(category);
+}
+
+function showCategorySpecifications(categoryId) {
+    if (!categoryId) {
+        return;
+    }
+    const category = categoryLookupById instanceof Map ? categoryLookupById.get(categoryId) : null;
+    if (!category) {
+        showNotification('warning', 'The selected category is no longer available.', 3200, 'categoryNotificationArea');
+        renderCategoryGrid();
+        return;
+    }
+    const specCount = Number.isFinite(category.specificationCount) ? category.specificationCount : 0;
+    if (specCount <= 0) {
+        return;
+    }
+    openCategorySpecificationOverlay(category);
+}
+
+function openSpecificationDetailOverlay(specification, viewMode = 'sub-specifications') {
+    const overlay = document.getElementById('specificationDetailOverlay');
+    const titleEl = document.getElementById('specificationDetailTitle');
+    const closeBtn = document.getElementById('specificationDetailCloseBtn');
+    if (!overlay || !titleEl) {
+        return;
+    }
+
+    const wasHidden = overlay.classList.contains('hidden');
+    const nextView = viewMode === 'categories' ? 'categories' : 'sub-specifications';
+
+    state.activeSpecificationDetailId = specification.id || null;
+    state.specificationDetailView = nextView;
+    overlay.classList.remove('hidden');
+
+    const displayName = specification.nameEnglish || specification.name || specification.nameArabic || 'Specification Details';
+    titleEl.textContent = displayName;
+
+    renderSpecificationDetailContent(specification, nextView);
+
+    if (wasHidden && closeBtn) {
+        closeBtn.focus();
+    }
+}
+
+function showSpecificationSubSpecificationDetail(specification) {
+    openSpecificationDetailOverlay(specification, 'sub-specifications');
+}
+
+function showSpecificationSubSpecifications(specId) {
+    if (!specId) {
+        return;
+    }
+
+    const specification = Array.isArray(specifications)
+        ? specifications.find(entry => entry && entry.id === specId)
+        : null;
+
+    if (!specification) {
+        showNotification('warning', 'The selected specification is no longer available.', 3200, 'specificationNotificationArea');
+        renderSpecificationList();
+        return;
+    }
+
+    openSpecificationDetailOverlay(specification, 'sub-specifications');
+}
+
+function showSpecificationCategories(specId) {
+    if (!specId) {
+        return;
+    }
+
+    const specification = Array.isArray(specifications)
+        ? specifications.find(entry => entry && entry.id === specId)
+        : null;
+
+    if (!specification) {
+        showNotification('warning', 'The selected specification is no longer available.', 3200, 'specificationNotificationArea');
+        renderSpecificationList();
+        return;
+    }
+
+    openSpecificationDetailOverlay(specification, 'categories');
+}
+
+function hideSpecificationDetailOverlay() {
+    const overlay = document.getElementById('specificationDetailOverlay');
+    const contentEl = document.getElementById('specificationDetailContent');
+    const titleEl = document.getElementById('specificationDetailTitle');
+    const subtitleEl = document.getElementById('specificationDetailSubtitle');
+    if (!overlay || !contentEl || !titleEl || !subtitleEl) {
+        return;
+    }
+
+    state.activeSpecificationDetailId = null;
+    state.specificationDetailView = 'sub-specifications';
+    overlay.classList.add('hidden');
+    titleEl.textContent = 'Specification Details';
+    subtitleEl.textContent = 'Select a specification to review its categories or sub-specifications.';
+    contentEl.innerHTML = '<p class="spec-detail-placeholder">Use the eye icon in the specifications table to inspect a specification&apos;s details here.</p>';
+}
+
+function hideSpecificationSubSpecifications() {
+    hideSpecificationDetailOverlay();
+}
+
+function refreshSpecificationDetailOverlay() {
+    if (!state.activeSpecificationDetailId) {
+        return;
+    }
+    const overlay = document.getElementById('specificationDetailOverlay');
+    if (!overlay || overlay.classList.contains('hidden')) {
+        return;
+    }
+    const specification = Array.isArray(specifications)
+        ? specifications.find(entry => entry && entry.id === state.activeSpecificationDetailId)
+        : null;
+    if (!specification) {
+        hideSpecificationDetailOverlay();
+        return;
+    }
+
+    const titleEl = document.getElementById('specificationDetailTitle');
+    if (titleEl) {
+        const displayName = specification.nameEnglish || specification.name || specification.nameArabic || 'Specification Details';
+        titleEl.textContent = displayName;
+    }
+
+    renderSpecificationDetailContent(specification, state.specificationDetailView || 'sub-specifications');
 }
 
 function updateSpecificationCategoryOptions() {
@@ -5873,6 +6864,7 @@ function handleSpecificationFormSubmit(event) {
     const placeholderEnInput = document.getElementById('specificationPlaceholderEnInput');
     const typeSelect = document.getElementById('specificationTypeInput');
     const requiredInput = document.getElementById('specificationRequiredInput');
+    const categoriesInput = getSpecificationCategoriesInputElement();
 
     if ((!nameArabicInput && !nameEnglishInput) || !typeSelect) {
         showNotification('error', 'Specification form is missing required inputs.', 3200, 'specificationNotificationArea');
@@ -5899,8 +6891,8 @@ function handleSpecificationFormSubmit(event) {
 
     if (!selectedCategoryIds.length) {
         showNotification('warning', 'Select at least one category for this specification.', 3200, 'specificationNotificationArea');
-        const categoriesInput = getSpecificationCategoriesInputElement();
-        categoriesInput?.focus();
+        categoriesInput?.focus({ preventScroll: true });
+        categoriesInput?.reportValidity?.();
         return;
     }
 
@@ -5939,6 +6931,38 @@ function handleSpecificationFormSubmit(event) {
         return;
     }
 
+    const sessionUser = typeof getActiveSessionUser === 'function' ? getActiveSessionUser() : null;
+    const sessionUserId = typeof getActiveSessionUserId === 'function' ? getActiveSessionUserId() : null;
+    let sessionUserName = '';
+    if (sessionUser) {
+        sessionUserName = resolveUserDisplayName(sessionUser);
+    }
+    if (!sessionUserName) {
+        sessionUserName = 'Central Admin';
+    }
+
+    let creatorName = '';
+    let creatorId = null;
+    if (existingSpecification) {
+        if (typeof existingSpecification.createdBy === 'string' && existingSpecification.createdBy.trim()) {
+            creatorName = existingSpecification.createdBy.trim();
+        } else if (typeof existingSpecification.createdByName === 'string' && existingSpecification.createdByName.trim()) {
+            creatorName = existingSpecification.createdByName.trim();
+        } else if (typeof existingSpecification.creatorName === 'string' && existingSpecification.creatorName.trim()) {
+            creatorName = existingSpecification.creatorName.trim();
+        } else if (typeof existingSpecification.owner === 'string' && existingSpecification.owner.trim()) {
+            creatorName = existingSpecification.owner.trim();
+        }
+        if (Number.isInteger(existingSpecification.createdById)) {
+            creatorId = existingSpecification.createdById;
+        }
+    } else {
+        creatorName = sessionUserName;
+        if (Number.isInteger(sessionUserId)) {
+            creatorId = sessionUserId;
+        }
+    }
+
     const specPayload = {
         id: existingSpecification ? existingSpecification.id : generateSpecificationId(),
         name: displayName,
@@ -5959,7 +6983,9 @@ function handleSpecificationFormSubmit(event) {
         subSpecifications,
         subSpecificationSummary: formatSubSpecificationSummary(subSpecifications),
         createdAt: existingSpecification && existingSpecification.createdAt ? existingSpecification.createdAt : nowIso,
-        updatedAt: nowIso
+        updatedAt: nowIso,
+        createdBy: creatorName,
+        createdById: Number.isInteger(creatorId) ? creatorId : null
     };
 
     const normalized = normalizeSpecificationPayload(specPayload, existingSpecification ? existingIndex : specifications.length);
@@ -6017,13 +7043,73 @@ function handleCategorySearch() {
     refreshCategoryDirectoryView({ keepScroll: false });
 }
 
+function splitCategoryCodeSegments(code) {
+    if (typeof code !== 'string') {
+        return [];
+    }
+    return code
+        .split('.')
+        .map(segment => segment.trim())
+        .filter(Boolean);
+}
+
+function compareCategoryCodeSegment(a, b) {
+    const numericA = /^\d+$/.test(a);
+    const numericB = /^\d+$/.test(b);
+    if (numericA && numericB) {
+        const diff = Number(a) - Number(b);
+        if (diff !== 0) {
+            return diff;
+        }
+        return 0;
+    }
+    if (numericA) {
+        return -1;
+    }
+    if (numericB) {
+        return 1;
+    }
+    const cmp = a.localeCompare(b, undefined, { sensitivity: 'base' });
+    if (cmp !== 0) {
+        return cmp;
+    }
+    return 0;
+}
+
+function compareCategoryCodesNatural(codeA, codeB) {
+    const segmentsA = splitCategoryCodeSegments(codeA);
+    const segmentsB = splitCategoryCodeSegments(codeB);
+    const maxLength = Math.max(segmentsA.length, segmentsB.length);
+    for (let index = 0; index < maxLength; index += 1) {
+        const segmentA = segmentsA[index];
+        const segmentB = segmentsB[index];
+        if (segmentA === undefined && segmentB === undefined) {
+            break;
+        }
+        if (segmentA === undefined) {
+            return -1;
+        }
+        if (segmentB === undefined) {
+            return 1;
+        }
+        const comparison = compareCategoryCodeSegment(segmentA, segmentB);
+        if (comparison !== 0) {
+            return comparison;
+        }
+    }
+    return codeA.localeCompare(codeB, undefined, { sensitivity: 'base' });
+}
+
 function compareCategoriesForTree(a, b) {
-    const codeA = typeof a.categoryCode === 'string' ? a.categoryCode.trim().toLowerCase() : '';
-    const codeB = typeof b.categoryCode === 'string' ? b.categoryCode.trim().toLowerCase() : '';
-    if (codeA !== codeB) {
+    const codeA = typeof a.categoryCode === 'string' ? a.categoryCode.trim() : '';
+    const codeB = typeof b.categoryCode === 'string' ? b.categoryCode.trim() : '';
+    if (codeA || codeB) {
         if (!codeA) return 1;
         if (!codeB) return -1;
-        return codeA.localeCompare(codeB);
+        const codeComparison = compareCategoryCodesNatural(codeA, codeB);
+        if (codeComparison !== 0) {
+            return codeComparison;
+        }
     }
     const nameA = (a.nameEnglish || a.nameArabic || '').trim().toLowerCase();
     const nameB = (b.nameEnglish || b.nameArabic || '').trim().toLowerCase();
@@ -6578,10 +7664,11 @@ function renderCategoryGrid({ resetPage = false } = {}) {
     }
 
     if (!total) {
-    body.innerHTML = '<div class="category-grid-empty">There is no Data Available</div>';
+        body.innerHTML = '<div class="category-grid-empty">There is no Data Available</div>';
         updateCategorySelectionSummary();
         renderCategoryRelatedDrawer(null);
         renderCategoryPagination(0, 0);
+        refreshCategorySpecificationOverlay();
         return;
     }
 
@@ -6607,6 +7694,7 @@ function renderCategoryGrid({ resetPage = false } = {}) {
     renderCategoryPagination(totalPages, total);
     syncCategoryGridHeader();
     syncCategoryDetailDrawerPosition();
+    refreshCategorySpecificationOverlay();
 }
 
 function syncCategorySelectionStyles() {
@@ -6708,9 +7796,16 @@ function handleCategoryGridBodyScroll() {
 }
 
 function formatCategoryCreatedMeta(category) {
-    const createdLabel = category.createdAt ? formatDateForDisplay(category.createdAt) : '—';
-    const createdBy = category.createdBy ? `<div class="user-meta">${escapeHtml(category.createdBy)}</div>` : '';
-    return `<div class="created-cell"><div class="created-date">${escapeHtml(createdLabel)}</div>${createdBy}</div>`;
+    const createdLabel = category.createdAt
+        ? formatDateForDisplay(category.createdAt, { includeTime: true })
+        : '—';
+    const creatorNameRaw = typeof category.createdBy === 'string' ? category.createdBy.trim() : '';
+    const rawMethod = category.createdMethod || category.creationMethod || category.createdVia || '';
+    const creationMethod = normalizeCategoryCreationMethod(rawMethod);
+    const displayName = creatorNameRaw || '—';
+    const methodSuffix = creationMethod ? ` (${creationMethod})` : '';
+    const creatorLine = `<div class="user-meta">${escapeHtml(`${displayName}${methodSuffix}`)}</div>`;
+    return `<div class="created-cell"><div class="created-date">${escapeHtml(createdLabel)}</div>${creatorLine}</div>`;
 }
 
 function buildCategoryGridRow(category, displayIndex, relativeDepth) {
@@ -6727,6 +7822,12 @@ function buildCategoryGridRow(category, displayIndex, relativeDepth) {
     const toggleClass = isActive ? 'deactivate' : 'activate';
     const toggleIcon = isActive ? 'fa-power-off' : 'fa-rotate-right';
     const toggleLabel = isActive ? 'Deactivate category' : 'Activate category';
+    const specificationCount = Number.isFinite(category.specificationCount) ? Math.max(0, category.specificationCount) : 0;
+    const specCountLabel = specificationCount === 1 ? '1 spec' : `${specificationCount} specs`;
+    const specBadgeClass = specificationCount > 0 ? ' has-specs' : '';
+    const specCountButtonTitle = specificationCount
+        ? `View ${specCountLabel} assigned to this category`
+        : 'View specifications for this category';
     return `
         <div class="category-grid-row${isSelected ? ' is-selected' : ''}" role="row" data-category-row="${escapeAttribute(category.id)}" style="--depth:${relativeDepth}">
             <div class="grid-cell index" data-column="index">
@@ -6743,6 +7844,9 @@ function buildCategoryGridRow(category, displayIndex, relativeDepth) {
             </div>
             <div class="grid-cell parent" data-column="parent">
                 <span>${escapeHtml(parentDisplay)}</span>
+            </div>
+            <div class="grid-cell specifications" data-column="specifications">
+                <button type="button" class="spec-count-badge${specBadgeClass}" data-category-specs="${escapeAttribute(category.id)}" title="${escapeAttribute(specCountButtonTitle)}" aria-label="${escapeAttribute(specCountButtonTitle)}">${escapeHtml(specCountLabel)}</button>
             </div>
             <div class="grid-cell status" data-column="status">
                 <span class="${statusClass}">${statusLabel}</span>
@@ -6827,8 +7931,6 @@ function initializeCategoryImportWorkflow() {
     categoryImportElements.submitLabel = overlay.querySelector('#categoryImportSubmitLabel');
     categoryImportElements.cancelBtn = overlay.querySelector('#categoryImportCancelBtn');
 
-    const closeBtn = overlay.querySelector('#categoryImportCloseBtn');
-
     if (categoryImportElements.dropzone) {
         const { dropzone } = categoryImportElements;
         dropzone.addEventListener('click', () => triggerCategoryImportFilePicker());
@@ -6863,10 +7965,6 @@ function initializeCategoryImportWorkflow() {
 
     if (categoryImportElements.submitBtn) {
         categoryImportElements.submitBtn.addEventListener('click', () => submitCategoryImport());
-    }
-
-    if (closeBtn) {
-        closeBtn.addEventListener('click', () => closeCategoryImportOverlay());
     }
 
     overlay.addEventListener('click', event => {
@@ -8245,6 +9343,10 @@ function applyCategoryImportLocally(parsed, validation) {
             mergedPayload.categoryCode = existingCategory.categoryCode;
             mergedPayload.createdAt = existingCategory.createdAt;
             mergedPayload.createdBy = existingCategory.createdBy || actorName;
+            mergedPayload.createdMethod = existingCategory.createdMethod
+                || existingCategory.creationMethod
+                || existingCategory.createdVia
+                || 'Manual';
 
             const normalized = normalizeCategoryPayload(mergedPayload, categories.indexOf(existingCategory));
             normalized.imageDataUrl = existingCategory.imageDataUrl || '';
@@ -8272,7 +9374,8 @@ function applyCategoryImportLocally(parsed, validation) {
             parentCategoryId,
             parent: parentLabel,
             createdAt: new Date().toISOString(),
-            createdBy: actorName
+            createdBy: actorName,
+            createdMethod: 'Import'
         };
 
         const normalizedNew = normalizeCategoryPayload(newRecordRaw, categories.length);
@@ -8526,7 +9629,6 @@ function renderCategoryRelatedDrawer(categoryId) {
         ? pathLabelRaw.trim()
         : getCategoryDisplayName(category);
     const pathLabel = isTopLevelCategory ? '–' : normalizedPathLabel;
-    const specificationLabel = Number.isFinite(category.specificationCount) ? String(category.specificationCount) : '0';
     const showAtHomeLabel = normalizeFlag(category.showAtHome) ? 'Yes' : 'No';
     const realEstateLabel = normalizeFlag(category.isRealEstate) ? 'Yes' : 'No';
     const salesTypesLabel = buildCategorySalesTypesSummary(category);
@@ -8554,10 +9656,6 @@ function renderCategoryRelatedDrawer(categoryId) {
         <div class="related-section">
             <span class="related-label">Sales Types</span>
             <span class="related-value">${escapeHtml(salesTypesLabel)}</span>
-        </div>
-        <div class="related-section">
-            <span class="related-label">Specifications</span>
-            <span class="related-value">${escapeHtml(specificationLabel)}</span>
         </div>
         <div class="related-section">
             <span class="related-label">Show on Home Page?</span>
@@ -8602,7 +9700,7 @@ function buildCategorySalesTypesSummary(category) {
     }
 
     if (!tokens.length) {
-        return 'None';
+        return '-';
     }
     return tokens.join(', ');
 }
@@ -8761,6 +9859,15 @@ function handleCategoryGridClick(event) {
         state.categoryViewBranchId = categoryId;
         ensureCategoryExplorerExpanded(categoryId);
         refreshCategoryDirectoryView({ rebuildCaches: false, resetScroll: true });
+        return;
+    }
+
+    const specTrigger = target.closest('[data-category-specs]');
+    if (specTrigger) {
+        const categoryId = specTrigger.dataset.categorySpecs;
+        if (categoryId) {
+            showCategorySpecifications(categoryId);
+        }
         return;
     }
 
@@ -9027,6 +10134,27 @@ async function handleCategoryDeleteAllRequest() {
 
     deleteAllCategories({ refresh: true });
     showNotification('success', 'All categories deleted successfully.', 3600, 'categoryNotificationArea');
+}
+
+async function handleSpecificationDeleteAllRequest() {
+    const totalSpecifications = Array.isArray(specifications) ? specifications.length : 0;
+    if (!totalSpecifications) {
+        showNotification('info', 'No specifications available to delete.', 3200, 'specificationNotificationArea');
+        return;
+    }
+
+    const confirmation = await showSpecificationConfirm(
+        `Delete all ${totalSpecifications} specification${totalSpecifications === 1 ? '' : 's'}? This action cannot be undone.`,
+        'Delete All',
+        'Cancel'
+    );
+
+    if (!confirmation) {
+        return;
+    }
+
+    deleteAllSpecifications({ refresh: true });
+    showNotification('success', 'All specifications deleted successfully.', 3600, 'specificationNotificationArea');
 }
 
 function toggleCategoryCompareMode(force) {
@@ -9687,6 +10815,7 @@ async function handleCategoryFormSubmit(event) {
             categoryCode: generatedCode || generateTopLevelCategoryCode(categories),
             createdAt: new Date().toISOString(),
             createdBy: activeUserName,
+            createdMethod: 'Manual',
             imageDataUrl,
             imageName
         }, categories.length);
@@ -9875,6 +11004,7 @@ function renderRolesTable(page = state.currentRolePage) {
             const userCount = updateRoleUserCount(role);
             const rawDescription = role.description && role.description.trim() ? role.description.trim() : '—';
             const descriptionTitleAttr = rawDescription !== '—' ? ` title="${escapeAttribute(rawDescription)}"` : '';
+            const lastUpdatedLabel = formatRoleLastUpdatedLabel(role.lastUpdated);
             return `
             <tr>
                 <td>${index++}</td>
@@ -9882,7 +11012,7 @@ function renderRolesTable(page = state.currentRolePage) {
                 <td>
                     <div>
                         <div style="font-weight:600;">${role.name || role.nameEnglish || ''}</div>
-                        <div class="role-meta">${role.lastUpdated}</div>
+                        <div class="role-meta">${escapeHtml(lastUpdatedLabel)}</div>
                     </div>
                 </td>
                 <td class="role-description-cell">
@@ -11158,6 +12288,7 @@ function refreshRoleDetailPanel() {
 }
 
 let categoryConfirmResolver = null;
+let specificationConfirmResolver = null;
 let roleConfirmResolver = null;
 let userConfirmResolver = null;
 let userAlertResolver = null;
@@ -11196,6 +12327,35 @@ function setupCategoryConfirmOverlay() {
     });
 }
 
+function setupSpecificationConfirmOverlay() {
+    const overlay = document.getElementById('specificationConfirmOverlay');
+    const okBtn = document.getElementById('specificationConfirmOk');
+    const cancelBtn = document.getElementById('specificationConfirmCancel');
+    if (!overlay || !okBtn || !cancelBtn) return;
+
+    const complete = result => {
+        if (specificationConfirmResolver) {
+            const resolver = specificationConfirmResolver;
+            specificationConfirmResolver = null;
+            overlay.classList.add('hidden');
+            resolver(result);
+        }
+    };
+
+    okBtn.addEventListener('click', () => complete(true));
+    cancelBtn.addEventListener('click', () => complete(false));
+    overlay.addEventListener('click', event => {
+        if (event.target === overlay) {
+            complete(false);
+        }
+    });
+    document.addEventListener('keydown', event => {
+        if (event.key === 'Escape' && specificationConfirmResolver) {
+            complete(false);
+        }
+    });
+}
+
 function showCategoryConfirm(message, confirmLabel = 'Confirm', cancelLabel = 'Cancel') {
     const overlay = document.getElementById('categoryConfirmOverlay');
     const messageEl = document.getElementById('categoryConfirmMessage');
@@ -11219,6 +12379,32 @@ function showCategoryConfirm(message, confirmLabel = 'Confirm', cancelLabel = 'C
 
     return new Promise(resolve => {
         categoryConfirmResolver = resolve;
+    });
+}
+
+function showSpecificationConfirm(message, confirmLabel = 'Confirm', cancelLabel = 'Cancel') {
+    const overlay = document.getElementById('specificationConfirmOverlay');
+    const messageEl = document.getElementById('specificationConfirmMessage');
+    const okBtn = document.getElementById('specificationConfirmOk');
+    const cancelBtn = document.getElementById('specificationConfirmCancel');
+    if (!overlay || !messageEl || !okBtn || !cancelBtn) {
+        return Promise.resolve(window.confirm(message));
+    }
+
+    if (specificationConfirmResolver) {
+        const resolver = specificationConfirmResolver;
+        specificationConfirmResolver = null;
+        resolver(false);
+    }
+
+    messageEl.textContent = message;
+    okBtn.textContent = confirmLabel;
+    cancelBtn.textContent = cancelLabel;
+    overlay.classList.remove('hidden');
+    okBtn.focus();
+
+    return new Promise(resolve => {
+        specificationConfirmResolver = resolve;
     });
 }
 
@@ -11690,17 +12876,61 @@ function setElementText(id, text) {
     }
 }
 
-function formatDateForDisplay(value) {
+function formatDateForDisplay(value, { includeTime = false } = {}) {
     if (!value) return '';
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) {
         return value;
     }
-    return date.toLocaleDateString(undefined, {
+
+    if (!includeTime) {
+        return date.toLocaleDateString(undefined, {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric'
+        });
+    }
+
+    const datePart = date.toLocaleDateString(undefined, {
         year: 'numeric',
         month: 'short',
         day: 'numeric'
     });
+    const timePart = date.toLocaleTimeString(undefined, {
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+    return `${datePart} ${timePart}`;
+}
+
+function buildRoleStatusLabel(prefix, timestamp = new Date()) {
+    const formatted = formatDateForDisplay(timestamp, { includeTime: true });
+    if (!formatted) {
+        return prefix || '';
+    }
+    return prefix ? `${prefix} ${formatted}` : formatted;
+}
+
+function formatRoleLastUpdatedLabel(value) {
+    if (!value) return '—';
+    const trimmed = String(value).trim();
+    if (!trimmed) return '—';
+
+    const match = trimmed.match(/^(Created|Updated|Deactivated|Reactivated)\s+(.+)$/i);
+    if (match) {
+        const prefix = match[1];
+        const remainder = match[2];
+        const formatted = formatDateForDisplay(remainder, { includeTime: true });
+        return formatted ? `${prefix} ${formatted}` : trimmed;
+    }
+
+    const formatted = formatDateForDisplay(trimmed, { includeTime: true });
+    return formatted || trimmed;
+}
+
+function formatUserCreatedLabel(value) {
+    if (!value) return '';
+    return formatDateForDisplay(value, { includeTime: true }) || String(value);
 }
 
 function buildAccessWindowLabel(start, end) {
@@ -12609,10 +13839,10 @@ async function handleUserFormSubmit(event) {
         role: roleLabel,
         roleId,
         accountType,
-        status: 'Pending',
-        lastLogin: 'Never',
-        created: new Date().toLocaleDateString(),
-        createdAt: createdIso,
+    status: 'Pending',
+    lastLogin: 'Never',
+    created: createdIso,
+    createdAt: createdIso,
         createdBy: createdById,
         invitation: {
             otp: otpCode,
@@ -13335,8 +14565,8 @@ async function toggleRoleStatus(roleId) {
             }
         }
 
-        role.status = 'inactive';
-        role.lastUpdated = `Deactivated ${new Date().toLocaleDateString()}`;
+    role.status = 'inactive';
+    role.lastUpdated = buildRoleStatusLabel('Deactivated');
         updateRoleUserCount(role);
 
         saveRolesToStorage();
@@ -13354,8 +14584,8 @@ async function toggleRoleStatus(roleId) {
             'Cancel'
         );
         if (!confirmed) return;
-        role.status = 'active';
-        role.lastUpdated = `Reactivated ${new Date().toLocaleDateString()}`;
+    role.status = 'active';
+    role.lastUpdated = buildRoleStatusLabel('Reactivated');
         updateRoleUserCount(role);
         saveRolesToStorage();
         updateUserRolesCount();
@@ -13654,7 +14884,7 @@ function handleRoleSubmit(event) {
         role.nameArabic = nameArabic;
         role.description = description;
         role.permissions = permissions;
-        role.lastUpdated = `Updated ${new Date().toLocaleDateString()}`;
+    role.lastUpdated = buildRoleStatusLabel('Updated');
         updateRoleUserCount(role);
 
         saveRolesToStorage();
@@ -13674,7 +14904,7 @@ function handleRoleSubmit(event) {
         users: 0,
         permissions,
         status: 'active',
-        lastUpdated: `Created ${new Date().toLocaleDateString()}`
+        lastUpdated: buildRoleStatusLabel('Created')
     };
 
     roles.unshift(newRole);
@@ -13754,7 +14984,9 @@ function renderUsersTable(searchTerm = state.userSearchTerm, page = state.curren
             const creatorMarkup = creatorInfo.email
                 ? `<div class="creator-cell"><div class="creator-name">${escapeHtml(creatorInfo.label)}</div><div class="user-meta">${escapeHtml(creatorInfo.email)}</div></div>`
                 : `<div class="creator-cell"><div class="creator-name">${escapeHtml(creatorInfo.label)}</div></div>`;
-            const createdDisplay = user.created ? escapeHtml(String(user.created)) : '—';
+            const createdSource = user.createdAt || user.created;
+            const createdLabel = formatUserCreatedLabel(createdSource);
+            const createdDisplay = createdLabel ? escapeHtml(createdLabel) : '—';
             const createdDetailsMarkup = `<div class="created-cell"><div class="created-date">${createdDisplay}</div>${creatorMarkup}</div>`;
             const fallbackInitialMatch = typeof displayName === 'string' ? displayName.match(/[A-Za-z0-9]/) : null;
             const fallbackInitial = fallbackInitialMatch ? fallbackInitialMatch[0].toUpperCase() : '';
@@ -13825,7 +15057,7 @@ function exportUsers() {
             const creatorLabel = creator && creator.label ? creator.label : '—';
             const creatorEmail = creator && creator.email ? creator.email : '';
             const creatorDisplay = creatorEmail ? `${creatorLabel} <${creatorEmail}>` : creatorLabel;
-            const createdDisplay = user.created || '';
+            const createdDisplay = formatUserCreatedLabel(user.createdAt || user.created);
             const createdCombined = creatorDisplay && creatorDisplay !== '—'
                 ? `${createdDisplay}${createdDisplay ? ' | ' : ''}${creatorDisplay}`
                 : createdDisplay || creatorDisplay;

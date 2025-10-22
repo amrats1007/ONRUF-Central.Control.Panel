@@ -714,6 +714,10 @@
                                     <i class="fas fa-file-export"></i>
                                     Export
                                 </button>
+                                <button type="button" class="btn btn-outline" id="categoryDeleteAllBtn" /*style="display:none;"*/>
+                                    <i class="fas fa-trash"></i>
+                                    Delete All
+                                </button>
                             </div>
                         </div>
                         <div class="notification-area" id="categoryNotificationArea" aria-live="polite"></div>
@@ -781,6 +785,7 @@
                                             <div class="grid-cell name" data-column="name">Category</div>
                                             <div class="grid-cell description" data-column="description">Description</div>
                                             <div class="grid-cell parent" data-column="parent">Parent</div>
+                                            <div class="grid-cell specification-count" data-column="specifications">Specifications</div>
                                             <div class="grid-cell status" data-column="status">Status</div>
                                             <div class="grid-cell created" data-column="created">Created</div>
                                             <div class="grid-cell actions" data-column="actions">Actions</div>
@@ -793,6 +798,22 @@
                             </div>
                         </div>
 
+                        <div id="categorySpecificationOverlay" class="spec-detail-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="categorySpecificationTitle">
+                            <div class="spec-detail-modal" role="document">
+                                <header>
+                                    <div>
+                                        <h3 id="categorySpecificationTitle">Category Specifications</h3>
+                                    </div>
+                                    <button type="button" class="modal-close-btn" id="categorySpecificationCloseBtn" aria-label="Close category specification details">
+                                        <i class="fas fa-xmark"></i>
+                                    </button>
+                                </header>
+                                <div id="categorySpecificationContent" class="spec-detail-content">
+                                    <p class="spec-detail-placeholder">Use the specifications column to review the specifications assigned to a category.</p>
+                                </div>
+                            </div>
+                        </div>
+
                         <div id="categoryImportOverlay" class="confirm-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="categoryImportTitle" aria-hidden="true">
                             <div class="confirm-dialog import-dialog" role="document">
                                 <header class="import-dialog-header">
@@ -800,9 +821,6 @@
                                         <h3 id="categoryImportTitle">Import Categories</h3>
                                         <p id="categoryImportSubtitle" class="import-dialog-subtitle">Upload an Excel (.xls or .xlsx) or CSV file to Add New Categories or Refresh Existing Ones in Bulk.</p>
                                     </div>
-                                    <button type="button" class="modal-close-btn" id="categoryImportCloseBtn" aria-label="Close import dialog">
-                                        <i class="fas fa-xmark"></i>
-                                    </button>
                                 </header>
                                 <div class="import-body">
                                     <input type="file" id="categoryImportFileInput" accept=".csv,.xls,.xlsx,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden />
@@ -867,11 +885,17 @@
                                         </div>
                                     </div>
                                     <!-- Category Selection Modal -->
-                                    <div id="categoryModal" class="modal hidden" tabindex="-1" role="dialog" aria-modal="true" style="position:fixed;z-index:1000;left:0;top:0;width:100vw;height:100vh;background:rgba(0,0,0,0.25);display:flex;align-items:center;justify-content:center;">
-                                        <div class="modal-content" style="background:#fff;padding:24px 32px;border-radius:12px;min-width:320px;max-width:90vw;max-height:80vh;overflow:auto;box-shadow:0 8px 32px rgba(0,0,0,0.18);">
-                                            <h2 style="margin-top:0;font-size:20px;">Select Parent</h2>
-                                            <div id="categoryModalList"></div>
-                                            <button type="button" id="closeCategoryModalBtn" class="btn btn-outline" style="margin-top:16px;">Cancel</button>
+                                    <div id="categoryModal" class="modal hidden category-tree-modal" tabindex="-1" role="dialog" aria-modal="true">
+                                        <div class="modal-content category-modal-dialog" role="document">
+                                            <div class="category-modal-header">
+                                                <h2>Parent Category</h2>
+                                            </div>
+                                            <div class="category-modal-body">
+                                                <div id="categoryModalList" class="category-modal-tree"></div>
+                                            </div>
+                                            <div class="category-modal-footer">
+                                                <button type="button" class="btn btn-outline" data-category-modal-cancel>Cancel</button>
+                                            </div>
                                         </div>
                                     </div>
                                     <div class="form-group" style="grid-column: 1;">
@@ -1078,7 +1102,7 @@
                         <div id="specificationNotificationArea" class="notification-area"></div>
                         <div class="users-header" id="specificationHeader">
                             <div class="header-stack">
-                                <h2 class="module-title" id="specificationModuleTitle">Specification Library</h2>
+                                <h2 class="module-title" id="specificationModuleTitle">Specifications</h2>
                                 <div class="search-box" id="specificationSearchContainer">
                                     <i class="fas fa-search"></i>
                                     <input type="text" id="specificationSearch" placeholder="Search by Specification, Category, Type, Version, or Status" />
@@ -1089,9 +1113,9 @@
                                     <i class="fas fa-file-circle-plus"></i>
                                     Add Specification
                                 </button>
-                                <button class="btn btn-outline" id="specificationTemplateBtn">
-                                    <i class="fas fa-table-list"></i>
-                                    Open Template Gallery
+                                <button type="button" class="btn btn-outline" id="specificationDeleteAllBtn" /*style="display:none;"*/>
+                                    <i class="fas fa-trash"></i>
+                                    Delete All
                                 </button>
                             </div>
                         </div>
@@ -1105,9 +1129,10 @@
                                             <th>Description</th>
                                             <th>Categories</th>
                                             <th>Type</th>
-                                            <th>IsRequired</th>
+                                            <th>Required?</th>
                                             <th>Status</th>
-                                            <th>Sub Specifications</th>
+                                            <th>Created</th>
+                                            <th>Sub-Specifications</th>
                                             <th>Actions</th>
                                         </tr>
                                     </thead>
@@ -1116,12 +1141,22 @@
                             </div>
                         </div>
 
+                        <div id="specificationConfirmOverlay" class="confirm-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="specificationConfirmMessage">
+                            <div class="confirm-dialog">
+                                <p id="specificationConfirmMessage">Delete this specification?</p>
+                                <div class="confirm-actions">
+                                    <button type="button" class="btn btn-outline" id="specificationConfirmCancel">Cancel</button>
+                                    <button type="button" class="btn btn-primary" id="specificationConfirmOk">Confirm</button>
+                                </div>
+                            </div>
+                        </div>
+
                         <div id="specificationBuilderView" class="specification-builder hidden">
                             <div class="form-card">
                                 <form id="specificationForm" class="form-grid" novalidate>
                                     <div class="form-group" style="grid-column: 1;">
                                         <label class="form-label" for="specificationNameArabicInput">Specification Name (Arabic)</label>
-                                        <input type="text" id="specificationNameArabicInput" class="form-input" placeholder="مثال: نقطة تجمع الإخلاء" />
+                                        <input type="text" id="specificationNameArabicInput" class="form-input" placeholder="مثال: نقطة تجمع الإخلاء" required />
                                     </div>
                                     <div class="form-group" style="grid-column: 2;">
                                         <label class="form-label" for="specificationDescriptionArInput">Description (Ar)</label>
@@ -1133,7 +1168,7 @@
                                     </div>
                                     <div class="form-group" style="grid-column: 1;">
                                         <label class="form-label" for="specificationNameEnglishInput">Specification Name (English)</label>
-                                        <input type="text" id="specificationNameEnglishInput" class="form-input" placeholder="e.g. Evacuation Assembly Point" />
+                                        <input type="text" id="specificationNameEnglishInput" class="form-input" placeholder="e.g. Evacuation Assembly Point" required />
                                     </div>
                                     <div class="form-group" style="grid-column: 2;">
                                         <label class="form-label" for="specificationDescriptionEnInput">Description (En)</label>
@@ -1147,14 +1182,14 @@
                                         <label class="form-label" for="specificationCategoriesInput">Categories</label>
                                         <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
                                             <button type="button" class="btn btn-secondary" id="openSpecificationCategoriesModalBtn" style="white-space:nowrap;">Select Categories</button>
-                                            <input type="text" id="specificationCategoriesInput" class="form-input" placeholder="Select categories" readonly style="background:#f9fafb; cursor:pointer; flex:1; min-width:280px;" />
+                                            <input type="text" id="specificationCategoriesInput" class="form-input" placeholder="Select categories" readonly required style="background:#f9fafb; cursor:pointer; flex:1; min-width:280px;" />
                                         </div>
                                     </div>
                                     <div class="form-group" style="grid-column: 3; width: 200%;">
-                                        <label class="form-label" for="specificationSubSpecificationsInput">Sub Specifications</label>
+                                        <label class="form-label" for="specificationSubSpecificationsInput">Sub-Specifications</label>
                                         <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
                                             <button type="button" class="btn btn-secondary" id="openSubSpecificationModalBtn" style="white-space:nowrap;">Add SubSpecification</button>
-                                            <input type="text" class="form-input" id="specificationSubSpecificationsInput" placeholder="Add sub specifications" readonly style="background:#f9fafb; cursor:pointer; flex:1; min-width:260px;" />
+                                            <input type="text" class="form-input" id="specificationSubSpecificationsInput" placeholder="Add sub-specifications" readonly style="background:#f9fafb; cursor:pointer; flex:1; min-width:260px;" />
                                         </div>
                                     </div>
                                     <div id="specificationCategoriesModal" class="modal hidden" tabindex="-1" role="dialog" aria-modal="true" style="position:fixed;z-index:1000;left:0;top:0;width:100vw;height:100vh;background:rgba(0,0,0,0.25);display:flex;align-items:center;justify-content:center;">
@@ -1177,7 +1212,7 @@
                                     </div>
                                     <div id="subSpecificationModal" class="modal hidden" tabindex="-1" role="dialog" aria-modal="true" style="position:fixed;z-index:1000;left:0;top:0;width:100vw;height:100vh;background:rgba(0,0,0,0.25);display:flex;align-items:center;justify-content:center;">
                                         <div class="modal-content" role="document" style="background:#fff;padding:24px 32px;border-radius:12px;min-width:360px;max-width:640px;max-height:80vh;overflow:auto;box-shadow:0 8px 32px rgba(0,0,0,0.18);">
-                                            <h2 style="margin-top:0;font-size:20px;margin-bottom:16px;">Sub Specifications</h2>
+                                            <h2 style="margin-top:0;font-size:20px;margin-bottom:16px;">Sub-Specifications</h2>
                                             <p style="margin-top:0;margin-bottom:16px;color:#4b5563;font-size:14px;">Capture localized labels for each sub specification option.</p>
                                             <div id="subSpecificationRows" style="display:flex; flex-direction:column; gap:12px;"></div>
                                             <div style="display:flex; justify-content:flex-end; gap:12px; margin-top:24px;">
@@ -1188,7 +1223,7 @@
                                     </div>
                                     <div class="form-group" style="grid-column: 1;">
                                         <label class="form-label" for="specificationTypeInput">Data Type</label>
-                                        <select id="specificationTypeInput" class="form-select">
+                                        <select id="specificationTypeInput" class="form-select" required>
                                             <option value="dropdownlist">Dropdown List</option>
                                             <option value="short-text">Short Text</option>
                                             <option value="long-text">Long Text</option>
@@ -1210,11 +1245,27 @@
                                             Cancel
                                         </button>
                                         <button type="submit" class="btn btn-primary" id="specificationSubmitBtn">
-                                            <i class="fas fa-floppy-disk"></i>
-                                            Add
+                                            <i class="fas fa-floppy-disk" id="specificationSubmitIcon"></i>
+                                            <span id="specificationSubmitLabel">Add</span>
                                         </button>
                                     </div>
                                 </form>
+                            </div>
+                        </div>
+                        <div id="specificationDetailOverlay" class="spec-detail-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="specificationDetailTitle">
+                            <div class="spec-detail-modal" role="document">
+                                <header>
+                                    <div>
+                                        <h3 id="specificationDetailTitle">Specification Details</h3>
+                                        <p id="specificationDetailSubtitle" class="section-subtitle" style="margin:6px 0 0;">Select a specification to review its categories or sub-specifications.</p>
+                                    </div>
+                                    <button type="button" class="modal-close-btn" id="specificationDetailCloseBtn" aria-label="Close specification details">
+                                        <i class="fas fa-xmark"></i>
+                                    </button>
+                                </header>
+                                <div id="specificationDetailContent" class="spec-detail-content">
+                                    <p class="spec-detail-placeholder">Use the eye icon in the specifications table to inspect a specification&rsquo;s details here.</p>
+                                </div>
                             </div>
                         </div>
                     </div>
