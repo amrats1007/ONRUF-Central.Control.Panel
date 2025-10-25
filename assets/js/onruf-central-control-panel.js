@@ -1346,9 +1346,9 @@ function buildSpecificationCategoriesModalRow(category) {
     item.className = `category-picker-item${selected ? ' is-selected' : ''}`;
     item.dataset.categoryId = category.id;
     item.innerHTML = `
-        <span class="category-picker-label" style="padding-left:${depth * 18}px;">
-            <span class="category-picker-name">${escapeHtml(label)}</span>
+        <span class="category-picker-label" style="padding-left:${depth * 6}px;">
             ${code ? `<span class="category-picker-code">${escapeHtml(code)}</span>` : ''}
+            <span class="category-picker-name">${escapeHtml(label)}</span>
         </span>
         <span class="category-picker-meta">
             <span class="${statusClass}">${escapeHtml(statusLabel)}</span>
@@ -1357,12 +1357,50 @@ function buildSpecificationCategoriesModalRow(category) {
     return item;
 }
 
+function getSpecificationModalCategoryOrder() {
+    if (!(categoryChildrenLookup instanceof Map) || !categoryChildrenLookup.size) {
+        rebuildCategoryCaches();
+    }
+
+    const ordered = [];
+    const seen = new Set();
+
+    const visit = parentId => {
+        if (!(categoryChildrenLookup instanceof Map)) {
+            return;
+        }
+        const children = categoryChildrenLookup.get(parentId) || [];
+        children.forEach(child => {
+            if (!child || !child.id || seen.has(child.id)) {
+                return;
+            }
+            seen.add(child.id);
+            ordered.push(child);
+            visit(child.id);
+        });
+    };
+
+    visit(CATEGORY_TREE_ROOT_ID);
+
+    if (Array.isArray(categories)) {
+        categories.forEach(category => {
+            if (category && typeof category.id === 'string' && !seen.has(category.id)) {
+                seen.add(category.id);
+                ordered.push(category);
+            }
+        });
+    }
+
+    return ordered;
+}
+
 function renderSpecificationCategoriesModalOptions(filterTerm = '') {
     const listContainer = document.getElementById('specificationCategoriesModalList');
     if (!listContainer) {
         return;
     }
-    const normalizedTerm = (filterTerm || '').trim().toLowerCase();
+    const displayTerm = (filterTerm || '').trim();
+    const normalizedTerm = displayTerm.toLowerCase();
     listContainer.innerHTML = '';
 
     if (!Array.isArray(categories) || !categories.length) {
@@ -1370,7 +1408,9 @@ function renderSpecificationCategoriesModalOptions(filterTerm = '') {
         return;
     }
 
-    const matches = categories
+    const orderedCategories = getSpecificationModalCategoryOrder();
+
+    const matches = orderedCategories
         .filter(Boolean)
         .filter(category => {
             if (!normalizedTerm) {
@@ -1385,19 +1425,11 @@ function renderSpecificationCategoriesModalOptions(filterTerm = '') {
                 category.englishDescription
             ].map(value => (typeof value === 'string' ? value.trim().toLowerCase() : '')).filter(Boolean);
             return tokens.some(value => value.includes(normalizedTerm));
-        })
-        .sort((a, b) => {
-            const labelA = typeof getCategoryDisplayName === 'function'
-                ? (getCategoryDisplayName(a) || '')
-                : (a.nameEnglish || a.nameArabic || a.categoryCode || a.id || '');
-            const labelB = typeof getCategoryDisplayName === 'function'
-                ? (getCategoryDisplayName(b) || '')
-                : (b.nameEnglish || b.nameArabic || b.categoryCode || b.id || '');
-            return labelA.toLowerCase().localeCompare(labelB.toLowerCase(), undefined, { sensitivity: 'base' });
         });
 
     if (!matches.length) {
-        listContainer.innerHTML = `<div class="category-picker-empty">No categories match “${escapeHtml(normalizedTerm)}”.</div>`;
+        const emptyTerm = displayTerm ? ` “${escapeHtml(displayTerm)}”` : '';
+        listContainer.innerHTML = `<div class="category-picker-empty">No categories match${emptyTerm}.</div>`;
         return;
     }
 
@@ -1594,8 +1626,8 @@ function renderSubSpecificationRows() {
     if (!Array.isArray(subSpecificationWorkingCopy) || !subSpecificationWorkingCopy.length) {
         const emptyState = document.createElement('div');
         emptyState.style = 'display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px;border:1px dashed #d1d5db;border-radius:8px;color:#6b7280;font-size:14px;';
-        const message = document.createElement('span');
-        message.textContent = 'No sub specifications added yet.';
+    const message = document.createElement('span');
+    message.textContent = 'No sub-specifications added yet.';
         const addBtn = document.createElement('button');
         addBtn.type = 'button';
         addBtn.className = 'btn btn-outline';
@@ -1923,6 +1955,7 @@ const state = {
     userFormStep: 1,
     userDraft: null,
     activeRoleDetailId: null,
+    activeRoleDetailMode: 'permissions',
     activeCategoryDetailId: null,
     activeCategorySpecificationId: null,
     permissionCatalog: [],
@@ -2005,21 +2038,31 @@ const CATEGORY_EXPORT_COLUMNS = [
     { id: 'isRealEstate', label: 'Is Real Estate?', value: category => formatCategoryBooleanLabel(category.isRealEstate) }
 ];
 
-const SPECIFICATION_IMPORT_ALLOWED_EXTENSIONS = new Set(['csv', 'json']);
-
 const SPECIFICATION_EXPORT_COLUMNS = [
     { id: 'index', label: '#', value: (_, index) => String(index + 1) },
-    { id: 'id', label: 'Specification ID', value: specification => specification.id || '' },
-    { id: 'specification', label: 'Specification', value: specification => specification.nameEnglish || specification.name || specification.nameArabic || '' },
-    { id: 'specificationArabic', label: 'Specification (Arabic)', value: specification => specification.nameArabic || '' },
-    { id: 'description', label: 'Description', value: specification => specification.descriptionEnglish || specification.descriptionArabic || '' },
+    { id: 'nameArabic', label: 'Specification Name (Arabic)', value: specification => specification.nameArabic || '' },
+    { id: 'descriptionArabic', label: 'Description (Ar)', value: specification => specification.descriptionArabic || '' },
+    { id: 'placeholderArabic', label: 'Placeholder (Ar)', value: specification => specification.placeholderArabic || '' },
+    { id: 'nameEnglish', label: 'Specification Name (English)', value: specification => specification.nameEnglish || specification.name || '' },
+    { id: 'descriptionEnglish', label: 'Description (En)', value: specification => specification.descriptionEnglish || '' },
+    { id: 'placeholderEnglish', label: 'Placeholder (En)', value: specification => specification.placeholderEnglish || '' },
     { id: 'dataType', label: 'Data Type', value: specification => formatSpecificationType(specification.dataType) },
     { id: 'isRequired', label: 'Required?', value: specification => specification.isRequired ? 'Yes' : 'No' },
     { id: 'categories', label: 'Categories', value: specification => Array.isArray(specification.categoryLabels) && specification.categoryLabels.length ? specification.categoryLabels.join('; ') : '' },
     { id: 'subSpecifications', label: 'Sub-Specifications', value: specification => formatSpecificationSubSpecExport(specification) },
     { id: 'status', label: 'Status', value: specification => formatSpecificationStatus(specification.status) },
-    { id: 'created', label: 'Created', value: specification => formatDateForDisplay(specification.createdAt, { includeTime: true }) || '' },
-    { id: 'createdBy', label: 'Created By', value: specification => specification.createdBy || specification.createdByName || '' }
+    { id: 'created', label: 'Creation Date', value: specification => formatDateForDisplay(specification.createdAt, { includeTime: true }) || '' },
+    {
+        id: 'createdBy',
+        label: 'Created By',
+        value: specification => {
+            const creator = resolveSpecificationCreator(specification);
+            if (creator.label && creator.email) {
+                return `${creator.label} (${creator.email})`;
+            }
+            return creator.label || creator.email || specification.createdByName || specification.createdBy || '';
+        }
+    }
 ];
 
 function formatCategoryTokenLabel(value) {
@@ -2213,6 +2256,71 @@ const categoryImportElements = {
     cancelBtn: null
 };
 
+const SPECIFICATION_IMPORT_CONFIG = {
+    maxFileSizeBytes: 5 * 1024 * 1024,
+    allowedExtensions: new Set(['csv', 'json']),
+    previewRowLimit: 12
+};
+
+const SPECIFICATION_IMPORT_PREVIEW_DEFAULT_HEADER = [
+    'Specification ID',
+    'Specification Name (Arabic)',
+    'Specification Name (English)',
+    'Description (Arabic)',
+    'Description (English)',
+    'Data Type',
+    'Required?',
+    'Category IDs',
+    'Category Labels',
+    'Sub-specifications',
+    'Status'
+];
+
+const SPECIFICATION_IMPORT_PREVIEW_FIELD_ALIASES = new Map([
+    ['Specification ID', ['id', 'specification id']],
+    ['Specification Name (Arabic)', ['specification name (arabic)', 'name (arabic)', 'arabic name', 'name_arabic', 'namearabic', 'nameArabic']],
+    ['Specification Name (English)', ['specification name (english)', 'name (english)', 'english name', 'name_english', 'nameenglish', 'nameEnglish']],
+    ['Description (Arabic)', ['description (arabic)', 'arabic description', 'description_ar', 'descriptionarabic', 'descriptionArabic']],
+    ['Description (English)', ['description (english)', 'english description', 'description_en', 'descriptionenglish', 'descriptionEnglish']],
+    ['Data Type', ['data type', 'datatype', 'type', 'dataType']],
+    ['Required?', ['required?', 'required', 'is required', 'isrequired', 'isRequired']],
+    ['Category IDs', ['category ids', 'categoryids', 'categoryIds']],
+    ['Category Labels', ['category labels', 'categorylabels', 'categoryLabels']],
+    ['Sub-specifications', ['sub-specifications', 'sub specifications', 'subspecifications', 'subSpecificationSummary', 'subSpecifications']],
+    ['Status', ['status']]
+]);
+
+const specificationImportState = {
+    file: null,
+    format: 'csv',
+    header: [],
+    rows: [],
+    rawRecords: [],
+    records: [],
+    warnings: [],
+    errors: [],
+    rowMetadata: [],
+    totalRows: 0,
+    truncated: false,
+    isSubmitting: false
+};
+
+const specificationImportElements = {
+    overlay: null,
+    dropzone: null,
+    fileInput: null,
+    browseBtn: null,
+    templateBtn: null,
+    status: null,
+    preview: null,
+    previewTable: null,
+    fileName: null,
+    chip: null,
+    submitBtn: null,
+    submitLabel: null,
+    cancelBtn: null
+};
+
 let categoryImportXlsxLoader = null;
 let categoryImportFileDialogOpen = false;
 let categoryImportFileDialogFocusHandler = null;
@@ -2222,6 +2330,17 @@ function releaseCategoryImportFileDialogGuard() {
     if (categoryImportFileDialogFocusHandler) {
         window.removeEventListener('focus', categoryImportFileDialogFocusHandler, true);
         categoryImportFileDialogFocusHandler = null;
+    }
+}
+
+let specificationImportFileDialogOpen = false;
+let specificationImportFileDialogFocusHandler = null;
+
+function releaseSpecificationImportFileDialogGuard() {
+    specificationImportFileDialogOpen = false;
+    if (specificationImportFileDialogFocusHandler) {
+        window.removeEventListener('focus', specificationImportFileDialogFocusHandler, true);
+        specificationImportFileDialogFocusHandler = null;
     }
 }
 
@@ -3122,6 +3241,111 @@ function clonePermissionEntry(entry) {
     return cloned;
 }
 
+function parseCreatorIdCandidate(value) {
+    if (value === null || value === undefined) {
+        return null;
+    }
+    if (Number.isInteger(value)) {
+        return value;
+    }
+    if (typeof value === 'number' && Number.isFinite(value)) {
+        return Math.trunc(value);
+    }
+    if (typeof value === 'string') {
+        const trimmed = value.trim();
+        if (!trimmed || !/^\d+$/.test(trimmed)) {
+            return null;
+        }
+        const parsed = Number.parseInt(trimmed, 10);
+        return Number.isFinite(parsed) ? parsed : null;
+    }
+    if (typeof value === 'object') {
+        if (!value) {
+            return null;
+        }
+        if (Number.isInteger(value.id)) {
+            return value.id;
+        }
+        if (typeof value.id === 'number' && Number.isFinite(value.id)) {
+            return Math.trunc(value.id);
+        }
+        if (typeof value.id === 'string') {
+            const idTrimmed = value.id.trim();
+            if (idTrimmed && /^\d+$/.test(idTrimmed)) {
+                const parsed = Number.parseInt(idTrimmed, 10);
+                if (Number.isFinite(parsed)) {
+                    return parsed;
+                }
+            }
+        }
+    }
+    return null;
+}
+
+const EMAIL_CANDIDATE_PATTERN = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i;
+
+function extractEmailAddress(candidate) {
+    if (!candidate && candidate !== 0) {
+        return '';
+    }
+    if (typeof candidate === 'string') {
+        const match = candidate.match(EMAIL_CANDIDATE_PATTERN);
+        return match ? match[0].trim() : '';
+    }
+    if (typeof candidate === 'object') {
+        const fields = ['email', 'contact', 'contactEmail', 'value', 'username'];
+        for (const field of fields) {
+            if (typeof candidate[field] === 'string') {
+                const email = extractEmailAddress(candidate[field]);
+                if (email) {
+                    return email;
+                }
+            }
+        }
+    }
+    return '';
+}
+
+function extractNameCandidate(candidate) {
+    if (!candidate && candidate !== 0) {
+        return '';
+    }
+    if (typeof candidate === 'string') {
+        const trimmed = candidate.trim();
+        if (!trimmed || /^\d+$/.test(trimmed)) {
+            return '';
+        }
+        return trimmed;
+    }
+    if (typeof candidate === 'object') {
+        const fields = ['displayName', 'label', 'name', 'fullName', 'username'];
+        for (const field of fields) {
+            if (typeof candidate[field] === 'string') {
+                const trimmed = candidate[field].trim();
+                if (trimmed) {
+                    return trimmed;
+                }
+            }
+        }
+        const combined = [candidate.firstName, candidate.lastName]
+            .map(value => (typeof value === 'string' ? value.trim() : ''))
+            .filter(Boolean)
+            .join(' ');
+        if (combined) {
+            return combined;
+        }
+        const email = extractEmailAddress(candidate);
+        if (email) {
+            const derived = deriveNamePartsFromEmail(email);
+            if (derived && derived.fullName) {
+                return derived.fullName;
+            }
+            return email.split('@')[0];
+        }
+    }
+    return '';
+}
+
 function normalizeRolePayload(role) {
     if (!role || typeof role !== 'object') return null;
 
@@ -3138,6 +3362,106 @@ function normalizeRolePayload(role) {
         ? role.id.trim()
         : `role-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 
+    const normalizeTimestampCandidate = value => {
+        if (value === null || value === undefined) {
+            return '';
+        }
+        if (value instanceof Date) {
+            const time = value.getTime();
+            return Number.isFinite(time) ? value.toISOString() : '';
+        }
+        if (typeof value === 'number' && Number.isFinite(value)) {
+            return new Date(value).toISOString();
+        }
+        if (typeof value === 'string') {
+            const trimmed = value.trim();
+            if (!trimmed) {
+                return '';
+            }
+            const parsed = Date.parse(trimmed);
+            if (Number.isFinite(parsed)) {
+                return new Date(parsed).toISOString();
+            }
+            return trimmed;
+        }
+        return '';
+    };
+
+    const timestampCandidates = [
+        role.createdAt,
+        role.created,
+        role.createdOn,
+        role.creationDate,
+        role.createdTime,
+        role.createdAtUtc,
+        role.dateCreated
+    ];
+
+    let createdAt = '';
+    for (const candidate of timestampCandidates) {
+        const normalized = normalizeTimestampCandidate(candidate);
+        if (normalized) {
+            createdAt = normalized;
+            break;
+        }
+    }
+
+    if (!createdAt && typeof role.lastUpdated === 'string') {
+        const trimmed = role.lastUpdated.trim();
+        if (trimmed) {
+            const match = trimmed.match(/^(?:Created|Updated)\s+(.+)$/i);
+            const remainder = match ? match[1] : trimmed;
+            const parsed = Date.parse(remainder);
+            if (Number.isFinite(parsed)) {
+                createdAt = new Date(parsed).toISOString();
+            }
+        }
+    }
+
+    const creatorIdCandidates = [
+        role.createdById,
+        role.createdBy,
+        role.createdByUserId,
+        role.creatorId,
+        role.ownerId
+    ];
+
+    let createdById = null;
+    for (const candidate of creatorIdCandidates) {
+        const parsed = parseCreatorIdCandidate(candidate);
+        if (Number.isInteger(parsed)) {
+            createdById = parsed;
+            break;
+        }
+    }
+
+    const labelCandidates = [
+        typeof role.createdByLabel === 'string' ? role.createdByLabel.trim() : '',
+        typeof role.createdByName === 'string' ? role.createdByName.trim() : '',
+        typeof role.createdBy === 'string' ? role.createdBy.trim() : '',
+        typeof role.creatorName === 'string' ? role.creatorName.trim() : '',
+        typeof role.creator === 'string' ? role.creator.trim() : '',
+        typeof role.ownerName === 'string' ? role.ownerName.trim() : '',
+        typeof role.owner === 'string' ? role.owner.trim() : ''
+    ].filter(Boolean);
+
+    let createdByLabel = labelCandidates.find(label => label && !/^\d+$/.test(label)) || '';
+    const createdByEmail = typeof role.createdByEmail === 'string' ? role.createdByEmail.trim() : '';
+
+    if (!createdByLabel && Number.isInteger(createdById) && Array.isArray(users)) {
+        const creatorRecord = users.find(candidate => candidate && candidate.id === createdById);
+        if (creatorRecord) {
+            createdByLabel = resolveUserDisplayName(creatorRecord);
+        }
+    }
+
+    const normalizedLastUpdated = typeof role.lastUpdated === 'string' ? role.lastUpdated.trim() : '';
+    const lastUpdatedValue = normalizedLastUpdated
+        ? normalizedLastUpdated
+        : createdAt
+            ? buildRoleStatusLabel('Created', createdAt)
+            : 'Imported';
+
     return {
         id: roleId,
         name: generalName || fallbackName,
@@ -3147,7 +3471,11 @@ function normalizeRolePayload(role) {
         users: typeof role.users === 'number' ? role.users : 0,
         permissions,
         status: role.status === 'inactive' ? 'inactive' : 'active',
-        lastUpdated: role.lastUpdated || 'Imported'
+        createdAt,
+        createdBy: createdByLabel,
+        createdById: Number.isInteger(createdById) ? createdById : null,
+        createdByEmail,
+        lastUpdated: lastUpdatedValue
     };
 }
 
@@ -3209,6 +3537,25 @@ function normalizeUserPayload(user, index = 0) {
         }
     }
 
+    const activityCandidates = [
+        typeof user.lastEvent === 'string' ? user.lastEvent.trim() : '',
+        typeof user.lastAction === 'string' ? user.lastAction.trim() : '',
+        typeof user.lastActivity === 'string' ? user.lastActivity.trim() : '',
+        typeof user.activityLabel === 'string' ? user.activityLabel.trim() : ''
+    ].filter(Boolean);
+
+    let lastEvent = '';
+    for (const candidate of activityCandidates) {
+        if (candidate) {
+            lastEvent = candidate;
+            break;
+        }
+    }
+
+    if (!lastEvent && createdValue) {
+        lastEvent = buildUserActivityLabel('Created', createdValue);
+    }
+
     return {
         id: numericId,
         name: safeName,
@@ -3233,7 +3580,8 @@ function normalizeUserPayload(user, index = 0) {
         photoUrl,
         invitation,
         auth,
-        createdBy
+        createdBy,
+        lastEvent
     };
 }
 
@@ -3594,11 +3942,66 @@ function normalizeCategoryPayload(category, index = 0) {
     const productFeeDueTime = rawAdPublishingFeeDue || rawProductFeeDueTime || 'now';
     const adPublishingFeeDue = productFeeDueTime;
     const baseCategory = typeof category.baseCategory === 'string' ? category.baseCategory.trim() : '';
-    const createdBy = typeof category.createdBy === 'string' && category.createdBy.trim()
-        ? category.createdBy.trim()
-        : typeof category.owner === 'string' && category.owner.trim()
-            ? category.owner.trim()
-            : '';
+
+    const createdByIdCandidates = [
+        category.createdById,
+        category.createdByUserId,
+        category.createdBy,
+        category.createdByUser,
+        category.ownerId,
+        category.ownerUserId,
+        category.ownerUser
+    ];
+
+    let createdById = null;
+    for (const candidate of createdByIdCandidates) {
+        const parsedId = parseCreatorIdCandidate(candidate);
+        if (Number.isInteger(parsedId)) {
+            createdById = parsedId;
+            break;
+        }
+    }
+
+    const labelCandidates = [
+        category.createdByLabel,
+        category.createdByName,
+        category.createdBy,
+        category.creatorName,
+        category.createdByUser,
+        category.ownerName,
+        category.owner,
+        category.ownerLabel,
+        category.ownerDisplayName,
+        category.ownerUser
+    ];
+
+    let createdBy = labelCandidates
+        .map(extractNameCandidate)
+        .find(Boolean) || '';
+
+    const emailCandidates = [
+        category.createdByEmail,
+        category.createdByContact,
+        category.createdByContactEmail,
+        category.creatorContact,
+        category.ownerEmail,
+        category.ownerContact,
+        category.contactEmail,
+        category.notificationEmail,
+        category.createdByUser,
+        category.ownerUser,
+        category.createdBy,
+        category.owner
+    ];
+
+    let createdByEmail = emailCandidates
+        .map(extractEmailAddress)
+        .find(Boolean) || '';
+
+    if (!createdBy && createdByEmail) {
+        const derived = deriveNamePartsFromEmail(createdByEmail);
+        createdBy = derived.fullName || createdByEmail.split('@')[0];
+    }
 
     const supportsFixedPrice = toBoolean(category.supportsFixedPrice);
     const supportsAuction = toBoolean(category.supportsAuction);
@@ -3685,10 +4088,12 @@ function normalizeCategoryPayload(category, index = 0) {
         auctionFee,
         negotiationFee,
         auctionClosingPeriodsUnit,
-        productFeeDueTime,
-        baseCategory,
-        createdBy,
-        createdMethod,
+    productFeeDueTime,
+    baseCategory,
+    createdBy,
+    createdById: Number.isInteger(createdById) ? createdById : null,
+    createdByEmail,
+    createdMethod,
         supportsFixedPrice,
         supportsAuction,
         supportsNegotiation,
@@ -3964,6 +4369,19 @@ function normalizeSpecificationPayload(specification, index = 0) {
         specification.createdByEmail
     ];
 
+    const emailCandidates = [
+        specification.createdByEmail,
+        specification.createdByContact,
+        specification.createdByContactEmail,
+        specification.creatorContact,
+        specification.ownerEmail,
+        specification.ownerContact,
+        specification.contactEmail,
+        specification.notificationEmail,
+        specification.createdBy,
+        specification.owner
+    ];
+
     let createdBy = '';
     for (const candidate of creatorCandidates) {
         const label = extractCreatorName(candidate);
@@ -3973,22 +4391,27 @@ function normalizeSpecificationPayload(specification, index = 0) {
         }
     }
 
+    let createdByEmail = emailCandidates
+        .map(extractEmailAddress)
+        .find(Boolean) || '';
+
     if (!createdBy && Number.isInteger(createdById)) {
         const userRecord = Array.isArray(users)
             ? users.find(entry => entry && entry.id === createdById)
             : null;
         if (userRecord) {
             createdBy = resolveUserDisplayName(userRecord);
+            if (!createdByEmail && typeof userRecord.email === 'string') {
+                createdByEmail = extractEmailAddress(userRecord.email);
+            }
         } else {
             createdBy = `User #${createdById}`;
         }
     }
 
-    if (!createdBy) {
-        const fallback = extractCreatorName(specification.createdByEmail);
-        if (fallback) {
-            createdBy = fallback;
-        }
+    if (!createdBy && createdByEmail) {
+        const derived = deriveNamePartsFromEmail(createdByEmail);
+        createdBy = derived.fullName || createdByEmail.split('@')[0];
     }
 
     const referenceLookup = buildSpecificationCategoryReferenceLookup();
@@ -4152,7 +4575,8 @@ function normalizeSpecificationPayload(specification, index = 0) {
         createdAt,
         updatedAt,
         createdBy,
-        createdById: normalizedCreatedById
+        createdById: normalizedCreatedById,
+        createdByEmail
     };
 }
 
@@ -4394,6 +4818,13 @@ async function regenerateUserInvitation(user, options = {}) {
         linkExpiresAt: newExpiresAt,
         invitedBy
     });
+
+    const activityPrefix = emailResult.status === 'sent'
+        ? 'Invitation Resent'
+        : emailResult.status === 'skipped'
+            ? 'Invitation Prepared'
+            : 'Invitation Failed';
+    updateUserLastEvent(user, activityPrefix, sentAtIso);
 
     return {
         emailResult,
@@ -5293,6 +5724,7 @@ function setupEventListeners() {
     }
 
     initializeCategoryImportWorkflow();
+    initializeSpecificationImportWorkflow();
 
     const importBtn = document.getElementById('categoryImportBtn');
     if (importBtn) {
@@ -5335,22 +5767,9 @@ function setupEventListeners() {
     const specificationImportBtn = document.getElementById('specificationImportBtn');
     if (specificationImportBtn && specificationImportBtn.dataset.bound !== 'true') {
         specificationImportBtn.addEventListener('click', () => {
-            const input = document.getElementById('specificationImportFileInput');
-            if (input) {
-                input.click();
-            }
+            openSpecificationImportOverlay();
         });
         specificationImportBtn.dataset.bound = 'true';
-    }
-
-    const specificationImportInput = document.getElementById('specificationImportFileInput');
-    if (specificationImportInput && specificationImportInput.dataset.bound !== 'true') {
-        specificationImportInput.addEventListener('change', async event => {
-            const file = event.target && event.target.files ? event.target.files[0] : null;
-            await handleSpecificationImportFile(file);
-            specificationImportInput.value = '';
-        });
-        specificationImportInput.dataset.bound = 'true';
     }
 
     const specificationExportBtn = document.getElementById('specificationExportBtn');
@@ -5504,6 +5923,8 @@ function setupEventListeners() {
             if (!roleId) return;
             if (button.dataset.action === 'view') {
                 viewRole(roleId);
+            } else if (button.dataset.action === 'view-users') {
+                viewRoleUsers(roleId);
             } else if (button.dataset.action === 'edit') {
                 editRole(roleId);
             } else if (button.dataset.action === 'toggle') {
@@ -6228,6 +6649,7 @@ const SPECIFICATION_TYPE_ALIASES = new Map([
     ['dropdown list', 'dropdownlist'],
     ['dropdown-list', 'dropdownlist'],
     ['dropdown', 'dropdownlist'],
+    ['list', 'dropdownlist'],
     ['short-text', 'short-text'],
     ['short text', 'short-text'],
     ['short', 'short-text'],
@@ -6380,35 +6802,127 @@ function formatSpecificationCategories(specification) {
     return 'Unassigned';
 }
 
+function resolveSpecificationCreator(specification) {
+    if (!specification || typeof specification !== 'object') {
+        return { id: null, label: '', email: '' };
+    }
+
+    const idCandidates = [
+        specification.createdById,
+        specification.createdByUserId,
+        specification.creatorId,
+        specification.ownerId,
+        specification.createdBy
+    ];
+
+    let creatorId = null;
+    for (const candidate of idCandidates) {
+        const parsed = parseCreatorIdCandidate(candidate);
+        if (Number.isInteger(parsed)) {
+            creatorId = parsed;
+            break;
+        }
+    }
+
+    let creatorRecord = Number.isInteger(creatorId) && Array.isArray(users)
+        ? users.find(entry => entry && entry.id === creatorId)
+        : null;
+
+    const labelCandidates = [
+        specification.createdByLabel,
+        specification.createdByName,
+        specification.createdBy,
+        specification.creatorName,
+        specification.creator,
+        specification.ownerName,
+        specification.owner
+    ];
+
+    if (creatorRecord) {
+        labelCandidates.unshift(resolveUserDisplayName(creatorRecord));
+    }
+
+    let creatorLabel = labelCandidates
+        .map(extractNameCandidate)
+        .find(Boolean) || '';
+
+    if (!creatorRecord && creatorLabel) {
+        const normalizedLabel = creatorLabel.trim().toLowerCase();
+        if (normalizedLabel && Array.isArray(users)) {
+            const matchedRecord = users.find(entry => entry && resolveUserDisplayName(entry).trim().toLowerCase() === normalizedLabel);
+            if (matchedRecord) {
+                creatorRecord = matchedRecord;
+                if (!Number.isInteger(creatorId) && Number.isInteger(matchedRecord.id)) {
+                    creatorId = matchedRecord.id;
+                }
+            }
+        }
+    }
+
+    const emailCandidates = [
+        specification.createdByEmail,
+        specification.createdByContact,
+        specification.createdByContactEmail,
+        specification.creatorContact,
+        specification.ownerEmail,
+        specification.ownerContact,
+        specification.contactEmail,
+        specification.notificationEmail,
+        specification.createdBy,
+        specification.owner
+    ];
+
+    if (creatorRecord) {
+        emailCandidates.unshift(creatorRecord.email || '');
+    }
+
+    let creatorEmail = emailCandidates
+        .map(extractEmailAddress)
+        .find(Boolean) || '';
+
+    if (creatorRecord) {
+        if (!creatorLabel) {
+            creatorLabel = resolveUserDisplayName(creatorRecord);
+        }
+        if (!creatorEmail && typeof creatorRecord.email === 'string') {
+            creatorEmail = extractEmailAddress(creatorRecord.email);
+        }
+    }
+
+    if (!creatorLabel && creatorEmail) {
+        const derived = deriveNamePartsFromEmail(creatorEmail);
+        creatorLabel = derived.fullName || creatorEmail.split('@')[0];
+    }
+
+    return {
+        id: Number.isInteger(creatorId) ? creatorId : null,
+        label: creatorLabel ? creatorLabel.trim() : '',
+        email: creatorEmail ? creatorEmail.trim() : ''
+    };
+}
+
 function formatSpecificationCreatedMeta(specification) {
     const createdLabelSource = specification && specification.createdAt
         ? formatDateForDisplay(specification.createdAt, { includeTime: true })
         : '';
     const createdLabel = createdLabelSource || '—';
 
-    let creatorLabel = '—';
-    if (specification && typeof specification === 'object') {
-        if (typeof specification.createdBy === 'string' && specification.createdBy.trim()) {
-            creatorLabel = specification.createdBy.trim();
-        } else if (typeof specification.createdByName === 'string' && specification.createdByName.trim()) {
-            creatorLabel = specification.createdByName.trim();
-        } else if (typeof specification.creatorName === 'string' && specification.creatorName.trim()) {
-            creatorLabel = specification.creatorName.trim();
-        } else if (typeof specification.owner === 'string' && specification.owner.trim()) {
-            creatorLabel = specification.owner.trim();
-        } else if (Number.isInteger(specification.createdById)) {
-            const userRecord = Array.isArray(users)
-                ? users.find(entry => entry && entry.id === specification.createdById)
-                : null;
-            if (userRecord) {
-                creatorLabel = resolveUserDisplayName(userRecord);
-            } else {
-                creatorLabel = `User #${specification.createdById}`;
-            }
-        }
+    const creatorInfo = resolveSpecificationCreator(specification);
+    const metaLines = [];
+
+    if (creatorInfo.label) {
+        metaLines.push(`<div class="creator-name">${escapeHtml(creatorInfo.label)}</div>`);
     }
 
-    return `<div class="created-cell"><div class="created-date">${escapeHtml(createdLabel)}</div><div class="creator-name">${escapeHtml(creatorLabel || '—')}</div></div>`;
+    if (creatorInfo.email) {
+        metaLines.push(`<div class="user-meta">${escapeHtml(creatorInfo.email)}</div>`);
+    }
+
+    if (!metaLines.length) {
+        metaLines.push('<div class="creator-name">—</div>');
+    }
+
+    return `<div class="created-cell"><div class="created-date">${escapeHtml(createdLabel)}</div>${metaLines.join('')}</div>`;
 }
 
 function formatSpecificationActivityLabel(specification) {
@@ -6780,21 +7294,23 @@ function toggleSpecificationStatus(specId) {
 
 function buildSpecificationSubSpecificationTableHtml(entries) {
     const sanitized = sanitizeSubSpecificationList(entries);
-    if (!sanitized.length) {
-        return '<p class="spec-detail-empty">This specification does not include any sub-specifications yet.</p>';
-    }
+    const hasEntries = sanitized.length > 0;
 
-    const rows = sanitized.map((entry, index) => {
-        const english = entry.nameEnglish || '—';
-        const arabic = entry.nameArabic || '—';
-        return `
+    const rows = hasEntries
+        ? sanitized.map((entry, index) => {
+            const english = entry.nameEnglish || '—';
+            return `
+                <tr>
+                    <td>${index + 1}</td>
+                    <td>${escapeHtml(english)}</td>
+                </tr>
+            `;
+        }).join('')
+        : `
             <tr>
-                <td>${index + 1}</td>
-                <td>${escapeHtml(english)}</td>
-                <td>${escapeHtml(arabic)}</td>
+                <td colspan="2" class="spec-detail-empty">This specification does not include any sub-specifications yet.</td>
             </tr>
         `;
-    }).join('');
 
     return `
         <div class="spec-subspec-table-wrapper">
@@ -6802,8 +7318,7 @@ function buildSpecificationSubSpecificationTableHtml(entries) {
                 <thead>
                     <tr>
                         <th>#</th>
-                        <th>Name (English)</th>
-                        <th>Name (Arabic)</th>
+                        <th>Name</th>
                     </tr>
                 </thead>
                 <tbody>${rows}</tbody>
@@ -6893,24 +7408,28 @@ function getSpecificationCategoryEntries(specification) {
 }
 
 function buildSpecificationCategoryTableHtml(entries) {
-    if (!Array.isArray(entries) || !entries.length) {
-        return '<p class="spec-detail-empty">This specification is not assigned to any categories yet.</p>';
-    }
+    const hasEntries = Array.isArray(entries) && entries.length > 0;
 
-    const rows = entries.map((entry, index) => {
-        const identifier = entry.code || entry.id;
-        const pathDisplay = entry.path || '';
-        const statusDisplay = formatCategoryStatusLabel(entry.status);
-        return `
+    const rows = hasEntries
+        ? entries.map((entry, index) => {
+            const identifier = entry.code || entry.id;
+            const pathDisplay = entry.path || '';
+            const statusDisplay = formatCategoryStatusLabel(entry.status);
+            return `
+                <tr>
+                    <td>${index + 1}</td>
+                    <td>${escapeHtml(entry.label || '—')}</td>
+                    <td>${escapeHtml(identifier || '—')}</td>
+                    <td>${escapeHtml(pathDisplay || '—')}</td>
+                    <td>${escapeHtml(statusDisplay || '—')}</td>
+                </tr>
+            `;
+        }).join('')
+        : `
             <tr>
-                <td>${index + 1}</td>
-                <td>${escapeHtml(entry.label || '—')}</td>
-                <td>${escapeHtml(identifier || '—')}</td>
-                <td>${escapeHtml(pathDisplay || '—')}</td>
-                <td>${escapeHtml(statusDisplay || '—')}</td>
+                <td colspan="5" class="spec-detail-empty">This specification is not assigned to any categories yet.</td>
             </tr>
         `;
-    }).join('');
 
     return `
         <div class="spec-subspec-table-wrapper">
@@ -6938,13 +7457,8 @@ function renderSpecificationCategoryContent(specification) {
     }
 
     const entries = getSpecificationCategoryEntries(specification);
-    if (!entries.length) {
-        subtitleEl.textContent = 'Categories: Unassigned';
-        contentEl.innerHTML = '<p class="spec-detail-empty">This specification is not assigned to any categories yet.</p>';
-        return;
-    }
-
-    subtitleEl.textContent = '';
+    const hasEntries = entries.length > 0;
+    subtitleEl.textContent = 'Categories assigned to this specification.';
     contentEl.innerHTML = buildSpecificationCategoryTableHtml(entries);
 }
 
@@ -6955,12 +7469,8 @@ function renderSpecificationSubSpecificationContent(specification) {
         return;
     }
 
-    const categoriesLabel = formatSpecificationCategories(specification) || 'Unassigned';
-    subtitleEl.textContent = categoriesLabel === 'Unassigned'
-        ? 'Categories: Unassigned'
-        : `Categories: ${categoriesLabel}`;
-
     const sanitized = sanitizeSubSpecificationList(specification.subSpecifications);
+    subtitleEl.textContent = 'Sub-specifications defined for this specification.';
     const tableHtml = buildSpecificationSubSpecificationTableHtml(sanitized);
     contentEl.innerHTML = tableHtml;
 }
@@ -7081,13 +7591,32 @@ function buildCategorySpecificationTableHtml(entries) {
     `;
 }
 
-function renderCategorySpecificationOverlayContent(category) {
+function updateCategorySpecificationSubtitle(category, entries) {
+    const subtitleEl = document.getElementById('categorySpecificationSubtitle');
+    if (!subtitleEl) {
+        return;
+    }
+    subtitleEl.textContent = 'Specifications assigned to this category.';
+}
+
+function renderCategorySpecificationOverlayContent(category, preloadedEntries) {
     const contentEl = document.getElementById('categorySpecificationContent');
     if (!contentEl) {
         return;
     }
 
-    const entries = getCategorySpecificationEntries(category && category.id);
+    if (!category) {
+        updateCategorySpecificationSubtitle(null);
+        contentEl.innerHTML = '<p class="spec-detail-empty">No specifications are currently assigned to this category.</p>';
+        return;
+    }
+
+    const entries = Array.isArray(preloadedEntries)
+        ? preloadedEntries
+        : getCategorySpecificationEntries(category && category.id);
+
+    updateCategorySpecificationSubtitle(category, entries);
+
     if (!entries.length) {
         contentEl.innerHTML = '<p class="spec-detail-empty">No specifications are currently assigned to this category.</p>';
         return;
@@ -7120,7 +7649,8 @@ function openCategorySpecificationOverlay(category) {
     overlay.classList.remove('hidden');
 
     titleEl.textContent = getCategoryDisplayName(category) || 'Category Specifications';
-    renderCategorySpecificationOverlayContent(category);
+    const entries = getCategorySpecificationEntries(category && category.id);
+    renderCategorySpecificationOverlayContent(category, entries);
 
     if (wasHidden && closeBtn) {
         try {
@@ -7143,6 +7673,7 @@ function hideCategorySpecificationOverlay() {
     overlay.dataset.activeCategory = '';
     state.activeCategorySpecificationId = null;
     titleEl.textContent = 'Category Specifications';
+    updateCategorySpecificationSubtitle(null);
     contentEl.innerHTML = '<p class="spec-detail-placeholder">Use the specifications column to review the specifications assigned to a category.</p>';
 }
 
@@ -7161,7 +7692,8 @@ function refreshCategorySpecificationOverlay() {
         hideCategorySpecificationOverlay();
         return;
     }
-    renderCategorySpecificationOverlayContent(category);
+    const entries = getCategorySpecificationEntries(category && category.id);
+    renderCategorySpecificationOverlayContent(category, entries);
 }
 
 function showCategorySpecifications(categoryId) {
@@ -7312,6 +7844,10 @@ function resetSpecificationForm(options = {}) {
         Array.from(categoriesSelect.options || []).forEach(option => {
             option.selected = false;
         });
+    }
+    const typeSelect = document.getElementById('specificationTypeInput');
+    if (typeSelect) {
+        typeSelect.selectedIndex = 0;
     }
     const requiredToggle = document.getElementById('specificationRequiredInput');
     if (requiredToggle) {
@@ -7468,7 +8004,18 @@ function handleSpecificationFormSubmit(event) {
 
     const categoryLabels = selectedCategoryIds.map(identifier => labelLookup.get(identifier) || identifier);
 
-    const dataType = normalizeSpecificationDataType(typeSelect.value);
+    const rawDataType = typeof typeSelect.value === 'string' ? typeSelect.value.trim() : '';
+    if (!rawDataType) {
+        showNotification('warning', 'Select a data type for this specification.', 3200, 'specificationNotificationArea');
+        try {
+            typeSelect.focus({ preventScroll: true });
+        } catch (error) {
+            typeSelect.focus();
+        }
+        return;
+    }
+
+    const dataType = normalizeSpecificationDataType(rawDataType);
     const collectionFrequency = 'per-inspection';
     const validationRule = '';
     const isRequired = requiredInput ? !!requiredInput.checked : true;
@@ -7488,6 +8035,9 @@ function handleSpecificationFormSubmit(event) {
 
     const sessionUser = typeof getActiveSessionUser === 'function' ? getActiveSessionUser() : null;
     const sessionUserId = typeof getActiveSessionUserId === 'function' ? getActiveSessionUserId() : null;
+    const sessionUserEmail = sessionUser && typeof sessionUser.email === 'string'
+        ? sessionUser.email.trim()
+        : '';
     let sessionUserName = '';
     if (sessionUser) {
         sessionUserName = resolveUserDisplayName(sessionUser);
@@ -7497,6 +8047,7 @@ function handleSpecificationFormSubmit(event) {
     }
 
     let creatorName = '';
+    let creatorEmail = '';
     let creatorId = null;
     if (existingSpecification) {
         if (typeof existingSpecification.createdBy === 'string' && existingSpecification.createdBy.trim()) {
@@ -7508,6 +8059,19 @@ function handleSpecificationFormSubmit(event) {
         } else if (typeof existingSpecification.owner === 'string' && existingSpecification.owner.trim()) {
             creatorName = existingSpecification.owner.trim();
         }
+        if (typeof existingSpecification.createdByEmail === 'string' && existingSpecification.createdByEmail.trim()) {
+            creatorEmail = existingSpecification.createdByEmail.trim();
+        } else if (typeof existingSpecification.createdByContact === 'string') {
+            const fallbackEmail = extractEmailAddress(existingSpecification.createdByContact);
+            if (fallbackEmail) {
+                creatorEmail = fallbackEmail;
+            }
+        } else if (typeof existingSpecification.createdBy === 'string') {
+            const fallbackEmail = extractEmailAddress(existingSpecification.createdBy);
+            if (fallbackEmail) {
+                creatorEmail = fallbackEmail;
+            }
+        }
         if (Number.isInteger(existingSpecification.createdById)) {
             creatorId = existingSpecification.createdById;
         }
@@ -7516,6 +8080,7 @@ function handleSpecificationFormSubmit(event) {
         if (Number.isInteger(sessionUserId)) {
             creatorId = sessionUserId;
         }
+        creatorEmail = sessionUserEmail;
     }
 
     const specPayload = {
@@ -7540,7 +8105,8 @@ function handleSpecificationFormSubmit(event) {
         createdAt: existingSpecification && existingSpecification.createdAt ? existingSpecification.createdAt : nowIso,
         updatedAt: nowIso,
         createdBy: creatorName,
-        createdById: Number.isInteger(creatorId) ? creatorId : null
+        createdById: Number.isInteger(creatorId) ? creatorId : null,
+        createdByEmail: creatorEmail
     };
 
     const normalized = normalizeSpecificationPayload(specPayload, existingSpecification ? existingIndex : specifications.length);
@@ -8362,17 +8928,137 @@ function handleCategoryGridBodyScroll() {
     syncCategoryDetailDrawerPosition();
 }
 
+function resolveCategoryCreator(category) {
+    if (!category || typeof category !== 'object') {
+        return { id: null, label: '', email: '' };
+    }
+
+    const idCandidates = [
+        category.createdById,
+        category.createdByUserId,
+        category.createdBy,
+        category.ownerId,
+        category.ownerUserId,
+        category.ownerUser
+    ];
+
+    let creatorId = null;
+    for (const candidate of idCandidates) {
+        const parsedId = parseCreatorIdCandidate(candidate);
+        if (Number.isInteger(parsedId)) {
+            creatorId = parsedId;
+            break;
+        }
+    }
+
+    let creatorRecord = Number.isInteger(creatorId) && Array.isArray(users)
+        ? users.find(entry => entry && entry.id === creatorId)
+        : null;
+
+    const labelCandidates = [
+        category.createdByLabel,
+        category.createdByName,
+        category.createdBy,
+        category.creatorName,
+        category.createdByUser,
+        category.ownerName,
+        category.owner,
+        category.ownerLabel,
+        category.ownerDisplayName,
+        category.ownerUser
+    ];
+
+    if (creatorRecord) {
+        labelCandidates.unshift(resolveUserDisplayName(creatorRecord));
+    }
+
+    let creatorLabel = labelCandidates
+        .map(extractNameCandidate)
+        .find(Boolean) || '';
+
+    if (!creatorRecord && creatorLabel) {
+        const normalizedLabel = creatorLabel.trim().toLowerCase();
+        if (normalizedLabel && Array.isArray(users)) {
+            const matchedRecord = users.find(entry => entry && resolveUserDisplayName(entry).trim().toLowerCase() === normalizedLabel);
+            if (matchedRecord) {
+                creatorRecord = matchedRecord;
+                if (!Number.isInteger(creatorId) && Number.isInteger(matchedRecord.id)) {
+                    creatorId = matchedRecord.id;
+                }
+            }
+        }
+    }
+
+    const emailCandidates = [
+        category.createdByEmail,
+        category.createdByContact,
+        category.createdByContactEmail,
+        category.creatorContact,
+        category.ownerEmail,
+        category.ownerContact,
+        category.contactEmail,
+        category.notificationEmail,
+        category.createdByUser,
+        category.ownerUser,
+        category.createdBy,
+        category.owner
+    ];
+
+    if (creatorRecord) {
+        emailCandidates.unshift(creatorRecord.email || '');
+    }
+
+    let creatorEmail = emailCandidates
+        .map(extractEmailAddress)
+        .find(Boolean) || '';
+
+    if (creatorRecord) {
+        if (!creatorLabel) {
+            creatorLabel = resolveUserDisplayName(creatorRecord);
+        }
+        if (!creatorEmail && typeof creatorRecord.email === 'string') {
+            creatorEmail = extractEmailAddress(creatorRecord.email);
+        }
+    }
+
+    if (!creatorLabel && creatorEmail) {
+        const derived = deriveNamePartsFromEmail(creatorEmail);
+        creatorLabel = derived.fullName || creatorEmail.split('@')[0];
+    }
+
+    return {
+        id: Number.isInteger(creatorId) ? creatorId : null,
+        label: creatorLabel ? creatorLabel.trim() : '',
+        email: creatorEmail ? creatorEmail.trim() : ''
+    };
+}
+
 function formatCategoryCreatedMeta(category) {
     const createdLabel = category.createdAt
         ? formatDateForDisplay(category.createdAt, { includeTime: true })
         : '—';
-    const creatorNameRaw = typeof category.createdBy === 'string' ? category.createdBy.trim() : '';
     const rawMethod = category.createdMethod || category.creationMethod || category.createdVia || '';
     const creationMethod = normalizeCategoryCreationMethod(rawMethod);
-    const displayName = creatorNameRaw || '—';
-    const methodSuffix = creationMethod ? ` (${creationMethod})` : '';
-    const creatorLine = `<div class="user-meta">${escapeHtml(`${displayName}${methodSuffix}`)}</div>`;
-    return `<div class="created-cell"><div class="created-date">${escapeHtml(createdLabel)}</div>${creatorLine}</div>`;
+    const creatorInfo = resolveCategoryCreator(category);
+    const metaLines = [];
+
+    if (creatorInfo.label && creationMethod) {
+        metaLines.push(`<div class="user-meta">${escapeHtml(`${creatorInfo.label} (${creationMethod})`)}</div>`);
+    } else if (creatorInfo.label) {
+        metaLines.push(`<div class="user-meta">${escapeHtml(creatorInfo.label)}</div>`);
+    } else if (creationMethod) {
+        metaLines.push(`<div class="user-meta">${escapeHtml(creationMethod)}</div>`);
+    }
+
+    if (creatorInfo.email) {
+        metaLines.push(`<div class="user-meta">${escapeHtml(creatorInfo.email)}</div>`);
+    }
+
+    if (!metaLines.length) {
+        metaLines.push('<div class="user-meta">—</div>');
+    }
+
+    return `<div class="created-cell"><div class="created-date">${escapeHtml(createdLabel)}</div>${metaLines.join('')}</div>`;
 }
 
 function formatCategoryActivityLabel(category) {
@@ -8528,20 +9214,671 @@ function splitCsvLine(line) {
     return result;
 }
 
+function initializeSpecificationImportWorkflow() {
+    const overlay = document.getElementById('specificationImportOverlay');
+    if (!overlay || overlay.dataset.initialized === 'true') {
+        return;
+    }
+
+    overlay.dataset.initialized = 'true';
+
+    specificationImportElements.overlay = overlay;
+    specificationImportElements.dropzone = overlay.querySelector('#specificationImportDropzone');
+    specificationImportElements.fileInput = overlay.querySelector('#specificationImportFileInput');
+    specificationImportElements.browseBtn = overlay.querySelector('#specificationImportBrowseBtn');
+    specificationImportElements.templateBtn = overlay.querySelector('#specificationImportTemplateBtn');
+    specificationImportElements.status = overlay.querySelector('#specificationImportStatus');
+    specificationImportElements.preview = overlay.querySelector('#specificationImportPreview');
+    specificationImportElements.previewTable = overlay.querySelector('#specificationImportPreviewTable');
+    specificationImportElements.fileName = overlay.querySelector('#specificationImportFileName');
+    specificationImportElements.chip = overlay.querySelector('#specificationImportChip');
+    specificationImportElements.submitBtn = overlay.querySelector('#specificationImportSubmitBtn');
+    specificationImportElements.submitLabel = overlay.querySelector('#specificationImportSubmitLabel');
+    specificationImportElements.cancelBtn = overlay.querySelector('#specificationImportCancelBtn');
+
+    const { dropzone, fileInput, browseBtn, templateBtn, cancelBtn, submitBtn } = specificationImportElements;
+
+    if (dropzone) {
+        dropzone.addEventListener('click', () => triggerSpecificationImportFilePicker());
+        dropzone.addEventListener('keydown', event => handleSpecificationImportDropzoneKeydown(event));
+        dropzone.addEventListener('dragover', event => handleSpecificationImportDragOver(event));
+        dropzone.addEventListener('dragleave', event => {
+            if (!event.relatedTarget || !dropzone.contains(event.relatedTarget)) {
+                dropzone.classList.remove('is-dragover');
+            }
+        });
+        dropzone.addEventListener('drop', event => handleSpecificationImportDrop(event));
+    }
+
+    if (browseBtn) {
+        browseBtn.addEventListener('click', () => triggerSpecificationImportFilePicker());
+    }
+
+    if (fileInput) {
+        fileInput.addEventListener('change', event => {
+            const file = event.target && event.target.files ? event.target.files[0] : null;
+            handleSpecificationImportFile(file);
+        });
+    }
+
+    if (templateBtn) {
+        templateBtn.addEventListener('click', () => downloadSpecificationImportTemplate());
+    }
+
+    if (cancelBtn) {
+        cancelBtn.addEventListener('click', () => closeSpecificationImportOverlay());
+    }
+
+    if (submitBtn) {
+        submitBtn.addEventListener('click', () => submitSpecificationImport());
+    }
+
+    overlay.addEventListener('click', event => {
+        if (event.target === overlay && !specificationImportState.isSubmitting) {
+            closeSpecificationImportOverlay();
+        }
+    });
+
+    resetSpecificationImportState();
+    refreshSpecificationImportControls();
+}
+
+function triggerSpecificationImportFilePicker() {
+    if (specificationImportState.isSubmitting || specificationImportFileDialogOpen) {
+        return;
+    }
+    if (specificationImportElements.fileInput) {
+        specificationImportFileDialogOpen = true;
+        if (!specificationImportFileDialogFocusHandler) {
+            specificationImportFileDialogFocusHandler = () => {
+                setTimeout(() => {
+                    releaseSpecificationImportFileDialogGuard();
+                }, 0);
+            };
+            window.addEventListener('focus', specificationImportFileDialogFocusHandler, true);
+        }
+        specificationImportElements.fileInput.click();
+    }
+}
+
+function openSpecificationImportOverlay() {
+    initializeSpecificationImportWorkflow();
+    if (!specificationImportElements.overlay) {
+        return;
+    }
+    resetSpecificationImportState();
+    setSpecificationImportStatus('Choose a CSV (.csv) or JSON (.json) file to get started.', 'info');
+    specificationImportElements.overlay.classList.remove('hidden');
+    specificationImportElements.overlay.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('body-locked');
+    document.addEventListener('keydown', handleSpecificationImportKeydown);
+    requestAnimationFrame(() => {
+        if (specificationImportElements.dropzone) {
+            specificationImportElements.dropzone.focus();
+        }
+    });
+}
+
+function closeSpecificationImportOverlay() {
+    if (!specificationImportElements.overlay) {
+        return;
+    }
+    specificationImportElements.overlay.classList.add('hidden');
+    specificationImportElements.overlay.setAttribute('aria-hidden', 'true');
+    document.body.classList.remove('body-locked');
+    document.removeEventListener('keydown', handleSpecificationImportKeydown);
+    releaseSpecificationImportFileDialogGuard();
+    resetSpecificationImportState();
+}
+
+function handleSpecificationImportKeydown(event) {
+    if (event.key === 'Escape' && !specificationImportState.isSubmitting) {
+        closeSpecificationImportOverlay();
+    }
+}
+
+function handleSpecificationImportDropzoneKeydown(event) {
+    if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        triggerSpecificationImportFilePicker();
+    }
+}
+
+function handleSpecificationImportDragOver(event) {
+    event.preventDefault();
+    if (specificationImportState.isSubmitting) {
+        return;
+    }
+    if (event.dataTransfer) {
+        event.dataTransfer.dropEffect = 'copy';
+    }
+    if (specificationImportElements.dropzone) {
+        specificationImportElements.dropzone.classList.add('is-dragover');
+    }
+}
+
+function handleSpecificationImportDrop(event) {
+    event.preventDefault();
+    if (specificationImportState.isSubmitting) {
+        return;
+    }
+    if (specificationImportElements.dropzone) {
+        specificationImportElements.dropzone.classList.remove('is-dragover');
+    }
+    const file = event.dataTransfer && event.dataTransfer.files ? event.dataTransfer.files[0] : null;
+    handleSpecificationImportFile(file);
+}
+
+function resetSpecificationImportState() {
+    releaseSpecificationImportFileDialogGuard();
+    specificationImportState.file = null;
+    specificationImportState.format = 'csv';
+    specificationImportState.header = [];
+    specificationImportState.rows = [];
+    specificationImportState.rawRecords = [];
+    specificationImportState.records = [];
+    specificationImportState.warnings = [];
+    specificationImportState.errors = [];
+    specificationImportState.rowMetadata = [];
+    specificationImportState.totalRows = 0;
+    specificationImportState.truncated = false;
+    specificationImportState.isSubmitting = false;
+
+    if (specificationImportElements.fileInput) {
+        specificationImportElements.fileInput.value = '';
+    }
+    if (specificationImportElements.status) {
+        specificationImportElements.status.textContent = '';
+        specificationImportElements.status.className = 'import-status';
+    }
+    if (specificationImportElements.preview) {
+        specificationImportElements.preview.classList.add('hidden');
+    }
+    if (specificationImportElements.previewTable) {
+        specificationImportElements.previewTable.innerHTML = '';
+    }
+    if (specificationImportElements.fileName) {
+        specificationImportElements.fileName.textContent = '';
+    }
+    if (specificationImportElements.chip) {
+        specificationImportElements.chip.textContent = '';
+        specificationImportElements.chip.className = 'import-chip';
+    }
+    refreshSpecificationImportControls();
+}
+
+function setSpecificationImportStatus(message, tone = 'info') {
+    if (!specificationImportElements.status) {
+        return;
+    }
+    const allowed = new Set(['info', 'success', 'error']);
+    const appliedTone = allowed.has(tone) ? tone : 'info';
+    specificationImportElements.status.className = `import-status ${appliedTone}`;
+    specificationImportElements.status.textContent = message || '';
+}
+
+function setSpecificationImportSubmitting(isSubmitting) {
+    specificationImportState.isSubmitting = Boolean(isSubmitting);
+    refreshSpecificationImportControls();
+}
+
+function refreshSpecificationImportControls() {
+    const isSubmitting = specificationImportState.isSubmitting;
+    const hasRecords = specificationImportState.records.length > 0;
+    const hasErrors = specificationImportState.errors.length > 0;
+
+    if (specificationImportElements.submitBtn) {
+        specificationImportElements.submitBtn.disabled = isSubmitting || !hasRecords || hasErrors;
+    }
+    if (specificationImportElements.submitLabel) {
+        specificationImportElements.submitLabel.textContent = isSubmitting ? 'Uploading...' : 'Import';
+    }
+    if (specificationImportElements.cancelBtn) {
+        specificationImportElements.cancelBtn.disabled = isSubmitting;
+    }
+    if (specificationImportElements.templateBtn) {
+        specificationImportElements.templateBtn.disabled = isSubmitting;
+    }
+    if (specificationImportElements.browseBtn) {
+        specificationImportElements.browseBtn.disabled = isSubmitting;
+    }
+    if (specificationImportElements.dropzone) {
+        specificationImportElements.dropzone.classList.toggle('is-disabled', isSubmitting);
+        specificationImportElements.dropzone.setAttribute('aria-disabled', isSubmitting ? 'true' : 'false');
+        if (isSubmitting) {
+            specificationImportElements.dropzone.classList.remove('is-dragover');
+        }
+    }
+}
+
+function deriveSpecificationImportHeader(records, fallbackHeader = []) {
+    if (Array.isArray(fallbackHeader) && fallbackHeader.length) {
+        return fallbackHeader;
+    }
+    const headerSet = new Set();
+    (Array.isArray(records) ? records : []).forEach(record => {
+        if (!record || typeof record !== 'object') {
+            return;
+        }
+        Object.keys(record).forEach(key => {
+            if (typeof key === 'string' && key.trim()) {
+                headerSet.add(key.trim());
+            }
+        });
+    });
+    return headerSet.size ? Array.from(headerSet) : SPECIFICATION_IMPORT_PREVIEW_DEFAULT_HEADER.slice();
+}
+
+function formatSpecificationImportPreviewValue(value) {
+    if (value == null) {
+        return '';
+    }
+    if (Array.isArray(value)) {
+        return value.map(entry => {
+            if (entry == null) {
+                return '';
+            }
+            if (typeof entry === 'string') {
+                return entry;
+            }
+            if (typeof entry === 'object') {
+                const english = typeof entry.nameEnglish === 'string' ? entry.nameEnglish.trim() : '';
+                const arabic = typeof entry.nameArabic === 'string' ? entry.nameArabic.trim() : '';
+                if (english && arabic) {
+                    return `${english} | ${arabic}`;
+                }
+                return english || arabic || JSON.stringify(entry);
+            }
+            return String(entry);
+        }).filter(Boolean).join('; ');
+    }
+    if (typeof value === 'object') {
+        return JSON.stringify(value);
+    }
+    return String(value);
+}
+
+function buildSpecificationImportPreviewRows(header, records, limit) {
+    const effectiveLimit = Number.isFinite(limit) && limit > 0 ? limit : 12;
+    const previewSource = Array.isArray(records) ? records.slice(0, effectiveLimit) : [];
+    return previewSource.map(record => header.map(column => {
+        if (!record || typeof record !== 'object') {
+            return '';
+        }
+
+        let value;
+        if (Object.prototype.hasOwnProperty.call(record, column)) {
+            value = record[column];
+        } else {
+            const caseInsensitiveKey = Object.keys(record).find(key => key && key.toLowerCase() === column.toLowerCase());
+            if (caseInsensitiveKey) {
+                value = record[caseInsensitiveKey];
+            } else {
+                const aliases = SPECIFICATION_IMPORT_PREVIEW_FIELD_ALIASES.get(column) || [];
+                const resolvedKey = Object.keys(record).find(key => aliases.some(alias => alias && key && key.toLowerCase() === alias.toLowerCase()));
+                if (resolvedKey) {
+                    value = record[resolvedKey];
+                }
+            }
+        }
+
+        return formatSpecificationImportPreviewValue(value);
+    }));
+}
+
+function renderSpecificationImportPreview() {
+    const hasRows = specificationImportState.rows.length > 0;
+
+    if (specificationImportElements.preview) {
+        specificationImportElements.preview.classList.toggle('hidden', !hasRows);
+    }
+
+    if (hasRows && specificationImportElements.previewTable) {
+        specificationImportElements.previewTable.innerHTML = buildCategoryImportPreviewTable(
+            specificationImportState.header,
+            specificationImportState.rows,
+            specificationImportState.rowMetadata
+        );
+    } else if (specificationImportElements.previewTable) {
+        specificationImportElements.previewTable.innerHTML = '';
+    }
+
+    if (specificationImportElements.fileName) {
+        specificationImportElements.fileName.textContent = specificationImportState.file ? specificationImportState.file.name : '';
+    }
+
+    if (specificationImportElements.chip) {
+        const previewCount = specificationImportState.rows.length;
+        const totalCount = specificationImportState.totalRows || previewCount;
+        const isTruncated = specificationImportState.truncated && totalCount > previewCount;
+        const chipLabel = !previewCount && !totalCount
+            ? ''
+            : isTruncated
+                ? `Previewing ${previewCount} of ${totalCount} rows`
+                : `${totalCount} row${totalCount === 1 ? '' : 's'}`;
+        const chipTone = specificationImportState.errors.length
+            ? ' error'
+            : specificationImportState.warnings.length
+                ? ' warning'
+                : '';
+        specificationImportElements.chip.textContent = chipLabel;
+        specificationImportElements.chip.className = `import-chip${chipTone}`;
+    }
+
+    const statusTone = specificationImportState.errors.length
+        ? 'error'
+        : specificationImportState.warnings.length
+            ? 'info'
+            : hasRows
+                ? 'success'
+                : 'info';
+
+    const statusMessage = specificationImportState.errors.length
+        ? specificationImportState.errors[0]
+        : specificationImportState.warnings.length
+            ? specificationImportState.warnings[0]
+            : hasRows
+                ? 'Looks good! Review the preview below and press Import when ready.'
+                : 'Choose a CSV (.csv) or JSON (.json) file to get started.';
+
+    setSpecificationImportStatus(statusMessage, statusTone);
+    refreshSpecificationImportControls();
+}
+
+function downloadSpecificationImportTemplate() {
+    const header = [
+        'Specification ID',
+        'Specification Name (Arabic)',
+        'Specification Name (English)',
+        'Description (Arabic)',
+        'Description (English)',
+        'Data Type',
+        'Required?',
+        'Category IDs',
+        'Category Labels',
+        'Sub-specifications',
+        'Status'
+    ];
+
+    const sampleRows = [
+        [
+            '',
+            'نقطة تجمع الإخلاء',
+            'Evacuation Assembly Point',
+            'حدد موقع نقطة التجمع في حال حدوث طارئ',
+            'Specify the designated assembly point during an emergency',
+            'Text',
+            'Yes',
+            'CAT-1001',
+            'Safety & Security',
+            'Location Pin; Signage Quality',
+            'Published'
+        ],
+        [
+            'SPEC-015',
+            'تكرار الصيانة',
+            'Maintenance Frequency',
+            'كم مرة تتم الصيانة الدورية؟',
+            'How often the routine maintenance occurs',
+            'Number',
+            'No',
+            'CAT-2005; CAT-3002',
+            'Equipment; Facilities',
+            'Quarterly Check',
+            'Draft'
+        ]
+    ];
+
+    const convertToCsv = rows => rows
+        .map(row => row
+            .map(cell => {
+                const text = cell == null ? '' : String(cell);
+                return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+            })
+            .join(','))
+        .join('\r\n');
+
+    const triggerDownload = (blob, filename) => {
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    };
+
+    const csvContent = convertToCsv([header, ...sampleRows]);
+    const csvBlob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    triggerDownload(csvBlob, 'Specification_Import_Template.csv');
+
+    const headerHtml = header.map(cell => `<th>${escapeHtml(cell)}</th>`).join('');
+    const rowsHtml = sampleRows
+        .map(row => `<tr>${row.map(cell => `<td>${escapeHtml(cell)}</td>`).join('')}</tr>`)
+        .join('');
+    const workbookHtml = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Specification Import Template</title><style>table{border-collapse:collapse;font-family:Arial,Helvetica,sans-serif;font-size:13px;}th,td{border:1px solid #d1d5db;padding:6px 10px;text-align:left;}th{background:#f1f5f9;font-weight:600;}</style></head><body><table><thead><tr>${headerHtml}</tr></thead><tbody>${rowsHtml}</tbody></table></body></html>`;
+
+    const xlsBlob = new Blob([workbookHtml], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+    triggerDownload(xlsBlob, 'Specification_Import_Template.xls');
+
+    setSpecificationImportStatus('Templates downloaded. CSV and Excel versions ready.', 'success');
+}
+
+async function handleSpecificationImportFile(file) {
+    if (specificationImportState.isSubmitting) {
+        return;
+    }
+    releaseSpecificationImportFileDialogGuard();
+
+    if (!file) {
+        resetSpecificationImportState();
+        setSpecificationImportStatus('No file selected yet.', 'info');
+        return;
+    }
+
+    const extension = (file.name || '').split('.').pop();
+    const normalizedExtension = extension ? extension.trim().toLowerCase() : '';
+
+    if (!SPECIFICATION_IMPORT_CONFIG.allowedExtensions.has(normalizedExtension)) {
+        resetSpecificationImportState();
+        setSpecificationImportStatus('Please upload a CSV (.csv) or JSON (.json) file.', 'error');
+        return;
+    }
+
+    if (file.size > SPECIFICATION_IMPORT_CONFIG.maxFileSizeBytes) {
+        resetSpecificationImportState();
+        setSpecificationImportStatus('File is too large. Limit is 5 MB.', 'error');
+        return;
+    }
+
+    specificationImportState.file = file;
+    specificationImportState.format = normalizedExtension === 'json' ? 'json' : 'csv';
+    setSpecificationImportStatus('Analyzing file...', 'info');
+
+    try {
+        const fileText = await file.text();
+        let header = [];
+        let rawRecords = [];
+
+        if (specificationImportState.format === 'json') {
+            const parsed = JSON.parse(fileText);
+            if (Array.isArray(parsed)) {
+                rawRecords = parsed;
+            } else if (parsed && Array.isArray(parsed.specifications)) {
+                rawRecords = parsed.specifications;
+            } else {
+                throw new Error('The JSON file must contain an array of specifications.');
+            }
+            header = deriveSpecificationImportHeader(rawRecords);
+        } else {
+            const parsed = parseSpecificationCsv(fileText);
+            header = parsed.header;
+            rawRecords = parsed.records;
+        }
+
+        if (!Array.isArray(rawRecords) || !rawRecords.length) {
+            resetSpecificationImportState();
+            setSpecificationImportStatus('No specification records found in the selected file.', 'error');
+            return;
+        }
+
+        const transformed = rawRecords.map(transformSpecificationImportRecord);
+        const normalized = transformed
+            .map((entry, index) => normalizeSpecificationPayload(entry, specifications.length + index))
+            .filter(Boolean);
+
+        const previewHeader = deriveSpecificationImportHeader(rawRecords, header);
+        const previewRows = buildSpecificationImportPreviewRows(previewHeader, rawRecords, SPECIFICATION_IMPORT_CONFIG.previewRowLimit);
+        const truncated = rawRecords.length > previewRows.length;
+
+        specificationImportState.rawRecords = rawRecords;
+        specificationImportState.header = previewHeader;
+        specificationImportState.rows = previewRows;
+        specificationImportState.records = normalized;
+        specificationImportState.totalRows = rawRecords.length;
+        specificationImportState.truncated = truncated;
+        specificationImportState.errors = [];
+        specificationImportState.warnings = [];
+        specificationImportState.rowMetadata = [];
+
+        if (!normalized.length) {
+            specificationImportState.errors.push('No valid specification entries could be parsed.');
+        } else if (normalized.length < rawRecords.length) {
+            specificationImportState.warnings.push('Some rows could not be normalized and will be skipped during import.');
+        }
+
+        renderSpecificationImportPreview();
+    } catch (error) {
+        console.error('Specification import preview failed:', error);
+        resetSpecificationImportState();
+        const message = error instanceof Error && error.message ? error.message : 'Unable to analyze the file.';
+        setSpecificationImportStatus(`Import preview failed: ${message}`, 'error');
+    } finally {
+        if (specificationImportElements.fileInput) {
+            specificationImportElements.fileInput.value = '';
+        }
+    }
+}
+
+function applySpecificationImportRecords(records) {
+    if (!Array.isArray(records) || !records.length) {
+        return { addedCount: 0, updatedCount: 0 };
+    }
+
+    const existingById = new Map(Array.isArray(specifications) ? specifications.map(spec => [spec.id, spec]) : []);
+    let addedCount = 0;
+    let updatedCount = 0;
+
+    records.forEach(specification => {
+        if (!specification || !specification.id) {
+            return;
+        }
+        const existing = existingById.get(specification.id);
+        if (existing) {
+            updatedCount += 1;
+            const mergedRecord = {
+                ...existing,
+                ...specification,
+                createdAt: existing.createdAt || specification.createdAt || new Date().toISOString(),
+                updatedAt: new Date().toISOString()
+            };
+            if (!mergedRecord.subSpecificationSummary) {
+                mergedRecord.subSpecificationSummary = formatSubSpecificationSummary(mergedRecord.subSpecifications);
+            }
+            existingById.set(mergedRecord.id, mergedRecord);
+        } else {
+            addedCount += 1;
+            const createdAt = specification.createdAt || new Date().toISOString();
+            const record = {
+                ...specification,
+                createdAt,
+                updatedAt: specification.updatedAt || createdAt
+            };
+            if (!record.subSpecificationSummary) {
+                record.subSpecificationSummary = formatSubSpecificationSummary(record.subSpecifications);
+            }
+            existingById.set(record.id, record);
+        }
+    });
+
+    specifications = Array.from(existingById.values());
+    saveSpecificationsToStorage();
+    renderSpecificationList();
+
+    return { addedCount, updatedCount };
+}
+
+function submitSpecificationImport() {
+    if (specificationImportState.isSubmitting) {
+        return;
+    }
+
+    if (!specificationImportState.file) {
+        setSpecificationImportStatus('Select a CSV or JSON file before importing.', 'error');
+        return;
+    }
+
+    if (!specificationImportState.records.length) {
+        setSpecificationImportStatus('No valid specification rows detected yet. Upload a populated file.', 'error');
+        return;
+    }
+
+    if (specificationImportState.errors.length) {
+        setSpecificationImportStatus(specificationImportState.errors[0], 'error');
+        return;
+    }
+
+    setSpecificationImportSubmitting(true);
+    setSpecificationImportStatus('Processing import...', 'info');
+
+    try {
+        const fileName = specificationImportState.file ? specificationImportState.file.name || 'your file' : 'your file';
+        const warningMessages = specificationImportState.warnings.slice();
+        const result = applySpecificationImportRecords(specificationImportState.records);
+
+        closeSpecificationImportOverlay();
+        setSpecificationImportSubmitting(false);
+
+        const summaryParts = [];
+        if (result.addedCount) {
+            summaryParts.push(`${result.addedCount} new ${result.addedCount === 1 ? 'specification' : 'specifications'}`);
+        }
+        if (result.updatedCount) {
+            summaryParts.push(`${result.updatedCount} updated ${result.updatedCount === 1 ? 'specification' : 'specifications'}`);
+        }
+
+        const summaryMessage = summaryParts.length
+            ? `Imported ${summaryParts.join(', ')} from ${fileName}.`
+            : `Import completed. No changes detected in ${fileName}.`;
+        const summaryTone = summaryParts.length ? 'success' : 'info';
+        showNotification(summaryTone, summaryMessage, 4600, 'specificationNotificationArea');
+
+        if (warningMessages.length) {
+            showNotification('info', warningMessages[0], 4600, 'specificationNotificationArea');
+        }
+    } catch (error) {
+        console.error('Specification import failed:', error);
+        setSpecificationImportStatus(`Import failed: ${error.message || 'Unexpected error.'}`, 'error');
+        showNotification('error', 'Import failed. Review the highlighted issues and try again.', 4600, 'specificationNotificationArea');
+        setSpecificationImportSubmitting(false);
+    }
+}
+
 function parseSpecificationCsv(rawText) {
     if (typeof rawText !== 'string') {
-        return [];
+        return { header: [], records: [] };
     }
     const lines = rawText
         .split(/\r?\n/)
         .map(line => line.trim())
         .filter(line => line.length);
     if (!lines.length) {
-        return [];
+        return { header: [], records: [] };
     }
     const headerCells = splitCsvLine(lines[0]).map(cell => cell.trim());
     if (!headerCells.length) {
-        return [];
+        return { header: [], records: [] };
     }
     const records = [];
     for (let lineIndex = 1; lineIndex < lines.length; lineIndex += 1) {
@@ -8564,7 +9901,7 @@ function parseSpecificationCsv(rawText) {
         });
         records.push(record);
     }
-    return records;
+    return { header: headerCells, records };
 }
 
 function transformSpecificationImportRecord(record) {
@@ -8691,107 +10028,6 @@ function transformSpecificationImportRecord(record) {
     }
 
     return output;
-}
-
-async function handleSpecificationImportFile(file) {
-    if (!file) {
-        showNotification('info', 'Import cancelled.', 3200, 'specificationNotificationArea');
-        return;
-    }
-
-    try {
-        const extension = (file.name || '').split('.').pop();
-        const normalizedExtension = extension ? extension.trim().toLowerCase() : '';
-        if (!SPECIFICATION_IMPORT_ALLOWED_EXTENSIONS.has(normalizedExtension)) {
-            showNotification('error', 'Unsupported file type. Please upload a CSV or JSON file.', 4200, 'specificationNotificationArea');
-            return;
-        }
-
-        const fileText = await file.text();
-        let rawRecords;
-
-        if (normalizedExtension === 'json') {
-            const parsed = JSON.parse(fileText);
-            if (Array.isArray(parsed)) {
-                rawRecords = parsed;
-            } else if (parsed && Array.isArray(parsed.specifications)) {
-                rawRecords = parsed.specifications;
-            } else {
-                throw new Error('The JSON file must contain an array of specifications.');
-            }
-        } else {
-            rawRecords = parseSpecificationCsv(fileText);
-        }
-
-        if (!Array.isArray(rawRecords) || !rawRecords.length) {
-            showNotification('error', 'No specification records found in the selected file.', 4200, 'specificationNotificationArea');
-            return;
-        }
-
-        const transformed = rawRecords.map(transformSpecificationImportRecord);
-        const normalized = transformed
-            .map((entry, index) => normalizeSpecificationPayload(entry, specifications.length + index))
-            .filter(Boolean);
-
-        if (!normalized.length) {
-            showNotification('error', 'No valid specification entries could be parsed.', 4200, 'specificationNotificationArea');
-            return;
-        }
-
-        const existingById = new Map(Array.isArray(specifications) ? specifications.map(spec => [spec.id, spec]) : []);
-        let addedCount = 0;
-        let updatedCount = 0;
-
-        normalized.forEach(specification => {
-            if (!specification || !specification.id) {
-                return;
-            }
-            const existing = existingById.get(specification.id);
-            if (existing) {
-                updatedCount += 1;
-                const mergedRecord = {
-                    ...existing,
-                    ...specification,
-                    createdAt: existing.createdAt || specification.createdAt || new Date().toISOString(),
-                    updatedAt: new Date().toISOString()
-                };
-                if (!mergedRecord.subSpecificationSummary) {
-                    mergedRecord.subSpecificationSummary = formatSubSpecificationSummary(mergedRecord.subSpecifications);
-                }
-                existingById.set(mergedRecord.id, mergedRecord);
-            } else {
-                addedCount += 1;
-                const createdAt = specification.createdAt || new Date().toISOString();
-                const record = {
-                    ...specification,
-                    createdAt,
-                    updatedAt: specification.updatedAt || createdAt
-                };
-                if (!record.subSpecificationSummary) {
-                    record.subSpecificationSummary = formatSubSpecificationSummary(record.subSpecifications);
-                }
-                existingById.set(record.id, record);
-            }
-        });
-
-        specifications = Array.from(existingById.values());
-        saveSpecificationsToStorage();
-        renderSpecificationList();
-
-        const summaryParts = [];
-        if (addedCount) {
-            summaryParts.push(`${addedCount} added`);
-        }
-        if (updatedCount) {
-            summaryParts.push(`${updatedCount} updated`);
-        }
-        const summary = summaryParts.length ? summaryParts.join(', ') : 'No changes detected';
-        const tone = addedCount || updatedCount ? 'success' : 'info';
-        showNotification(tone, `Specification import complete: ${summary}.`, 5200, 'specificationNotificationArea');
-    } catch (error) {
-        console.error('Specification import failed:', error);
-        showNotification('error', `Import failed: ${error.message || 'Unexpected error.'}`, 5200, 'specificationNotificationArea');
-    }
 }
 
 function exportSpecificationView() {
@@ -10223,12 +11459,17 @@ function applyCategoryImportLocally(parsed, validation) {
     const skippedRows = [];
     const warningMessages = [...inferredWarnings];
 
-    const actorName = state.activeSession && state.activeSession.user
-        ? (state.activeSession.user.name
-            || [state.activeSession.user.firstName, state.activeSession.user.lastName].filter(Boolean).join(' ')
-            || state.activeSession.user.email
+    const sessionUser = state.activeSession && state.activeSession.user ? state.activeSession.user : null;
+    const actorName = sessionUser
+        ? (sessionUser.name
+            || [sessionUser.firstName, sessionUser.lastName].filter(Boolean).join(' ')
+            || sessionUser.email
             || 'Central Admin')
         : 'Central Admin';
+    const actorEmail = sessionUser && typeof sessionUser.email === 'string'
+        ? sessionUser.email.trim()
+        : '';
+    const actorId = sessionUser && Number.isInteger(sessionUser.id) ? sessionUser.id : null;
 
     rows.forEach((cells, rowIndex) => {
         const meta = rowMetadata[rowIndex] || { issues: [], severity: 'ok' };
@@ -10306,6 +11547,8 @@ function applyCategoryImportLocally(parsed, validation) {
             parent: parentLabel,
             createdAt: new Date().toISOString(),
             createdBy: actorName,
+            createdById: actorId,
+            createdByEmail: actorEmail,
             createdMethod: 'Import'
         };
 
@@ -11767,18 +13010,27 @@ async function handleCategoryFormSubmit(event) {
             }
         }
         const generatedCode = generateSequentialCategoryCode(categoryData.parentCategoryId, categoryData.parent, categories);
-        const activeUserName = state.activeSession && state.activeSession.user
-            ? (state.activeSession.user.name
-                || [state.activeSession.user.firstName, state.activeSession.user.lastName].filter(Boolean).join(' ')
-                || state.activeSession.user.email
+        const sessionUser = state.activeSession && state.activeSession.user ? state.activeSession.user : null;
+        const activeUserName = sessionUser
+            ? (sessionUser.name
+                || [sessionUser.firstName, sessionUser.lastName].filter(Boolean).join(' ')
+                || sessionUser.email
                 || 'Central Admin')
             : 'Central Admin';
+        const activeUserEmail = sessionUser && typeof sessionUser.email === 'string'
+            ? sessionUser.email.trim()
+            : '';
+        const activeUserId = sessionUser && Number.isInteger(sessionUser.id)
+            ? sessionUser.id
+            : null;
         const categoryRecord = normalizeCategoryPayload({
             id: generateCategoryId(),
             ...categoryData,
             categoryCode: generatedCode || generateTopLevelCategoryCode(categories),
             createdAt: new Date().toISOString(),
             createdBy: activeUserName,
+            createdById: activeUserId,
+            createdByEmail: activeUserEmail,
             createdMethod: 'Manual',
             imageDataUrl,
             imageName
@@ -11959,16 +13211,22 @@ function renderRolesTable(page = state.currentRolePage) {
 
     if (!visibleRoles.length) {
         tbody.innerHTML = state.roleSearchTerm
-            ? '<tr><td colspan="7">There is no Data Available</td></tr>'
-            : '<tr><td colspan="7">There is no Data Available</td></tr>';
+            ? '<tr><td colspan="9">There is no Data Available</td></tr>'
+            : '<tr><td colspan="9">There is no Data Available</td></tr>';
     } else {
         let index = (state.currentRolePage - 1) * state.rolesPerPage + 1;
         tbody.innerHTML = visibleRoles.map(role => {
             const permissionCount = Array.isArray(role.permissions) ? role.permissions.length : 0;
             const userCount = updateRoleUserCount(role);
+            const userCountLabel = `${userCount} ${userCount === 1 ? 'user' : 'users'}`;
             const rawDescription = role.description && role.description.trim() ? role.description.trim() : '—';
             const descriptionTitleAttr = rawDescription !== '—' ? ` title="${escapeAttribute(rawDescription)}"` : '';
             const lastUpdatedLabel = formatRoleLastUpdatedLabel(role.lastUpdated);
+            const createdLabel = formatRoleCreatedLabel(role.createdAt || role.created);
+            const createdDisplay = createdLabel ? escapeHtml(createdLabel) : '—';
+            const creatorInfo = resolveRoleCreator(role);
+            const creatorNameMarkup = creatorInfo.label ? `<div class="role-meta">${escapeHtml(creatorInfo.label)}</div>` : '';
+            const creatorEmailMarkup = creatorInfo.email ? `<div class="role-meta">${escapeHtml(creatorInfo.email)}</div>` : '';
             return `
             <tr>
                 <td>${index++}</td>
@@ -11982,17 +13240,31 @@ function renderRolesTable(page = state.currentRolePage) {
                 <td class="role-description-cell">
                     <div class="role-description-text"${descriptionTitleAttr}>${rawDescription}</div>
                 </td>
-                <td>${userCount}</td>
+                <td>
+                    <div class="role-users-cell">
+                        <span class="role-user-count">${escapeHtml(userCountLabel)}</span>
+                        <button class="action-btn view" data-action="view-users" data-role="${escapeAttribute(role.id)}" title="${escapeAttribute('View users assigned to this role')}">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </div>
+                </td>
                 <td>
                     <div class="permission-cell">
                         <span class="permission-count">${permissionCount} ${permissionCount === 1 ? 'app' : 'apps'}</span>
-                        <button class="action-btn view" data-action="view" data-role="${role.id}" title="View permissions">
+                        <button class="action-btn view" data-action="view" data-role="${escapeAttribute(role.id)}" title="View permissions">
                             <i class="fas fa-eye"></i>
                         </button>
                     </div>
                 </td>
                 <td>
                     <span class="status-badge status-${role.status}">${role.status === 'active' ? 'Active' : 'Inactive'}</span>
+                </td>
+                <td>
+                    <div>
+                        <div>${createdDisplay}</div>
+                        ${creatorNameMarkup}
+                        ${creatorEmailMarkup}
+                    </div>
                 </td>
                 <td>
                     <div class="action-group">
@@ -12318,11 +13590,87 @@ function resolveUserCreator(user) {
 
     const creatorName = resolveUserDisplayName(creatorRecord);
     const creatorEmail = typeof creatorRecord.email === 'string' ? creatorRecord.email.trim() : '';
-    const activeSessionId = getActiveSessionUserId();
-    const suffix = activeSessionId === creatorId ? ' (You)' : '';
+    return {
+        label: creatorName,
+        email: creatorEmail
+    };
+}
+
+function resolveRoleCreator(role) {
+    if (!role || typeof role !== 'object') {
+        return { id: null, label: '', email: '' };
+    }
+
+    const idCandidates = [
+        role.createdById,
+        role.createdBy,
+        role.createdByUserId,
+        role.creatorId,
+        role.ownerId
+    ];
+
+    let creatorId = null;
+    for (const candidate of idCandidates) {
+        const parsed = parseCreatorIdCandidate(candidate);
+        if (Number.isInteger(parsed)) {
+            creatorId = parsed;
+            break;
+        }
+    }
+
+    const stringCandidates = [
+        role.createdByLabel,
+        role.createdByName,
+        role.createdBy,
+        role.creatorName,
+        role.creator,
+        role.ownerName,
+        role.owner
+    ];
+
+    let creatorLabel = '';
+    for (const candidate of stringCandidates) {
+        if (typeof candidate !== 'string') {
+            continue;
+        }
+        const trimmed = candidate.trim();
+        if (!trimmed || /^\d+$/.test(trimmed)) {
+            continue;
+        }
+        creatorLabel = trimmed;
+        break;
+    }
+
+    let creatorEmail = typeof role.createdByEmail === 'string' ? role.createdByEmail.trim() : '';
+
+    if (Number.isInteger(creatorId)) {
+        const creatorRecord = Array.isArray(users) ? users.find(entry => entry && entry.id === creatorId) : null;
+        if (creatorRecord) {
+            if (!creatorLabel) {
+                creatorLabel = resolveUserDisplayName(creatorRecord);
+            }
+            if (!creatorEmail && typeof creatorRecord.email === 'string') {
+                creatorEmail = creatorRecord.email.trim();
+            }
+        } else if (!creatorLabel) {
+            creatorLabel = `User #${creatorId}`;
+        }
+    }
+
+    if (!creatorEmail && typeof role.createdByContact === 'string') {
+        const trimmed = role.createdByContact.trim();
+        if (trimmed.includes('@')) {
+            creatorEmail = trimmed;
+        }
+    }
+
+    if (!creatorLabel && !creatorEmail) {
+        return { id: Number.isInteger(creatorId) ? creatorId : null, label: '', email: '' };
+    }
 
     return {
-        label: `${creatorName}${suffix}`,
+        id: Number.isInteger(creatorId) ? creatorId : null,
+        label: creatorLabel,
         email: creatorEmail
     };
 }
@@ -13185,7 +14533,64 @@ function buildRolePermissionsTableHtml(permissions, options = {}) {
     `;
 }
 
-function showRoleDetailForRole(role) {
+function buildRoleUsersTableHtml(userList) {
+    const records = Array.isArray(userList) ? userList.filter(Boolean) : [];
+    const rows = records.map((user, index) => {
+        const displayName = resolveUserDisplayName(user) || '—';
+        const email = typeof user.email === 'string' && user.email.trim() ? user.email.trim() : '—';
+        const normalizedStatus = typeof user.status === 'string' ? user.status.trim().toLowerCase() : '';
+        let statusLabel = 'Inactive';
+        let statusClass = 'inactive';
+        if (normalizedStatus === 'active') {
+            statusLabel = 'Active';
+            statusClass = 'active';
+        } else if (normalizedStatus === 'pending') {
+            statusLabel = 'Pending';
+            statusClass = 'pending';
+        } else if (normalizedStatus === 'inactive') {
+            statusLabel = 'Inactive';
+        } else if (normalizedStatus) {
+            statusLabel = formatNameToken(normalizedStatus) || normalizedStatus;
+        }
+
+        return `
+            <tr>
+                <td>${index + 1}</td>
+                <td>${escapeHtml(displayName)}</td>
+                <td>${escapeHtml(email)}</td>
+                <td><span class="status-badge status-${statusClass}">${escapeHtml(statusLabel)}</span></td>
+            </tr>
+        `;
+    }).join('');
+
+    const hasRows = Boolean(rows && rows.trim());
+    const bodyContent = hasRows
+        ? rows
+        : `
+            <tr>
+                <td colspan="4" class="role-detail-empty">No users assigned yet.</td>
+            </tr>
+        `;
+
+    return `
+        <table class="role-detail-users">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Name</th>
+                    <th>Email</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${bodyContent}
+            </tbody>
+        </table>
+    `;
+}
+
+function showRoleDetailForRole(role, mode = 'permissions') {
+    const resolvedMode = mode === 'users' ? 'users' : 'permissions';
     const overlay = document.getElementById('roleDetailOverlay');
     const titleEl = document.getElementById('roleDetailTitle');
     const subtitleEl = document.getElementById('roleDetailSubtitle');
@@ -13195,34 +14600,47 @@ function showRoleDetailForRole(role) {
 
     const wasHidden = overlay.classList.contains('hidden');
     state.activeRoleDetailId = role.id;
+    state.activeRoleDetailMode = resolvedMode;
     overlay.classList.remove('hidden');
 
     const primaryName = role.name || role.nameEnglish || 'Role Permissions';
     titleEl.textContent = primaryName;
 
-    subtitleEl.textContent = '';
+    const subtitle = resolvedMode === 'users'
+        ? 'Users assigned to this role.'
+        : 'Applications this role can access.';
+    subtitleEl.textContent = subtitle;
 
-    const permissions = Array.isArray(role.permissions) ? role.permissions : [];
-    const tableHtml = buildRolePermissionsTableHtml(permissions);
-
-    contentEl.innerHTML = `
-        <div class="role-permissions-table-wrapper">
-            ${tableHtml}
-        </div>
-    `;
+    if (resolvedMode === 'users') {
+        const assignedUsers = getUsersAssignedToRole(role);
+        const tableHtml = buildRoleUsersTableHtml(assignedUsers);
+        contentEl.innerHTML = `
+            <div class="role-users-table-wrapper">
+                ${tableHtml}
+            </div>
+        `;
+    } else {
+        const permissions = Array.isArray(role.permissions) ? role.permissions : [];
+        const tableHtml = buildRolePermissionsTableHtml(permissions);
+        contentEl.innerHTML = `
+            <div class="role-permissions-table-wrapper">
+                ${tableHtml}
+            </div>
+        `;
+    }
 
     if (wasHidden && closeBtn) {
         closeBtn.focus();
     }
 }
 
-function showRoleDetails(roleId) {
+function showRoleDetails(roleId, mode = 'permissions') {
     const role = roles.find(item => item.id === roleId);
     if (!role) {
         hideRoleDetails();
         return;
     }
-    showRoleDetailForRole(role);
+    showRoleDetailForRole(role, mode);
 }
 
 function hideRoleDetails() {
@@ -13233,10 +14651,11 @@ function hideRoleDetails() {
     if (!overlay || !contentEl || !titleEl || !subtitleEl) return;
 
     state.activeRoleDetailId = null;
+    state.activeRoleDetailMode = 'permissions';
     overlay.classList.add('hidden');
     titleEl.textContent = 'Role Permissions';
     subtitleEl.textContent = 'Review permission coverage and metadata for this role.';
-    contentEl.innerHTML = '<p class="role-detail-placeholder">Use the eye icon in the roles table to inspect a role&rsquo;s permissions here.</p>';
+    contentEl.innerHTML = '<p class="role-detail-placeholder">Use the eye icons in the roles table to inspect permissions or assigned users here.</p>';
 }
 
 function refreshRoleDetailPanel() {
@@ -13248,7 +14667,8 @@ function refreshRoleDetailPanel() {
         hideRoleDetails();
         return;
     }
-    showRoleDetailForRole(role);
+    const mode = state.activeRoleDetailMode || 'permissions';
+    showRoleDetailForRole(role, mode);
 }
 
 let categoryConfirmResolver = null;
@@ -13865,6 +15285,120 @@ function formatDateForDisplay(value, { includeTime = false } = {}) {
         minute: '2-digit'
     });
     return `${datePart} ${timePart}`;
+}
+
+function formatRoleCreatedLabel(value) {
+    if (!value && value !== 0) {
+        return '';
+    }
+    if (typeof value === 'string') {
+        const trimmed = value.trim();
+        if (!trimmed) {
+            return '';
+        }
+        const match = trimmed.match(/^(?:Created|Updated)\s+(.+)$/i);
+        if (match) {
+            const formatted = formatDateForDisplay(match[1], { includeTime: true });
+            return formatted || trimmed;
+        }
+        const formattedString = formatDateForDisplay(trimmed, { includeTime: true });
+        if (formattedString) {
+            return formattedString;
+        }
+        return trimmed;
+    }
+
+    const formatted = formatDateForDisplay(value, { includeTime: true });
+    if (formatted) {
+        return formatted;
+    }
+
+    if (value instanceof Date && Number.isFinite(value.getTime())) {
+        return formatDateForDisplay(value.toISOString(), { includeTime: true });
+    }
+
+    return '';
+}
+
+const USER_ACTIVITY_PREFIXES = {
+    created: 'Created',
+    updated: 'Updated',
+    activated: 'Activated',
+    deactivated: 'Deactivated',
+    reactivated: 'Reactivated',
+    'invitation sent': 'Invitation Sent',
+    'invitation resent': 'Invitation Resent',
+    'invitation prepared': 'Invitation Prepared',
+    'invitation failed': 'Invitation Failed',
+    'invitation refreshed': 'Invitation Refreshed',
+    'invitation revoked': 'Invitation Revoked',
+    'password updated': 'Password Updated',
+    'password reset': 'Password Reset',
+    'password changed': 'Password Updated'
+};
+
+function normalizeUserActivityPrefix(prefix) {
+    if (!prefix && prefix !== 0) {
+        return '';
+    }
+    const raw = String(prefix).trim();
+    if (!raw) {
+        return '';
+    }
+    const mapped = USER_ACTIVITY_PREFIXES[raw.toLowerCase()];
+    if (mapped) {
+        return mapped;
+    }
+    return raw
+        .split(' ')
+        .filter(Boolean)
+        .map(part => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+        .join(' ');
+}
+
+function buildUserActivityLabel(prefix, timestamp = new Date()) {
+    const normalizedPrefix = normalizeUserActivityPrefix(prefix);
+    const formatted = formatDateForDisplay(timestamp, { includeTime: true });
+    if (normalizedPrefix && formatted) {
+        return `${normalizedPrefix} ${formatted}`;
+    }
+    if (normalizedPrefix) {
+        return normalizedPrefix;
+    }
+    return formatted || '';
+}
+
+function formatUserActivityLabel(value) {
+    if (value === null || value === undefined) {
+        return '';
+    }
+    const trimmed = String(value).trim();
+    if (!trimmed) {
+        return '';
+    }
+    const prefixMatch = trimmed.match(/^([A-Za-z\s]+?)\s+(\S.+)$/);
+    if (prefixMatch) {
+        const prefix = normalizeUserActivityPrefix(prefixMatch[1]);
+        const remainder = prefixMatch[2];
+        const formatted = formatDateForDisplay(remainder, { includeTime: true });
+        if (formatted) {
+            return prefix ? `${prefix} ${formatted}` : formatted;
+        }
+        return prefix ? `${prefix} ${remainder}` : remainder;
+    }
+    const formatted = formatDateForDisplay(trimmed, { includeTime: true });
+    return formatted || trimmed;
+}
+
+function updateUserLastEvent(user, prefix, timestamp = new Date()) {
+    if (!user) {
+        return '';
+    }
+    const label = buildUserActivityLabel(prefix, timestamp);
+    if (label) {
+        user.lastEvent = label;
+    }
+    return label;
 }
 
 function buildRoleStatusLabel(prefix, timestamp = new Date()) {
@@ -14737,6 +16271,9 @@ async function handleUserFormSubmit(event) {
             user.passwordUpdatedAt = updatedAt;
         }
 
+        const lastEventPrefix = draft.password ? 'Password Updated' : 'Updated';
+        updateUserLastEvent(user, lastEventPrefix);
+
         let invitationResult = null;
         if (isPendingStatus) {
             invitationResult = await regenerateUserInvitation(user, {
@@ -14826,7 +16363,8 @@ async function handleUserFormSubmit(event) {
         permissionSummary,
         expiresOn,
         photoFileName: draft.photoFileName || '',
-        photoDataUrl: draft.photoDataUrl || ''
+        photoDataUrl: draft.photoDataUrl || '',
+        lastEvent: buildUserActivityLabel('Created', createdIso)
     };
 
     users.unshift(newUser);
@@ -14859,12 +16397,18 @@ async function handleUserFormSubmit(event) {
     });
 
     if (emailResult.status === 'sent') {
+        updateUserLastEvent(newUser, 'Invitation Sent');
         showNotification('success', `Invitation email sent to ${draft.email}. The user is now pending activation.`, 6000);
     } else if (emailResult.status === 'skipped') {
+        updateUserLastEvent(newUser, 'Invitation Prepared');
         showNotification('info', `Invitation prepared for ${draft.email}, but no email service is configured. Share the link manually from the registration flow.`, 7000);
     } else {
+        updateUserLastEvent(newUser, 'Invitation Failed');
         showNotification('success', 'User account created. The invitation link has been sent successfully.', 6000);
     }
+
+    saveUsersToStorage();
+    renderUsersTable(state.userSearchTerm, state.currentUserPage);
 
     hideUserForm();
 }
@@ -15576,6 +17120,7 @@ async function toggleUserStatus(userId) {
         );
         if (!confirmed) return;
         user.status = 'Inactive';
+        updateUserLastEvent(user, 'Deactivated');
         saveUsersToStorage();
         renderUsersTable(activeSearch, state.currentUserPage);
         renderStats();
@@ -15588,6 +17133,7 @@ async function toggleUserStatus(userId) {
         );
         if (!confirmed) return;
         user.status = 'Active';
+        updateUserLastEvent(user, 'Reactivated');
         saveUsersToStorage();
         renderUsersTable(activeSearch, state.currentUserPage);
         renderStats();
@@ -15622,6 +17168,8 @@ function deactivateUserInvitationLink(user) {
     user.invitation.otp = null;
     user.invitation.expiresAt = nowIso;
     user.invitation.lastOtpSentAt = null;
+
+    updateUserLastEvent(user, 'Invitation Revoked', nowIso);
 }
 
 function finalizeUserRemoval(user, successMessage, options = {}) {
@@ -15758,7 +17306,11 @@ async function handleUserDelete(userId) {
 }
 
 function viewRole(roleId) {
-    showRoleDetails(roleId);
+    showRoleDetails(roleId, 'permissions');
+}
+
+function viewRoleUsers(roleId) {
+    showRoleDetails(roleId, 'users');
 }
 
 function editRole(roleId) {
@@ -15858,6 +17410,12 @@ function handleRoleSubmit(event) {
         return;
     }
 
+    const creatorUser = getActiveSessionUser();
+    const creatorId = getActiveSessionUserId();
+    const createdIso = new Date().toISOString();
+    const creatorLabel = creatorUser ? resolveUserDisplayName(creatorUser) : '';
+    const creatorEmail = creatorUser && typeof creatorUser.email === 'string' ? creatorUser.email.trim() : '';
+
     // Add new role with provided ID
     const newRole = {
         id: idValue,
@@ -15868,7 +17426,11 @@ function handleRoleSubmit(event) {
         users: 0,
         permissions,
         status: 'active',
-        lastUpdated: buildRoleStatusLabel('Created')
+        createdAt: createdIso,
+        createdById: Number.isInteger(creatorId) ? creatorId : null,
+        createdBy: creatorLabel,
+        createdByEmail: creatorEmail,
+        lastUpdated: buildRoleStatusLabel('Created', createdIso)
     };
 
     roles.unshift(newRole);
@@ -15954,6 +17516,8 @@ function renderUsersTable(searchTerm = state.userSearchTerm, page = state.curren
             const createdDetailsMarkup = `<div class="created-cell"><div class="created-date">${createdDisplay}</div>${creatorMarkup}</div>`;
             const fallbackInitialMatch = typeof displayName === 'string' ? displayName.match(/[A-Za-z0-9]/) : null;
             const fallbackInitial = fallbackInitialMatch ? fallbackInitialMatch[0].toUpperCase() : '';
+            const lastEventLabel = formatUserActivityLabel(user.lastEvent || user.lastAction || '');
+            const lastEventMarkup = lastEventLabel ? `<div class="user-meta">${escapeHtml(lastEventLabel)}</div>` : '';
             const actionButtons = [];
 
             actionButtons.push(`<button class="action-btn edit" onclick="showUserForm('edit', ${user.id})" title="Edit user"><i class="fas fa-pen"></i></button>`);
@@ -15991,6 +17555,7 @@ function renderUsersTable(searchTerm = state.userSearchTerm, page = state.curren
                                 <div class="user-meta">${user.email}</div>
                                 <div class="user-meta">${phoneDisplay}</div>
                                 <div class="user-meta">ID: ${employeeIdDisplay}</div>
+                                ${lastEventMarkup}
                             </div>
                         </div>
                     </td>

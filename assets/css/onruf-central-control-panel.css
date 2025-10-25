@@ -2347,6 +2347,17 @@ body.dark-mode .user-avatar {
     color: var(--muted-light);
 }
 
+.role-users-cell {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.role-user-count {
+    font-size: 12px;
+    color: var(--muted-light);
+}
+
 .spec-subspec-cell,
 .spec-category-cell {
     display: inline-flex;
@@ -2496,6 +2507,7 @@ body.dark-mode .spec-detail-modal .modal-close-btn {
 }
 
 .role-detail-permissions,
+.role-detail-users,
 .spec-subspec-table {
     width: 100%;
     border-collapse: collapse;
@@ -2505,17 +2517,21 @@ body.dark-mode .spec-detail-modal .modal-close-btn {
 }
 
 .role-detail-permissions thead,
+.role-detail-users thead,
 .spec-subspec-table thead {
     background: rgba(15, 23, 42, 0.04);
 }
 
 body.dark-mode .role-detail-permissions thead,
+body.dark-mode .role-detail-users thead,
 body.dark-mode .spec-subspec-table thead {
     background: rgba(148, 163, 184, 0.12);
 }
 
 .role-detail-permissions th,
 .role-detail-permissions td,
+.role-detail-users th,
+.role-detail-users td,
 .spec-subspec-table th,
 .spec-subspec-table td {
     padding: 12px 16px;
@@ -2524,6 +2540,7 @@ body.dark-mode .spec-subspec-table thead {
 }
 
 .role-detail-permissions th,
+.role-detail-users th,
 .spec-subspec-table th {
     text-transform: uppercase;
     letter-spacing: 0.06em;
@@ -2532,16 +2549,19 @@ body.dark-mode .spec-subspec-table thead {
 }
 
 body.dark-mode .role-detail-permissions th,
+body.dark-mode .role-detail-users th,
 body.dark-mode .spec-subspec-table th {
     color: var(--muted-dark);
 }
 
 .role-detail-permissions tbody tr + tr,
+.role-detail-users tbody tr + tr,
 .spec-subspec-table tbody tr + tr {
     border-top: 1px solid var(--border-light);
 }
 
 body.dark-mode .role-detail-permissions tbody tr + tr,
+body.dark-mode .role-detail-users tbody tr + tr,
 body.dark-mode .spec-subspec-table tbody tr + tr {
     border-top-color: var(--border-dark);
 }
@@ -2586,12 +2606,14 @@ body.dark-mode .role-detail-permissions tbody tr.legacy-permission-row td {
 }
 
 .role-permissions-table-wrapper,
+.role-users-table-wrapper,
 .spec-subspec-table-wrapper {
     width: 100%;
     overflow-x: auto;
 }
 
 .role-permissions-table-wrapper table,
+.role-users-table-wrapper table,
 .spec-subspec-table-wrapper table {
     min-width: 100%;
 }
@@ -5321,10 +5343,8 @@ body.dark-mode .category-grid-row.is-selected {
     justify-content: space-between;
     width: 100%;
     border: 1px solid rgba(148, 163, 184, 0.28);
-    background: #f9fafb;
     color: #1f2937;
     border-radius: 12px;
-    padding: 10px 14px;
     cursor: pointer;
     transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
     text-align: left;
@@ -5344,23 +5364,49 @@ body.dark-mode .category-grid-row.is-selected {
 
 .category-picker-label {
     display: flex;
-    flex-direction: column;
-    gap: 4px;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
 }
 
 .category-picker-name {
     font-weight: 600;
     font-size: 14px;
     color: inherit;
+    flex: 1;
+    min-width: 0;
+    text-align: left;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .category-picker-code {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2px 10px;
+    border-radius: 999px;
+    background:rgba(37, 99, 235, 0.08);
     font-size: 12px;
-    color: #4b5563;
+    font-weight: 600;
+    color: var(--primary);
+    white-space: nowrap;
 }
 
 .category-picker-item.is-selected .category-picker-code {
-    color: rgba(17, 24, 39, 0.72);
+    background: rgba(37, 99, 235, 0.08);
+    color: var(--primary);
+}
+
+body.dark-mode .category-picker-code {
+    background: rgba(148, 163, 184, 0.2);
+    color: #f8fafc;
+}
+
+body.dark-mode .category-picker-item.is-selected .category-picker-code {
+    background: rgba(96, 165, 250, 0.32);
+    color: #0f172a;
 }
 
 .category-picker-meta {
@@ -5385,6 +5431,133 @@ body.dark-mode .category-picker-item.is-selected {
     background: linear-gradient(90deg, rgba(30, 64, 175, 0.52), rgba(30, 64, 175, 0.28));
     border-color: rgba(147, 197, 253, 0.75);
     box-shadow: 0 12px 32px rgba(15, 23, 42, 0.65);
+}
+
+.spec-categories-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 32px 24px;
+    background: rgba(15, 23, 42, 0.35);
+    backdrop-filter: blur(3px);
+}
+
+body.dark-mode .spec-categories-modal {
+    background: rgba(9, 14, 23, 0.62);
+}
+
+.spec-categories-dialog {
+    background: #ffffff;
+    border-radius: 18px;
+    padding: 32px 36px;
+    width: min(680px, 96vw);
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    box-shadow: 0 28px 64px rgba(15, 23, 42, 0.18);
+    overflow: hidden;
+}
+
+body.dark-mode .spec-categories-dialog {
+    background: rgba(15, 23, 42, 0.96);
+    color: #f9fafb;
+    box-shadow: 0 28px 72px rgba(2, 6, 23, 0.72);
+}
+
+.spec-categories-header {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.spec-categories-title {
+    margin: 0;
+    font-size: 22px;
+    font-weight: 700;
+    color: #1f2937;
+}
+
+body.dark-mode .spec-categories-title {
+    color: #f3f4f6;
+}
+
+.spec-categories-subtitle {
+    margin: 0;
+    font-size: 14px;
+    color: #4b5563;
+}
+
+body.dark-mode .spec-categories-subtitle {
+    color: #cbd5f5;
+}
+
+.spec-categories-body {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.spec-categories-search {
+    position: relative;
+}
+
+.spec-categories-search-icon {
+    position: absolute;
+    top: 50%;
+    left: 14px;
+    transform: translateY(-50%);
+    color: #9ca3af;
+    font-size: 14px;
+    pointer-events: none;
+}
+
+body.dark-mode .spec-categories-search-icon {
+    color: #94a3b8;
+}
+
+.spec-categories-search-input {
+    width: 100%;
+    padding-left: 40px;
+    height: 44px;
+    border-radius: 12px;
+}
+
+.spec-categories-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-height: 320px;
+    overflow: auto;
+    padding-right: 6px;
+}
+
+.spec-categories-list::-webkit-scrollbar {
+    width: 8px;
+}
+
+.spec-categories-list::-webkit-scrollbar-thumb {
+    background: rgba(148, 163, 184, 0.4);
+    border-radius: 999px;
+}
+
+.spec-categories-summary {
+    font-size: 13px;
+    color: #4b5563;
+}
+
+body.dark-mode .spec-categories-summary {
+    color: #e2e8f0;
+}
+
+.spec-categories-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    margin-top: auto;
 }
 
 .grid-cell {

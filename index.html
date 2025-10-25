@@ -279,6 +279,7 @@
                                             <th>Users</th>
                                             <th>Permissions</th>
                                             <th>Status</th>
+                                            <th>Created</th>
                                             <th>Actions</th>
                                         </tr>
                                     </thead>
@@ -816,6 +817,7 @@
                                 <header>
                                     <div>
                                         <h3 id="categorySpecificationTitle">Category Specifications</h3>
+                                        <p id="categorySpecificationSubtitle" class="section-subtitle" style="margin:6px 0 0;">Specifications assigned to this category.</p>
                                     </div>
                                     <button type="button" class="modal-close-btn" id="categorySpecificationCloseBtn" aria-label="Close category specification details">
                                         <i class="fas fa-xmark"></i>
@@ -1161,7 +1163,6 @@
                                     <i class="fas fa-trash"></i>
                                     Delete All
                                 </button>
-                                <input type="file" id="specificationImportFileInput" accept=".csv,.json" hidden />
                             </div>
                             <div class="table-shell">
                                 <table>
@@ -1181,6 +1182,59 @@
                                     </thead>
                                     <tbody id="specificationsTableBody"></tbody>
                                 </table>
+                            </div>
+                        </div>
+
+                        <div id="specificationImportOverlay" class="confirm-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="specificationImportTitle" aria-hidden="true">
+                            <div class="confirm-dialog import-dialog" role="document">
+                                <header class="import-dialog-header">
+                                    <div>
+                                        <h3 id="specificationImportTitle">Import Specifications</h3>
+                                        <p id="specificationImportSubtitle" class="import-dialog-subtitle">Upload a CSV (.csv) or JSON (.json) file to add new specifications or refresh existing ones in bulk.</p>
+                                    </div>
+                                </header>
+                                <div class="import-body">
+                                    <input type="file" id="specificationImportFileInput" accept=".csv,.json" hidden />
+                                    <div class="import-dropzone" id="specificationImportDropzone" tabindex="0" role="button" aria-describedby="specificationImportHelp">
+                                        <i class="fas fa-cloud-arrow-up import-drop-icon" aria-hidden="true"></i>
+                                        <div class="import-drop-primary">Drag &amp; drop your file</div>
+                                        <div class="import-drop-secondary">or <button type="button" class="btn btn-secondary btn-compact" id="specificationImportBrowseBtn">Browse files</button></div>
+                                        <p class="import-drop-hint" id="specificationImportHelp">
+                                            Supports CSV (.csv) or JSON (.json)<br />
+                                            Max 5&nbsp;MB<br />
+                                            Suggested fields: Specification Name (Arabic), Specification Name (English)
+                                        </p>
+                                    </div>
+                                    <button type="button" class="btn btn-ghost import-template-btn" id="specificationImportTemplateBtn">
+                                        <i class="fas fa-file-circle-plus"></i>
+                                        Download starter template
+                                    </button>
+                                    <div class="import-tips" aria-label="Import tips">
+                                        <h4>Import tips</h4>
+                                        <ul>
+                                            <li>Include an existing Specification ID to update that record automatically.</li>
+                                            <li>Separate multiple categories or sub-specifications with commas or semicolons.</li>
+                                        </ul>
+                                    </div>
+                                    <div class="import-status" id="specificationImportStatus" role="status" aria-live="polite"></div>
+                                    <div class="import-preview hidden" id="specificationImportPreview">
+                                        <div class="import-preview-header">
+                                            <span class="import-file-name" id="specificationImportFileName"></span>
+                                            <span class="import-chip" id="specificationImportChip"></span>
+                                        </div>
+                                        <div class="import-preview-table" id="specificationImportPreviewTable"></div>
+                                    </div>
+                                </div>
+                                <footer class="import-footer">
+                                    <button type="button" class="btn btn-outline" id="specificationImportCancelBtn">
+                                        <i class="fas fa-arrow-left"></i>
+                                        Cancel
+                                    </button>
+                                    <button type="button" class="btn btn-primary" id="specificationImportSubmitBtn" disabled>
+                                        <i class="fas fa-file-arrow-up"></i>
+                                        <span id="specificationImportSubmitLabel">Import</span>
+                                    </button>
+                                </footer>
                             </div>
                         </div>
 
@@ -1224,6 +1278,7 @@
                                     <div class="form-group" style="grid-column: 1;">
                                         <label class="form-label" for="specificationTypeInput">Data Type</label>
                                         <select id="specificationTypeInput" class="form-select" required>
+                                            <option value="" selected>---</option>
                                             <option value="dropdownlist">Dropdown List</option>
                                             <option value="short-text">Short Text</option>
                                             <option value="long-text">Long Text</option>
@@ -1253,19 +1308,21 @@
                                             <input type="text" class="form-input" id="specificationSubSpecificationsInput" placeholder="Add sub-specifications" readonly style="background:#f9fafb; cursor:pointer; flex:1; min-width:260px;" />
                                         </div>
                                     </div>
-                                    <div id="specificationCategoriesModal" class="modal hidden" tabindex="-1" role="dialog" aria-modal="true" style="position:fixed;z-index:1000;left:0;top:0;width:100vw;height:100vh;background:rgba(0,0,0,0.25);display:flex;align-items:center;justify-content:center;">
-                                        <div class="modal-content" role="document" style="background:#fff;padding:24px 32px;border-radius:12px;min-width:360px;max-width:640px;max-height:80vh;overflow:auto;box-shadow:0 8px 32px rgba(0,0,0,0.18);">
-                                            <h2 style="margin-top:0;font-size:20px;margin-bottom:8px;">Assign Categories</h2>
-                                            <p style="margin-top:0;margin-bottom:16px;color:#4b5563;font-size:14px;">Search and select every category that should include this specification.</p>
-                                            <div class="category-picker" style="display:flex;flex-direction:column;gap:12px;">
-                                                <div class="category-picker-search" style="position:relative;">
-                                                    <i class="fas fa-search" aria-hidden="true" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:#9ca3af;"></i>
-                                                    <input type="search" id="specificationCategoriesModalSearch" class="form-input" placeholder="Search categories" style="padding-left:36px; width: 100%;" />
+                                    <div id="specificationCategoriesModal" class="modal hidden spec-categories-modal" tabindex="-1" role="dialog" aria-modal="true">
+                                        <div class="modal-content spec-categories-dialog" role="document">
+                                            <header class="spec-categories-header">
+                                                <h2 class="spec-categories-title">Assign Categories</h2>
+                                                <p class="spec-categories-subtitle">Search and select every category that should include this specification.</p>
+                                            </header>
+                                            <div class="category-picker spec-categories-body">
+                                                <div class="category-picker-search spec-categories-search">
+                                                    <i class="fas fa-search spec-categories-search-icon" aria-hidden="true"></i>
+                                                    <input type="search" id="specificationCategoriesModalSearch" class="form-input spec-categories-search-input" placeholder="Search categories" />
                                                 </div>
-                                                <div id="specificationCategoriesModalList" class="category-picker-list" style="display:flex;flex-direction:column;gap:8px;max-height:320px;overflow:auto;padding-right:4px;"></div>
-                                                <div id="specificationCategoriesModalSummary" style="font-size:13px;color:#4b5563;">No categories selected yet.</div>
+                                                <div id="specificationCategoriesModalList" class="category-picker-list spec-categories-list"></div>
+                                                <div id="specificationCategoriesModalSummary" class="spec-categories-summary">No categories selected yet.</div>
                                             </div>
-                                            <div style="display:flex; justify-content:flex-end; gap:12px; margin-top:24px;">
+                                            <div class="spec-categories-actions">
                                                 <button type="button" class="btn btn-outline" id="cancelSpecificationCategoriesBtn">Cancel</button>
                                                 <button type="button" class="btn btn-primary" id="applySpecificationCategoriesBtn">Apply</button>
                                             </div>
