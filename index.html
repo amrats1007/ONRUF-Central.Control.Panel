@@ -400,7 +400,7 @@
                                 <table>
                                     <thead>
                                         <tr>
-                                            <th>ID</th>
+                                            <th>#</th>
                                             <th>User</th>
                                             <th>Role</th>
                                             <th>Department</th>
@@ -714,10 +714,6 @@
                                     <i class="fas fa-file-export"></i>
                                     Export
                                 </button>
-                                <button type="button" class="btn btn-outline" id="categoryDeleteAllBtn" /*style="display:none;"*/>
-                                    <i class="fas fa-trash"></i>
-                                    Delete All
-                                </button>
                             </div>
                         </div>
                         <div class="notification-area" id="categoryNotificationArea" aria-live="polite"></div>
@@ -756,7 +752,7 @@
                                     <div class="detail-controls">
                                         <div class="detail-search">
                                             <i class="fas fa-search"></i>
-                                            <input type="text" id="categoryDetailSearchInput" placeholder="Filter by name, code, or description" aria-label="Filter categories" />
+                                            <input type="text" id="categoryDetailSearchInput" placeholder="Search by Category Name, Category Code, or Description" aria-label="Filter categories" />
                                         </div>
                                         <div class="detail-filters">
                                             <span class="filter-label" aria-hidden="true">Filter:</span>
@@ -778,6 +774,24 @@
                                             </label>
                                         </div>
                                     </div>
+                                    <div class="category-bulk-actions">
+                                        <button type="button" class="btn btn-outline" id="categoryBulkModifyBtn" disabled>
+                                            <i class="fas fa-pen"></i>
+                                            Modify
+                                        </button>
+                                        <button type="button" class="btn btn-outline" id="categoryBulkArchiveBtn" disabled>
+                                            <i class="fas fa-power-off"></i>
+                                            Deactivate
+                                        </button>
+                                        <button type="button" class="btn btn-outline" id="categoryBulkActivateBtn" disabled>
+                                            <i class="fas fa-rotate-right"></i>
+                                            Activate
+                                        </button>
+                                        <button type="button" class="btn btn-outline" id="categoryDeleteAllBtn">
+                                            <i class="fas fa-trash"></i>
+                                            Delete All
+                                        </button>
+                                    </div>
                                     <div class="category-grid" role="region" aria-label="Category data">
                                         <div class="category-grid-header" role="row">
                                             <div class="grid-cell index" data-column="index">#</div>
@@ -788,7 +802,6 @@
                                             <div class="grid-cell specification-count" data-column="specifications">Specifications</div>
                                             <div class="grid-cell status" data-column="status">Status</div>
                                             <div class="grid-cell created" data-column="created">Created</div>
-                                            <div class="grid-cell actions" data-column="actions">Actions</div>
                                         </div>
                                         <div class="category-grid-body" id="categoryGridBody" role="rowgroup" tabindex="0"></div>
                                     </div>
@@ -842,7 +855,7 @@
                                         <h4>Import tips</h4>
                                         <ul>
                                             <li>Existing category codes update the matching records automatically.</li>
-                                            <li>Leave the Parent column blank for top-level categories.</li>
+                                            <li>Leave the Parent column blank for main categories.</li>
                                         </ul>
                                     </div>
                                     <div class="import-status" id="categoryImportStatus" role="status" aria-live="polite"></div>
@@ -877,18 +890,35 @@
                                             <input type="file" id="categoryImageInput" class="form-input" accept="image/*" />
                                         </div>
                                     </div>
-                                    <div class="form-group" style="grid-column: 3; width: 200%;">
-                                        <label class="form-label" for="categoryParentInput">Parent Category</label>
-                                        <div style="display:flex; gap:8px; align-items:center;">
-                                            <button type="button" id="openCategoryModalBtn" class="btn btn-secondary" style="white-space:nowrap;">Choose</button>
-                                            <input type="text" id="categoryParentInput" class="form-input" placeholder="Select parent" readonly style="background:#f9fafb; cursor:pointer; flex:1; min-width:280px;" />
+                                    <div class="form-group parent-category-group" style="grid-column: 3; width: 200%;">
+                                        <div class="form-label-row">
+                                            <label class="form-label" for="categoryParentInput">Parent Category</label>
+                                            <button type="button" class="form-info-trigger" id="parentCategoryInfoTrigger" aria-label="Show parent category availability details" aria-haspopup="dialog" aria-expanded="false" aria-controls="parentCategoryInfoPopover">
+                                                <i class="fas fa-circle-info" aria-hidden="true"></i>
+                                            </button>
+                                        </div>
+                                        <div class="form-info-popover hidden" id="parentCategoryInfoPopover" role="note" aria-live="polite">
+                                            <ul>
+                                                <li>Inactive Categories Appear, But are Unselectable.</li>
+                                                <li>When Editing a Category, The Current Category Becomes Unselectable.</li>
+                                                <li>When Editing a Category, Subcategories of the Current Category Become Unselectable.</li>
+                                            </ul>
+                                        </div>
+                                        <div class="parent-category-input-row">
+                                            <button type="button" id="openCategoryModalBtn" class="btn btn-secondary parent-category-trigger">Choose</button>
+                                            <div class="parent-category-field">
+                                                <input type="text" id="categoryParentInput" class="form-input parent-category-display" placeholder="Select parent" readonly style="width: -webkit-fill-available;"/>
+                                                <button type="button" id="clearParentCategoryBtn" class="parent-category-clear is-hidden" aria-label="Clear parent category" title="Clear parent category">
+                                                    <i class="fas fa-xmark" aria-hidden="true"></i>
+                                                </button>
+                                            </div>
                                         </div>
                                     </div>
                                     <!-- Category Selection Modal -->
                                     <div id="categoryModal" class="modal hidden category-tree-modal" tabindex="-1" role="dialog" aria-modal="true">
                                         <div class="modal-content category-modal-dialog" role="document">
                                             <div class="category-modal-header">
-                                                <h2>Parent Category</h2>
+                                                <h2>Assign Category</h2>
                                             </div>
                                             <div class="category-modal-body">
                                                 <div id="categoryModalList" class="category-modal-tree"></div>
@@ -1105,21 +1135,34 @@
                                 <h2 class="module-title" id="specificationModuleTitle">Specifications</h2>
                                 <div class="search-box" id="specificationSearchContainer">
                                     <i class="fas fa-search"></i>
-                                    <input type="text" id="specificationSearch" placeholder="Search by Specification, Category, Type, Version, or Status" />
+                                    <input type="text" id="specificationSearch" placeholder="Search by Specification Name, or Description" />
                                 </div>
                             </div>
                             <div class="users-actions" id="specificationActions">
-                                <button class="btn btn-primary" id="addSpecificationBtn">
-                                    <i class="fas fa-file-circle-plus"></i>
-                                    Add Specification
-                                </button>
+                                <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:center;">
+                                    <button class="btn btn-primary" id="addSpecificationBtn">
+                                        <i class="fas fa-file-circle-plus"></i>
+                                        Add Specification
+                                    </button>
+                                    <button type="button" class="btn btn-outline" id="specificationImportBtn">
+                                        <i class="fas fa-file-import"></i>
+                                        Import
+                                    </button>
+                                    <button type="button" class="btn btn-outline" id="specificationExportBtn">
+                                        <i class="fas fa-file-export"></i>
+                                        Export
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="specificationsListView">
+                            <div class="table-actions" style="display:flex; align-items:center; justify-content:flex-start; gap:12px; flex-wrap:wrap; margin-bottom:18px;">
                                 <button type="button" class="btn btn-outline" id="specificationDeleteAllBtn" /*style="display:none;"*/>
                                     <i class="fas fa-trash"></i>
                                     Delete All
                                 </button>
+                                <input type="file" id="specificationImportFileInput" accept=".csv,.json" hidden />
                             </div>
-                        </div>
-                        <div id="specificationsListView">
                             <div class="table-shell">
                                 <table>
                                     <thead>
@@ -1127,12 +1170,12 @@
                                             <th>#</th>
                                             <th>Specification</th>
                                             <th>Description</th>
-                                            <th>Categories</th>
                                             <th>Type</th>
                                             <th>Required?</th>
+                                            <th>Categories</th>
+                                            <th>Sub-Specifications</th>
                                             <th>Status</th>
                                             <th>Created</th>
-                                            <th>Sub-Specifications</th>
                                             <th>Actions</th>
                                         </tr>
                                     </thead>
@@ -1163,7 +1206,7 @@
                                         <textarea id="specificationDescriptionArInput" placeholder="أدخل وصفًا عربيًا للمواصفة"></textarea>
                                     </div>
                                     <div class="form-group" style="grid-column: 3;">
-                                        <label class="form-label" for="specificationPlaceholderArInput">Place Holder (Ar)</label>
+                                        <label class="form-label" for="specificationPlaceholderArInput">Placeholder (Ar)</label>
                                         <input type="text" id="specificationPlaceholderArInput" class="form-input" placeholder="أدخل النص الإرشادي" />
                                     </div>
                                     <div class="form-group" style="grid-column: 1;">
@@ -1175,20 +1218,38 @@
                                         <textarea id="specificationDescriptionEnInput" placeholder="Enter an English description for the specification"></textarea>
                                     </div>
                                     <div class="form-group" style="grid-column: 3;">
-                                        <label class="form-label" for="specificationPlaceholderEnInput">Place Holder (En)</label>
+                                        <label class="form-label" for="specificationPlaceholderEnInput">Placeholder (En)</label>
                                         <input type="text" id="specificationPlaceholderEnInput" class="form-input" placeholder="Enter guidance text" />
+                                    </div>
+                                    <div class="form-group" style="grid-column: 1;">
+                                        <label class="form-label" for="specificationTypeInput">Data Type</label>
+                                        <select id="specificationTypeInput" class="form-select" required>
+                                            <option value="dropdownlist">Dropdown List</option>
+                                            <option value="short-text">Short Text</option>
+                                            <option value="long-text">Long Text</option>
+                                            <option value="number">Number</option>
+                                            <option value="radio">Radio</option>
+                                            <option value="checkbox">Checkbox</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group"  style="grid-column: 2;">
+                                        <span class="form-label">Required?</span>
+                                        <label class="toggle-switch" style="margin-top:6px;">
+                                            <input type="checkbox" id="specificationRequiredInput" aria-label="Mark specification as required" />
+                                            <span class="toggle-slider"></span>
+                                        </label>
                                     </div>
                                     <div class="form-group" style="grid-column: 1; width: 200%;">
                                         <label class="form-label" for="specificationCategoriesInput">Categories</label>
                                         <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-                                            <button type="button" class="btn btn-secondary" id="openSpecificationCategoriesModalBtn" style="white-space:nowrap;">Select Categories</button>
+                                            <button type="button" class="btn btn-secondary" id="openSpecificationCategoriesModalBtn" style="white-space:nowrap;">Choose</button>
                                             <input type="text" id="specificationCategoriesInput" class="form-input" placeholder="Select categories" readonly required style="background:#f9fafb; cursor:pointer; flex:1; min-width:280px;" />
                                         </div>
                                     </div>
                                     <div class="form-group" style="grid-column: 3; width: 200%;">
                                         <label class="form-label" for="specificationSubSpecificationsInput">Sub-Specifications</label>
                                         <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-                                            <button type="button" class="btn btn-secondary" id="openSubSpecificationModalBtn" style="white-space:nowrap;">Add SubSpecification</button>
+                                            <button type="button" class="btn btn-secondary" id="openSubSpecificationModalBtn" style="white-space:nowrap;">Configure</button>
                                             <input type="text" class="form-input" id="specificationSubSpecificationsInput" placeholder="Add sub-specifications" readonly style="background:#f9fafb; cursor:pointer; flex:1; min-width:260px;" />
                                         </div>
                                     </div>
@@ -1213,31 +1274,13 @@
                                     <div id="subSpecificationModal" class="modal hidden" tabindex="-1" role="dialog" aria-modal="true" style="position:fixed;z-index:1000;left:0;top:0;width:100vw;height:100vh;background:rgba(0,0,0,0.25);display:flex;align-items:center;justify-content:center;">
                                         <div class="modal-content" role="document" style="background:#fff;padding:24px 32px;border-radius:12px;min-width:360px;max-width:640px;max-height:80vh;overflow:auto;box-shadow:0 8px 32px rgba(0,0,0,0.18);">
                                             <h2 style="margin-top:0;font-size:20px;margin-bottom:16px;">Sub-Specifications</h2>
-                                            <p style="margin-top:0;margin-bottom:16px;color:#4b5563;font-size:14px;">Capture localized labels for each sub specification option.</p>
+                                            <p style="margin-top:0;margin-bottom:16px;color:#4b5563;font-size:14px;">Capture localized labels for each sub-specification option.</p>
                                             <div id="subSpecificationRows" style="display:flex; flex-direction:column; gap:12px;"></div>
                                             <div style="display:flex; justify-content:flex-end; gap:12px; margin-top:24px;">
                                                 <button type="button" class="btn btn-outline" id="cancelSubSpecificationBtn">Cancel</button>
                                                 <button type="button" class="btn btn-primary" id="applySubSpecificationBtn">Apply</button>
                                             </div>
                                         </div>
-                                    </div>
-                                    <div class="form-group" style="grid-column: 1;">
-                                        <label class="form-label" for="specificationTypeInput">Data Type</label>
-                                        <select id="specificationTypeInput" class="form-select" required>
-                                            <option value="dropdownlist">Dropdown List</option>
-                                            <option value="short-text">Short Text</option>
-                                            <option value="long-text">Long Text</option>
-                                            <option value="number">Number</option>
-                                            <option value="radio">Radio</option>
-                                            <option value="checkbox">Checkbox</option>
-                                        </select>
-                                    </div>
-                                    <div class="form-group"  style="grid-column: 1;">
-                                        <span class="form-label">Required?</span>
-                                        <label class="toggle-switch" style="margin-top:6px;">
-                                            <input type="checkbox" id="specificationRequiredInput" aria-label="Mark specification as required" />
-                                            <span class="toggle-slider"></span>
-                                        </label>
                                     </div>
                                     <div style="grid-column: 1 / -1; display:flex; justify-content:flex-end; gap:12px;">
                                         <button type="button" class="btn btn-outline" id="cancelSpecificationFormBtn">

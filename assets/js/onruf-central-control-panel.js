@@ -196,21 +196,26 @@ function buildCategoryModalHierarchy(items) {
         }
     });
 
-    const byPositionThenName = (a, b) => {
-        const ap = Number.isFinite(a.entry.position) ? a.entry.position : Number.POSITIVE_INFINITY;
-        const bp = Number.isFinite(b.entry.position) ? b.entry.position : Number.POSITIVE_INFINITY;
-        if (ap !== bp) return ap - bp;
-        const an = (a.entry.nameEnglish || a.entry.nameArabic || a.entry.id || '').toLowerCase();
-        const bn = (b.entry.nameEnglish || b.entry.nameArabic || b.entry.id || '').toLowerCase();
-        return an.localeCompare(bn);
+    const compareNodesForTree = (a, b) => {
+        if (a === b) return 0;
+        if (!a || !b) return 0;
+        if (!a.synthetic && b.synthetic) return -1;
+        if (a.synthetic && !b.synthetic) return 1;
+        const entryA = a.entry || {};
+        const entryB = b.entry || {};
+        const result = compareCategoriesForTree(entryA, entryB);
+        if (result !== 0) {
+            return result;
+        }
+        return String(a.key || '').localeCompare(String(b.key || ''));
     };
 
     const sortTree = node => {
-        node.children.sort(byPositionThenName).forEach(sortTree);
+        node.children.sort(compareNodesForTree).forEach(sortTree);
     };
 
-    roots.sort(byPositionThenName).forEach(sortTree);
-    return roots;
+    roots.sort(compareNodesForTree).forEach(sortTree);
+    return { roots, nodeMap: nodes };
 }
 
 function renderCategoryModalTree(items, onSelect, options = {}) {
@@ -218,7 +223,9 @@ function renderCategoryModalTree(items, onSelect, options = {}) {
     if (!container) return;
     container.innerHTML = '';
 
-    const roots = buildCategoryModalHierarchy(items);
+    const hierarchy = buildCategoryModalHierarchy(items);
+    const roots = hierarchy.roots;
+    const nodeMap = hierarchy.nodeMap;
     if (!roots.length) {
         container.innerHTML = '<div style="color:#888;text-align:center;padding:16px;">There is no Data Available</div>';
         return;
@@ -226,21 +233,67 @@ function renderCategoryModalTree(items, onSelect, options = {}) {
 
     const expandedSet = options.expandedKeys instanceof Set ? options.expandedKeys : new Set();
     const selectedKey = options.selectedKey || null;
+    const disableEntry = typeof options.disableEntry === 'function' ? options.disableEntry : null;
 
     const ul = document.createElement('ul');
     ul.className = 'tree-root';
+
+    const collectPathKeys = node => {
+        const keys = [];
+        let current = node;
+        const guard = new Set();
+        while (current && !guard.has(current) && typeof current.key === 'string' && current.key.trim()) {
+            guard.add(current);
+            keys.push(current.key);
+            if (!current.parentKey) {
+                break;
+            }
+            const parent = nodeMap.get(current.parentKey);
+            if (!parent) {
+                break;
+            }
+            current = parent;
+        }
+        return keys;
+    };
+
+    const enforceExclusiveExpansion = node => {
+        if (!node) {
+            return;
+        }
+        const allowedKeys = new Set(collectPathKeys(node));
+        expandedSet.forEach(key => {
+            if (!allowedKeys.has(key)) {
+                expandedSet.delete(key);
+            }
+        });
+        allowedKeys.forEach(key => expandedSet.add(key));
+    };
 
     const renderNode = node => {
         const li = document.createElement('li');
         li.className = 'tree-node';
         const hasChildren = Array.isArray(node.children) && node.children.length > 0;
-    const label = node.entry.nameEnglish || node.entry.nameArabic || node.entry.id || '';
-    const code = typeof node.entry.categoryCode === 'string' ? node.entry.categoryCode.trim() : '';
+        const label = node.entry.nameEnglish || node.entry.nameArabic || node.entry.id || '';
+        const code = typeof node.entry.categoryCode === 'string' ? node.entry.categoryCode.trim() : '';
+
+        const disableMeta = disableEntry ? disableEntry(node.entry) : null;
+        const isDisabled = !!(disableMeta && disableMeta.disabled !== false);
+        const disabledReason = isDisabled && disableMeta && disableMeta.reason
+            ? String(disableMeta.reason)
+            : '';
 
         const row = document.createElement('div');
         row.className = 'tree-row';
         if (selectedKey && node.key === selectedKey) {
             row.classList.add('selected');
+        }
+        if (isDisabled) {
+            row.classList.add('is-disabled');
+            row.setAttribute('aria-disabled', 'true');
+            if (disabledReason) {
+                row.setAttribute('data-disabled-reason', disabledReason);
+            }
         }
 
         let toggleButton = null;
@@ -279,15 +332,37 @@ function renderCategoryModalTree(items, onSelect, options = {}) {
         if (!hasChildren) {
             labelBtn.setAttribute('aria-expanded', 'false');
         }
+        if (isDisabled) {
+            labelBtn.classList.add('disabled');
+            labelBtn.setAttribute('aria-disabled', 'true');
+            if (disabledReason) {
+                labelBtn.setAttribute('title', disabledReason);
+            }
+        } else if (disabledReason) {
+            labelBtn.setAttribute('title', disabledReason);
+        }
         row.appendChild(labelBtn);
 
-        const selectBtn = document.createElement('button');
-        selectBtn.type = 'button';
-        selectBtn.className = 'btn btn-primary tree-select';
-        selectBtn.textContent = 'Select';
-        const ariaLabel = code ? `Select ${label} (${code})` : `Select ${label}`;
-        selectBtn.setAttribute('aria-label', ariaLabel.trim());
-        row.appendChild(selectBtn);
+        let selectBtn = null;
+        if (hasChildren) {
+            selectBtn = document.createElement('button');
+            selectBtn.type = 'button';
+            selectBtn.className = 'btn btn-primary tree-select';
+            selectBtn.textContent = 'Select';
+            const ariaLabel = code ? `Select ${label} (${code})` : `Select ${label}`;
+            selectBtn.setAttribute('aria-label', ariaLabel.trim());
+            if (isDisabled) {
+                selectBtn.disabled = true;
+                selectBtn.classList.add('disabled');
+                selectBtn.setAttribute('aria-disabled', 'true');
+                if (disabledReason) {
+                    selectBtn.setAttribute('title', disabledReason);
+                }
+            } else if (disabledReason) {
+                selectBtn.setAttribute('title', disabledReason);
+            }
+            row.appendChild(selectBtn);
+        }
 
         li.appendChild(row);
 
@@ -295,37 +370,24 @@ function renderCategoryModalTree(items, onSelect, options = {}) {
         childList.className = 'tree-children';
         li.appendChild(childList);
 
-        let expanded = hasChildren ? expandedSet.has(node.key) : false;
-        const applyExpandedState = nextState => {
-            if (!hasChildren) {
-                return;
-            }
-            expanded = nextState;
+        const expanded = hasChildren ? expandedSet.has(node.key) : false;
+        if (hasChildren) {
             if (expanded) {
-                expandedSet.add(node.key);
                 li.classList.add('expanded');
                 childList.style.display = '';
                 toggleButton.textContent = '▾';
                 toggleButton.setAttribute('aria-label', 'Collapse');
                 toggleButton.classList.add('expanded');
+                toggleButton.setAttribute('aria-expanded', 'true');
+                labelBtn.setAttribute('aria-expanded', 'true');
             } else {
-                expandedSet.delete(node.key);
-                li.classList.remove('expanded');
                 childList.style.display = 'none';
                 toggleButton.textContent = '▸';
                 toggleButton.setAttribute('aria-label', 'Expand');
                 toggleButton.classList.remove('expanded');
+                toggleButton.setAttribute('aria-expanded', 'false');
+                labelBtn.setAttribute('aria-expanded', 'false');
             }
-            toggleButton.setAttribute('aria-expanded', expanded ? 'true' : 'false');
-            labelBtn.setAttribute('aria-expanded', expanded ? 'true' : 'false');
-        };
-
-        if (hasChildren) {
-            applyExpandedState(expanded);
-            toggleButton.addEventListener('click', event => {
-                event.stopPropagation();
-                applyExpandedState(!expanded);
-            });
         } else {
             childList.style.display = 'none';
         }
@@ -336,21 +398,48 @@ function renderCategoryModalTree(items, onSelect, options = {}) {
                 if (event.detail > 1) {
                     return;
                 }
-                applyExpandedState(!expanded);
+                const currentlyExpanded = expandedSet.has(node.key);
+                if (currentlyExpanded) {
+                    expandedSet.delete(node.key);
+                } else {
+                    enforceExclusiveExpansion(node);
+                }
+                renderCategoryModalTree(items, onSelect, { expandedKeys: expandedSet, selectedKey, disableEntry });
             } else {
+                if (!isDisabled) {
+                    onSelect(node.entry);
+                }
+            }
+        });
+
+        if (hasChildren) {
+            toggleButton.addEventListener('click', event => {
+                event.stopPropagation();
+                const currentlyExpanded = expandedSet.has(node.key);
+                if (currentlyExpanded) {
+                    expandedSet.delete(node.key);
+                } else {
+                    enforceExclusiveExpansion(node);
+                }
+                renderCategoryModalTree(items, onSelect, { expandedKeys: expandedSet, selectedKey, disableEntry });
+            });
+        }
+
+        labelBtn.addEventListener('dblclick', event => {
+            event.stopPropagation();
+            if (!isDisabled) {
                 onSelect(node.entry);
             }
         });
 
-        labelBtn.addEventListener('dblclick', event => {
-            event.stopPropagation();
-            onSelect(node.entry);
-        });
-
-        selectBtn.addEventListener('click', event => {
-            event.stopPropagation();
-            onSelect(node.entry);
-        });
+        if (selectBtn) {
+            selectBtn.addEventListener('click', event => {
+                event.stopPropagation();
+                if (!isDisabled) {
+                    onSelect(node.entry);
+                }
+            });
+        }
 
         node.children.forEach(child => {
             childList.appendChild(renderNode(child));
@@ -363,6 +452,81 @@ function renderCategoryModalTree(items, onSelect, options = {}) {
     container.appendChild(ul);
 }
 
+
+function getCategoriesForParentModal({ includeInactive = true } = {}) {
+    if (!Array.isArray(categories) || !categories.length) {
+        return [];
+    }
+
+    const includeInactiveCategories = includeInactive === true;
+    const categoryById = new Map();
+
+    categories.forEach(entry => {
+        if (!entry || typeof entry.id !== 'string') {
+            return;
+        }
+        const id = entry.id.trim();
+        if (id) {
+            categoryById.set(id, entry);
+        }
+    });
+
+    const resolveParentLabel = parentId => {
+        if (!parentId || parentId === CATEGORY_TREE_ROOT_ID) {
+            return '';
+        }
+        const parent = categoryById.get(parentId);
+        if (!parent) {
+            return '';
+        }
+        return getCategoryDisplayName(parent);
+    };
+
+    return categories
+        .filter(entry => {
+            if (!entry) {
+                return false;
+            }
+            if (includeInactiveCategories) {
+                return true;
+            }
+            return getCategoryStatusFilterGroup(entry.status) === 'active';
+        })
+        .map(entry => {
+            const clone = { ...entry };
+            const explicitParent = typeof clone.parent === 'string' ? clone.parent.trim() : '';
+            if (!explicitParent && typeof clone.parentCategoryId === 'string') {
+                const normalizedParentId = clone.parentCategoryId.trim();
+                if (normalizedParentId && normalizedParentId !== CATEGORY_TREE_ROOT_ID) {
+                    const parentLabel = resolveParentLabel(normalizedParentId);
+                    if (parentLabel) {
+                        clone.parent = parentLabel;
+                        if (Object.prototype.hasOwnProperty.call(clone, 'parentCategory')) {
+                            clone.parentCategory = parentLabel;
+                        }
+                        if (Object.prototype.hasOwnProperty.call(clone, 'parentCategoryLabel')) {
+                            clone.parentCategoryLabel = parentLabel;
+                        }
+                    }
+                }
+            }
+            return clone;
+        });
+}
+
+
+function updateParentCategoryClearState() {
+    const input = document.getElementById('categoryParentInput');
+    const clearBtn = document.getElementById('clearParentCategoryBtn');
+    if (!input || !clearBtn) {
+        return;
+    }
+    const hasSelection = Boolean((input.value || '').trim());
+    clearBtn.classList.toggle('is-hidden', !hasSelection);
+    clearBtn.disabled = !hasSelection;
+    clearBtn.setAttribute('aria-hidden', hasSelection ? 'false' : 'true');
+}
+
 let categoryModalSelectedKey = null;
 
 function setupCategoryModal() {
@@ -370,9 +534,25 @@ function setupCategoryModal() {
     const modal = document.getElementById('categoryModal');
     const cancelBtn = modal.querySelector('[data-category-modal-cancel]');
     const input = document.getElementById('categoryParentInput');
+    const clearBtn = document.getElementById('clearParentCategoryBtn');
     if (!openBtn || !modal || !input) {
         return;
     }
+
+    const clearSelection = () => {
+        input.value = '';
+        if (input.dataset) {
+            delete input.dataset.parentCategoryId;
+            delete input.dataset.parentCategoryLabel;
+        }
+        categoryModalSelectedKey = null;
+        updateParentCategoryClearState();
+        try {
+            input.focus({ preventScroll: true });
+        } catch (error) {
+            input.focus();
+        }
+    };
 
     const closeModal = () => {
         modal.classList.add('hidden');
@@ -398,16 +578,18 @@ function setupCategoryModal() {
         }
 
         categoryModalSelectedKey = normalizeCategoryModalKey(entry);
+        updateParentCategoryClearState();
         closeModal();
     };
 
-    const findCategoryForValue = value => {
+    const findCategoryForValue = (value, searchList) => {
         const target = (value || '').trim().toLowerCase();
-        if (!target || !Array.isArray(categories)) {
+        if (!target) {
             return null;
         }
 
-        return categories.find(cat => {
+        const pool = Array.isArray(searchList) ? searchList : (Array.isArray(categories) ? categories : []);
+        return pool.find(cat => {
             const english = typeof cat.nameEnglish === 'string' ? cat.nameEnglish.trim().toLowerCase() : '';
             const arabic = typeof cat.nameArabic === 'string' ? cat.nameArabic.trim().toLowerCase() : '';
             const identifier = typeof cat.id === 'string' ? cat.id.trim().toLowerCase() : '';
@@ -423,17 +605,93 @@ function setupCategoryModal() {
         modal.classList.remove('hidden');
         document.body.classList.add('modal-open');
 
+        const modalCategories = getCategoriesForParentModal({ includeInactive: true });
         const expandedKeys = new Set();
 
+        const disabledById = new Map();
+        const disabledByKey = new Map();
+
+        const registerDisabledEntry = (entry, reason) => {
+            if (!entry) {
+                return;
+            }
+            const entryId = typeof entry.id === 'string' ? entry.id.trim() : '';
+            if (entryId && !disabledById.has(entryId)) {
+                disabledById.set(entryId, reason);
+            }
+            const key = normalizeCategoryModalKey(entry);
+            if (key && !disabledByKey.has(key)) {
+                disabledByKey.set(key, reason);
+            }
+        };
+
+        const editingId = state.categoryBuilderMode === 'edit' && typeof state.editingCategoryId === 'string'
+            ? state.editingCategoryId.trim()
+            : '';
+        if (editingId) {
+            if (!(categoryChildrenLookup instanceof Map) || categoryChildrenLookup.size === 0) {
+                rebuildCategoryCaches();
+            }
+
+            const editingModalEntry = Array.isArray(modalCategories)
+                ? modalCategories.find(entry => entry && typeof entry.id === 'string' && entry.id.trim() === editingId)
+                : null;
+            if (editingModalEntry) {
+                registerDisabledEntry(editingModalEntry, 'Cannot select the category being edited.');
+            } else {
+                const editingCategory = Array.isArray(categories)
+                    ? categories.find(entry => entry && typeof entry.id === 'string' && entry.id.trim() === editingId)
+                    : null;
+                if (editingCategory) {
+                    registerDisabledEntry(editingCategory, 'Cannot select the category being edited.');
+                } else if (!disabledById.has(editingId)) {
+                    disabledById.set(editingId, 'Cannot select the category being edited.');
+                }
+            }
+
+            const descendants = collectCategoryDescendants(editingId);
+            descendants.forEach(descendant => {
+                registerDisabledEntry(descendant, 'Cannot assign a subcategory as parent.');
+            });
+        }
+
+        if (Array.isArray(modalCategories)) {
+            modalCategories.forEach(entry => {
+                if (!entry) {
+                    return;
+                }
+                if (getCategoryStatusFilterGroup(entry.status) === 'inactive') {
+                    registerDisabledEntry(entry, 'Inactive categories cannot be selected.');
+                }
+            });
+        }
+
+        const disableEntry = entry => {
+            if (!entry) {
+                return null;
+            }
+            if (typeof entry.id === 'string') {
+                const id = entry.id.trim();
+                if (id && disabledById.has(id)) {
+                    return { disabled: true, reason: disabledById.get(id) };
+                }
+            }
+            const key = normalizeCategoryModalKey(entry);
+            if (key && disabledByKey.has(key)) {
+                return { disabled: true, reason: disabledByKey.get(key) };
+            }
+            return null;
+        };
+
         if (!categoryModalSelectedKey && input.value) {
-            const matchedCategory = findCategoryForValue(input.value);
+            const matchedCategory = findCategoryForValue(input.value, modalCategories);
             if (matchedCategory) {
                 categoryModalSelectedKey = normalizeCategoryModalKey(matchedCategory);
             }
         }
 
         const ensureSelectionPathVisible = () => {
-            if (!categoryModalSelectedKey || !Array.isArray(categories)) {
+            if (!categoryModalSelectedKey || !Array.isArray(modalCategories) || !modalCategories.length) {
                 return;
             }
 
@@ -451,7 +709,7 @@ function setupCategoryModal() {
                 }
             };
 
-            categories.forEach(cat => {
+            modalCategories.forEach(cat => {
                 addKey(normalizeCategoryModalKey(cat), cat);
                 addKey(cat.id, cat);
                 addKey(cat.nameEnglish, cat);
@@ -477,9 +735,9 @@ function setupCategoryModal() {
         ensureSelectionPathVisible();
 
         renderCategoryModalTree(
-            Array.isArray(categories) ? categories : [],
+            modalCategories,
             cat => selectCategory(cat),
-            { expandedKeys, selectedKey: categoryModalSelectedKey }
+            { expandedKeys, selectedKey: categoryModalSelectedKey, disableEntry }
         );
     };
 
@@ -491,6 +749,15 @@ function setupCategoryModal() {
             openModal();
         }
     });
+    if (clearBtn) {
+        clearBtn.addEventListener('click', event => {
+            event.preventDefault();
+            event.stopPropagation();
+            if ((input.value || '').trim()) {
+                clearSelection();
+            }
+        });
+    }
     if (cancelBtn) {
         cancelBtn.addEventListener('click', closeModal);
     }
@@ -506,6 +773,8 @@ function setupCategoryModal() {
             closeModal();
         }
     });
+
+    updateParentCategoryClearState();
 }
 
 document.addEventListener('DOMContentLoaded', setupCategoryModal);
@@ -1550,6 +1819,68 @@ function initializeCategoryFormToggles() {
     applyCategoryPricingToggleStates();
 }
 
+function initializeParentCategoryInfo() {
+    const trigger = document.getElementById('parentCategoryInfoTrigger');
+    const popover = document.getElementById('parentCategoryInfoPopover');
+    if (!trigger || !popover || trigger.dataset.infoInitialized === 'true') {
+        return;
+    }
+
+    const hidePopover = () => {
+        if (popover.classList.contains('hidden')) {
+            return;
+        }
+        popover.classList.add('hidden');
+        trigger.setAttribute('aria-expanded', 'false');
+    };
+
+    const showPopover = () => {
+        popover.classList.remove('hidden');
+        trigger.setAttribute('aria-expanded', 'true');
+    };
+
+    const togglePopover = event => {
+        event.preventDefault();
+        event.stopPropagation();
+        if (trigger.getAttribute('aria-expanded') === 'true') {
+            hidePopover();
+        } else {
+            showPopover();
+        }
+    };
+
+    trigger.addEventListener('click', togglePopover);
+
+    trigger.addEventListener('keydown', event => {
+        if (event.key === 'Enter' || event.key === ' ') {
+            togglePopover(event);
+        } else if (event.key === 'Escape') {
+            hidePopover();
+        }
+    });
+
+    popover.addEventListener('click', event => {
+        event.stopPropagation();
+    });
+
+    const handleOutsideClick = event => {
+        if (!popover.contains(event.target) && !trigger.contains(event.target)) {
+            hidePopover();
+        }
+    };
+
+    const handleEscape = event => {
+        if (event.key === 'Escape') {
+            hidePopover();
+        }
+    };
+
+    document.addEventListener('click', handleOutsideClick);
+    document.addEventListener('keydown', handleEscape);
+
+    trigger.dataset.infoInitialized = 'true';
+}
+
 function enforceAdPublishingFeeTypeConstraints() {
     const dueSelect = document.getElementById('categoryFeeDueTimeInput');
     const typeSelect = document.getElementById('categoryPriceTypeInput');
@@ -1597,6 +1928,7 @@ const state = {
     permissionCatalog: [],
     categorySearchTerm: '',
     specificationSearchTerm: '',
+    specificationFilteredList: [],
     specificationBuilderMode: 'create',
     editingSpecificationId: null,
     activeSpecificationDetailId: null,
@@ -1671,6 +2003,23 @@ const CATEGORY_EXPORT_COLUMNS = [
     { id: 'minimumBid', label: 'Minimum Bid (Value, Seller Can Modify?)', value: category => formatCategoryMinimumBid(category.minimumBidValue, category.minimumBidSellerCanModify) },
     { id: 'showAtHome', label: 'Show on Home Page?', value: category => formatCategoryBooleanLabel(category.showAtHome) },
     { id: 'isRealEstate', label: 'Is Real Estate?', value: category => formatCategoryBooleanLabel(category.isRealEstate) }
+];
+
+const SPECIFICATION_IMPORT_ALLOWED_EXTENSIONS = new Set(['csv', 'json']);
+
+const SPECIFICATION_EXPORT_COLUMNS = [
+    { id: 'index', label: '#', value: (_, index) => String(index + 1) },
+    { id: 'id', label: 'Specification ID', value: specification => specification.id || '' },
+    { id: 'specification', label: 'Specification', value: specification => specification.nameEnglish || specification.name || specification.nameArabic || '' },
+    { id: 'specificationArabic', label: 'Specification (Arabic)', value: specification => specification.nameArabic || '' },
+    { id: 'description', label: 'Description', value: specification => specification.descriptionEnglish || specification.descriptionArabic || '' },
+    { id: 'dataType', label: 'Data Type', value: specification => formatSpecificationType(specification.dataType) },
+    { id: 'isRequired', label: 'Required?', value: specification => specification.isRequired ? 'Yes' : 'No' },
+    { id: 'categories', label: 'Categories', value: specification => Array.isArray(specification.categoryLabels) && specification.categoryLabels.length ? specification.categoryLabels.join('; ') : '' },
+    { id: 'subSpecifications', label: 'Sub-Specifications', value: specification => formatSpecificationSubSpecExport(specification) },
+    { id: 'status', label: 'Status', value: specification => formatSpecificationStatus(specification.status) },
+    { id: 'created', label: 'Created', value: specification => formatDateForDisplay(specification.createdAt, { includeTime: true }) || '' },
+    { id: 'createdBy', label: 'Created By', value: specification => specification.createdBy || specification.createdByName || '' }
 ];
 
 function formatCategoryTokenLabel(value) {
@@ -3059,6 +3408,77 @@ function generateSequentialCategoryCode(parentCategoryId, parentLabel, registry)
         return nextCode;
     }
     return generateTopLevelCategoryCode(list);
+}
+
+function buildCategoryParentChildMap(list) {
+    const map = new Map();
+    if (!Array.isArray(list)) {
+        return map;
+    }
+    list.forEach(entry => {
+        if (!entry || typeof entry.id !== 'string') {
+            return;
+        }
+        const parentId = getCategoryParentId(entry);
+        if (!map.has(parentId)) {
+            map.set(parentId, []);
+        }
+        map.get(parentId).push(entry);
+    });
+    map.forEach(children => {
+        if (Array.isArray(children) && children.length > 1) {
+            children.sort((a, b) => compareCategoriesForTree(a, b));
+        }
+    });
+    return map;
+}
+
+function resequenceCategorySubtreeCodes(rootCategory, registry, { updatedAt } = {}) {
+    if (!rootCategory || !rootCategory.id) {
+        return;
+    }
+    const list = Array.isArray(registry) ? registry.filter(Boolean) : [];
+    if (!list.length) {
+        return;
+    }
+    const parentChildMap = buildCategoryParentChildMap(list);
+    const assignCodesToChildren = parent => {
+        const parentSegments = parseNumericCategoryCodeSegments(parent.categoryCode);
+        if (!parentSegments || !parentSegments.length) {
+            return;
+        }
+        const children = parentChildMap.get(parent.id) || [];
+        children.forEach((child, index) => {
+            const newSegments = parentSegments.concat(index + 1);
+            child.categoryCode = formatCategoryCodeFromSegments(newSegments);
+            if (updatedAt) {
+                child.updatedAt = updatedAt;
+            }
+            assignCodesToChildren(child);
+        });
+    };
+    assignCodesToChildren(rootCategory);
+}
+
+function promoteCategoryToTopLevel(category, registry, { updatedAt } = {}) {
+    if (!category) {
+        return;
+    }
+    const list = Array.isArray(registry) ? registry.filter(Boolean) : [];
+    const pool = list.filter(entry => entry && entry !== category);
+    const generatedCode = generateTopLevelCategoryCode(pool);
+    if (generatedCode) {
+        category.categoryCode = generatedCode;
+    }
+    category.parent = '';
+    category.parentCategoryId = '';
+    if (Object.prototype.hasOwnProperty.call(category, 'parentCategory')) {
+        category.parentCategory = '';
+    }
+    if (Object.prototype.hasOwnProperty.call(category, 'parentCategoryLabel')) {
+        category.parentCategoryLabel = '';
+    }
+    resequenceCategorySubtreeCodes(category, list, { updatedAt });
 }
 
 function normalizeCategoryCreationMethod(value) {
@@ -4694,6 +5114,7 @@ function setupEventListeners() {
     }
 
     initializeCategoryFormToggles();
+    initializeParentCategoryInfo();
     initializeAuctionPeriodsPicker();
     initializeSubSpecificationPicker();
     initializeSpecificationCategoriesPicker();
@@ -4909,6 +5330,35 @@ function setupEventListeners() {
             showSpecificationBuilder('create');
         });
         addSpecificationBtn.dataset.bound = 'true';
+    }
+
+    const specificationImportBtn = document.getElementById('specificationImportBtn');
+    if (specificationImportBtn && specificationImportBtn.dataset.bound !== 'true') {
+        specificationImportBtn.addEventListener('click', () => {
+            const input = document.getElementById('specificationImportFileInput');
+            if (input) {
+                input.click();
+            }
+        });
+        specificationImportBtn.dataset.bound = 'true';
+    }
+
+    const specificationImportInput = document.getElementById('specificationImportFileInput');
+    if (specificationImportInput && specificationImportInput.dataset.bound !== 'true') {
+        specificationImportInput.addEventListener('change', async event => {
+            const file = event.target && event.target.files ? event.target.files[0] : null;
+            await handleSpecificationImportFile(file);
+            specificationImportInput.value = '';
+        });
+        specificationImportInput.dataset.bound = 'true';
+    }
+
+    const specificationExportBtn = document.getElementById('specificationExportBtn');
+    if (specificationExportBtn && specificationExportBtn.dataset.bound !== 'true') {
+        specificationExportBtn.addEventListener('click', () => {
+            exportSpecificationView();
+        });
+        specificationExportBtn.dataset.bound = 'true';
     }
 
     const specificationDeleteAllBtn = document.getElementById('specificationDeleteAllBtn');
@@ -5861,6 +6311,35 @@ function formatSpecificationStatus(status) {
         .join(' ');
 }
 
+function formatSpecificationSubSpecExport(specification) {
+    if (!specification) {
+        return '';
+    }
+    if (Array.isArray(specification.subSpecifications) && specification.subSpecifications.length) {
+        const labels = specification.subSpecifications
+            .map(entry => {
+                if (!entry || typeof entry !== 'object') {
+                    return '';
+                }
+                if (typeof entry.nameEnglish === 'string' && entry.nameEnglish.trim()) {
+                    return entry.nameEnglish.trim();
+                }
+                if (typeof entry.nameArabic === 'string' && entry.nameArabic.trim()) {
+                    return entry.nameArabic.trim();
+                }
+                return '';
+            })
+            .filter(Boolean);
+        if (labels.length) {
+            return labels.join('; ');
+        }
+    }
+    if (typeof specification.subSpecificationSummary === 'string' && specification.subSpecificationSummary.trim()) {
+        return specification.subSpecificationSummary.trim();
+    }
+    return '';
+}
+
 function getSpecificationStatusClass(status) {
     const normalized = typeof status === 'string' ? status.trim().toLowerCase() : '';
     if (normalized === 'active') {
@@ -5932,6 +6411,72 @@ function formatSpecificationCreatedMeta(specification) {
     return `<div class="created-cell"><div class="created-date">${escapeHtml(createdLabel)}</div><div class="creator-name">${escapeHtml(creatorLabel || '—')}</div></div>`;
 }
 
+function formatSpecificationActivityLabel(specification) {
+    if (!specification) {
+        return '';
+    }
+
+    const normalizedStatus = typeof specification.status === 'string' ? specification.status.trim().toLowerCase() : '';
+    const inactiveStatuses = new Set(['inactive', 'archived', 'retired', 'disabled', 'deactivated']);
+    const activeStatuses = new Set(['active', 'published', 'enabled', 'live']);
+
+    let prefix = 'Updated';
+    if (inactiveStatuses.has(normalizedStatus)) {
+        prefix = 'Deactivated';
+    } else if (activeStatuses.has(normalizedStatus)) {
+        const updatedTimestamp = specification.updatedAt
+            || specification.modifiedAt
+            || specification.updatedOn
+            || specification.updated
+            || specification.lastUpdatedAt
+            || specification.lastModifiedAt
+            || specification.lastActivityAt
+            || specification.lastActionAt;
+        const createdTimestamp = specification.createdAt;
+        if (!updatedTimestamp && createdTimestamp) {
+            prefix = 'Created';
+        } else if (updatedTimestamp && createdTimestamp) {
+            const updatedValue = Date.parse(updatedTimestamp);
+            const createdValue = Date.parse(createdTimestamp);
+            if (Number.isFinite(updatedValue) && Number.isFinite(createdValue) && updatedValue === createdValue) {
+                prefix = 'Created';
+            }
+        }
+    } else if (!normalizedStatus) {
+        const updatedTimestamp = specification.updatedAt || specification.modifiedAt || specification.updatedOn;
+        const createdTimestamp = specification.createdAt;
+        if (!updatedTimestamp && createdTimestamp) {
+            prefix = 'Created';
+        }
+    }
+
+    const timestampCandidates = [
+        specification.updatedAt,
+        specification.modifiedAt,
+        specification.updatedOn,
+        specification.updated,
+        specification.lastActionAt,
+        specification.lastActivityAt,
+        specification.lastModifiedAt,
+        specification.lastUpdatedAt,
+        specification.reviewedAt,
+        specification.approvedAt,
+        specification.createdAt
+    ];
+
+    for (const candidate of timestampCandidates) {
+        if (!candidate) {
+            continue;
+        }
+        const formatted = formatDateForDisplay(candidate, { includeTime: true });
+        if (formatted) {
+            return `${prefix} ${formatted}`;
+        }
+    }
+
+    return '';
+}
+
 function specificationMatchesSearch(specification, searchTerm) {
     if (!searchTerm) {
         return true;
@@ -5981,6 +6526,7 @@ function specificationMatchesSearch(specification, searchTerm) {
 function renderSpecificationList() {
     const tableBody = document.getElementById('specificationsTableBody');
     if (!tableBody) {
+        state.specificationFilteredList = [];
         updateCategoryBadges();
         refreshCategorySpecificationOverlay();
         return;
@@ -6004,12 +6550,14 @@ function renderSpecificationList() {
     });
 
     if (!filtered.length) {
-    tableBody.innerHTML = '<tr><td colspan="10" style="padding:16px;text-align:center;color:#6b7280;">There is no Data Available</td></tr>';
+        state.specificationFilteredList = [];
+        tableBody.innerHTML = '<tr><td colspan="10" style="padding:16px;text-align:center;color:#6b7280; font-size:16px; font-weight:600;">There is no Data Available</td></tr>';
         updateCategoryBadges();
         refreshCategorySpecificationOverlay();
         return;
     }
 
+    state.specificationFilteredList = filtered;
     const rows = filtered.map((entry, index) => {
         const rowNumber = index + 1;
         const categoriesLabel = formatSpecificationCategories(entry);
@@ -6037,6 +6585,13 @@ function renderSpecificationList() {
         const descriptionPreferred = entry.descriptionEnglish || entry.descriptionArabic || '';
         const descriptionInfo = formatTruncatedText(descriptionPreferred, 120);
         const descriptionTitleAttr = descriptionInfo.full ? ` title="${escapeAttribute(descriptionInfo.full)}"` : '';
+        const activityLabel = formatSpecificationActivityLabel(entry);
+        const specificationNameCell = `
+            <div class="cell-stack">
+                <span class="cell-primary">${escapeHtml(displayName)}</span>
+                ${activityLabel ? `<span class="cell-secondary" aria-label="Last specification activity">${escapeHtml(activityLabel)}</span>` : ''}
+            </div>
+        `.trim();
         const subSummarySource = entry.subSpecificationSummary && entry.subSpecificationSummary.trim()
             ? entry.subSpecificationSummary.trim()
             : formatSubSpecificationSummary(entry.subSpecifications);
@@ -6065,8 +6620,10 @@ function renderSpecificationList() {
         return `
             <tr>
                 <td>${rowNumber}</td>
-                <td>${escapeHtml(displayName)}</td>
+                <td>${specificationNameCell}</td>
                 <td${descriptionTitleAttr}>${escapeHtml(descriptionInfo.display)}</td>
+                <td>${escapeHtml(formatSpecificationType(entry.dataType))}</td>
+                <td>${escapeHtml(requiredLabel)}</td>
                 <td>
                     <div class="spec-category-cell">
                         <span class="spec-category-count" title="${escapeAttribute(categoriesTooltip)}">${escapeHtml(categoryCountDisplay)}</span>
@@ -6075,10 +6632,6 @@ function renderSpecificationList() {
                         </button>
                     </div>
                 </td>
-                <td>${escapeHtml(formatSpecificationType(entry.dataType))}</td>
-                <td>${escapeHtml(requiredLabel)}</td>
-                <td><span class="status-pill ${statusClass}">${escapeHtml(statusLabel)}</span></td>
-                <td>${createdMeta}</td>
                 <td>
                     <div class="spec-subspec-cell">
                         <span class="spec-subspec-count">${escapeHtml(subSpecCountDisplay)}</span>
@@ -6087,6 +6640,8 @@ function renderSpecificationList() {
                         </button>
                     </div>
                 </td>
+                <td><span class="status-pill ${statusClass}">${escapeHtml(statusLabel)}</span></td>
+                <td>${createdMeta}</td>
                 <td>
                     <div class="action-group">
                         <button type="button" class="action-btn edit" data-action="modify" data-spec-id="${specIdAttribute}" title="${escapeAttribute(modifyLabel)}" aria-label="${escapeAttribute(modifyLabel)}">
@@ -7584,18 +8139,30 @@ function renderCategoryTree() {
             const isSelected = state.categoryViewBranchId === nodeId;
             const relativeDepth = depth + 1;
             const descriptor = `${child.categoryCode ? `${child.categoryCode} · ` : ''}${child.nameEnglish || child.nameArabic || 'Untitled'}`;
-            const labelHtml = highlightSearchMatch(descriptor, searchTerm);
+            const statusGroup = getCategoryStatusFilterGroup(child.status);
+            const isInactive = statusGroup === 'inactive';
+            const labelTextHtml = highlightSearchMatch(descriptor, searchTerm);
+            const statusIndicatorHtml = isInactive
+                ? '<span class="tree-node-status" aria-hidden="true"><i class="fas fa-pause-circle"></i></span>'
+                : '';
+            const rowClasses = ['tree-node-row'];
+            if (isSelected) {
+                rowClasses.push('is-selected');
+            }
+            if (isInactive) {
+                rowClasses.push('is-inactive');
+            }
             const childMarkup = isExpanded ? `<div class="tree-node-children" role="group">${buildMarkup(nodeId, relativeDepth)}</div>` : '';
             const badge = (categoryChildrenLookup.get(nodeId) || []).length;
             const badgeHtml = badge ? `<span class="tree-node-badge">${badge}</span>` : '';
             const depthStyle = `style="--depth:${relativeDepth};"`;
             return `
                 <div class="tree-node" role="treeitem" aria-level="${relativeDepth}" aria-expanded="${hasChildren ? String(isExpanded) : 'false'}" data-category-node="${escapeAttribute(nodeId)}">
-                    <div class="tree-node-row${isSelected ? ' is-selected' : ''}" data-category-select-node="${escapeAttribute(nodeId)}" ${depthStyle}>
+                    <div class="${rowClasses.join(' ')}" data-category-select-node="${escapeAttribute(nodeId)}" ${depthStyle}${isInactive ? ' aria-disabled="true"' : ''}>
                         <button type="button" class="tree-node-toggle${hasChildren ? '' : ' is-leaf'}" data-tree-toggle="${escapeAttribute(nodeId)}" aria-label="${hasChildren ? (isExpanded ? 'Collapse' : 'Expand') : 'Leaf node'}">
                             <i class="fas ${hasChildren ? (isExpanded ? 'fa-chevron-down' : 'fa-chevron-right') : 'fa-circle'}"></i>
                         </button>
-                        <span class="tree-node-label">${labelHtml}</span>
+                        <span class="tree-node-label" title="${escapeAttribute(getCategoryStatusLabel(child.status))}">${statusIndicatorHtml}<span class="tree-node-label-text">${labelTextHtml}</span></span>
                         ${badgeHtml}
                     </div>
                     ${childMarkup}
@@ -7632,11 +8199,11 @@ function getCategoryDisplayName(category) {
 
 function resolveCategoryParentLabel(category) {
     if (!category) {
-        return 'Top-level';
+        return '–';
     }
     const parentId = getCategoryParentId(category);
     if (!parentId || parentId === CATEGORY_TREE_ROOT_ID) {
-        return 'Top-level';
+        return '–';
     }
     if (!categoryLookupById.size) {
         rebuildCategoryCaches();
@@ -7808,6 +8375,30 @@ function formatCategoryCreatedMeta(category) {
     return `<div class="created-cell"><div class="created-date">${escapeHtml(createdLabel)}</div>${creatorLine}</div>`;
 }
 
+function formatCategoryActivityLabel(category) {
+    if (!category) {
+        return '';
+    }
+    const normalizedStatus = typeof category.status === 'string' ? category.status.trim().toLowerCase() : '';
+    let prefix = 'Updated';
+    if (normalizedStatus === 'inactive' || normalizedStatus === 'archived' || normalizedStatus === 'deactivated') {
+        prefix = 'Deactivated';
+    } else if (normalizedStatus === 'active') {
+        const updatedAt = category.updatedAt || category.modifiedAt;
+        const createdAt = category.createdAt;
+        if (!updatedAt && createdAt) {
+            prefix = 'Created';
+        }
+    }
+
+    const timestamp = category.updatedAt || category.modifiedAt || category.updatedOn || category.updated || category.createdAt;
+    const formatted = formatDateForDisplay(timestamp, { includeTime: true });
+    if (!formatted) {
+        return '';
+    }
+    return `${prefix} ${formatted}`;
+}
+
 function buildCategoryGridRow(category, displayIndex, relativeDepth) {
     const statusClass = getCategoryStatusClass(category.status);
     const statusLabel = getCategoryStatusLabel(category.status);
@@ -7834,10 +8425,18 @@ function buildCategoryGridRow(category, displayIndex, relativeDepth) {
                 <span class="row-index">${escapeHtml(String(displayIndex))}</span>
             </div>
             <div class="grid-cell code" data-column="code">
-                <span class="cell-primary">${escapeHtml(category.categoryCode || category.id)}</span>
+                <span class="cell-primary code-pill">${escapeHtml(category.categoryCode || category.id)}</span>
             </div>
             <div class="grid-cell name" data-column="name">
-                <span class="cell-primary">${escapeHtml(category.nameEnglish || '—')}</span>
+                <div class="cell-stack">
+                    <span class="cell-primary">${escapeHtml(category.nameEnglish || '—')}</span>
+                    ${(() => {
+                        const activityLabel = formatCategoryActivityLabel(category);
+                        return activityLabel
+                            ? `<span class="cell-secondary" aria-label="Last category activity">${escapeHtml(activityLabel)}</span>`
+                            : '';
+                    })()}
+                </div>
             </div>
             <div class="grid-cell description" data-column="description">
                 <span class="cell-secondary" title="${escapeAttribute(category.englishDescription || category.description || '—')}">${escapeHtml(category.englishDescription || category.description || '—')}</span>
@@ -7853,16 +8452,6 @@ function buildCategoryGridRow(category, displayIndex, relativeDepth) {
             </div>
             <div class="grid-cell created" data-column="created">
                 ${formatCategoryCreatedMeta(category)}
-            </div>
-            <div class="grid-cell actions" data-column="actions">
-                <div class="action-group">
-                    <button type="button" class="action-btn edit" data-category-action="edit" data-category-id="${escapeAttribute(category.id)}" title="Modify category" aria-label="Modify category">
-                        <i class="fas fa-pen"></i>
-                    </button>
-                    <button type="button" class="action-btn ${toggleClass}" data-category-action="${toggleAction}" data-category-id="${escapeAttribute(category.id)}" title="${escapeAttribute(toggleLabel)}" aria-label="${escapeAttribute(toggleLabel)}">
-                        <i class="fas ${toggleIcon}"></i>
-                    </button>
-                </div>
             </div>
         </div>
     `;
@@ -7907,6 +8496,348 @@ function exportCategoryView() {
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
     showNotification('success', 'Export ready. Check your downloads.', 3200, 'categoryNotificationArea');
+}
+
+function splitCsvLine(line) {
+    if (typeof line !== 'string') {
+        return [''];
+    }
+    const result = [];
+    let current = '';
+    let inQuotes = false;
+    for (let index = 0; index < line.length; index += 1) {
+        const char = line[index];
+        if (char === '"') {
+            const nextChar = line[index + 1];
+            if (inQuotes && nextChar === '"') {
+                current += '"';
+                index += 1;
+            } else {
+                inQuotes = !inQuotes;
+            }
+            continue;
+        }
+        if (char === ',' && !inQuotes) {
+            result.push(current);
+            current = '';
+            continue;
+        }
+        current += char;
+    }
+    result.push(current);
+    return result;
+}
+
+function parseSpecificationCsv(rawText) {
+    if (typeof rawText !== 'string') {
+        return [];
+    }
+    const lines = rawText
+        .split(/\r?\n/)
+        .map(line => line.trim())
+        .filter(line => line.length);
+    if (!lines.length) {
+        return [];
+    }
+    const headerCells = splitCsvLine(lines[0]).map(cell => cell.trim());
+    if (!headerCells.length) {
+        return [];
+    }
+    const records = [];
+    for (let lineIndex = 1; lineIndex < lines.length; lineIndex += 1) {
+        const line = lines[lineIndex];
+        if (!line) {
+            continue;
+        }
+        const values = splitCsvLine(line);
+        const hasContent = values.some(cell => typeof cell === 'string' && cell.trim().length);
+        if (!hasContent) {
+            continue;
+        }
+        const record = {};
+        headerCells.forEach((header, valueIndex) => {
+            if (!header) {
+                return;
+            }
+            const rawValue = valueIndex < values.length ? values[valueIndex] : '';
+            record[header] = typeof rawValue === 'string' ? rawValue.trim() : rawValue;
+        });
+        records.push(record);
+    }
+    return records;
+}
+
+function transformSpecificationImportRecord(record) {
+    if (!record || typeof record !== 'object') {
+        return {};
+    }
+
+    const output = { ...record };
+    const assign = (key, value) => {
+        if (value === undefined) {
+            return;
+        }
+        output[key] = value;
+    };
+
+    Object.entries(record).forEach(([rawKey, rawValue]) => {
+        const key = typeof rawKey === 'string' ? rawKey.trim() : '';
+        if (!key) {
+            return;
+        }
+        const lower = key.toLowerCase();
+        const value = typeof rawValue === 'string' ? rawValue.trim() : rawValue;
+
+        if (lower === 'specification id' || lower === 'id') {
+            assign('id', value);
+        } else if (lower === 'specification' || lower === 'specification name' || lower === 'specification name (english)' || lower === 'name' || lower === 'name (english)') {
+            assign('nameEnglish', value);
+        } else if (lower === 'specification (arabic)' || lower === 'specification name (arabic)' || lower === 'name (arabic)') {
+            assign('nameArabic', value);
+        } else if (lower === 'description' || lower === 'description (english)' || lower === 'description en') {
+            assign('descriptionEnglish', value);
+        } else if (lower === 'description (arabic)' || lower === 'description ar') {
+            assign('descriptionArabic', value);
+        } else if (lower === 'data type' || lower === 'datatype' || lower === 'type') {
+            assign('dataType', value);
+        } else if (lower === 'required?' || lower === 'required' || lower === 'is required') {
+            if (typeof rawValue === 'string') {
+                const normalized = rawValue.trim().toLowerCase();
+                assign('isRequired', ['yes', 'true', '1', 'required', 'y'].includes(normalized));
+            } else {
+                assign('isRequired', Boolean(rawValue));
+            }
+        } else if (lower === 'categories' || lower === 'category labels') {
+            const labels = Array.isArray(rawValue)
+                ? rawValue
+                : typeof rawValue === 'string'
+                    ? rawValue.split(/[,;]+/).map(entry => entry.trim()).filter(Boolean)
+                    : [];
+            assign('categoryLabels', labels);
+        } else if (lower === 'category ids' || lower === 'categoryids') {
+            const ids = Array.isArray(rawValue)
+                ? rawValue
+                : typeof rawValue === 'string'
+                    ? rawValue.split(/[,;]+/).map(entry => entry.trim()).filter(Boolean)
+                    : [];
+            assign('categoryIds', ids);
+        } else if (lower === 'sub-specifications' || lower === 'sub specifications' || lower === 'subspecifications') {
+            const entries = Array.isArray(rawValue)
+                ? rawValue
+                : typeof rawValue === 'string'
+                    ? rawValue.split(/[,;]+/).map(entry => entry.trim()).filter(Boolean)
+                    : [];
+            const normalizedEntries = entries.map(entry => {
+                if (entry && typeof entry === 'object') {
+                    return entry;
+                }
+                return { nameEnglish: entry, nameArabic: '' };
+            });
+            assign('subSpecifications', normalizedEntries);
+            if (!output.subSpecificationSummary && normalizedEntries.length) {
+                assign('subSpecificationSummary', normalizedEntries
+                    .map(item => (item && typeof item === 'object' && typeof item.nameEnglish === 'string') ? item.nameEnglish.trim() : '')
+                    .filter(Boolean)
+                    .join('; '));
+            }
+        } else if (lower === 'status') {
+            assign('status', value);
+        } else if (lower === 'created' || lower === 'created at' || lower === 'creation date') {
+            assign('createdAt', value);
+        } else if (lower === 'updated' || lower === 'updated at' || lower === 'last updated') {
+            assign('updatedAt', value);
+        } else if (lower === 'created by') {
+            assign('createdBy', value);
+        } else if (lower === 'placeholder (arabic)' || lower === 'placeholder ar') {
+            assign('placeholderArabic', value);
+        } else if (lower === 'placeholder (english)' || lower === 'placeholder en' || lower === 'placeholder') {
+            assign('placeholderEnglish', value);
+        } else if (lower === 'collection frequency' || lower === 'frequency') {
+            assign('collectionFrequency', value);
+        } else if (lower === 'validation rule' || lower === 'validation') {
+            assign('validationRule', value);
+        } else if (lower === 'version') {
+            assign('version', value);
+        }
+    });
+
+    if (Array.isArray(output.subSpecifications)) {
+        output.subSpecifications = sanitizeSubSpecificationList(output.subSpecifications);
+        if (!output.subSpecificationSummary && output.subSpecifications.length) {
+            output.subSpecificationSummary = output.subSpecifications
+                .map(entry => (entry && typeof entry === 'object' && typeof entry.nameEnglish === 'string') ? entry.nameEnglish.trim() : '')
+                .filter(Boolean)
+                .join('; ');
+        }
+    }
+
+    if (Array.isArray(output.categoryLabels)) {
+        output.categoryLabels = output.categoryLabels
+            .map(label => (typeof label === 'string' ? label.trim() : ''))
+            .filter(Boolean);
+    }
+
+    if (Array.isArray(output.categoryIds)) {
+        output.categoryIds = output.categoryIds
+            .map(label => (typeof label === 'string' ? label.trim() : ''))
+            .filter(Boolean);
+    }
+
+    if (!output.name && typeof output.nameEnglish === 'string' && output.nameEnglish.trim()) {
+        output.name = output.nameEnglish.trim();
+    }
+    if (!output.nameEnglish && typeof output.name === 'string' && output.name.trim()) {
+        output.nameEnglish = output.name.trim();
+    }
+
+    return output;
+}
+
+async function handleSpecificationImportFile(file) {
+    if (!file) {
+        showNotification('info', 'Import cancelled.', 3200, 'specificationNotificationArea');
+        return;
+    }
+
+    try {
+        const extension = (file.name || '').split('.').pop();
+        const normalizedExtension = extension ? extension.trim().toLowerCase() : '';
+        if (!SPECIFICATION_IMPORT_ALLOWED_EXTENSIONS.has(normalizedExtension)) {
+            showNotification('error', 'Unsupported file type. Please upload a CSV or JSON file.', 4200, 'specificationNotificationArea');
+            return;
+        }
+
+        const fileText = await file.text();
+        let rawRecords;
+
+        if (normalizedExtension === 'json') {
+            const parsed = JSON.parse(fileText);
+            if (Array.isArray(parsed)) {
+                rawRecords = parsed;
+            } else if (parsed && Array.isArray(parsed.specifications)) {
+                rawRecords = parsed.specifications;
+            } else {
+                throw new Error('The JSON file must contain an array of specifications.');
+            }
+        } else {
+            rawRecords = parseSpecificationCsv(fileText);
+        }
+
+        if (!Array.isArray(rawRecords) || !rawRecords.length) {
+            showNotification('error', 'No specification records found in the selected file.', 4200, 'specificationNotificationArea');
+            return;
+        }
+
+        const transformed = rawRecords.map(transformSpecificationImportRecord);
+        const normalized = transformed
+            .map((entry, index) => normalizeSpecificationPayload(entry, specifications.length + index))
+            .filter(Boolean);
+
+        if (!normalized.length) {
+            showNotification('error', 'No valid specification entries could be parsed.', 4200, 'specificationNotificationArea');
+            return;
+        }
+
+        const existingById = new Map(Array.isArray(specifications) ? specifications.map(spec => [spec.id, spec]) : []);
+        let addedCount = 0;
+        let updatedCount = 0;
+
+        normalized.forEach(specification => {
+            if (!specification || !specification.id) {
+                return;
+            }
+            const existing = existingById.get(specification.id);
+            if (existing) {
+                updatedCount += 1;
+                const mergedRecord = {
+                    ...existing,
+                    ...specification,
+                    createdAt: existing.createdAt || specification.createdAt || new Date().toISOString(),
+                    updatedAt: new Date().toISOString()
+                };
+                if (!mergedRecord.subSpecificationSummary) {
+                    mergedRecord.subSpecificationSummary = formatSubSpecificationSummary(mergedRecord.subSpecifications);
+                }
+                existingById.set(mergedRecord.id, mergedRecord);
+            } else {
+                addedCount += 1;
+                const createdAt = specification.createdAt || new Date().toISOString();
+                const record = {
+                    ...specification,
+                    createdAt,
+                    updatedAt: specification.updatedAt || createdAt
+                };
+                if (!record.subSpecificationSummary) {
+                    record.subSpecificationSummary = formatSubSpecificationSummary(record.subSpecifications);
+                }
+                existingById.set(record.id, record);
+            }
+        });
+
+        specifications = Array.from(existingById.values());
+        saveSpecificationsToStorage();
+        renderSpecificationList();
+
+        const summaryParts = [];
+        if (addedCount) {
+            summaryParts.push(`${addedCount} added`);
+        }
+        if (updatedCount) {
+            summaryParts.push(`${updatedCount} updated`);
+        }
+        const summary = summaryParts.length ? summaryParts.join(', ') : 'No changes detected';
+        const tone = addedCount || updatedCount ? 'success' : 'info';
+        showNotification(tone, `Specification import complete: ${summary}.`, 5200, 'specificationNotificationArea');
+    } catch (error) {
+        console.error('Specification import failed:', error);
+        showNotification('error', `Import failed: ${error.message || 'Unexpected error.'}`, 5200, 'specificationNotificationArea');
+    }
+}
+
+function exportSpecificationView() {
+    const records = Array.isArray(state.specificationFilteredList) && state.specificationFilteredList.length
+        ? state.specificationFilteredList
+        : Array.isArray(specifications)
+            ? specifications.slice()
+            : [];
+
+    if (!records.length) {
+        showNotification('info', 'No specifications available to export.', 3200, 'specificationNotificationArea');
+        return;
+    }
+
+    const headerRowHtml = SPECIFICATION_EXPORT_COLUMNS
+        .map(column => `<th>${escapeHtml(column.label)}</th>`)
+        .join('');
+
+    const bodyRowsHtml = records.map((specification, index) => {
+        const cellsHtml = SPECIFICATION_EXPORT_COLUMNS.map(column => {
+            let value = '';
+            try {
+                value = typeof column.value === 'function' ? column.value(specification, index) : '';
+            } catch (error) {
+                console.warn(`Unable to derive specification export value for column "${column.id}"`, error);
+                value = '';
+            }
+            const text = value == null ? '' : String(value);
+            return `<td>${escapeHtml(text)}</td>`;
+        }).join('');
+        return `<tr>${cellsHtml}</tr>`;
+    }).join('');
+
+    const htmlContent = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Specifications Export</title><style>table{border-collapse:collapse;font-family:Arial,Helvetica,sans-serif;font-size:13px;}th,td{border:1px solid #d1d5db;padding:6px 10px;text-align:left;}th{background:#f1f5f9;font-weight:600;}</style></head><body><table><thead><tr>${headerRowHtml}</tr></thead><tbody>${bodyRowsHtml}</tbody></table></body></html>`;
+    const blob = new Blob([htmlContent], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    const exportTimestamp = new Date();
+    const exportDate = `${String(exportTimestamp.getDate()).padStart(2, '0')}-${String(exportTimestamp.getMonth() + 1).padStart(2, '0')}-${exportTimestamp.getFullYear()}`;
+    link.download = `Specifications_Export_${exportDate}.xls`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    showNotification('success', 'Export ready. Check your downloads.', 3200, 'specificationNotificationArea');
 }
 
 function initializeCategoryImportWorkflow() {
@@ -8759,7 +9690,7 @@ function downloadCategoryImportTemplate() {
             'No',
             '0',
             '0',
-            '48h | 72h',
+            '48 (Hour), 72 (Hour)',
             '1000 (Yes)',
             'Yes',
             'No'
@@ -8786,7 +9717,7 @@ function downloadCategoryImportTemplate() {
             'Yes',
             '50',
             '25',
-            '24h | 36h',
+            '24 (Hour), 36 (Hour)',
             '500 (No)',
             'No',
             'Yes'
@@ -10353,6 +11284,7 @@ function populateCategoryForm(category) {
             delete parentSelect.dataset.parentCategoryId;
             delete parentSelect.dataset.parentCategoryLabel;
         }
+        updateParentCategoryClearState();
     }
     if (ownerInput) ownerInput.value = category.owner || '';
     if (priceTypeSelect) priceTypeSelect.value = category.productPriceType || 'fixed';
@@ -10413,6 +11345,13 @@ function showCategoryBuilder(mode = 'create', category = null) {
     const form = document.getElementById('categoryForm');
     if (!directory || !builder || !addBtn || !form) return;
 
+    const infoPopover = document.getElementById('parentCategoryInfoPopover');
+    const infoTrigger = document.getElementById('parentCategoryInfoTrigger');
+    if (infoPopover && infoTrigger) {
+        infoPopover.classList.add('hidden');
+        infoTrigger.setAttribute('aria-expanded', 'false');
+    }
+
     state.categoryBuilderMode = mode === 'edit' ? 'edit' : 'create';
     state.editingCategoryId = mode === 'edit' && category ? category.id : null;
 
@@ -10439,6 +11378,8 @@ function showCategoryBuilder(mode = 'create', category = null) {
         delete parentSelect.dataset.parentCategoryLabel;
     }
 
+    updateParentCategoryClearState();
+
     updateCategoryImagePreview(null);
 
     updateCategoryFormHeader(category);
@@ -10451,6 +11392,7 @@ function showCategoryBuilder(mode = 'create', category = null) {
         populateCategoryForm(category);
     } else {
         applyCategoryPricingToggleStates();
+        updateParentCategoryClearState();
     }
 
     builder.classList.remove('hidden');
@@ -10479,6 +11421,13 @@ function hideCategoryBuilder() {
     form.reset();
     setAuctionPeriodsInput([]);
 
+    const infoPopover = document.getElementById('parentCategoryInfoPopover');
+    const infoTrigger = document.getElementById('parentCategoryInfoTrigger');
+    if (infoPopover && infoTrigger) {
+        infoPopover.classList.add('hidden');
+        infoTrigger.setAttribute('aria-expanded', 'false');
+    }
+
     const syncToggle = document.getElementById('categorySyncToggle');
     const alertToggle = document.getElementById('categoryAlertToggle');
     const imageInput = document.getElementById('categoryImageInput');
@@ -10493,6 +11442,8 @@ function hideCategoryBuilder() {
         delete imageInput.dataset.storedDataUrl;
         delete imageInput.dataset.storedImageName;
     }
+
+    updateParentCategoryClearState();
 
     applyCategoryPricingToggleStates();
 
@@ -10765,11 +11716,24 @@ async function handleCategoryFormSubmit(event) {
 
         const previousLabel = getCategoryDisplayName(existing);
         const previousStatus = existing.status;
+        const previousParentId = getCategoryParentId(existing);
         Object.assign(existing, categoryData);
         if (!statusFieldPresent || !statusFromForm) {
             existing.status = previousStatus;
         }
+        const currentParentId = getCategoryParentId(existing);
+        if (!currentParentId || currentParentId === CATEGORY_TREE_ROOT_ID) {
+            existing.parent = '';
+            existing.parentCategoryId = '';
+            if (Object.prototype.hasOwnProperty.call(existing, 'parentCategory')) {
+                existing.parentCategory = '';
+            }
+        }
         existing.updatedAt = new Date().toISOString();
+        const becameTopLevel = previousParentId !== CATEGORY_TREE_ROOT_ID && currentParentId === CATEGORY_TREE_ROOT_ID;
+        if (becameTopLevel) {
+            promoteCategoryToTopLevel(existing, categories, { updatedAt: existing.updatedAt });
+        }
         const updatedLabel = getCategoryDisplayName(existing);
         if (previousLabel !== updatedLabel) {
             updateChildCategoryParentLabels(existing.id, updatedLabel);
