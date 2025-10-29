@@ -8,6 +8,7 @@
     const DATA_RESET_KEY = 'onruf_data_reset_version';
     const INVITATION_SERVICE_ENDPOINT_DEFAULT = '/api/invitations/send';
     const INVITATION_VALIDITY_MS = 7 * 24 * 60 * 60 * 1000;
+    const PASSWORD_POLICY_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/;
 
     function resolveInvitationServiceUrl() {
         try {
@@ -286,6 +287,43 @@
         }, timeout);
     }
 
+    function setFieldErrorState(input, errorElement, message) {
+        if (!input || !errorElement) {
+            return;
+        }
+        if (message) {
+            errorElement.textContent = message;
+            errorElement.classList.remove('hidden');
+            input.classList.add('input-error');
+        } else {
+            errorElement.textContent = '';
+            errorElement.classList.add('hidden');
+            input.classList.remove('input-error');
+        }
+    }
+
+    function applyRegistrationRequiredIndicators() {
+        const form = document.getElementById('registrationAccountForm');
+        if (!form) {
+            return;
+        }
+        const requiredFields = form.querySelectorAll('input[required], select[required], textarea[required]');
+        requiredFields.forEach(field => {
+            const label = field.id ? form.querySelector(`label[for="${field.id}"]`) : field.closest('label');
+            if (!label) {
+                return;
+            }
+            const isAgreementField = label.id === 'registrationPrivacyAgreeLabel' || field.id === 'registrationPrivacyAgree';
+            if (isAgreementField) {
+                label.classList.remove('required');
+                return;
+            }
+            if (!label.classList.contains('required')) {
+                label.classList.add('required');
+            }
+        });
+    }
+
     function attachPasswordToggle(button) {
         if (!button) return;
         const targetId = button.dataset.toggleTarget;
@@ -329,9 +367,15 @@
             const firstNameInput = document.getElementById('registrationFirstName');
             const lastNameInput = document.getElementById('registrationLastName');
             const phoneInput = document.getElementById('registrationPhone');
+            const genderInputs = document.querySelectorAll('input[name="registrationGender"]');
             if (firstNameInput) firstNameInput.value = authState.pendingPersonalData.firstName || '';
             if (lastNameInput) lastNameInput.value = authState.pendingPersonalData.lastName || '';
             if (phoneInput) phoneInput.value = authState.pendingPersonalData.phone || '';
+            if (genderInputs.length) {
+                genderInputs.forEach(input => {
+                    input.checked = input.value === (authState.pendingPersonalData.gender || '');
+                });
+            }
         }
         
         const firstNameInput = document.getElementById('registrationFirstName');
@@ -641,7 +685,9 @@
     const invitationExpiresEl = document.getElementById('summaryInvitationExpiresAt');
 
         if (roleEl) {
-            roleEl.textContent = user.role || 'Pending role';
+            const rawRole = typeof user.role === 'string' ? user.role.trim() : '';
+            const simplifiedRole = rawRole ? rawRole.replace(/\s*\([^)]*\)\s*$/, '').trim() : '';
+            roleEl.textContent = simplifiedRole || rawRole || 'Pending role';
         }
         if (sentAtEl) {
             sentAtEl.textContent = user.invitation && user.invitation.sentAt ? formatDateTime(user.invitation.sentAt) : '—';
@@ -790,10 +836,11 @@
         });
     }
 
-    function updateOtpEmailLabel(email) {
-        const label = document.getElementById('otpEmailLabel');
+    function updateOtpContactLabel(contactValue) {
+        const label = document.getElementById('otpContactLabel');
         if (label) {
-            label.textContent = email || '—';
+            const normalizedContact = typeof contactValue === 'string' ? contactValue.trim() : '';
+            label.textContent = normalizedContact || '—';
         }
     }
 
@@ -994,6 +1041,7 @@
         setupSharedToggles();
         setupOtpInputBehavior();
         setupPrivacyModal();
+        applyRegistrationRequiredIndicators();
 
         const params = new URLSearchParams(window.location.search);
         const token = params.get('token');
@@ -1081,6 +1129,28 @@
         if (phoneInput) phoneInput.value = user.phone || '';
         if (emailDisplay) emailDisplay.value = user.email || '';
 
+        const passwordInput = document.getElementById('registrationPassword');
+        const passwordError = document.getElementById('registrationPasswordError');
+        if (passwordInput && passwordError) {
+            const handlePasswordBlurFeedback = () => {
+                const value = passwordInput.value || '';
+                if (!value) {
+                    setFieldErrorState(passwordInput, passwordError, '');
+                    return;
+                }
+                if (!PASSWORD_POLICY_REGEX.test(value)) {
+                    setFieldErrorState(passwordInput, passwordError, 'Password Must be at Least 8 Characters Long and Contain Uppercase and Lowercase Letters, and at Least One Number');
+                } else {
+                    setFieldErrorState(passwordInput, passwordError, '');
+                }
+            };
+            const clearPasswordFeedbackWhileTyping = () => {
+                setFieldErrorState(passwordInput, passwordError, '');
+            };
+            passwordInput.addEventListener('input', clearPasswordFeedbackWhileTyping);
+            passwordInput.addEventListener('blur', handlePasswordBlurFeedback);
+        }
+
         if (isInvitationExpired(user.invitation)) {
             handleExpiredInvitation(user);
             return;
@@ -1144,7 +1214,8 @@
             });
         }
 
-        updateOtpEmailLabel(user.email);
+    const initialContact = (user.phone && user.phone.trim()) ? user.phone.trim() : (user.email || '');
+    updateOtpContactLabel(initialContact);
         setRegistrationStep('account');
     }
 
@@ -1167,6 +1238,9 @@
         const passwordInput = document.getElementById('registrationPassword');
         const confirmInput = document.getElementById('registrationPasswordConfirm');
         const photoInput = document.getElementById('registrationPhoto');
+        const genderSelected = document.querySelector('input[name="registrationGender"]:checked');
+        const passwordError = document.getElementById('registrationPasswordError');
+        const confirmError = document.getElementById('registrationPasswordConfirmError');
     const privacyCheckbox = document.getElementById('registrationPrivacyAgree');
 
         const firstName = firstNameInput?.value.trim();
@@ -1175,6 +1249,10 @@
         const password = passwordInput?.value || '';
         const confirm = confirmInput?.value || '';
         const photoFile = photoInput?.files?.[0] || null;
+        const gender = genderSelected ? genderSelected.value : '';
+
+        setFieldErrorState(passwordInput, passwordError, '');
+        setFieldErrorState(confirmInput, confirmError, '');
 
         if (!firstName) {
             showToast('error', 'First name is required.');
@@ -1212,12 +1290,32 @@
             phoneInput?.focus();
             return;
         }
-        if (password.length < 8) {
-            showToast('error', 'Password must be at least 8 characters long.');
+
+        if (!gender) {
+            showToast('error', 'The Gender is Required');
+            const genderFocus = document.getElementById('registrationGenderMale') || document.getElementById('registrationGenderFemale');
+            genderFocus?.focus();
+            return;
+        }
+        if (!password) {
+            setFieldErrorState(passwordInput, passwordError, '');
+            showToast('error', 'Please Enter your Password');
             passwordInput?.focus();
             return;
         }
+        if (!PASSWORD_POLICY_REGEX.test(password)) {
+            setFieldErrorState(passwordInput, passwordError, 'Password Must be at Least 8 Characters Long and Contain Uppercase and Lowercase Letters, and at Least One Number');
+            passwordInput?.focus();
+            return;
+        }
+        if (!confirm) {
+            setFieldErrorState(confirmInput, confirmError, '');
+            showToast('error', 'Please Confirm your Password');
+            confirmInput?.focus();
+            return;
+        }
         if (password !== confirm) {
+            setFieldErrorState(confirmInput, confirmError, '');
             showToast('error', 'Password Does not Match, Please Check Again');
             confirmInput?.focus();
             return;
@@ -1249,6 +1347,7 @@
             firstName,
             lastName,
             phone,
+            gender,
             photoFile: photoFile || null,
             photoDataUrl: null,
             photoFileName: photoFile ? photoFile.name : null
@@ -1277,9 +1376,12 @@
 
         saveUsersToStorage();
         renderSummary(user);
-        updateOtpEmailLabel(user.email);
+        const otpContact = (authState.pendingPersonalData && typeof authState.pendingPersonalData.phone === 'string')
+            ? authState.pendingPersonalData.phone.trim()
+            : (user.phone || '');
+    updateOtpContactLabel(otpContact);
         resetOtpInputs(authState.otp);
-        showToast('success', 'Information Saved. A One-Time Verification Code has been sent to your Email Address.', 3000);
+    showToast('success', 'Information Saved. A One-Time Verification Code has been sent to your Phone Number.', 3000);
         updateHeadline('');
         setStatusPill('', '');
         setRegistrationStep('otp');
@@ -1323,6 +1425,7 @@
             user.lastName = authState.pendingPersonalData.lastName;
             user.name = `${authState.pendingPersonalData.firstName} ${authState.pendingPersonalData.lastName}`.trim();
             user.phone = authState.pendingPersonalData.phone;
+            user.gender = authState.pendingPersonalData.gender || '';
             if (authState.pendingPersonalData.photoDataUrl) {
                 user.photoDataUrl = authState.pendingPersonalData.photoDataUrl;
                 user.photoFileName = authState.pendingPersonalData.photoFileName;

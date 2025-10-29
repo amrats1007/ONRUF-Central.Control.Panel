@@ -240,8 +240,8 @@
 
                 <section id="users" class="section-content">
                     <div class="sub-apps-nav">
-                        <button class="sub-app-btn active" data-target="users-app1" data-label="User Roles">
-                            <span>User Roles</span>
+                        <button class="sub-app-btn active" data-target="users-app1" data-label="User Roles Management">
+                            <span>User Roles Management</span>
                             <span class="count" id="userRolesCount">#0 Roles</span>
                         </button>
                         <button class="sub-app-btn" data-target="users-app2" data-label="Users Management">
@@ -256,7 +256,7 @@
                                 <h2 class="module-title" id="roleModuleTitle">User Roles</h2>
                                 <div class="search-box" id="roleSearchContainer">
                                     <i class="fas fa-search"></i>
-                                    <input type="text" id="roleSearchInput" placeholder="Search by User Role Name, ID, or Description" />
+                                    <input type="text" id="roleSearchInput" placeholder="Search by User Role Name, Code, or Description" />
                                 </div>
                             </div>
                             <div class="roles-actions">
@@ -273,7 +273,7 @@
                                     <thead>
                                         <tr>
                                             <th>#</th>
-                                            <th>ID</th>
+                                            <th>Code</th>
                                             <th class="role-column">Role</th>
                                             <th>Description</th>
                                             <th>Users</th>
@@ -298,8 +298,8 @@
                                 </div>
                                 <form id="roleForm" class="form-grid" novalidate>
                                     <div class="form-group">
-                                        <label class="form-label required" for="roleIdInput">ID</label>
-                                        <input type="text" class="form-input" id="roleIdInput" placeholder="e.g. ROLE-001" required pattern="^[A-Za-z0-9_-]+$" title="Unique ID (letters, numbers, dashes, underscores)" />
+                                        <label class="form-label required" for="roleIdInput">Role Code</label>
+                                        <input type="text" class="form-input" id="roleIdInput" placeholder="e.g. ROLE-001" required pattern="^[A-Za-z0-9_-]+$" title="The role code must be unique and contain only letters, numbers, hyphens, or underscores." />
                                         <span class="form-validation-error hidden" id="roleIdError" role="alert"></span>
                                     </div>
                                     <div class="form-group">
@@ -386,7 +386,7 @@
                                 <h2 class="module-title" id="usersModuleTitle">User Accounts</h2>
                                 <div class="search-box">
                                     <i class="fas fa-search"></i>
-                                    <input type="text" id="userSearch" placeholder="Search by User Name, Email, Phone, Role, Status, Department or ID" />
+                                    <input type="text" id="userSearch" placeholder="Search by User Name, Email, Phone, Role, Status, Department, or ID" />
                                 </div>
                             </div>
                             <div class="users-actions">
@@ -491,8 +491,8 @@
                                                     </select>
                                                 </div>
                                                 <div class="form-group">
-                                                    <label class="form-label required" for="userEmployeeId">ID</label>
-                                                    <input type="text" class="form-input" id="userEmployeeId" placeholder="e.g. ONR-4521" required aria-required="true" />
+                                                    <label class="form-label required" for="userEmployeeId">Employee Code</label>
+                                                    <input type="text" class="form-input" id="userEmployeeId" placeholder="e.g. EMP-4521" required aria-required="true" />
                                                     <span class="form-validation-error hidden" id="userEmployeeIdError" role="alert"></span>
                                                 </div>
                                                 <div id="userCompletedRegistrationSection" class="completed-registration-section hidden">
@@ -846,7 +846,7 @@
                                         <p class="import-drop-hint" id="categoryImportHelp">
                                             Supports Excel (.xls or .xlsx) or CSV<br />
                                             Max 5&nbsp;MB<br />
-                                            Required columns: Category Name (Arabic), Category Name (English)
+                                            Required columns: Category Name (Arabic), and Category Name (English)
                                         </p>
                                     </div>
                                     <button type="button" class="btn btn-ghost import-template-btn" id="categoryImportTemplateBtn">
@@ -1075,7 +1075,7 @@
                                             <h2 style="margin-top:0;font-size:20px;margin-bottom:16px;">Default Auction Closing Periods</h2>
                                             <p style="margin-top:0;margin-bottom:16px;color:#4b5563;font-size:14px;">Add one or more default periods that define how long auctions stay open.</p>
                                             <div id="auctionPeriodsRows" style="display:flex; flex-direction:column; gap:12px;"></div>
-                                            <div style="display:flex; justify-content:flex-end; gap:12px; margin-top:24px;">
+                                            <div class="modal-actions">
                                                 <button type="button" class="btn btn-outline" id="cancelAuctionPeriodsBtn">Cancel</button>
                                                 <button type="button" class="btn btn-primary" id="applyAuctionPeriodsBtn">Apply</button>
                                             </div>
@@ -1137,7 +1137,7 @@
                                 <h2 class="module-title" id="specificationModuleTitle">Specifications</h2>
                                 <div class="search-box" id="specificationSearchContainer">
                                     <i class="fas fa-search"></i>
-                                    <input type="text" id="specificationSearch" placeholder="Search by Specification Name, or Description" />
+                                    <input type="text" id="specificationSearch" placeholder="Search by Category Name, Description, or Code" />
                                 </div>
                             </div>
                             <div class="users-actions" id="specificationActions">
@@ -1169,6 +1169,7 @@
                                     <thead>
                                         <tr>
                                             <th>#</th>
+                                            <th>Code</th>
                                             <th>Specification</th>
                                             <th>Description</th>
                                             <th>Type</th>
@@ -1190,19 +1191,19 @@
                                 <header class="import-dialog-header">
                                     <div>
                                         <h3 id="specificationImportTitle">Import Specifications</h3>
-                                        <p id="specificationImportSubtitle" class="import-dialog-subtitle">Upload a CSV (.csv) or JSON (.json) file to add new specifications or refresh existing ones in bulk.</p>
+                                        <p id="specificationImportSubtitle" class="import-dialog-subtitle">Upload an Excel (.xls or .xlsx) or CSV file to Add New Specifications or Refresh Existing Ones in Bulk.</p>
                                     </div>
                                 </header>
                                 <div class="import-body">
-                                    <input type="file" id="specificationImportFileInput" accept=".csv,.json" hidden />
+                                    <input type="file" id="specificationImportFileInput" accept=".csv,.xls,.xlsx" hidden />
                                     <div class="import-dropzone" id="specificationImportDropzone" tabindex="0" role="button" aria-describedby="specificationImportHelp">
                                         <i class="fas fa-cloud-arrow-up import-drop-icon" aria-hidden="true"></i>
                                         <div class="import-drop-primary">Drag &amp; drop your file</div>
                                         <div class="import-drop-secondary">or <button type="button" class="btn btn-secondary btn-compact" id="specificationImportBrowseBtn">Browse files</button></div>
                                         <p class="import-drop-hint" id="specificationImportHelp">
-                                            Supports CSV (.csv) or JSON (.json)<br />
+                                            Supports Excel (.xls or .xlsx) or CSV<br />
                                             Max 5&nbsp;MB<br />
-                                            Suggested fields: Specification Name (Arabic), Specification Name (English)
+                                            Required columns: Specification Name (Arabic), Specification Name (English), Data Type, and Categories
                                         </p>
                                     </div>
                                     <button type="button" class="btn btn-ghost import-template-btn" id="specificationImportTemplateBtn">
@@ -1333,7 +1334,7 @@
                                             <h2 style="margin-top:0;font-size:20px;margin-bottom:16px;">Sub-Specifications</h2>
                                             <p style="margin-top:0;margin-bottom:16px;color:#4b5563;font-size:14px;">Capture localized labels for each sub-specification option.</p>
                                             <div id="subSpecificationRows" style="display:flex; flex-direction:column; gap:12px;"></div>
-                                            <div style="display:flex; justify-content:flex-end; gap:12px; margin-top:24px;">
+                                            <div class="modal-actions">
                                                 <button type="button" class="btn btn-outline" id="cancelSubSpecificationBtn">Cancel</button>
                                                 <button type="button" class="btn btn-primary" id="applySubSpecificationBtn">Apply</button>
                                             </div>

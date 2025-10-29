@@ -539,6 +539,14 @@ function setupCategoryModal() {
         return;
     }
 
+    const closeModal = () => {
+        if (modal.classList.contains('hidden')) {
+            return;
+        }
+        modal.classList.add('hidden');
+        document.body.classList.remove('modal-open');
+    };
+
     const clearSelection = () => {
         input.value = '';
         if (input.dataset) {
@@ -554,13 +562,9 @@ function setupCategoryModal() {
         }
     };
 
-    const closeModal = () => {
-        modal.classList.add('hidden');
-        document.body.classList.remove('modal-open');
-    };
-
     const selectCategory = entry => {
         if (!entry) {
+            clearSelection();
             closeModal();
             return;
         }
@@ -580,6 +584,11 @@ function setupCategoryModal() {
         categoryModalSelectedKey = normalizeCategoryModalKey(entry);
         updateParentCategoryClearState();
         closeModal();
+        try {
+            input.focus({ preventScroll: true });
+        } catch (error) {
+            input.focus();
+        }
     };
 
     const findCategoryForValue = (value, searchList) => {
@@ -602,10 +611,15 @@ function setupCategoryModal() {
             return;
         }
 
+        const modalCategories = getCategoriesForParentModal({ includeInactive: true });
+        if (!Array.isArray(modalCategories) || !modalCategories.length) {
+            showNotification('info', 'No categories available yet. Create a category first.', 3200, 'categoryNotificationArea');
+            return;
+        }
+
         modal.classList.remove('hidden');
         document.body.classList.add('modal-open');
 
-        const modalCategories = getCategoriesForParentModal({ includeInactive: true });
         const expandedKeys = new Set();
 
         const disabledById = new Map();
@@ -817,6 +831,69 @@ function sanitizeAuctionPeriodList(entries) {
         .filter(item => item !== null);
 }
 
+function updateModalErrorState(modal) {
+    if (!modal) {
+        return;
+    }
+    const hasErrors = Boolean(modal.querySelector('.field-error:not(.hidden)'));
+    modal.classList.toggle('has-field-errors', hasErrors);
+}
+
+function clearFieldError(field) {
+    if (!field) {
+        return;
+    }
+    field.classList.remove('is-invalid');
+    field.removeAttribute('aria-invalid');
+    field.removeAttribute('aria-describedby');
+    field.removeAttribute('data-error-active');
+    field.removeAttribute('title');
+    const errorId = field.dataset ? field.dataset.errorId : '';
+    if (errorId) {
+        const errorElement = document.getElementById(errorId);
+        if (errorElement) {
+            errorElement.textContent = '';
+            errorElement.classList.add('hidden');
+            errorElement.removeAttribute('role');
+        }
+    }
+    const modal = field.closest('.modal');
+    updateModalErrorState(modal);
+}
+
+function showFieldError(field, message) {
+    if (!field) {
+        return;
+    }
+    field.classList.add('is-invalid');
+    field.setAttribute('aria-invalid', 'true');
+    field.setAttribute('data-error-active', 'true');
+    field.setAttribute('title', message);
+    const errorId = field.dataset ? field.dataset.errorId : '';
+    let errorElement = errorId ? document.getElementById(errorId) : null;
+    if (!errorElement && field.parentElement) {
+        errorElement = field.parentElement.querySelector('.field-error');
+        if (errorElement && field.dataset) {
+            field.dataset.errorId = errorElement.id || '';
+        }
+    }
+    if (errorElement) {
+        if (!errorElement.id) {
+            const fallbackId = `${field.id || 'field'}-error`;
+            errorElement.id = fallbackId;
+            if (field.dataset) {
+                field.dataset.errorId = fallbackId;
+            }
+        }
+        errorElement.textContent = message;
+        errorElement.classList.remove('hidden');
+        errorElement.setAttribute('role', 'alert');
+        field.setAttribute('aria-describedby', errorElement.id);
+    }
+    const modal = field.closest('.modal');
+    updateModalErrorState(modal);
+}
+
 function parseAuctionPeriods(value, fallbackUnit = 'hour') {
     const normalizedFallback = AUCTION_PERIOD_UNIT_LABELS.has(fallbackUnit) ? fallbackUnit : 'hour';
     if (Array.isArray(value)) {
@@ -900,6 +977,7 @@ function closeAuctionPeriodsModal() {
     const modal = document.getElementById('auctionPeriodsModal');
     if (!modal) return;
     modal.classList.add('hidden');
+    modal.classList.remove('has-field-errors');
     document.body.classList.remove('modal-open');
     auctionPeriodsWorkingCopy = [];
 }
@@ -913,6 +991,8 @@ function handleAuctionPeriodUnitChange(index, nextUnit) {
         return;
     }
     auctionPeriodsWorkingCopy[index].unit = normalized;
+    const field = document.getElementById(`auctionPeriodUnit-${index}`);
+    clearFieldError(field);
 }
 
 function handleAuctionPeriodValueChange(index, nextValue) {
@@ -921,6 +1001,8 @@ function handleAuctionPeriodValueChange(index, nextValue) {
     }
     const parsedValue = Number.parseInt(nextValue, 10);
     auctionPeriodsWorkingCopy[index].value = Number.isFinite(parsedValue) ? parsedValue : null;
+    const field = document.getElementById(`auctionPeriodValue-${index}`);
+    clearFieldError(field);
 }
 
 function removeAuctionPeriodRow(index) {
@@ -977,19 +1059,23 @@ function renderAuctionPeriodsRows() {
     auctionPeriodsPendingFocusIndex = null;
 
     auctionPeriodsWorkingCopy.forEach((entry, index) => {
-        const row = document.createElement('div');
-        row.className = 'auction-period-row';
-        row.style = 'display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;';
+    const row = document.createElement('div');
+    row.className = 'auction-period-row';
+    row.style = 'display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start;';
 
         const unitWrapper = document.createElement('div');
         unitWrapper.style = 'flex:1;min-width:160px;display:flex;flex-direction:column;gap:6px;';
         const unitLabel = document.createElement('label');
-        unitLabel.className = 'form-label';
+        unitLabel.className = 'form-label required';
         unitLabel.textContent = 'Unit';
         unitLabel.setAttribute('for', `auctionPeriodUnit-${index}`);
         const unitSelect = document.createElement('select');
         unitSelect.className = 'form-select';
         unitSelect.id = `auctionPeriodUnit-${index}`;
+        unitSelect.name = 'auction-period-unit';
+        unitSelect.required = true;
+        unitSelect.dataset.errorId = `auctionPeriodUnitError-${index}`;
+        unitSelect.dataset.errorLabel = 'Unit';
         AUCTION_PERIOD_UNIT_OPTIONS.forEach(option => {
             const opt = document.createElement('option');
             opt.value = option.value;
@@ -1002,11 +1088,15 @@ function renderAuctionPeriodsRows() {
         });
         unitWrapper.appendChild(unitLabel);
         unitWrapper.appendChild(unitSelect);
+        const unitError = document.createElement('div');
+        unitError.className = 'field-error hidden';
+        unitError.id = unitSelect.dataset.errorId;
+        unitWrapper.appendChild(unitError);
 
         const valueWrapper = document.createElement('div');
         valueWrapper.style = 'flex:1;min-width:140px;display:flex;flex-direction:column;gap:6px;';
         const valueLabel = document.createElement('label');
-        valueLabel.className = 'form-label';
+        valueLabel.className = 'form-label required';
         valueLabel.textContent = 'Number';
         valueLabel.setAttribute('for', `auctionPeriodValue-${index}`);
         const valueInput = document.createElement('input');
@@ -1017,12 +1107,18 @@ function renderAuctionPeriodsRows() {
         valueInput.className = 'form-input';
         valueInput.id = `auctionPeriodValue-${index}`;
         valueInput.name = 'auction-period-value';
+        valueInput.dataset.errorId = `auctionPeriodValueError-${index}`;
+        valueInput.dataset.errorLabel = 'Number';
         valueInput.value = Number.isFinite(entry.value) && entry.value > 0 ? entry.value : '';
         valueInput.addEventListener('input', event => {
             handleAuctionPeriodValueChange(index, event.target.value);
         });
         valueWrapper.appendChild(valueLabel);
         valueWrapper.appendChild(valueInput);
+        const valueError = document.createElement('div');
+        valueError.className = 'field-error hidden';
+        valueError.id = valueInput.dataset.errorId;
+        valueWrapper.appendChild(valueError);
 
         const actionsWrapper = document.createElement('div');
         actionsWrapper.style = 'display:flex;align-items:center;gap:8px;min-width:88px;padding-bottom:4px;';
@@ -1083,13 +1179,57 @@ function openAuctionPeriodsModal() {
 function applyAuctionPeriodsSelection() {
     const modal = document.getElementById('auctionPeriodsModal');
     if (!modal) return;
-    const inputs = modal.querySelectorAll('input[name="auction-period-value"]');
-    for (const field of inputs) {
-        if (!field.checkValidity()) {
-            field.reportValidity();
-            return;
+    const fields = [
+        ...modal.querySelectorAll('select[name="auction-period-unit"]'),
+        ...modal.querySelectorAll('input[name="auction-period-value"]')
+    ];
+
+    fields.forEach(field => clearFieldError(field));
+
+    let firstErrorField = null;
+
+    fields.forEach(field => {
+        const label = field.dataset && field.dataset.errorLabel ? field.dataset.errorLabel : 'This field';
+        const value = typeof field.value === 'string' ? field.value.trim() : '';
+        if ((field.required && !value) || !field.checkValidity()) {
+            showFieldError(field, `${label} is Required`);
+            if (!firstErrorField) {
+                firstErrorField = field;
+            }
+        }
+    });
+
+    for (let index = 0; index < auctionPeriodsWorkingCopy.length; index += 1) {
+        const entry = auctionPeriodsWorkingCopy[index] || {};
+        const unit = typeof entry.unit === 'string' ? entry.unit.trim().toLowerCase() : '';
+        const value = entry.value;
+        if (!AUCTION_PERIOD_UNIT_LABELS.has(unit)) {
+            const field = document.getElementById(`auctionPeriodUnit-${index}`);
+            if (field) {
+                const label = field.dataset && field.dataset.errorLabel ? field.dataset.errorLabel : 'Unit';
+                showFieldError(field, `${label} is Required`);
+                if (!firstErrorField) {
+                    firstErrorField = field;
+                }
+            }
+        }
+        if (!Number.isFinite(value) || value <= 0) {
+            const field = document.getElementById(`auctionPeriodValue-${index}`);
+            if (field) {
+                const label = field.dataset && field.dataset.errorLabel ? field.dataset.errorLabel : 'Number';
+                showFieldError(field, `${label} is Required`);
+                if (!firstErrorField) {
+                    firstErrorField = field;
+                }
+            }
         }
     }
+
+    if (firstErrorField) {
+        firstErrorField.focus();
+        return;
+    }
+
     const sanitized = sanitizeAuctionPeriodList(auctionPeriodsWorkingCopy);
     setAuctionPeriodsInput(sanitized);
     closeAuctionPeriodsModal();
@@ -1428,8 +1568,7 @@ function renderSpecificationCategoriesModalOptions(filterTerm = '') {
         });
 
     if (!matches.length) {
-        const emptyTerm = displayTerm ? ` “${escapeHtml(displayTerm)}”` : '';
-        listContainer.innerHTML = `<div class="category-picker-empty">No categories match${emptyTerm}.</div>`;
+        listContainer.innerHTML = '<div class="category-picker-empty">There is No Data Available.</div>';
         return;
     }
 
@@ -1579,6 +1718,7 @@ function closeSubSpecificationModal() {
         return;
     }
     modal.classList.add('hidden');
+    modal.classList.remove('has-field-errors');
     document.body.classList.remove('modal-open');
     subSpecificationWorkingCopy = [];
     subSpecificationPendingFocusIndex = null;
@@ -1589,6 +1729,11 @@ function handleSubSpecificationNameChange(index, field, nextValue) {
         return;
     }
     subSpecificationWorkingCopy[index][field] = typeof nextValue === 'string' ? nextValue : '';
+    if (field === 'nameArabic') {
+        clearFieldError(document.getElementById(`subSpecificationArabic-${index}`));
+    } else if (field === 'nameEnglish') {
+        clearFieldError(document.getElementById(`subSpecificationEnglish-${index}`));
+    }
 }
 
 function removeSubSpecificationRow(index) {
@@ -1626,8 +1771,8 @@ function renderSubSpecificationRows() {
     if (!Array.isArray(subSpecificationWorkingCopy) || !subSpecificationWorkingCopy.length) {
         const emptyState = document.createElement('div');
         emptyState.style = 'display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px;border:1px dashed #d1d5db;border-radius:8px;color:#6b7280;font-size:14px;';
-    const message = document.createElement('span');
-    message.textContent = 'No sub-specifications added yet.';
+        const message = document.createElement('span');
+        message.textContent = 'No sub-specifications added yet.';
         const addBtn = document.createElement('button');
         addBtn.type = 'button';
         addBtn.className = 'btn btn-outline';
@@ -1647,19 +1792,23 @@ function renderSubSpecificationRows() {
     subSpecificationPendingFocusIndex = null;
 
     subSpecificationWorkingCopy.forEach((entry, index) => {
-        const row = document.createElement('div');
-        row.style = 'display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;';
+    const row = document.createElement('div');
+    row.style = 'display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start;';
 
         const arabicWrapper = document.createElement('div');
         arabicWrapper.style = 'flex:1;min-width:220px;display:flex;flex-direction:column;gap:6px;';
         const arabicLabel = document.createElement('label');
-        arabicLabel.className = 'form-label';
+        arabicLabel.className = 'form-label required';
         arabicLabel.textContent = 'Arabic Name';
         arabicLabel.setAttribute('for', `subSpecificationArabic-${index}`);
         const arabicInput = document.createElement('input');
         arabicInput.type = 'text';
         arabicInput.className = 'form-input';
         arabicInput.id = `subSpecificationArabic-${index}`;
+        arabicInput.name = 'sub-specification-name-ar';
+        arabicInput.required = true;
+        arabicInput.dataset.errorId = `subSpecificationArabicError-${index}`;
+        arabicInput.dataset.errorLabel = 'Arabic Name';
         arabicInput.placeholder = 'مثال: خيار فرعي';
         arabicInput.dir = 'rtl';
         arabicInput.value = entry.nameArabic || '';
@@ -1668,17 +1817,25 @@ function renderSubSpecificationRows() {
         });
         arabicWrapper.appendChild(arabicLabel);
         arabicWrapper.appendChild(arabicInput);
+        const arabicError = document.createElement('div');
+        arabicError.className = 'field-error hidden';
+        arabicError.id = arabicInput.dataset.errorId;
+        arabicWrapper.appendChild(arabicError);
 
         const englishWrapper = document.createElement('div');
         englishWrapper.style = 'flex:1;min-width:220px;display:flex;flex-direction:column;gap:6px;';
         const englishLabel = document.createElement('label');
-        englishLabel.className = 'form-label';
+        englishLabel.className = 'form-label required';
         englishLabel.textContent = 'English Name';
         englishLabel.setAttribute('for', `subSpecificationEnglish-${index}`);
         const englishInput = document.createElement('input');
         englishInput.type = 'text';
         englishInput.className = 'form-input';
         englishInput.id = `subSpecificationEnglish-${index}`;
+        englishInput.name = 'sub-specification-name-en';
+        englishInput.required = true;
+        englishInput.dataset.errorId = `subSpecificationEnglishError-${index}`;
+        englishInput.dataset.errorLabel = 'English Name';
         englishInput.placeholder = 'e.g. Sub Specification';
         englishInput.dir = 'ltr';
         englishInput.value = entry.nameEnglish || '';
@@ -1687,6 +1844,10 @@ function renderSubSpecificationRows() {
         });
         englishWrapper.appendChild(englishLabel);
         englishWrapper.appendChild(englishInput);
+        const englishError = document.createElement('div');
+        englishError.className = 'field-error hidden';
+        englishError.id = englishInput.dataset.errorId;
+        englishWrapper.appendChild(englishError);
 
         const actionsWrapper = document.createElement('div');
         actionsWrapper.style = 'display:flex;align-items:center;gap:8px;min-width:88px;padding-bottom:4px;';
@@ -1752,18 +1913,56 @@ function applySubSpecificationSelection() {
     if (!modal) {
         return;
     }
-    const sanitized = sanitizeSubSpecificationList(subSpecificationWorkingCopy);
-    if (subSpecificationWorkingCopy.length && sanitized.length !== subSpecificationWorkingCopy.length) {
-        const blankIndex = subSpecificationWorkingCopy.findIndex(item => !item || (!item.nameArabic && !item.nameEnglish));
-        if (blankIndex !== -1) {
-            const focusTarget = modal.querySelector(`#subSpecificationEnglish-${blankIndex}`) || modal.querySelector(`#subSpecificationArabic-${blankIndex}`);
-            if (focusTarget) {
-                focusTarget.focus();
+    const inputs = modal.querySelectorAll('input[name="sub-specification-name-ar"], input[name="sub-specification-name-en"]');
+    inputs.forEach(field => clearFieldError(field));
+
+    let firstErrorField = null;
+
+    inputs.forEach(field => {
+        const label = field.dataset && field.dataset.errorLabel ? field.dataset.errorLabel : 'This field';
+        const value = typeof field.value === 'string' ? field.value.trim() : '';
+        if (!value || !field.checkValidity()) {
+            showFieldError(field, `${label} is Required`);
+            if (!firstErrorField) {
+                firstErrorField = field;
             }
         }
-        showNotification('warning', 'Each sub specification needs an Arabic or English name.', 3200, 'specificationNotificationArea');
+    });
+
+    for (let index = 0; index < subSpecificationWorkingCopy.length; index += 1) {
+        const entry = subSpecificationWorkingCopy[index] || {};
+        const arabic = typeof entry.nameArabic === 'string' ? entry.nameArabic.trim() : '';
+        const english = typeof entry.nameEnglish === 'string' ? entry.nameEnglish.trim() : '';
+        if (!arabic || !english) {
+            if (!arabic) {
+                const field = document.getElementById(`subSpecificationArabic-${index}`);
+                if (field) {
+                    const label = field.dataset && field.dataset.errorLabel ? field.dataset.errorLabel : 'Arabic Name';
+                    showFieldError(field, `${label} is Required`);
+                    if (!firstErrorField) {
+                        firstErrorField = field;
+                    }
+                }
+            }
+            if (!english) {
+                const field = document.getElementById(`subSpecificationEnglish-${index}`);
+                if (field) {
+                    const label = field.dataset && field.dataset.errorLabel ? field.dataset.errorLabel : 'English Name';
+                    showFieldError(field, `${label} is Required`);
+                    if (!firstErrorField) {
+                        firstErrorField = field;
+                    }
+                }
+            }
+        }
+    }
+
+    if (firstErrorField) {
+        firstErrorField.focus();
         return;
     }
+
+    const sanitized = sanitizeSubSpecificationList(subSpecificationWorkingCopy);
     setSubSpecificationsInput(sanitized);
     closeSubSpecificationModal();
 }
@@ -1968,6 +2167,52 @@ const state = {
     specificationDetailView: 'sub-specifications',
     categoryBuilderMode: 'create',
     editingCategoryId: null,
+    currentProductAdsPage: 1,
+    productAdsPerPage: 10,
+    productAdsFilters: {
+        search: '',
+        status: 'all',
+        category: 'all',
+        city: 'all',
+        account: 'all'
+    },
+    productAdDecisionContext: null,
+    editingProductAdId: null,
+    activeProductAdId: null,
+    currentIndividualAccountsPage: 1,
+    individualAccountsPerPage: 10,
+    individualAccountsFilters: {
+        search: '',
+        status: 'all',
+        city: 'all'
+    },
+    activeIndividualAccountId: null,
+    editingIndividualAccountId: null,
+    currentBusinessAccountsPage: 1,
+    businessAccountsPerPage: 10,
+    businessAccountsFilters: {
+        search: '',
+        status: 'all',
+        package: 'all'
+    },
+    activeBusinessAccountId: null,
+    businessDecisionContext: null,
+    editingBusinessPackageId: null,
+    businessFinancialIntegration: true,
+    currentFinanceTransactionsPage: 1,
+    financeTransactionsPerPage: 10,
+    financeFilters: {
+        search: '',
+        direction: 'all',
+        status: 'all',
+        channel: 'all',
+        startDate: null,
+        endDate: null
+    },
+    activeFinanceTransactionId: null,
+    financeActionContext: null,
+    financeTransferContext: null,
+    financeAuditTrail: [],
     registrationFlow: {
         otp: null,
         userId: null,
@@ -2040,6 +2285,7 @@ const CATEGORY_EXPORT_COLUMNS = [
 
 const SPECIFICATION_EXPORT_COLUMNS = [
     { id: 'index', label: '#', value: (_, index) => String(index + 1) },
+    { id: 'specificationCode', label: 'Specification Code', value: specification => specification.specificationCode || specification.id || '' },
     { id: 'nameArabic', label: 'Specification Name (Arabic)', value: specification => specification.nameArabic || '' },
     { id: 'descriptionArabic', label: 'Description (Ar)', value: specification => specification.descriptionArabic || '' },
     { id: 'placeholderArabic', label: 'Placeholder (Ar)', value: specification => specification.placeholderArabic || '' },
@@ -2263,31 +2509,31 @@ const SPECIFICATION_IMPORT_CONFIG = {
 };
 
 const SPECIFICATION_IMPORT_PREVIEW_DEFAULT_HEADER = [
-    'Specification ID',
+    'Specification Code',
     'Specification Name (Arabic)',
-    'Specification Name (English)',
     'Description (Arabic)',
+    'Placeholder (AR)',
+    'Specification Name (English)',
     'Description (English)',
+    'Placeholder (EN)',
     'Data Type',
     'Required?',
-    'Category IDs',
-    'Category Labels',
-    'Sub-specifications',
-    'Status'
+    'Category Cods',
+    'Sub-specifications'
 ];
 
 const SPECIFICATION_IMPORT_PREVIEW_FIELD_ALIASES = new Map([
-    ['Specification ID', ['id', 'specification id']],
+    ['Specification Code', ['id', 'specification id', 'specification code', 'code']],
     ['Specification Name (Arabic)', ['specification name (arabic)', 'name (arabic)', 'arabic name', 'name_arabic', 'namearabic', 'nameArabic']],
-    ['Specification Name (English)', ['specification name (english)', 'name (english)', 'english name', 'name_english', 'nameenglish', 'nameEnglish']],
     ['Description (Arabic)', ['description (arabic)', 'arabic description', 'description_ar', 'descriptionarabic', 'descriptionArabic']],
+    ['Placeholder (AR)', ['placeholder (arabic)', 'placeholder ar', 'placeholder_ar', 'placeholderArabic']],
+    ['Specification Name (English)', ['specification name (english)', 'name (english)', 'english name', 'name_english', 'nameenglish', 'nameEnglish']],
     ['Description (English)', ['description (english)', 'english description', 'description_en', 'descriptionenglish', 'descriptionEnglish']],
+    ['Placeholder (EN)', ['placeholder (english)', 'placeholder en', 'placeholder_english', 'placeholderEnglish', 'placeholder']],
     ['Data Type', ['data type', 'datatype', 'type', 'dataType']],
     ['Required?', ['required?', 'required', 'is required', 'isrequired', 'isRequired']],
-    ['Category IDs', ['category ids', 'categoryids', 'categoryIds']],
-    ['Category Labels', ['category labels', 'categorylabels', 'categoryLabels']],
-    ['Sub-specifications', ['sub-specifications', 'sub specifications', 'subspecifications', 'subSpecificationSummary', 'subSpecifications']],
-    ['Status', ['status']]
+    ['Category Cods', ['category cods', 'category codes', 'category ids', 'categoryids', 'categoryIds']],
+    ['Sub-specifications', ['sub-specifications', 'sub specifications', 'subspecifications', 'subSpecificationSummary', 'subSpecifications']]
 ]);
 
 const specificationImportState = {
@@ -2436,7 +2682,7 @@ const permissionSectionsTemplate = [
         apps: [
             {
                 id: 'users-roles',
-                label: 'User Roles',
+                label: 'User Roles Management',
                 description: 'Create, edit, and audit system role definitions.',
                 defaultAction: 'modify'
             },
@@ -2580,51 +2826,38 @@ const permissionSectionsTemplate = [
         ]
     },
     {
-        id: 'products',
-        label: 'Products',
-        description: 'Marketplace catalogue, inventories, and supplier governance.',
+        id: 'product-ads',
+        label: 'Product Ads Governance',
+        description: 'Listing moderation, automation rules, and catalog oversight.',
         apps: [
             {
-                id: 'products-catalog',
-                label: 'Catalog',
-                description: 'Manage product listings, pricing, and merchandising.',
+                id: 'product-ads-directory',
+                label: 'Ads Directory',
+                description: 'Moderate listings, review statuses, and maintain audit history.',
                 defaultAction: 'modify'
             },
             {
-                id: 'products-inventory',
-                label: 'Inventory & SLAs',
-                description: 'Stock levels, service agreements, and alerts.',
+                id: 'product-ads-automation',
+                label: 'Automation Controls',
+                description: 'Trusted accounts, review queues, and blacklist policies.',
                 defaultAction: 'modify'
             },
             {
-                id: 'products-suppliers',
-                label: 'Supplier Matrix',
-                description: 'Vendor performance, contracts, and escalation workflows.',
-                defaultAction: 'view'
-            }
-        ]
-    },
-    {
-        id: 'onruf-users',
-        label: 'ONRUF Users',
-        description: 'Customer lifecycle management and engagement analytics.',
-        apps: [
-            {
-                id: 'onruf-directory',
-                label: 'Directory Overview',
-                description: 'Account segments, activation status, and sync history.',
-                defaultAction: 'view'
-            },
-            {
-                id: 'onruf-verification',
-                label: 'Verification Queue',
-                description: 'Identity reviews, escalations, and field confirmations.',
+                id: 'product-ads-data',
+                label: 'Data Tools',
+                description: 'Import/export pipelines and automation policy overview.',
                 defaultAction: 'modify'
             },
             {
-                id: 'onruf-engagement',
-                label: 'Engagement Insights',
-                description: 'Usage signals, churn watchlists, and success KPIs.',
+                id: 'product-ads-catalog',
+                label: 'Marketplace Catalog',
+                description: 'Curate device bundles, merchandising assets, and pricing.',
+                defaultAction: 'modify'
+            },
+            {
+                id: 'product-ads-suppliers',
+                label: 'Inventory & Suppliers',
+                description: 'Stock governance, SLA monitoring, and partner performance.',
                 defaultAction: 'view'
             }
         ]
@@ -2692,60 +2925,480 @@ const defaultUsers = [
 
 const defaultCategories = [];
 
-const defaultSpecifications = [
+const defaultSpecifications = [];
+
+const defaultProductAds = [
     {
-        id: 'SPEC-142',
-        name: 'Maximum Load Rating',
-        categoryLabels: ['Electrical Safety'],
-        dataType: 'number',
-        collectionFrequency: 'per-inspection',
-        validationRule: 'Capture inspection-certified rating value.',
-        isRequired: true,
-        version: 'v2.1',
+        id: 'AD-1024',
+        title: 'Prime Retail Space - Riyadh Front',
+        category: 'Real Estate',
+        city: 'Riyadh',
+        account: 'malqaa-holdings@onruf.com',
+        status: 'pending',
+        views: 1890,
+        createdAt: '2025-09-12T09:30:00.000Z',
+        lastEditedAt: '2025-09-29T14:05:00.000Z',
+        flags: { autoPosting: false, manualReview: true, blacklisted: false },
+        notes: 'High profile location flagged for manual review.',
+        history: [
+            { id: 'evt-ad1024-1', action: 'created', timestamp: '2025-09-12T09:30:00.000Z', actor: 'Malqaa Holdings', context: 'Ad submitted for approval.' },
+            { id: 'evt-ad1024-2', action: 'updated', timestamp: '2025-09-29T14:05:00.000Z', actor: 'Marketing Ops', context: 'Pricing adjusted before launch.' }
+        ]
+    },
+    {
+        id: 'AD-1088',
+        title: 'Premium SUV - Full Options',
+        category: 'Automotive',
+        city: 'Jeddah',
+        account: 'elite-motors@onruf.com',
+        status: 'approved',
+        views: 4821,
+        createdAt: '2025-08-22T10:15:00.000Z',
+        lastEditedAt: '2025-09-16T08:40:00.000Z',
+        flags: { autoPosting: true, manualReview: false, blacklisted: false },
+        notes: 'Trusted seller program participant.',
+        history: [
+            { id: 'evt-ad1088-1', action: 'created', timestamp: '2025-08-22T10:15:00.000Z', actor: 'Elite Motors', context: 'Listing published via API.' },
+            { id: 'evt-ad1088-2', action: 'approved', timestamp: '2025-08-22T10:20:00.000Z', actor: 'System', context: 'Auto-approved trusted merchant.' },
+            { id: 'evt-ad1088-3', action: 'views', timestamp: '2025-09-20T09:00:00.000Z', actor: 'System', context: '5,000 impressions achieved.' }
+        ]
+    },
+    {
+        id: 'AD-1115',
+        title: 'Co-working Desks in Dammam',
+        category: 'Services',
+        city: 'Dammam',
+        account: 'workspace-labs@onruf.com',
+        status: 'suspended',
+        views: 980,
+        createdAt: '2025-07-04T07:10:00.000Z',
+        lastEditedAt: '2025-09-30T12:12:00.000Z',
+        flags: { autoPosting: false, manualReview: true, blacklisted: false },
+        notes: 'Suspended pending document verification.',
+        history: [
+            { id: 'evt-ad1115-1', action: 'created', timestamp: '2025-07-04T07:10:00.000Z', actor: 'Workspace Labs', context: 'Listing submitted.' },
+            { id: 'evt-ad1115-2', action: 'approved', timestamp: '2025-07-05T11:40:00.000Z', actor: 'Marketplace Ops', context: 'Manual approval granted.' },
+            { id: 'evt-ad1115-3', action: 'suspended', timestamp: '2025-09-30T12:12:00.000Z', actor: 'Trust & Safety', context: 'Suspected policy breach reported.' }
+        ]
+    },
+    {
+        id: 'AD-1142',
+        title: 'Refurbished Laptops Bundle',
+        category: 'Electronics',
+        city: 'Riyadh',
+        account: 'techdealers@onruf.com',
+        status: 'rejected',
+        views: 245,
+        createdAt: '2025-09-18T09:05:00.000Z',
+        lastEditedAt: '2025-09-21T16:32:00.000Z',
+        flags: { autoPosting: false, manualReview: true, blacklisted: false },
+        notes: 'Rejected due to incomplete warranty documentation.',
+        history: [
+            { id: 'evt-ad1142-1', action: 'created', timestamp: '2025-09-18T09:05:00.000Z', actor: 'Tech Dealers', context: 'Listing submitted.' },
+            { id: 'evt-ad1142-2', action: 'rejected', timestamp: '2025-09-21T16:32:00.000Z', actor: 'Marketplace Ops', context: 'Missing warranty certificate.' }
+        ]
+    }
+];
+
+const defaultProductAdAutomation = {
+    trusted: [
+        {
+            id: 'trusted-001',
+            account: 'elite-motors@onruf.com',
+            label: 'Elite Motors',
+            addedAt: '2025-08-01T08:00:00.000Z',
+            notes: 'Zero violations in the last 12 months.'
+        },
+        {
+            id: 'trusted-002',
+            account: 'verified-properties@onruf.com',
+            label: 'Verified Properties Program',
+            addedAt: '2025-07-14T09:30:00.000Z',
+            notes: 'Managed by real-estate trust desk.'
+        }
+    ],
+    manualReview: [
+        {
+            id: 'review-001',
+            account: 'flash-sales@onruf.com',
+            label: 'Flash Sales Marketplace',
+            addedAt: '2025-09-18T10:00:00.000Z',
+            notes: 'High volume seller with frequent price edits.'
+        }
+    ],
+    blacklist: [
+        {
+            id: 'blacklist-001',
+            account: 'suspended-dealer@onruf.com',
+            label: 'Suspended Dealer',
+            addedAt: '2025-08-12T12:22:00.000Z',
+            notes: 'Multiple counterfeit products detected.'
+        }
+    ]
+};
+
+const defaultIndividualAccounts = [
+    {
+        id: 'IND-2001',
+        fullName: 'Sara Al-Qahtani',
+        email: 'sara.alqahtani@example.com',
+        mobile: '+966512345678',
+        city: 'Riyadh',
         status: 'active',
-        createdAt: '2025-01-15T08:00:00.000Z'
+        balance: 2450.75,
+        adsCount: 11,
+        pendingAds: 2,
+        createdAt: '2025-04-18T07:50:00.000Z',
+        lastActiveAt: '2025-10-26T16:30:00.000Z',
+        permissions: { autoPosting: true, manualReview: false },
+        subscriptions: [
+            { name: 'Featured Ads Boost', status: 'active', renewsAt: '2025-12-01T00:00:00.000Z' }
+        ],
+        financialHistory: [
+            { id: 'txn-2001-1', label: 'Wallet Top-up', amount: 1200, type: 'credit', timestamp: '2025-09-01T09:20:00.000Z' },
+            { id: 'txn-2001-2', label: 'Ad Publishing Fee', amount: -150, type: 'debit', timestamp: '2025-09-10T12:00:00.000Z' }
+        ],
+        supportRequests: [],
+        notes: 'Prefers SMS notifications.'
     },
     {
-        id: 'SPEC-213',
-        name: 'Food Handling Certificate',
-        categoryLabels: ['Food Hygiene'],
-        dataType: 'dropdownlist',
-        collectionFrequency: 'per-inspection',
-        validationRule: 'Upload current municipality certificate.',
-        isRequired: true,
-        version: 'v1.4',
+        id: 'IND-2078',
+        fullName: 'Hassan Al-Mutairi',
+        email: 'hassan.mutairi@example.com',
+        mobile: '+966598887766',
+        city: 'Jeddah',
+        status: 'frozen',
+        balance: 520,
+        adsCount: 4,
+        pendingAds: 0,
+        createdAt: '2025-05-11T10:05:00.000Z',
+        lastActiveAt: '2025-09-30T21:15:00.000Z',
+        permissions: { autoPosting: false, manualReview: true },
+        subscriptions: [
+            { name: 'Auto Renew Ads', status: 'paused', renewsAt: '2025-11-15T00:00:00.000Z' }
+        ],
+        financialHistory: [
+            { id: 'txn-2078-1', label: 'Manual Adjustment', amount: -80, type: 'debit', timestamp: '2025-09-28T08:45:00.000Z' }
+        ],
+        supportRequests: [
+            { id: 'support-2078-1', reason: 'Fraud review', expiresAt: '2025-11-01T00:00:00.000Z', requestedAt: '2025-10-02T12:10:00.000Z', status: 'pending' }
+        ],
+        notes: 'Account frozen pending identity confirmation.'
+    },
+    {
+        id: 'IND-2110',
+        fullName: 'Maya Al-Salem',
+        email: 'maya.alsalem@example.com',
+        mobile: '+966533112244',
+        city: 'Dammam',
+        status: 'pending',
+        balance: 0,
+        adsCount: 0,
+        pendingAds: 1,
+        createdAt: '2025-10-10T13:25:00.000Z',
+        lastActiveAt: '2025-10-10T13:25:00.000Z',
+        permissions: { autoPosting: false, manualReview: true },
+        subscriptions: [],
+        financialHistory: [],
+        supportRequests: [],
+        notes: 'Awaiting OTP verification.'
+    }
+];
+
+const defaultBusinessAccounts = [
+    {
+        id: 'BUS-3101',
+        companyName: 'Al-Majd Trading Co.',
+        contactName: 'Khalid Al-Majd',
+        email: 'operations@almajdsales.com',
+        phone: '+966512008887',
+        city: 'Jeddah',
+        status: 'pending',
+        submittedAt: '2025-09-22T10:00:00.000Z',
+        approvedAt: null,
+        packageId: 'PKG-ELITE',
+        requestedDocuments: ['Commercial Registration Certificate', 'VAT Certificate'],
+        invoices: [],
+        autoRenew: true,
+        financialStatus: 'awaiting-payment',
+        history: [
+            { id: 'evt-bus3101-1', action: 'request-submitted', timestamp: '2025-09-22T10:00:00.000Z', actor: 'Al-Majd Trading Co.', context: 'New business account application received.' }
+        ]
+    },
+    {
+        id: 'BUS-3144',
+        companyName: 'Najd Hospitality Group',
+        contactName: 'Laila Al-Omari',
+        email: 'partnerships@najdhospitality.com',
+        phone: '+966555670021',
+        city: 'Riyadh',
+        status: 'docs-requested',
+        submittedAt: '2025-09-08T09:40:00.000Z',
+        approvedAt: null,
+        packageId: 'PKG-GROWTH',
+        requestedDocuments: ['Updated Food Safety Permit'],
+        invoices: [
+            { id: 'INV-9011', amount: 6400, dueDate: '2025-10-05T00:00:00.000Z', status: 'pending' }
+        ],
+        autoRenew: false,
+        financialStatus: 'pending-docs',
+        history: [
+            { id: 'evt-bus3144-1', action: 'request-submitted', timestamp: '2025-09-08T09:40:00.000Z', actor: 'Najd Hospitality Group', context: 'Initial application submitted.' },
+            { id: 'evt-bus3144-2', action: 'docs-requested', timestamp: '2025-09-15T15:20:00.000Z', actor: 'Business Ops', context: 'Additional food safety permit requested.' }
+        ]
+    },
+    {
+        id: 'BUS-3210',
+        companyName: 'Gulf Auto Hub',
+        contactName: 'Mishaal Al-Harthi',
+        email: 'sales@gulfautohub.com',
+        phone: '+966566443322',
+        city: 'Dammam',
         status: 'active',
-        createdAt: '2025-01-10T08:00:00.000Z'
+        submittedAt: '2025-06-11T11:25:00.000Z',
+        approvedAt: '2025-06-12T08:10:00.000Z',
+        packageId: 'PKG-ELITE',
+        requestedDocuments: [],
+        invoices: [
+            { id: 'INV-8802', amount: 8999, dueDate: '2025-10-01T00:00:00.000Z', status: 'paid' }
+        ],
+        autoRenew: true,
+        financialStatus: 'settled',
+        history: [
+            { id: 'evt-bus3210-1', action: 'approved', timestamp: '2025-06-12T08:10:00.000Z', actor: 'Business Ops', context: 'Business account approved.' },
+            { id: 'evt-bus3210-2', action: 'package-renewed', timestamp: '2025-09-01T09:00:00.000Z', actor: 'System', context: 'Auto-renewal processed successfully.' }
+        ]
+    }
+];
+
+const defaultBusinessPackages = [
+    {
+        id: 'PKG-ELITE',
+        name: 'Elite Merchant',
+        adsIncluded: 200,
+        categoriesIncluded: 10,
+        images: 20,
+        videos: 8,
+        highlights: 6,
+        whatsapp: true,
+        price: 8999,
+        billingCycle: 'Monthly'
     },
     {
-        id: 'SPEC-321',
-        name: 'Evacuation Drill Date',
-        categoryLabels: ['Fire Readiness'],
-        dataType: 'short-text',
-        collectionFrequency: 'quarterly',
-        validationRule: 'Record last completed drill date.',
-        isRequired: false,
-        version: 'v1.0',
-        status: 'monitoring',
-        createdAt: '2025-01-05T08:00:00.000Z'
+        id: 'PKG-GROWTH',
+        name: 'Growth Accelerator',
+        adsIncluded: 120,
+        categoriesIncluded: 6,
+        images: 12,
+        videos: 4,
+        highlights: 3,
+        whatsapp: true,
+        price: 5499,
+        billingCycle: 'Monthly'
     },
     {
-        id: 'SPEC-404',
-        name: 'Water Potability Index',
-        categoryLabels: ['Water Quality'],
-        dataType: 'number',
-        collectionFrequency: 'monthly',
-        validationRule: 'Sample must score >= 0.85.',
-        isRequired: true,
-        version: 'v3.2',
-        status: 'draft',
-        createdAt: '2025-01-01T08:00:00.000Z'
+        id: 'PKG-START',
+        name: 'Starter Merchant',
+        adsIncluded: 45,
+        categoriesIncluded: 3,
+        images: 6,
+        videos: 2,
+        highlights: 1,
+        whatsapp: false,
+        price: 1999,
+        billingCycle: 'Quarterly'
+    }
+];
+
+const defaultBusinessSubscribers = [
+    {
+        id: 'SUB-5001',
+        accountId: 'BUS-3210',
+        packageId: 'PKG-ELITE',
+        status: 'active',
+        startDate: '2025-06-12T00:00:00.000Z',
+        endDate: '2025-12-12T00:00:00.000Z',
+        autoRenew: true,
+        paymentStatus: 'paid'
+    },
+    {
+        id: 'SUB-5004',
+        accountId: 'BUS-3144',
+        packageId: 'PKG-GROWTH',
+        status: 'pending',
+        startDate: '2025-09-08T00:00:00.000Z',
+        endDate: '2025-12-08T00:00:00.000Z',
+        autoRenew: false,
+        paymentStatus: 'pending'
+    },
+    {
+        id: 'SUB-5010',
+        accountId: 'BUS-3101',
+        packageId: 'PKG-ELITE',
+        status: 'awaiting-activation',
+        startDate: null,
+        endDate: null,
+        autoRenew: true,
+        paymentStatus: 'awaiting-payment'
+    }
+];
+
+const defaultFinancialTransactions = [
+    {
+        id: 'FIN-7001',
+        reference: 'INV-9011',
+        accountId: 'BUS-3144',
+        counterparty: 'Najd Hospitality Group',
+        direction: 'incoming',
+        type: 'credit',
+        status: 'settled',
+        channel: 'bank-transfer',
+        channelLabel: 'Bank Transfer',
+        amount: 6400,
+        commission: 640,
+        fees: 0,
+        currency: 'SAR',
+        category: 'Merchant Subscription',
+        createdAt: '2025-09-15T08:00:00.000Z',
+        settledAt: '2025-09-16T10:30:00.000Z',
+        notes: 'Growth Accelerator package renewal collected via bank transfer.',
+        metadata: {
+            bank: 'Riyad Bank',
+            reference: 'RB-2025-0916-889',
+            batch: 'BNK-2025-37'
+        }
+    },
+    {
+        id: 'FIN-7004',
+        reference: 'PAYOUT-3101',
+        accountId: 'BUS-3101',
+        counterparty: 'Al-Majd Trading Co.',
+        direction: 'outgoing',
+        type: 'debit',
+        status: 'processing',
+        channel: 'bank-transfer',
+        channelLabel: 'Bank Transfer',
+        amount: 3800,
+        commission: 0,
+        fees: 25,
+        currency: 'SAR',
+        category: 'Vendor Payout',
+        createdAt: '2025-10-24T11:45:00.000Z',
+        settledAt: null,
+        notes: 'Scheduled receivable transfer for settled September orders.',
+        metadata: {
+            bank: 'Al Rajhi Bank',
+            reference: 'ALR-2025-1024-512',
+            approval: 'Finance Ops'
+        }
+    },
+    {
+        id: 'FIN-7010',
+        reference: 'GWAY-55881',
+        accountId: 'IND-2001',
+        counterparty: 'Sara Al-Qahtani',
+        direction: 'incoming',
+        type: 'credit',
+        status: 'pending',
+        channel: 'gateway-mada',
+        channelLabel: 'Mada Gateway',
+        amount: 249.5,
+        commission: 24.95,
+        fees: 1.8,
+        currency: 'SAR',
+        category: 'Premium Feature Purchase',
+        createdAt: '2025-10-27T18:22:00.000Z',
+        settledAt: null,
+        notes: 'Feature boost purchase awaiting gateway settlement.',
+        metadata: {
+            gateway: 'Mada',
+            settlementWindow: 'T+1',
+            txnId: 'MADA-77F55-20251027'
+        }
+    },
+    {
+        id: 'FIN-7016',
+        reference: 'REF-AD-1142',
+        accountId: 'AD-1142',
+        counterparty: 'Tech Dealers',
+        direction: 'refund',
+        type: 'refund',
+        status: 'settled',
+        channel: 'gateway-stcpay',
+        channelLabel: 'STC Pay',
+        amount: 150,
+        commission: 0,
+        fees: 0,
+        currency: 'SAR',
+        category: 'Customer Refund',
+        createdAt: '2025-09-22T09:05:00.000Z',
+        settledAt: '2025-09-22T09:35:00.000Z',
+        notes: 'Refund issued after ad rejection and compliance review.',
+        metadata: {
+            gateway: 'STC Pay',
+            authCode: 'STC-553399',
+            moderator: 'Trust & Safety'
+        }
+    },
+    {
+        id: 'FIN-7021',
+        reference: 'OPS-MEDIA-2025-09',
+        accountId: 'OPS-MEDIA',
+        counterparty: 'Riyadh Creative Labs',
+        direction: 'outgoing',
+        type: 'debit',
+        status: 'settled',
+        channel: 'virtual-card',
+        channelLabel: 'Virtual Card',
+        amount: 1120,
+        commission: 0,
+        fees: 0,
+        currency: 'SAR',
+        category: 'Marketing Spend',
+        createdAt: '2025-09-28T14:25:00.000Z',
+        settledAt: '2025-09-28T14:25:00.000Z',
+        notes: 'Creative asset production for product ads hero carousel.',
+        metadata: {
+            campaign: 'Product Ads Awareness',
+            owner: 'Marketing Ops'
+        }
+    }
+];
+
+const defaultFinanceAuditTrail = [
+    {
+        id: 'AUD-9001',
+        title: 'Gateway reconciliation completed',
+        description: 'September Mada gateway payouts reconciled. 132 settlements matched without variance.',
+        timestamp: '2025-10-01T09:15:00.000Z',
+        status: 'completed'
+    },
+    {
+        id: 'AUD-9002',
+        title: 'Chargeback investigation opened',
+        description: 'Customer dispute for order ORD-55991 escalated to finance compliance desk.',
+        timestamp: '2025-10-12T13:45:00.000Z',
+        status: 'in-progress'
+    },
+    {
+        id: 'AUD-9003',
+        title: 'Vendor payout schedule generated',
+        description: 'Weekly vendor receivable batch prepared for automated transfers.',
+        timestamp: '2025-10-25T08:05:00.000Z',
+        status: 'scheduled'
     }
 ];
 
 let categories = [];
 let users = [];
 let specifications = [];
+let productAds = [];
+let productAdAutomation = { trusted: [], manualReview: [], blacklist: [] };
+let individualAccounts = [];
+let businessAccounts = [];
+let businessPackages = [];
+let businessSubscribers = [];
+let financeTransactions = [];
 
 const platformDirectory = [
     {
@@ -2841,7 +3494,15 @@ const USERS_STORAGE_KEY = 'onruf_users_v1';
 const CATEGORIES_STORAGE_KEY = 'onruf_categories_v1';
 const SPECIFICATIONS_STORAGE_KEY = 'onruf_specifications_v1';
 const SESSION_STORAGE_KEY = 'onruf_active_session_v1';
-const DATA_RESET_VERSION = '20241005-super-admin-seed';
+const PRODUCT_ADS_STORAGE_KEY = 'onruf_product_ads_v1';
+const PRODUCT_AD_AUTOMATION_STORAGE_KEY = 'onruf_product_ads_automation_v1';
+const INDIVIDUAL_ACCOUNTS_STORAGE_KEY = 'onruf_individual_accounts_v1';
+const BUSINESS_ACCOUNTS_STORAGE_KEY = 'onruf_business_accounts_v1';
+const BUSINESS_PACKAGES_STORAGE_KEY = 'onruf_business_packages_v1';
+const BUSINESS_SUBSCRIBERS_STORAGE_KEY = 'onruf_business_subscribers_v1';
+const FINANCE_TRANSACTIONS_STORAGE_KEY = 'onruf_finance_transactions_v1';
+const FINANCE_AUDIT_STORAGE_KEY = 'onruf_finance_audit_v1';
+const DATA_RESET_VERSION = '20251029-remove-specification-seed';
 const DATA_RESET_KEY = 'onruf_data_reset_version';
 const CATEGORY_RESET_VERSION = '20251021-delete-all-categories';
 const CATEGORY_RESET_KEY = 'onruf_category_reset_version';
@@ -3483,7 +4144,6 @@ function normalizeUserPayload(user, index = 0) {
     if (!user || typeof user !== 'object') return null;
 
     const numericId = Number.isInteger(user.id) ? user.id : index + 1;
-    const safeName = typeof user.name === 'string' && user.name.trim() ? user.name.trim() : `User ${numericId}`;
     const rawEmail = typeof user.email === 'string' ? user.email.trim() : '';
     const email = rawEmail || `user${numericId}@onruf.com`;
     const rawStatus = typeof user.status === 'string' ? user.status.trim().toLowerCase() : 'active';
@@ -3493,6 +4153,10 @@ function normalizeUserPayload(user, index = 0) {
     } else if (rawStatus === 'pending') {
         normalizedStatus = 'Pending';
     }
+    const trimmedName = typeof user.name === 'string' ? user.name.trim() : '';
+    const sanitizedName = normalizedStatus === 'Pending' && isPlaceholderPersonalName(trimmedName) ? '-' : trimmedName;
+    const fallbackName = normalizedStatus === 'Pending' ? '-' : `User ${numericId}`;
+    const safeName = sanitizedName || fallbackName;
 
     const invitation = normalizeInvitationPayload(user.invitation);
     const auth = normalizeAuthPayload(user.auth);
@@ -3505,6 +4169,7 @@ function normalizeUserPayload(user, index = 0) {
 
     const firstName = typeof user.firstName === 'string' ? user.firstName.trim() : '';
     const lastName = typeof user.lastName === 'string' ? user.lastName.trim() : '';
+    const genderValue = typeof user.gender === 'string' ? user.gender.trim() : '';
     const employeeId = typeof user.employeeId === 'string' ? user.employeeId.trim() : '';
     const photoDataUrl = typeof user.photoDataUrl === 'string' ? user.photoDataUrl.trim() : '';
     const photoFileName = typeof user.photoFileName === 'string' ? user.photoFileName.trim() : '';
@@ -3566,6 +4231,7 @@ function normalizeUserPayload(user, index = 0) {
         status: normalizedStatus,
         firstName,
         lastName,
+    gender: genderValue,
         employeeId,
         lastLogin: user.lastLogin || 'Never',
         created: createdValue,
@@ -4113,6 +4779,13 @@ function normalizeSpecificationPayload(specification, index = 0) {
     const rawId = typeof specification.id === 'string' ? specification.id.trim().toUpperCase() : '';
     const id = /^SPEC-\d{3,}$/i.test(rawId) ? rawId : `SPEC-${String(fallbackIndex + 1).padStart(3, '0')}`;
 
+    const rawCode = typeof specification.specificationCode === 'string' ? specification.specificationCode.trim().toUpperCase() : '';
+    const legacyCode = typeof specification.code === 'string' ? specification.code.trim().toUpperCase() : '';
+    const legacyId = typeof specification.specificationId === 'string' ? specification.specificationId.trim().toUpperCase() : '';
+    const codeCandidates = [rawCode, legacyCode, legacyId, id];
+    const specificationCode = codeCandidates.find(candidate => /^SPEC-\d{3,}$/i.test(candidate)) || id;
+    const normalizedId = /^SPEC-\d{3,}$/i.test(id) ? id : specificationCode;
+
     const normalizeText = value => (typeof value === 'string' ? value.trim() : '');
 
     const arabicNameCandidates = [
@@ -4554,7 +5227,8 @@ function normalizeSpecificationPayload(specification, index = 0) {
     const normalizedCreatedById = Number.isInteger(createdById) ? createdById : null;
 
     return {
-        id,
+    id: normalizedId,
+    specificationCode,
         name,
         nameArabic,
         nameEnglish,
@@ -4731,6 +5405,449 @@ function saveSpecificationsToStorage() {
         localStorage.setItem(SPECIFICATIONS_STORAGE_KEY, serialized);
     } catch (error) {
         console.warn('Unable to save specifications dataset:', error);
+    }
+}
+
+function normalizeIsoTimestamp(value, fallback = null) {
+    if (value instanceof Date && !Number.isNaN(value.getTime())) {
+        return value.toISOString();
+    }
+    if (typeof value === 'number' && Number.isFinite(value)) {
+        const fromNumber = new Date(value);
+        if (!Number.isNaN(fromNumber.getTime())) {
+            return fromNumber.toISOString();
+        }
+    }
+    if (typeof value === 'string') {
+        const trimmed = value.trim();
+        if (!trimmed) {
+            return fallback;
+        }
+        const parsed = Date.parse(trimmed);
+        if (!Number.isNaN(parsed)) {
+            return new Date(parsed).toISOString();
+        }
+    }
+    return fallback;
+}
+
+function normalizeProductAdHistoryEntry(entry, fallbackAction = 'updated', defaultTimestamp = null, sequence = 0) {
+    if (!entry || typeof entry !== 'object') {
+        return null;
+    }
+    const rawId = typeof entry.id === 'string' && entry.id.trim() ? entry.id.trim() : '';
+    const id = rawId || `ad-hist-${Date.now()}-${sequence}`;
+    const rawAction = typeof entry.action === 'string' && entry.action.trim() ? entry.action.trim().toLowerCase() : '';
+    const action = rawAction || fallbackAction;
+    const timestamp = normalizeIsoTimestamp(entry.timestamp, normalizeIsoTimestamp(entry.createdAt, defaultTimestamp || new Date().toISOString()));
+    const actor = typeof entry.actor === 'string' && entry.actor.trim() ? entry.actor.trim() : 'System';
+    const context = typeof entry.context === 'string' ? entry.context.trim() : '';
+    return { id, action, timestamp, actor, context };
+}
+
+function normalizeProductAdFlags(flags) {
+    const source = flags && typeof flags === 'object' ? flags : {};
+    return {
+        autoPosting: Boolean(source.autoPosting),
+        manualReview: Boolean(source.manualReview),
+        blacklisted: Boolean(source.blacklisted)
+    };
+}
+
+function normalizeProductAdPayload(ad, index = 0) {
+    if (!ad || typeof ad !== 'object') {
+        return null;
+    }
+    const fallbackId = `AD-${String(index + 1).padStart(4, '0')}`;
+    const id = typeof ad.id === 'string' && ad.id.trim() ? ad.id.trim() : fallbackId;
+    const title = typeof ad.title === 'string' && ad.title.trim() ? ad.title.trim() : `Product Ad ${index + 1}`;
+    const category = typeof ad.category === 'string' && ad.category.trim() ? ad.category.trim() : 'General';
+    const city = typeof ad.city === 'string' && ad.city.trim() ? ad.city.trim() : 'Riyadh';
+    const accountRaw = typeof ad.account === 'string' && ad.account.trim() ? ad.account.trim() : 'unknown@onruf.com';
+    const account = normalizeEmail(accountRaw) || accountRaw.toLowerCase();
+    const allowedStatuses = new Set(['pending', 'approved', 'rejected', 'suspended', 'draft', 'expired']);
+    const statusCandidate = typeof ad.status === 'string' && ad.status.trim() ? ad.status.trim().toLowerCase() : 'pending';
+    const status = allowedStatuses.has(statusCandidate) ? statusCandidate : 'pending';
+    const views = Number.isFinite(ad.views) ? Math.max(0, Math.floor(ad.views)) : 0;
+    const createdAt = normalizeIsoTimestamp(ad.createdAt, new Date().toISOString());
+    const lastEditedAt = normalizeIsoTimestamp(ad.lastEditedAt, createdAt);
+    const notes = typeof ad.notes === 'string' ? ad.notes.trim() : '';
+    const flags = normalizeProductAdFlags(ad.flags);
+    const historySource = Array.isArray(ad.history) ? ad.history : [];
+    const history = historySource
+        .map((entry, entryIndex) => normalizeProductAdHistoryEntry(entry, 'updated', createdAt, entryIndex))
+        .filter(Boolean)
+        .sort((a, b) => (a.timestamp > b.timestamp ? -1 : a.timestamp < b.timestamp ? 1 : 0));
+    if (!history.length) {
+        history.push(normalizeProductAdHistoryEntry({ action: 'created', timestamp: createdAt, actor: 'System', context: 'Imported record.' }, 'created', createdAt, 0));
+    }
+    return { id, title, category, city, account, status, views, createdAt, lastEditedAt, flags, notes, history };
+}
+
+function loadProductAdsFromStorage() {
+    try {
+        const raw = localStorage.getItem(PRODUCT_ADS_STORAGE_KEY);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed) || !parsed.length) return null;
+        const normalized = parsed.map((entry, index) => normalizeProductAdPayload(entry, index)).filter(Boolean);
+        return normalized.length ? normalized : null;
+    } catch (error) {
+        console.warn('Unable to load product ads from storage:', error);
+        return null;
+    }
+}
+
+function saveProductAdsToStorage() {
+    try {
+        if (!Array.isArray(productAds)) {
+            return;
+        }
+        const serialized = JSON.stringify(productAds);
+        localStorage.setItem(PRODUCT_ADS_STORAGE_KEY, serialized);
+    } catch (error) {
+        console.warn('Unable to save product ads to storage:', error);
+    }
+}
+
+function normalizeAutomationEntry(entry, sequence = 0) {
+    if (!entry || typeof entry !== 'object') {
+        return null;
+    }
+    const accountRaw = typeof entry.account === 'string' && entry.account.trim() ? entry.account.trim() : '';
+    const account = normalizeEmail(accountRaw) || accountRaw.toLowerCase();
+    if (!account) {
+        return null;
+    }
+    const id = typeof entry.id === 'string' && entry.id.trim() ? entry.id.trim() : `auto-${Date.now()}-${sequence}`;
+    const label = typeof entry.label === 'string' && entry.label.trim() ? entry.label.trim() : account;
+    const notes = typeof entry.notes === 'string' ? entry.notes.trim() : '';
+    const addedAt = normalizeIsoTimestamp(entry.addedAt, new Date().toISOString());
+    return { id, account, label, notes, addedAt };
+}
+
+function loadProductAdAutomationFromStorage() {
+    try {
+        const raw = localStorage.getItem(PRODUCT_AD_AUTOMATION_STORAGE_KEY);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        if (!parsed || typeof parsed !== 'object') return null;
+        const trusted = Array.isArray(parsed.trusted) ? parsed.trusted.map((entry, index) => normalizeAutomationEntry(entry, index)).filter(Boolean) : [];
+        const manualReview = Array.isArray(parsed.manualReview) ? parsed.manualReview.map((entry, index) => normalizeAutomationEntry(entry, index)).filter(Boolean) : [];
+        const blacklist = Array.isArray(parsed.blacklist) ? parsed.blacklist.map((entry, index) => normalizeAutomationEntry(entry, index)).filter(Boolean) : [];
+        return { trusted, manualReview, blacklist };
+    } catch (error) {
+        console.warn('Unable to load product ad automation lists:', error);
+        return null;
+    }
+}
+
+function saveProductAdAutomationToStorage() {
+    try {
+        if (!productAdAutomation || typeof productAdAutomation !== 'object') {
+            return;
+        }
+        const payload = {
+            trusted: Array.isArray(productAdAutomation.trusted) ? productAdAutomation.trusted : [],
+            manualReview: Array.isArray(productAdAutomation.manualReview) ? productAdAutomation.manualReview : [],
+            blacklist: Array.isArray(productAdAutomation.blacklist) ? productAdAutomation.blacklist : []
+        };
+        localStorage.setItem(PRODUCT_AD_AUTOMATION_STORAGE_KEY, JSON.stringify(payload));
+    } catch (error) {
+        console.warn('Unable to save automation lists:', error);
+    }
+}
+
+function normalizeIndividualAccountPayload(account, index = 0) {
+    if (!account || typeof account !== 'object') {
+        return null;
+    }
+    const fallbackId = `IND-${String(index + 1).padStart(4, '0')}`;
+    const id = typeof account.id === 'string' && account.id.trim() ? account.id.trim() : fallbackId;
+    const fullName = typeof account.fullName === 'string' && account.fullName.trim() ? account.fullName.trim() : `Account ${index + 1}`;
+    const emailRaw = typeof account.email === 'string' && account.email.trim() ? account.email.trim() : `${id.toLowerCase()}@example.com`;
+    const email = normalizeEmail(emailRaw) || emailRaw.toLowerCase();
+    const mobile = typeof account.mobile === 'string' && account.mobile.trim() ? account.mobile.trim() : '';
+    const city = typeof account.city === 'string' && account.city.trim() ? account.city.trim() : 'Riyadh';
+    const statusCandidate = typeof account.status === 'string' && account.status.trim() ? account.status.trim().toLowerCase() : 'pending';
+    const allowedStatuses = new Set(['active', 'frozen', 'pending', 'deleted', 'suspended']);
+    const status = allowedStatuses.has(statusCandidate) ? statusCandidate : 'pending';
+    const balance = Number.isFinite(account.balance) ? Number(account.balance) : 0;
+    const adsCount = Number.isFinite(account.adsCount) ? Math.max(0, Math.floor(account.adsCount)) : 0;
+    const pendingAds = Number.isFinite(account.pendingAds) ? Math.max(0, Math.floor(account.pendingAds)) : 0;
+    const createdAt = normalizeIsoTimestamp(account.createdAt, new Date().toISOString());
+    const lastActiveAt = normalizeIsoTimestamp(account.lastActiveAt, createdAt);
+    const permissionsSource = account.permissions && typeof account.permissions === 'object' ? account.permissions : {};
+    const permissions = {
+        autoPosting: Boolean(permissionsSource.autoPosting),
+        manualReview: Boolean(permissionsSource.manualReview)
+    };
+    const subscriptions = Array.isArray(account.subscriptions)
+        ? account.subscriptions.map(subscription => ({
+            name: typeof subscription.name === 'string' && subscription.name.trim() ? subscription.name.trim() : 'Subscription',
+            status: typeof subscription.status === 'string' && subscription.status.trim() ? subscription.status.trim() : 'active',
+            renewsAt: normalizeIsoTimestamp(subscription.renewsAt, null)
+        }))
+        : [];
+    const financialHistory = Array.isArray(account.financialHistory)
+        ? account.financialHistory.map((entry, entryIndex) => {
+            if (!entry || typeof entry !== 'object') {
+                return null;
+            }
+            const idValue = typeof entry.id === 'string' && entry.id.trim() ? entry.id.trim() : `txn-${index + 1}-${entryIndex}`;
+            const label = typeof entry.label === 'string' && entry.label.trim() ? entry.label.trim() : 'Transaction';
+            const amount = Number(entry.amount) || 0;
+            const typeCandidate = typeof entry.type === 'string' && entry.type.trim() ? entry.type.trim().toLowerCase() : '';
+            const type = typeCandidate || (amount >= 0 ? 'credit' : 'debit');
+            const timestamp = normalizeIsoTimestamp(entry.timestamp, createdAt);
+            const note = typeof entry.note === 'string' ? entry.note.trim() : '';
+            return { id: idValue, label, amount, type, timestamp, note };
+        }).filter(Boolean)
+        : [];
+    const supportRequests = Array.isArray(account.supportRequests)
+        ? account.supportRequests.map((entry, entryIndex) => {
+            if (!entry || typeof entry !== 'object') {
+                return null;
+            }
+            const requestId = typeof entry.id === 'string' && entry.id.trim() ? entry.id.trim() : `support-${index + 1}-${entryIndex}`;
+            const reason = typeof entry.reason === 'string' && entry.reason.trim() ? entry.reason.trim() : 'Support access requested.';
+            const requestedAt = normalizeIsoTimestamp(entry.requestedAt, new Date().toISOString());
+            const expiresAt = normalizeIsoTimestamp(entry.expiresAt, null);
+            const statusLabel = typeof entry.status === 'string' && entry.status.trim() ? entry.status.trim().toLowerCase() : 'pending';
+            return { id: requestId, reason, requestedAt, expiresAt, status: statusLabel };
+        }).filter(Boolean)
+        : [];
+    const notes = typeof account.notes === 'string' ? account.notes.trim() : '';
+    return {
+        id,
+        fullName,
+        email,
+        mobile,
+        city,
+        status,
+        balance,
+        adsCount,
+        pendingAds,
+        createdAt,
+        lastActiveAt,
+        permissions,
+        subscriptions,
+        financialHistory,
+        supportRequests,
+        notes
+    };
+}
+
+function loadIndividualAccountsFromStorage() {
+    try {
+        const raw = localStorage.getItem(INDIVIDUAL_ACCOUNTS_STORAGE_KEY);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed) || !parsed.length) return null;
+        const normalized = parsed.map((entry, index) => normalizeIndividualAccountPayload(entry, index)).filter(Boolean);
+        return normalized.length ? normalized : null;
+    } catch (error) {
+        console.warn('Unable to load individual accounts:', error);
+        return null;
+    }
+}
+
+function saveIndividualAccountsToStorage() {
+    try {
+        if (!Array.isArray(individualAccounts)) {
+            return;
+        }
+        localStorage.setItem(INDIVIDUAL_ACCOUNTS_STORAGE_KEY, JSON.stringify(individualAccounts));
+    } catch (error) {
+        console.warn('Unable to save individual accounts:', error);
+    }
+}
+
+function normalizeBusinessAccountInvoice(invoice, index = 0) {
+    if (!invoice || typeof invoice !== 'object') {
+        return null;
+    }
+    const id = typeof invoice.id === 'string' && invoice.id.trim() ? invoice.id.trim() : `INV-${Date.now()}-${index}`;
+    const amount = Number(invoice.amount) || 0;
+    const dueDate = normalizeIsoTimestamp(invoice.dueDate, null);
+    const status = typeof invoice.status === 'string' && invoice.status.trim() ? invoice.status.trim().toLowerCase() : 'pending';
+    return { id, amount, dueDate, status };
+}
+
+function normalizeBusinessAccountHistoryEntry(entry, fallbackAction = 'updated', sequence = 0) {
+    if (!entry || typeof entry !== 'object') {
+        return null;
+    }
+    const id = typeof entry.id === 'string' && entry.id.trim() ? entry.id.trim() : `bus-evt-${Date.now()}-${sequence}`;
+    const action = typeof entry.action === 'string' && entry.action.trim() ? entry.action.trim().toLowerCase() : fallbackAction;
+    const timestamp = normalizeIsoTimestamp(entry.timestamp, normalizeIsoTimestamp(entry.createdAt, new Date().toISOString()));
+    const actor = typeof entry.actor === 'string' && entry.actor.trim() ? entry.actor.trim() : 'System';
+    const context = typeof entry.context === 'string' ? entry.context.trim() : '';
+    return { id, action, timestamp, actor, context };
+}
+
+function normalizeBusinessAccountPayload(account, index = 0) {
+    if (!account || typeof account !== 'object') {
+        return null;
+    }
+    const fallbackId = `BUS-${String(index + 1).padStart(4, '0')}`;
+    const id = typeof account.id === 'string' && account.id.trim() ? account.id.trim() : fallbackId;
+    const companyName = typeof account.companyName === 'string' && account.companyName.trim() ? account.companyName.trim() : `Business ${index + 1}`;
+    const contactName = typeof account.contactName === 'string' && account.contactName.trim() ? account.contactName.trim() : '';
+    const emailRaw = typeof account.email === 'string' && account.email.trim() ? account.email.trim() : '';
+    const email = emailRaw ? (normalizeEmail(emailRaw) || emailRaw.toLowerCase()) : '';
+    const phone = typeof account.phone === 'string' && account.phone.trim() ? account.phone.trim() : '';
+    const city = typeof account.city === 'string' && account.city.trim() ? account.city.trim() : 'Riyadh';
+    const submittedAt = normalizeIsoTimestamp(account.submittedAt, new Date().toISOString());
+    const approvedAt = normalizeIsoTimestamp(account.approvedAt, null);
+    const statusCandidate = typeof account.status === 'string' && account.status.trim() ? account.status.trim().toLowerCase() : 'pending';
+    const allowedStatuses = new Set(['pending', 'docs-requested', 'active', 'suspended', 'cancelled', 'rejected']);
+    const status = allowedStatuses.has(statusCandidate) ? statusCandidate : 'pending';
+    const packageId = typeof account.packageId === 'string' && account.packageId.trim() ? account.packageId.trim() : '';
+    const requestedDocuments = Array.isArray(account.requestedDocuments)
+        ? account.requestedDocuments.map(doc => (typeof doc === 'string' ? doc.trim() : '')).filter(Boolean)
+        : [];
+    const invoices = Array.isArray(account.invoices)
+        ? account.invoices.map((invoice, invoiceIndex) => normalizeBusinessAccountInvoice(invoice, invoiceIndex)).filter(Boolean)
+        : [];
+    const autoRenew = Boolean(account.autoRenew);
+    const financialStatus = typeof account.financialStatus === 'string' && account.financialStatus.trim() ? account.financialStatus.trim() : 'pending';
+    const historySource = Array.isArray(account.history) ? account.history : [];
+    const history = historySource
+        .map((entry, entryIndex) => normalizeBusinessAccountHistoryEntry(entry, 'updated', entryIndex))
+        .filter(Boolean)
+        .sort((a, b) => (a.timestamp > b.timestamp ? -1 : a.timestamp < b.timestamp ? 1 : 0));
+    if (!history.length) {
+        history.push(normalizeBusinessAccountHistoryEntry({ action: 'request-submitted', timestamp: submittedAt, actor: companyName, context: 'Application captured.' }, 'request-submitted', submittedAt, 0));
+    }
+    return {
+        id,
+        companyName,
+        contactName,
+        email,
+        phone,
+        city,
+        submittedAt,
+        approvedAt,
+        status,
+        packageId,
+        requestedDocuments,
+        invoices,
+        autoRenew,
+        financialStatus,
+        history
+    };
+}
+
+function loadBusinessAccountsFromStorage() {
+    try {
+        const raw = localStorage.getItem(BUSINESS_ACCOUNTS_STORAGE_KEY);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed) || !parsed.length) return null;
+        const normalized = parsed.map((entry, index) => normalizeBusinessAccountPayload(entry, index)).filter(Boolean);
+        return normalized.length ? normalized : null;
+    } catch (error) {
+        console.warn('Unable to load business accounts:', error);
+        return null;
+    }
+}
+
+function saveBusinessAccountsToStorage() {
+    try {
+        if (!Array.isArray(businessAccounts)) {
+            return;
+        }
+        localStorage.setItem(BUSINESS_ACCOUNTS_STORAGE_KEY, JSON.stringify(businessAccounts));
+    } catch (error) {
+        console.warn('Unable to store business accounts:', error);
+    }
+}
+
+function normalizeBusinessPackagePayload(pkg, index = 0) {
+    if (!pkg || typeof pkg !== 'object') {
+        return null;
+    }
+    const fallbackId = `PKG-${String(index + 1).padStart(3, '0')}`;
+    const id = typeof pkg.id === 'string' && pkg.id.trim() ? pkg.id.trim() : fallbackId;
+    const name = typeof pkg.name === 'string' && pkg.name.trim() ? pkg.name.trim() : `Package ${index + 1}`;
+    const adsIncluded = Number.isFinite(pkg.adsIncluded) ? Math.max(0, Math.floor(pkg.adsIncluded)) : 0;
+    const categoriesIncluded = Number.isFinite(pkg.categoriesIncluded) ? Math.max(0, Math.floor(pkg.categoriesIncluded)) : 0;
+    const images = Number.isFinite(pkg.images) ? Math.max(0, Math.floor(pkg.images)) : 0;
+    const videos = Number.isFinite(pkg.videos) ? Math.max(0, Math.floor(pkg.videos)) : 0;
+    const highlights = Number.isFinite(pkg.highlights) ? Math.max(0, Math.floor(pkg.highlights)) : 0;
+    const whatsapp = Boolean(pkg.whatsapp);
+    const price = Number(pkg.price) || 0;
+    const billingCycle = typeof pkg.billingCycle === 'string' && pkg.billingCycle.trim() ? pkg.billingCycle.trim() : 'Monthly';
+    return { id, name, adsIncluded, categoriesIncluded, images, videos, highlights, whatsapp, price, billingCycle };
+}
+
+function loadBusinessPackagesFromStorage() {
+    try {
+        const raw = localStorage.getItem(BUSINESS_PACKAGES_STORAGE_KEY);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed) || !parsed.length) return null;
+        const normalized = parsed.map((entry, index) => normalizeBusinessPackagePayload(entry, index)).filter(Boolean);
+        return normalized.length ? normalized : null;
+    } catch (error) {
+        console.warn('Unable to load business packages:', error);
+        return null;
+    }
+}
+
+function saveBusinessPackagesToStorage() {
+    try {
+        if (!Array.isArray(businessPackages)) {
+            return;
+        }
+        localStorage.setItem(BUSINESS_PACKAGES_STORAGE_KEY, JSON.stringify(businessPackages));
+    } catch (error) {
+        console.warn('Unable to save business packages:', error);
+    }
+}
+
+function normalizeBusinessSubscriberPayload(subscriber, index = 0) {
+    if (!subscriber || typeof subscriber !== 'object') {
+        return null;
+    }
+    const fallbackId = `SUB-${String(index + 1).padStart(4, '0')}`;
+    const id = typeof subscriber.id === 'string' && subscriber.id.trim() ? subscriber.id.trim() : fallbackId;
+    const accountId = typeof subscriber.accountId === 'string' && subscriber.accountId.trim() ? subscriber.accountId.trim() : '';
+    if (!accountId) {
+        return null;
+    }
+    const packageId = typeof subscriber.packageId === 'string' && subscriber.packageId.trim() ? subscriber.packageId.trim() : '';
+    const status = typeof subscriber.status === 'string' && subscriber.status.trim() ? subscriber.status.trim().toLowerCase() : 'active';
+    const startDate = normalizeIsoTimestamp(subscriber.startDate, null);
+    const endDate = normalizeIsoTimestamp(subscriber.endDate, null);
+    const autoRenew = Boolean(subscriber.autoRenew);
+    const paymentStatus = typeof subscriber.paymentStatus === 'string' && subscriber.paymentStatus.trim() ? subscriber.paymentStatus.trim().toLowerCase() : 'pending';
+    return { id, accountId, packageId, status, startDate, endDate, autoRenew, paymentStatus };
+}
+
+function loadBusinessSubscribersFromStorage() {
+    try {
+        const raw = localStorage.getItem(BUSINESS_SUBSCRIBERS_STORAGE_KEY);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed) || !parsed.length) return null;
+        const normalized = parsed.map((entry, index) => normalizeBusinessSubscriberPayload(entry, index)).filter(Boolean);
+        return normalized.length ? normalized : null;
+    } catch (error) {
+        console.warn('Unable to load business subscribers:', error);
+        return null;
+    }
+}
+
+function saveBusinessSubscribersToStorage() {
+    try {
+        if (!Array.isArray(businessSubscribers)) {
+            return;
+        }
+        localStorage.setItem(BUSINESS_SUBSCRIBERS_STORAGE_KEY, JSON.stringify(businessSubscribers));
+    } catch (error) {
+        console.warn('Unable to save business subscriber dataset:', error);
     }
 }
 
@@ -5177,6 +6294,7 @@ function populateRoleForm(role) {
     }
 
     applyPermissionsToMatrix(role.permissions);
+    updateRoleCodeInlineFeedback();
 }
 
 function applyPermissionsToMatrix(permissions) {
@@ -5317,6 +6435,15 @@ function ensureSeedDataReset() {
             localStorage.removeItem(ROLES_STORAGE_KEY);
             localStorage.removeItem(USERS_STORAGE_KEY);
             localStorage.removeItem(CATEGORIES_STORAGE_KEY);
+            localStorage.removeItem(SPECIFICATIONS_STORAGE_KEY);
+            localStorage.removeItem(PRODUCT_ADS_STORAGE_KEY);
+            localStorage.removeItem(PRODUCT_AD_AUTOMATION_STORAGE_KEY);
+            localStorage.removeItem(INDIVIDUAL_ACCOUNTS_STORAGE_KEY);
+            localStorage.removeItem(BUSINESS_ACCOUNTS_STORAGE_KEY);
+            localStorage.removeItem(BUSINESS_PACKAGES_STORAGE_KEY);
+            localStorage.removeItem(BUSINESS_SUBSCRIBERS_STORAGE_KEY);
+            localStorage.removeItem(FINANCE_TRANSACTIONS_STORAGE_KEY);
+            localStorage.removeItem(FINANCE_AUDIT_STORAGE_KEY);
             localStorage.setItem(DATA_RESET_KEY, DATA_RESET_VERSION);
         }
     } catch (error) {
@@ -5387,6 +6514,92 @@ function initializeApp() {
         saveSpecificationsToStorage();
     }
 
+    const storedProductAds = loadProductAdsFromStorage();
+    if (storedProductAds && storedProductAds.length) {
+        productAds = storedProductAds;
+    } else {
+        productAds = defaultProductAds.map((ad, index) => normalizeProductAdPayload(ad, index)).filter(Boolean);
+        saveProductAdsToStorage();
+    }
+
+    const storedAutomationLists = loadProductAdAutomationFromStorage();
+    if (storedAutomationLists) {
+        productAdAutomation = storedAutomationLists;
+    } else {
+        productAdAutomation = {
+            trusted: Array.isArray(defaultProductAdAutomation.trusted)
+                ? defaultProductAdAutomation.trusted.map((entry, index) => normalizeAutomationEntry(entry, index)).filter(Boolean)
+                : [],
+            manualReview: Array.isArray(defaultProductAdAutomation.manualReview)
+                ? defaultProductAdAutomation.manualReview.map((entry, index) => normalizeAutomationEntry(entry, index)).filter(Boolean)
+                : [],
+            blacklist: Array.isArray(defaultProductAdAutomation.blacklist)
+                ? defaultProductAdAutomation.blacklist.map((entry, index) => normalizeAutomationEntry(entry, index)).filter(Boolean)
+                : []
+        };
+        saveProductAdAutomationToStorage();
+    }
+
+    const storedIndividualAccounts = loadIndividualAccountsFromStorage();
+    if (storedIndividualAccounts && storedIndividualAccounts.length) {
+        individualAccounts = storedIndividualAccounts;
+    } else {
+        individualAccounts = defaultIndividualAccounts
+            .map((account, index) => normalizeIndividualAccountPayload(account, index))
+            .filter(Boolean);
+        saveIndividualAccountsToStorage();
+    }
+
+    const storedBusinessAccounts = loadBusinessAccountsFromStorage();
+    if (storedBusinessAccounts && storedBusinessAccounts.length) {
+        businessAccounts = storedBusinessAccounts;
+    } else {
+        businessAccounts = defaultBusinessAccounts
+            .map((account, index) => normalizeBusinessAccountPayload(account, index))
+            .filter(Boolean);
+        saveBusinessAccountsToStorage();
+    }
+
+    const storedBusinessPackages = loadBusinessPackagesFromStorage();
+    if (storedBusinessPackages && storedBusinessPackages.length) {
+        businessPackages = storedBusinessPackages;
+    } else {
+        businessPackages = defaultBusinessPackages
+            .map((pkg, index) => normalizeBusinessPackagePayload(pkg, index))
+            .filter(Boolean);
+        saveBusinessPackagesToStorage();
+    }
+
+    const storedBusinessSubscribers = loadBusinessSubscribersFromStorage();
+    if (storedBusinessSubscribers && storedBusinessSubscribers.length) {
+        businessSubscribers = storedBusinessSubscribers;
+    } else {
+        businessSubscribers = defaultBusinessSubscribers
+            .map((subscriber, index) => normalizeBusinessSubscriberPayload(subscriber, index))
+            .filter(Boolean);
+        saveBusinessSubscribersToStorage();
+    }
+
+    const storedFinanceTransactions = loadFinanceTransactionsFromStorage();
+    if (storedFinanceTransactions && storedFinanceTransactions.length) {
+        financeTransactions = storedFinanceTransactions;
+    } else {
+        financeTransactions = defaultFinancialTransactions
+            .map((transaction, index) => normalizeFinanceTransactionPayload(transaction, index))
+            .filter(Boolean);
+        saveFinanceTransactionsToStorage();
+    }
+
+    const storedFinanceAuditTrail = loadFinanceAuditTrailFromStorage();
+    if (storedFinanceAuditTrail && storedFinanceAuditTrail.length) {
+        state.financeAuditTrail = storedFinanceAuditTrail;
+    } else {
+        state.financeAuditTrail = Array.isArray(defaultFinanceAuditTrail)
+            ? defaultFinanceAuditTrail.map((entry, index) => normalizeFinanceAuditEntry(entry, index)).filter(Boolean)
+            : [];
+        saveFinanceAuditTrailToStorage();
+    }
+
     syncCategorySpecificationCounts({ persistCategories: true, persistSpecifications: true, refreshView: false });
 
     if (!ensureSessionUserIsActive()) {
@@ -5401,6 +6614,7 @@ function initializeApp() {
     saveRolesToStorage();
 
     setupEventListeners();
+    updateSidebarMenuTooltips();
     updateRegistrationLinkDisplay(null);
     renderStats();
     renderChart();
@@ -5448,6 +6662,10 @@ function initializeApp() {
     updateSpecificationCategoryOptions();
     resetSpecificationForm();
     hideSpecificationBuilder({ resetForm: false });
+    renderFinanceTransactionsTable();
+    renderFinanceInsights();
+    renderFinanceChannelSummaries();
+    renderFinanceAuditTimeline();
 }
 
 function applyRequiredFieldIndicators() {
@@ -5469,6 +6687,113 @@ function setupEventListeners() {
             navigateToSection(sectionId);
         });
     });
+
+    const financeSearchInput = document.getElementById('financeTransactionsSearchInput');
+    if (financeSearchInput && financeSearchInput.dataset.bound !== 'true') {
+        const handler = () => handleFinanceTransactionsSearch(financeSearchInput.value);
+        financeSearchInput.addEventListener('input', handler);
+        financeSearchInput.addEventListener('search', handler);
+        financeSearchInput.dataset.bound = 'true';
+    }
+
+    const financeDirectionFilter = document.getElementById('financeDirectionFilter');
+    if (financeDirectionFilter && financeDirectionFilter.dataset.bound !== 'true') {
+        financeDirectionFilter.addEventListener('change', event => handleFinanceFilterChange('direction', event.target.value));
+        financeDirectionFilter.dataset.bound = 'true';
+    }
+
+    const financeStatusFilter = document.getElementById('financeStatusFilter');
+    if (financeStatusFilter && financeStatusFilter.dataset.bound !== 'true') {
+        financeStatusFilter.addEventListener('change', event => handleFinanceFilterChange('status', event.target.value));
+        financeStatusFilter.dataset.bound = 'true';
+    }
+
+    const financeChannelFilter = document.getElementById('financeChannelFilter');
+    if (financeChannelFilter && financeChannelFilter.dataset.bound !== 'true') {
+        financeChannelFilter.addEventListener('change', event => handleFinanceFilterChange('channel', event.target.value));
+        financeChannelFilter.dataset.bound = 'true';
+    }
+
+    const financeStartDateInput = document.getElementById('financeStartDateInput');
+    if (financeStartDateInput && financeStartDateInput.dataset.bound !== 'true') {
+        const handler = () => handleFinanceDateFilterChange();
+        financeStartDateInput.addEventListener('change', handler);
+        financeStartDateInput.addEventListener('input', handler);
+        financeStartDateInput.dataset.bound = 'true';
+    }
+
+    const financeEndDateInput = document.getElementById('financeEndDateInput');
+    if (financeEndDateInput && financeEndDateInput.dataset.bound !== 'true') {
+        const handler = () => handleFinanceDateFilterChange();
+        financeEndDateInput.addEventListener('change', handler);
+        financeEndDateInput.addEventListener('input', handler);
+        financeEndDateInput.dataset.bound = 'true';
+    }
+
+    const financeResetFiltersBtn = document.getElementById('financeResetFiltersBtn');
+    if (financeResetFiltersBtn && financeResetFiltersBtn.dataset.bound !== 'true') {
+        financeResetFiltersBtn.addEventListener('click', () => resetFinanceFilters());
+        financeResetFiltersBtn.dataset.bound = 'true';
+    }
+
+    const financeTableBody = document.getElementById('financeTransactionsTableBody');
+    if (financeTableBody && financeTableBody.dataset.bound !== 'true') {
+        financeTableBody.addEventListener('click', handleFinanceTransactionsTableClick);
+        financeTableBody.dataset.bound = 'true';
+    }
+
+    const financeDetailCloseBtn = document.getElementById('financeTransactionDetailCloseBtn');
+    if (financeDetailCloseBtn && financeDetailCloseBtn.dataset.bound !== 'true') {
+        financeDetailCloseBtn.addEventListener('click', closeFinanceTransactionDetailDrawer);
+        financeDetailCloseBtn.dataset.bound = 'true';
+    }
+
+    const financeActionCancelBtn = document.getElementById('financeActionCancelBtn');
+    if (financeActionCancelBtn && financeActionCancelBtn.dataset.bound !== 'true') {
+        financeActionCancelBtn.addEventListener('click', closeFinanceActionOverlay);
+        financeActionCancelBtn.dataset.bound = 'true';
+    }
+
+    const financeActionForm = document.getElementById('financeActionForm');
+    if (financeActionForm && financeActionForm.dataset.bound !== 'true') {
+        financeActionForm.addEventListener('submit', handleFinanceActionFormSubmit);
+        financeActionForm.dataset.bound = 'true';
+    }
+
+    const financeTransferCancelBtn = document.getElementById('financeTransferCancelBtn');
+    if (financeTransferCancelBtn && financeTransferCancelBtn.dataset.bound !== 'true') {
+        financeTransferCancelBtn.addEventListener('click', closeFinanceTransferOverlay);
+        financeTransferCancelBtn.dataset.bound = 'true';
+    }
+
+    const financeTransferForm = document.getElementById('financeTransferForm');
+    if (financeTransferForm && financeTransferForm.dataset.bound !== 'true') {
+        financeTransferForm.addEventListener('submit', handleFinanceTransferFormSubmit);
+        financeTransferForm.dataset.bound = 'true';
+    }
+
+    const financeInitiateTransferBtn = document.getElementById('financeInitiateTransferBtn');
+    if (financeInitiateTransferBtn && financeInitiateTransferBtn.dataset.bound !== 'true') {
+        financeInitiateTransferBtn.addEventListener('click', () => openFinanceTransferOverlay());
+        financeInitiateTransferBtn.dataset.bound = 'true';
+    }
+
+    const financeExportBtn = document.getElementById('exportFinanceTransactionsBtn');
+    if (financeExportBtn && financeExportBtn.dataset.bound !== 'true') {
+        financeExportBtn.addEventListener('click', exportFinanceTransactions);
+        financeExportBtn.dataset.bound = 'true';
+    }
+
+    const financeImportBtn = document.getElementById('openFinanceImportBtn');
+    const financeImportInput = document.getElementById('financeTransactionsImportInput');
+    if (financeImportBtn && financeImportBtn.dataset.bound !== 'true' && financeImportInput) {
+        financeImportBtn.addEventListener('click', () => financeImportInput.click());
+        financeImportBtn.dataset.bound = 'true';
+    }
+    if (financeImportInput && financeImportInput.dataset.bound !== 'true') {
+        financeImportInput.addEventListener('change', handleFinanceImportInputChange);
+        financeImportInput.dataset.bound = 'true';
+    }
 
     document.querySelectorAll('.sub-app-btn').forEach(button => {
         button.addEventListener('click', () => {
@@ -5817,6 +7142,282 @@ function setupEventListeners() {
         specificationTableBody.dataset.bound = 'true';
     }
 
+    const productAdsSearchInput = document.getElementById('productAdsSearchInput');
+    if (productAdsSearchInput && productAdsSearchInput.dataset.bound !== 'true') {
+        const handler = () => handleProductAdsSearch(productAdsSearchInput.value);
+        productAdsSearchInput.addEventListener('input', handler);
+        productAdsSearchInput.addEventListener('search', handler);
+        productAdsSearchInput.dataset.bound = 'true';
+    }
+
+    const productAdsStatusFilter = document.getElementById('productAdsStatusFilter');
+    if (productAdsStatusFilter && productAdsStatusFilter.dataset.bound !== 'true') {
+        productAdsStatusFilter.addEventListener('change', event => handleProductAdsFilterChange('status', event.target.value));
+        productAdsStatusFilter.dataset.bound = 'true';
+    }
+
+    const productAdsCategoryFilter = document.getElementById('productAdsCategoryFilter');
+    if (productAdsCategoryFilter && productAdsCategoryFilter.dataset.bound !== 'true') {
+        productAdsCategoryFilter.addEventListener('change', event => handleProductAdsFilterChange('category', event.target.value));
+        productAdsCategoryFilter.dataset.bound = 'true';
+    }
+
+    const productAdsCityFilter = document.getElementById('productAdsCityFilter');
+    if (productAdsCityFilter && productAdsCityFilter.dataset.bound !== 'true') {
+        productAdsCityFilter.addEventListener('change', event => handleProductAdsFilterChange('city', event.target.value));
+        productAdsCityFilter.dataset.bound = 'true';
+    }
+
+    const productAdsAccountFilter = document.getElementById('productAdsAccountFilter');
+    if (productAdsAccountFilter && productAdsAccountFilter.dataset.bound !== 'true') {
+        productAdsAccountFilter.addEventListener('change', event => handleProductAdsFilterChange('account', event.target.value));
+        productAdsAccountFilter.dataset.bound = 'true';
+    }
+
+    const productAdsResetBtn = document.getElementById('productAdsResetFiltersBtn');
+    if (productAdsResetBtn && productAdsResetBtn.dataset.bound !== 'true') {
+        productAdsResetBtn.addEventListener('click', resetProductAdsFilters);
+        productAdsResetBtn.dataset.bound = 'true';
+    }
+
+    const productAdsTableBody = document.getElementById('productAdsTableBody');
+    if (productAdsTableBody && productAdsTableBody.dataset.bound !== 'true') {
+        productAdsTableBody.addEventListener('click', handleProductAdsTableClick);
+        productAdsTableBody.dataset.bound = 'true';
+    }
+
+    const productAdHistoryCloseBtn = document.getElementById('productAdHistoryCloseBtn');
+    if (productAdHistoryCloseBtn && productAdHistoryCloseBtn.dataset.bound !== 'true') {
+        productAdHistoryCloseBtn.addEventListener('click', closeProductAdHistoryDrawer);
+        productAdHistoryCloseBtn.dataset.bound = 'true';
+    }
+
+    const productAdDecisionCancelBtn = document.getElementById('productAdDecisionCancelBtn');
+    if (productAdDecisionCancelBtn && productAdDecisionCancelBtn.dataset.bound !== 'true') {
+        productAdDecisionCancelBtn.addEventListener('click', closeProductAdDecisionOverlay);
+        productAdDecisionCancelBtn.dataset.bound = 'true';
+    }
+
+    const productAdDecisionConfirmBtn = document.getElementById('productAdDecisionConfirmBtn');
+    if (productAdDecisionConfirmBtn && productAdDecisionConfirmBtn.dataset.bound !== 'true') {
+        productAdDecisionConfirmBtn.addEventListener('click', confirmProductAdDecision);
+        productAdDecisionConfirmBtn.dataset.bound = 'true';
+    }
+
+    const productAdEditForm = document.getElementById('productAdEditForm');
+    if (productAdEditForm && productAdEditForm.dataset.bound !== 'true') {
+        productAdEditForm.addEventListener('submit', handleProductAdEditSubmit);
+        productAdEditForm.dataset.bound = 'true';
+    }
+
+    const productAdEditCancelBtn = document.getElementById('productAdEditCancelBtn');
+    if (productAdEditCancelBtn && productAdEditCancelBtn.dataset.bound !== 'true') {
+        productAdEditCancelBtn.addEventListener('click', closeProductAdEditOverlay);
+        productAdEditCancelBtn.dataset.bound = 'true';
+    }
+
+    const addTrustedAdsBtn = document.getElementById('addTrustedAdsBtn');
+    if (addTrustedAdsBtn && addTrustedAdsBtn.dataset.bound !== 'true') {
+        addTrustedAdsBtn.addEventListener('click', () => openProductAdAutomationPrompt('trusted'));
+        addTrustedAdsBtn.dataset.bound = 'true';
+    }
+
+    const addManualReviewAdsBtn = document.getElementById('addManualReviewAdsBtn');
+    if (addManualReviewAdsBtn && addManualReviewAdsBtn.dataset.bound !== 'true') {
+        addManualReviewAdsBtn.addEventListener('click', () => openProductAdAutomationPrompt('manualReview'));
+        addManualReviewAdsBtn.dataset.bound = 'true';
+    }
+
+    const addBlacklistedAdsBtn = document.getElementById('addBlacklistedAdsBtn');
+    if (addBlacklistedAdsBtn && addBlacklistedAdsBtn.dataset.bound !== 'true') {
+        addBlacklistedAdsBtn.addEventListener('click', () => openProductAdAutomationPrompt('blacklist'));
+        addBlacklistedAdsBtn.dataset.bound = 'true';
+    }
+
+    const automationLists = ['productAdsTrustedList', 'productAdsReviewList', 'productAdsBlacklist'];
+    automationLists.forEach(listId => {
+        const listEl = document.getElementById(listId);
+        if (listEl && listEl.dataset.bound !== 'true') {
+            listEl.addEventListener('click', handleProductAdAutomationListClick);
+            listEl.dataset.bound = 'true';
+        }
+    });
+
+    const exportProductAdsBtn = document.getElementById('exportProductAdsBtn');
+    if (exportProductAdsBtn && exportProductAdsBtn.dataset.bound !== 'true') {
+        exportProductAdsBtn.addEventListener('click', exportProductAds);
+        exportProductAdsBtn.dataset.bound = 'true';
+    }
+
+    const openProductAdsImportBtn = document.getElementById('openProductAdsImportBtn');
+    const productAdsImportInput = document.getElementById('productAdsImportInput');
+    if (openProductAdsImportBtn && productAdsImportInput && openProductAdsImportBtn.dataset.bound !== 'true') {
+        openProductAdsImportBtn.addEventListener('click', () => productAdsImportInput.click());
+        openProductAdsImportBtn.dataset.bound = 'true';
+    }
+    if (productAdsImportInput && productAdsImportInput.dataset.bound !== 'true') {
+        productAdsImportInput.addEventListener('change', handleProductAdsImportInputChange);
+        productAdsImportInput.dataset.bound = 'true';
+    }
+
+    const individualAccountsSearchInput = document.getElementById('individualAccountsSearchInput');
+    if (individualAccountsSearchInput && individualAccountsSearchInput.dataset.bound !== 'true') {
+        const handler = () => handleIndividualAccountsSearch(individualAccountsSearchInput.value);
+        individualAccountsSearchInput.addEventListener('input', handler);
+        individualAccountsSearchInput.addEventListener('search', handler);
+        individualAccountsSearchInput.dataset.bound = 'true';
+    }
+
+    const individualAccountsStatusFilter = document.getElementById('individualAccountsStatusFilter');
+    if (individualAccountsStatusFilter && individualAccountsStatusFilter.dataset.bound !== 'true') {
+        individualAccountsStatusFilter.addEventListener('change', event => handleIndividualAccountsFilterChange('status', event.target.value));
+        individualAccountsStatusFilter.dataset.bound = 'true';
+    }
+
+    const individualAccountsCityFilter = document.getElementById('individualAccountsCityFilter');
+    if (individualAccountsCityFilter && individualAccountsCityFilter.dataset.bound !== 'true') {
+        individualAccountsCityFilter.addEventListener('change', event => handleIndividualAccountsFilterChange('city', event.target.value));
+        individualAccountsCityFilter.dataset.bound = 'true';
+    }
+
+    const individualAccountsResetBtn = document.getElementById('individualAccountsResetFiltersBtn');
+    if (individualAccountsResetBtn && individualAccountsResetBtn.dataset.bound !== 'true') {
+        individualAccountsResetBtn.addEventListener('click', resetIndividualAccountsFilters);
+        individualAccountsResetBtn.dataset.bound = 'true';
+    }
+
+    const individualAccountsTableBody = document.getElementById('individualAccountsTableBody');
+    if (individualAccountsTableBody && individualAccountsTableBody.dataset.bound !== 'true') {
+        individualAccountsTableBody.addEventListener('click', handleIndividualAccountsTableClick);
+        individualAccountsTableBody.dataset.bound = 'true';
+    }
+
+    const individualAccountQuickActions = document.getElementById('individualAccountQuickActions');
+    if (individualAccountQuickActions && individualAccountQuickActions.dataset.bound !== 'true') {
+        individualAccountQuickActions.addEventListener('click', handleIndividualAccountQuickAction);
+        individualAccountQuickActions.dataset.bound = 'true';
+    }
+
+    const individualAccountEditForm = document.getElementById('individualAccountEditForm');
+    if (individualAccountEditForm && individualAccountEditForm.dataset.bound !== 'true') {
+        individualAccountEditForm.addEventListener('submit', handleIndividualAccountEditSubmit);
+        individualAccountEditForm.dataset.bound = 'true';
+    }
+
+    const individualAccountEditCancelBtn = document.getElementById('individualAccountEditCancelBtn');
+    if (individualAccountEditCancelBtn && individualAccountEditCancelBtn.dataset.bound !== 'true') {
+        individualAccountEditCancelBtn.addEventListener('click', closeIndividualAccountEditOverlay);
+        individualAccountEditCancelBtn.dataset.bound = 'true';
+    }
+
+    const exportIndividualAccountsBtn = document.getElementById('exportIndividualAccountsBtn');
+    if (exportIndividualAccountsBtn && exportIndividualAccountsBtn.dataset.bound !== 'true') {
+        exportIndividualAccountsBtn.addEventListener('click', exportIndividualAccounts);
+        exportIndividualAccountsBtn.dataset.bound = 'true';
+    }
+
+    const openIndividualAccountsImportBtn = document.getElementById('openIndividualAccountsImportBtn');
+    const individualAccountsImportInput = document.getElementById('individualAccountsImportInput');
+    if (openIndividualAccountsImportBtn && individualAccountsImportInput && openIndividualAccountsImportBtn.dataset.bound !== 'true') {
+        openIndividualAccountsImportBtn.addEventListener('click', () => individualAccountsImportInput.click());
+        openIndividualAccountsImportBtn.dataset.bound = 'true';
+    }
+    if (individualAccountsImportInput && individualAccountsImportInput.dataset.bound !== 'true') {
+        individualAccountsImportInput.addEventListener('change', handleIndividualAccountsImportInputChange);
+        individualAccountsImportInput.dataset.bound = 'true';
+    }
+
+    const businessAccountsSearchInput = document.getElementById('businessAccountsSearchInput');
+    if (businessAccountsSearchInput && businessAccountsSearchInput.dataset.bound !== 'true') {
+        const handler = () => handleBusinessAccountsSearch(businessAccountsSearchInput.value);
+        businessAccountsSearchInput.addEventListener('input', handler);
+        businessAccountsSearchInput.addEventListener('search', handler);
+        businessAccountsSearchInput.dataset.bound = 'true';
+    }
+
+    const businessAccountsStatusFilter = document.getElementById('businessAccountsStatusFilter');
+    if (businessAccountsStatusFilter && businessAccountsStatusFilter.dataset.bound !== 'true') {
+        businessAccountsStatusFilter.addEventListener('change', event => handleBusinessAccountsFilterChange('status', event.target.value));
+        businessAccountsStatusFilter.dataset.bound = 'true';
+    }
+
+    const businessAccountsPackageFilter = document.getElementById('businessAccountsPackageFilter');
+    if (businessAccountsPackageFilter && businessAccountsPackageFilter.dataset.bound !== 'true') {
+        businessAccountsPackageFilter.addEventListener('change', event => handleBusinessAccountsFilterChange('package', event.target.value));
+        businessAccountsPackageFilter.dataset.bound = 'true';
+    }
+
+    const businessAccountsResetBtn = document.getElementById('businessAccountsResetFiltersBtn');
+    if (businessAccountsResetBtn && businessAccountsResetBtn.dataset.bound !== 'true') {
+        businessAccountsResetBtn.addEventListener('click', resetBusinessAccountsFilters);
+        businessAccountsResetBtn.dataset.bound = 'true';
+    }
+
+    const businessAccountsTableBody = document.getElementById('businessAccountsTableBody');
+    if (businessAccountsTableBody && businessAccountsTableBody.dataset.bound !== 'true') {
+        businessAccountsTableBody.addEventListener('click', handleBusinessAccountsTableClick);
+        businessAccountsTableBody.dataset.bound = 'true';
+    }
+
+    const businessAccountDetailCloseBtn = document.getElementById('businessAccountDetailCloseBtn');
+    if (businessAccountDetailCloseBtn && businessAccountDetailCloseBtn.dataset.bound !== 'true') {
+        businessAccountDetailCloseBtn.addEventListener('click', closeBusinessAccountDetailDrawer);
+        businessAccountDetailCloseBtn.dataset.bound = 'true';
+    }
+
+    const businessAccountDecisionCancelBtn = document.getElementById('businessAccountDecisionCancelBtn');
+    if (businessAccountDecisionCancelBtn && businessAccountDecisionCancelBtn.dataset.bound !== 'true') {
+        businessAccountDecisionCancelBtn.addEventListener('click', closeBusinessAccountDecisionOverlay);
+        businessAccountDecisionCancelBtn.dataset.bound = 'true';
+    }
+
+    const businessAccountDecisionConfirmBtn = document.getElementById('businessAccountDecisionConfirmBtn');
+    if (businessAccountDecisionConfirmBtn && businessAccountDecisionConfirmBtn.dataset.bound !== 'true') {
+        businessAccountDecisionConfirmBtn.addEventListener('click', confirmBusinessAccountDecision);
+        businessAccountDecisionConfirmBtn.dataset.bound = 'true';
+    }
+
+    const businessPackageForm = document.getElementById('businessPackageForm');
+    if (businessPackageForm && businessPackageForm.dataset.bound !== 'true') {
+        businessPackageForm.addEventListener('submit', handleBusinessPackageFormSubmit);
+        businessPackageForm.dataset.bound = 'true';
+    }
+
+    const businessPackageCancelBtn = document.getElementById('businessPackageCancelBtn');
+    if (businessPackageCancelBtn && businessPackageCancelBtn.dataset.bound !== 'true') {
+        businessPackageCancelBtn.addEventListener('click', handleBusinessPackageCancel);
+        businessPackageCancelBtn.dataset.bound = 'true';
+    }
+
+    const businessPackagesTableBody = document.getElementById('businessPackagesTableBody');
+    if (businessPackagesTableBody && businessPackagesTableBody.dataset.bound !== 'true') {
+        businessPackagesTableBody.addEventListener('click', handleBusinessPackagesTableClick);
+        businessPackagesTableBody.dataset.bound = 'true';
+    }
+
+    const toggleBusinessFinancialIntegrationBtn = document.getElementById('toggleBusinessFinancialIntegrationBtn');
+    if (toggleBusinessFinancialIntegrationBtn && toggleBusinessFinancialIntegrationBtn.dataset.bound !== 'true') {
+        toggleBusinessFinancialIntegrationBtn.addEventListener('click', toggleBusinessFinancialIntegration);
+        toggleBusinessFinancialIntegrationBtn.dataset.bound = 'true';
+    }
+
+    const exportBusinessAccountsBtn = document.getElementById('exportBusinessAccountsBtn');
+    if (exportBusinessAccountsBtn && exportBusinessAccountsBtn.dataset.bound !== 'true') {
+        exportBusinessAccountsBtn.addEventListener('click', exportBusinessAccounts);
+        exportBusinessAccountsBtn.dataset.bound = 'true';
+    }
+
+    const openBusinessAccountsImportBtn = document.getElementById('openBusinessAccountsImportBtn');
+    const businessAccountsImportInput = document.getElementById('businessAccountsImportInput');
+    if (openBusinessAccountsImportBtn && businessAccountsImportInput && openBusinessAccountsImportBtn.dataset.bound !== 'true') {
+        openBusinessAccountsImportBtn.addEventListener('click', () => businessAccountsImportInput.click());
+        openBusinessAccountsImportBtn.dataset.bound = 'true';
+    }
+    if (businessAccountsImportInput && businessAccountsImportInput.dataset.bound !== 'true') {
+        businessAccountsImportInput.addEventListener('change', handleBusinessAccountsImportInputChange);
+        businessAccountsImportInput.dataset.bound = 'true';
+    }
+
     const cancelRoleFormBtn = document.getElementById('cancelRoleFormBtn');
     if (cancelRoleFormBtn) {
         cancelRoleFormBtn.addEventListener('click', () => {
@@ -5830,6 +7431,7 @@ function setupEventListeners() {
         roleForm.addEventListener('reset', () => {
             setTimeout(() => {
                 resetPermissionMatrix();
+                updateRoleCodeInlineFeedback();
             }, 0);
         });
     }
@@ -5846,6 +7448,15 @@ function setupEventListeners() {
                 handleRoleSearch();
             }
         });
+    }
+
+    const roleIdInput = document.getElementById('roleIdInput');
+    if (roleIdInput && roleIdInput.dataset.bound !== 'true') {
+        const triggerRoleCodeValidation = () => updateRoleCodeInlineFeedback();
+        roleIdInput.addEventListener('input', triggerRoleCodeValidation);
+        roleIdInput.addEventListener('blur', triggerRoleCodeValidation);
+        roleIdInput.dataset.bound = 'true';
+        triggerRoleCodeValidation();
     }
 
     const userSearch = document.getElementById('userSearch');
@@ -6176,9 +7787,11 @@ function updateBreadcrumb(sectionId = state.currentSection) {
         reports: 'Reports',
         diagrams: 'Diagrams',
         packages: 'Packages',
-        products: 'Products',
-        'onruf-users': 'ONRUF Users',
-        advertisments: 'Advertisments'
+        advertisments: 'Advertisments',
+        'product-ads': 'Product Ads Governance',
+        'individual-accounts': 'Individual Accounts',
+        'business-accounts': 'Business Accounts',
+        'finance-payments': 'Finance & Payments'
     };
 
     const sectionLabel = sectionNames[sectionId] || 'Dashboard';
@@ -6522,6 +8135,7 @@ function refreshSpecificationCategoryAssignments({ persist = false } = {}) {
             }
             const keysToSync = [
                 'id',
+                'specificationCode',
                 'name',
                 'nameArabic',
                 'nameEnglish',
@@ -6624,22 +8238,35 @@ function syncCategorySpecificationCounts({ persistCategories = true, persistSpec
 }
 
 function generateSpecificationId() {
-    const existingNumbers = Array.isArray(specifications)
-        ? specifications
-            .map(entry => {
-                if (!entry || typeof entry.id !== 'string') {
-                    return null;
+    const parseSequence = value => {
+        if (typeof value !== 'string') {
+            return null;
+        }
+        const match = value.trim().match(/SPEC-(\d+)/i);
+        if (!match) {
+            return null;
+        }
+        const parsed = Number.parseInt(match[1], 10);
+        return Number.isFinite(parsed) ? parsed : null;
+    };
+
+    const numericValues = Array.isArray(specifications)
+        ? specifications.reduce((accumulator, entry) => {
+            if (!entry || typeof entry !== 'object') {
+                return accumulator;
+            }
+            const candidates = [entry.id, entry.specificationCode, entry.code, entry.specificationId];
+            candidates.forEach(candidate => {
+                const value = parseSequence(candidate);
+                if (Number.isFinite(value)) {
+                    accumulator.push(value);
                 }
-                const match = entry.id.match(/SPEC-(\d+)/i);
-                if (!match) {
-                    return null;
-                }
-                const parsed = Number.parseInt(match[1], 10);
-                return Number.isFinite(parsed) ? parsed : null;
-            })
-            .filter(Number.isFinite)
+            });
+            return accumulator;
+        }, [])
         : [];
-    const highest = existingNumbers.length ? Math.max(...existingNumbers) : 0;
+
+    const highest = numericValues.length ? Math.max(...numericValues) : 0;
     const next = Number.isFinite(highest) ? highest + 1 : 1;
     return `SPEC-${String(next).padStart(3, '0')}`;
 }
@@ -7001,6 +8628,7 @@ function specificationMatchesSearch(specification, searchTerm) {
     }
     const haystackParts = [
         specification.id,
+        specification.specificationCode,
         specification.name,
         specification.nameEnglish,
         specification.nameArabic,
@@ -7065,7 +8693,7 @@ function renderSpecificationList() {
 
     if (!filtered.length) {
         state.specificationFilteredList = [];
-        tableBody.innerHTML = '<tr><td colspan="10" style="padding:16px;text-align:center;color:#6b7280; font-size:16px; font-weight:600;">There is no Data Available</td></tr>';
+    tableBody.innerHTML = '<tr><td colspan="11" style="padding:16px;text-align:center;color:#6b7280; font-size:16px; font-weight:600;">There is no Data Available</td></tr>';
         updateCategoryBadges();
         refreshCategorySpecificationOverlay();
         return;
@@ -7100,10 +8728,15 @@ function renderSpecificationList() {
         const descriptionInfo = formatTruncatedText(descriptionPreferred, 120);
         const descriptionTitleAttr = descriptionInfo.full ? ` title="${escapeAttribute(descriptionInfo.full)}"` : '';
         const activityLabel = formatSpecificationActivityLabel(entry);
+        const specificationCodeLabel = entry.specificationCode || entry.id || '';
+        const secondaryLines = [];
+        if (activityLabel) {
+            secondaryLines.push(`<span class="cell-secondary" aria-label="Last specification activity">${escapeHtml(activityLabel)}</span>`);
+        }
         const specificationNameCell = `
             <div class="cell-stack">
                 <span class="cell-primary">${escapeHtml(displayName)}</span>
-                ${activityLabel ? `<span class="cell-secondary" aria-label="Last specification activity">${escapeHtml(activityLabel)}</span>` : ''}
+                ${secondaryLines.join('')}
             </div>
         `.trim();
         const subSummarySource = entry.subSpecificationSummary && entry.subSpecificationSummary.trim()
@@ -7131,9 +8764,11 @@ function renderSpecificationList() {
         const toggleLabel = isActive ? 'Deactivate specification' : 'Activate specification';
         const modifyLabel = 'Modify specification';
         const createdMeta = formatSpecificationCreatedMeta(entry);
+    const specificationCodeCell = specificationCodeLabel ? escapeHtml(specificationCodeLabel) : '—';
         return `
             <tr>
                 <td>${rowNumber}</td>
+        <td>${specificationCodeCell}</td>
                 <td>${specificationNameCell}</td>
                 <td${descriptionTitleAttr}>${escapeHtml(descriptionInfo.display)}</td>
                 <td>${escapeHtml(formatSpecificationType(entry.dataType))}</td>
@@ -8083,8 +9718,14 @@ function handleSpecificationFormSubmit(event) {
         creatorEmail = sessionUserEmail;
     }
 
+    const nextSpecificationId = existingSpecification ? existingSpecification.id : generateSpecificationId();
+    const nextSpecificationCode = existingSpecification
+        ? (existingSpecification.specificationCode || existingSpecification.id)
+        : nextSpecificationId;
+
     const specPayload = {
-        id: existingSpecification ? existingSpecification.id : generateSpecificationId(),
+        id: nextSpecificationId,
+        specificationCode: nextSpecificationCode,
         name: displayName,
         nameArabic,
         nameEnglish,
@@ -8123,7 +9764,7 @@ function handleSpecificationFormSubmit(event) {
     saveSpecificationsToStorage();
     renderSpecificationList();
     hideSpecificationBuilder();
-    const successMessage = existingSpecification ? 'Specification updated successfully.' : 'Specification blueprint saved.';
+    const successMessage = existingSpecification ? 'Specification updated successfully.' : 'Specification Added Successfully';
     showNotification('success', successMessage, 3200, 'specificationNotificationArea');
 }
 
@@ -9307,7 +10948,7 @@ function openSpecificationImportOverlay() {
         return;
     }
     resetSpecificationImportState();
-    setSpecificationImportStatus('Choose a CSV (.csv) or JSON (.json) file to get started.', 'info');
+    setSpecificationImportStatus('Choose an Excel (.xls or .xlsx) or CSV (.csv) file to get started.', 'info');
     specificationImportElements.overlay.classList.remove('hidden');
     specificationImportElements.overlay.setAttribute('aria-hidden', 'false');
     document.body.classList.add('body-locked');
@@ -9579,7 +11220,7 @@ function renderSpecificationImportPreview() {
             ? specificationImportState.warnings[0]
             : hasRows
                 ? 'Looks good! Review the preview below and press Import when ready.'
-                : 'Choose a CSV (.csv) or JSON (.json) file to get started.';
+                : 'Choose an Excel (.xls or .xlsx) or CSV (.csv) file to get started.';
 
     setSpecificationImportStatus(statusMessage, statusTone);
     refreshSpecificationImportControls();
@@ -9587,45 +11228,45 @@ function renderSpecificationImportPreview() {
 
 function downloadSpecificationImportTemplate() {
     const header = [
-        'Specification ID',
+        'Specification Code',
         'Specification Name (Arabic)',
-        'Specification Name (English)',
         'Description (Arabic)',
+        'Placeholder (AR)',
+        'Specification Name (English)',
         'Description (English)',
+        'Placeholder (EN)',
         'Data Type',
         'Required?',
-        'Category IDs',
-        'Category Labels',
-        'Sub-specifications',
-        'Status'
+        'Category Cods',
+        'Sub-specifications'
     ];
 
     const sampleRows = [
         [
             '',
             'نقطة تجمع الإخلاء',
-            'Evacuation Assembly Point',
             'حدد موقع نقطة التجمع في حال حدوث طارئ',
+            'مثال: يتم عرض الوصف المختصر هنا',
+            'Evacuation Assembly Point',
             'Specify the designated assembly point during an emergency',
+            'e.g. Must be visible near main entrance',
             'Text',
             'Yes',
-            'CAT-1001',
-            'Safety & Security',
-            'Location Pin; Signage Quality',
-            'Published'
+            '1.2.',
+            'Location Pin; Signage Quality'
         ],
         [
             'SPEC-015',
             'تكرار الصيانة',
-            'Maintenance Frequency',
             'كم مرة تتم الصيانة الدورية؟',
+            'مثل: اضغط لاختيار الفترة',
+            'Maintenance Frequency',
             'How often the routine maintenance occurs',
+            'e.g. Select from the maintenance schedule',
             'Number',
             'No',
-            'CAT-2005; CAT-3002',
-            'Equipment; Facilities',
-            'Quarterly Check',
-            'Draft'
+            '2.1.; 3.4.',
+            'Quarterly Check'
         ]
     ];
 
@@ -9682,7 +11323,7 @@ async function handleSpecificationImportFile(file) {
 
     if (!SPECIFICATION_IMPORT_CONFIG.allowedExtensions.has(normalizedExtension)) {
         resetSpecificationImportState();
-        setSpecificationImportStatus('Please upload a CSV (.csv) or JSON (.json) file.', 'error');
+    setSpecificationImportStatus('Please upload an Excel (.xls or .xlsx) or CSV (.csv) file.', 'error');
         return;
     }
 
@@ -9925,8 +11566,9 @@ function transformSpecificationImportRecord(record) {
         const lower = key.toLowerCase();
         const value = typeof rawValue === 'string' ? rawValue.trim() : rawValue;
 
-        if (lower === 'specification id' || lower === 'id') {
+        if (lower === 'specification id' || lower === 'id' || lower === 'specification code' || lower === 'code') {
             assign('id', value);
+            assign('specificationCode', value);
         } else if (lower === 'specification' || lower === 'specification name' || lower === 'specification name (english)' || lower === 'name' || lower === 'name (english)') {
             assign('nameEnglish', value);
         } else if (lower === 'specification (arabic)' || lower === 'specification name (arabic)' || lower === 'name (arabic)') {
@@ -9944,14 +11586,14 @@ function transformSpecificationImportRecord(record) {
             } else {
                 assign('isRequired', Boolean(rawValue));
             }
-        } else if (lower === 'categories' || lower === 'category labels') {
+        } else if (lower === 'categories') {
             const labels = Array.isArray(rawValue)
                 ? rawValue
                 : typeof rawValue === 'string'
                     ? rawValue.split(/[,;]+/).map(entry => entry.trim()).filter(Boolean)
                     : [];
             assign('categoryLabels', labels);
-        } else if (lower === 'category ids' || lower === 'categoryids') {
+        } else if (lower === 'category cods' || lower === 'category codes' || lower === 'category ids' || lower === 'categoryids') {
             const ids = Array.isArray(rawValue)
                 ? rawValue
                 : typeof rawValue === 'string'
@@ -9985,9 +11627,9 @@ function transformSpecificationImportRecord(record) {
             assign('updatedAt', value);
         } else if (lower === 'created by') {
             assign('createdBy', value);
-        } else if (lower === 'placeholder (arabic)' || lower === 'placeholder ar') {
+        } else if (lower === 'placeholder (arabic)' || lower === 'placeholder ar' || lower === 'placeholder (ar)') {
             assign('placeholderArabic', value);
-        } else if (lower === 'placeholder (english)' || lower === 'placeholder en' || lower === 'placeholder') {
+        } else if (lower === 'placeholder (english)' || lower === 'placeholder en' || lower === 'placeholder' || lower === 'placeholder (en)') {
             assign('placeholderEnglish', value);
         } else if (lower === 'collection frequency' || lower === 'frequency') {
             assign('collectionFrequency', value);
@@ -13428,6 +15070,22 @@ function normalizeEmployeeId(value) {
     return typeof value === 'string' ? value.trim().toUpperCase() : '';
 }
 
+function normalizePhoneNumber(value) {
+    if (typeof value !== 'string') {
+        return '';
+    }
+    const trimmed = value.trim();
+    if (!trimmed) {
+        return '';
+    }
+    const hasLeadingPlus = trimmed.startsWith('+');
+    const digitsOnly = trimmed.replace(/[^0-9]/g, '');
+    if (!digitsOnly) {
+        return '';
+    }
+    return hasLeadingPlus ? `+${digitsOnly}` : digitsOnly;
+}
+
 function formatDateForInput(date) {
     if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
         return '';
@@ -13539,22 +15197,68 @@ function deriveNamePartsFromEmail(email) {
     return { firstName, lastName, fullName };
 }
 
+function isPlaceholderPersonalName(name) {
+    const trimmed = typeof name === 'string' ? name.trim() : '';
+    if (!trimmed) {
+        return true;
+    }
+    if (trimmed === '-' || trimmed === '—') {
+        return true;
+    }
+    if (trimmed.includes('@')) {
+        return true;
+    }
+    if (/^User\s+#?\d+$/i.test(trimmed)) {
+        return true;
+    }
+    if (/^Pending\s+User\b/i.test(trimmed)) {
+        return true;
+    }
+    if (/^Pending\s+Invite\b/i.test(trimmed)) {
+        return true;
+    }
+    return false;
+}
+
+function resolveRecordNameParts(user) {
+    if (!user || typeof user !== 'object') {
+        return { firstName: '', lastName: '' };
+    }
+
+    const explicitFirst = typeof user.firstName === 'string' ? user.firstName.trim() : '';
+    const explicitLast = typeof user.lastName === 'string' ? user.lastName.trim() : '';
+    const sanitizedFirst = explicitFirst && !isPlaceholderPersonalName(explicitFirst) ? explicitFirst : '';
+    const sanitizedLast = explicitLast && !isPlaceholderPersonalName(explicitLast) ? explicitLast : '';
+
+    const displayName = typeof user.name === 'string' ? user.name.trim() : '';
+    const tokens = displayName && !isPlaceholderPersonalName(displayName)
+        ? displayName.split(/\s+/).filter(Boolean)
+        : [];
+    return {
+        firstName: sanitizedFirst || tokens[0] || '',
+        lastName: sanitizedLast || tokens.slice(1).join(' ') || ''
+    };
+}
+
 function resolveUserDisplayName(user) {
     if (!user || typeof user !== 'object') {
         return 'User';
     }
 
-    const nameCandidates = [
-        typeof user.name === 'string' ? user.name.trim() : '',
-        [user.firstName, user.lastName]
-            .map(value => (typeof value === 'string' ? value.trim() : ''))
-            .filter(Boolean)
-            .join(' ')
-    ];
+    const explicitName = typeof user.name === 'string' ? user.name.trim() : '';
+    if (explicitName && !isPlaceholderPersonalName(explicitName)) {
+        return explicitName;
+    }
 
-    const existing = nameCandidates.find(candidate => candidate);
-    if (existing) {
-        return existing;
+    const { firstName, lastName } = resolveRecordNameParts(user);
+    const combined = [firstName, lastName].filter(Boolean).join(' ');
+    if (combined) {
+        return combined;
+    }
+
+    const normalizedStatus = typeof user.status === 'string' ? user.status.trim().toLowerCase() : '';
+    if (normalizedStatus === 'pending') {
+        return '-';
     }
 
     const derived = deriveNamePartsFromEmail(user.email || '');
@@ -13727,6 +15431,25 @@ function findExistingUserByEmployeeId(employeeId, excludeUserId = null) {
             return false;
         }
         return normalizeEmployeeId(user.employeeId) === normalized;
+    });
+
+    return candidate || null;
+}
+
+function findExistingUserByPhone(phoneNumber, excludeUserId = null) {
+    const normalized = normalizePhoneNumber(phoneNumber);
+    if (!normalized) {
+        return null;
+    }
+
+    const candidate = users.find(user => {
+        if (!user || !user.phone) {
+            return false;
+        }
+        if (excludeUserId !== null && user.id === excludeUserId) {
+            return false;
+        }
+        return normalizePhoneNumber(user.phone) === normalized;
     });
 
     return candidate || null;
@@ -13935,7 +15658,7 @@ function lookupPlatformAccount(email) {
     return {
         email: existingUser.email,
         name: existingUser.name,
-        phone: existingUser.phone || `+96650${String(existingUser.id).padStart(6, '0')}`,
+        phone: typeof existingUser.phone === 'string' ? existingUser.phone : '',
         department: existingUser.department || '',
         status: ['inactive', 'suspended'].includes(fallbackStatus) ? 'inactive' : fallbackStatus === 'pending' ? 'pending' : 'active'
     };
@@ -14060,6 +15783,7 @@ function resetUserVerification(clearDraft = true) {
         state.userDraft.department = '';
         state.userDraft.email = '';
         state.userDraft.photoUrl = '';
+        state.userDraft.gender = '';
     }
 
     updateUserInfoSummary(null);
@@ -14090,6 +15814,7 @@ function applyVerificationAccount(account) {
         phone: account.phone || (state.userDraft ? state.userDraft.phone : ''),
         department: account.department || (state.userDraft ? state.userDraft.department : ''),
         status: (state.userDraft && state.userDraft.status) || 'Active',
+        gender: account.gender || (state.userDraft ? state.userDraft.gender : ''),
         photoUrl: ''
     };
 
@@ -14357,7 +16082,7 @@ function updateAccountTypeUI() {
     }
 }
 
-function renderRolePermissionsPreview(roleName) {
+function renderRolePermissionsPreview(roleIdentifier) {
     const wrapper = document.getElementById('userPermissionsWrapper');
     const container = document.getElementById('userRolePermissionsPreview');
     const list = document.getElementById('userRolePermissionsList');
@@ -14366,37 +16091,50 @@ function renderRolePermissionsPreview(roleName) {
         return;
     }
 
-    list.innerHTML = '';
-
-    if (!roleName) {
+    if (!roleIdentifier) {
+        list.innerHTML = '';
         container.classList.add('hidden');
         if (wrapper) {
             wrapper.classList.add('hidden');
         }
-        if (state.userDraft) {
+        if (state.userDraft && state.userDraft.accountType !== 'system-administrator') {
             state.userDraft.permissionSummary = '';
         }
         return;
     }
 
-    const role = roles.find(item => item.name === roleName || item.id === roleName || item.nameEnglish === roleName);
-    const permissions = role && Array.isArray(role.permissions) ? role.permissions : [];
-    const displayLabel = role ? (role.nameEnglish || role.name || role.id) : roleName;
+    const role = roles.find(item => item && item.id === roleIdentifier);
+    if (!role) {
+        container.classList.remove('hidden');
+        if (wrapper) {
+            wrapper.classList.remove('hidden');
+        }
+        list.innerHTML = '<p class="role-detail-empty">Role permissions not found for this assignment.</p>';
+        if (state.userDraft && state.userDraft.accountType !== 'system-administrator') {
+            state.userDraft.permissionSummary = '';
+        }
+        return;
+    }
+
+    const permissions = Array.isArray(role.permissions) ? role.permissions : [];
+    const tableHtml = buildRolePermissionsTableHtml(permissions, { compact: true });
+    const displayLabel = role.nameEnglish || role.name || role.id || '';
 
     container.classList.remove('hidden');
     if (wrapper) {
         wrapper.classList.remove('hidden');
     }
 
-    if (!permissions.length) {
-        list.innerHTML = '<p class="permissions-preview-placeholder">No structured permissions are defined for this role yet.</p>';
-    } else {
-        const tableHtml = buildRolePermissionsTableHtml(permissions, { compact: true });
-        list.innerHTML = `<div class="role-permissions-table-wrapper">${tableHtml}</div>`;
-    }
+    list.innerHTML = `
+        <div class="role-permissions-table-wrapper">
+            ${tableHtml}
+        </div>
+    `;
 
     if (state.userDraft) {
-        state.userDraft.permissionSummary = displayLabel ? `Inherits permissions from “${displayLabel}”.` : '';
+        state.userDraft.permissionSummary = displayLabel
+            ? `Inherits permissions from “${displayLabel}”.`
+            : '';
     }
 }
 
@@ -14418,8 +16156,12 @@ function populateUserRoleOptions(select) {
     }
 
     const optionsHtml = activeRoles.map(role => {
-        const label = role.nameEnglish || role.name || role.id;
-        return `<option value="${role.id}">${label}</option>`;
+        const roleId = role && role.id ? String(role.id) : '';
+        const nameLabel = role && (role.nameEnglish || role.name) ? String(role.nameEnglish || role.name) : '';
+        const combinedLabel = nameLabel
+            ? (roleId ? `${nameLabel} (${roleId})` : nameLabel)
+            : roleId || 'Unknown Role';
+        return `<option value="${escapeAttribute(roleId)}">${escapeHtml(combinedLabel)}</option>`;
     }).join('');
 
     select.innerHTML = `${placeholderOption}${optionsHtml}`;
@@ -15620,6 +17362,7 @@ function populateCompletedRegistrationSection(options = {}) {
         firstName = '',
         lastName = '',
         phone = '',
+        gender = '',
         photoDataUrl = '',
         photoFileName = '',
         email = '',
@@ -15645,6 +17388,14 @@ function populateCompletedRegistrationSection(options = {}) {
     const phoneInput = document.getElementById('userPhone');
     if (phoneInput) {
         phoneInput.value = visible ? phone : '';
+    }
+
+    const genderInputs = document.querySelectorAll('input[name="userGender"]');
+    if (genderInputs && genderInputs.length) {
+        const normalizedGender = visible ? (typeof gender === 'string' ? gender.trim() : '') : '';
+        genderInputs.forEach(input => {
+            input.checked = normalizedGender ? input.value === normalizedGender : false;
+        });
     }
 
     const statusEl = document.getElementById('userCompletedRegistrationStatus');
@@ -15711,10 +17462,11 @@ function collectUserFormStepData(step) {
         const emailInput = document.getElementById('userEmail');
         const departmentInput = document.getElementById('userDepartment');
         const employeeIdInput = document.getElementById('userEmployeeId');
-        const completedSection = document.getElementById('userCompletedRegistrationSection');
-        const firstNameInput = document.getElementById('userFirstName');
-        const lastNameInput = document.getElementById('userLastName');
-        const phoneInput = document.getElementById('userPhone');
+    const completedSection = document.getElementById('userCompletedRegistrationSection');
+    const firstNameInput = document.getElementById('userFirstName');
+    const lastNameInput = document.getElementById('userLastName');
+    const phoneInput = document.getElementById('userPhone');
+    const genderInputs = document.querySelectorAll('input[name="userGender"]');
         if (!emailInput || !departmentInput || !employeeIdInput) {
             return false;
         }
@@ -15727,7 +17479,16 @@ function collectUserFormStepData(step) {
         const firstNameValue = firstNameInput ? firstNameInput.value.trim() : '';
         const lastNameValue = lastNameInput ? lastNameInput.value.trim() : '';
         const phoneValue = phoneInput ? phoneInput.value.trim() : '';
+        const selectedGenderInput = genderInputs && genderInputs.length
+            ? Array.from(genderInputs).find(input => input.checked)
+            : null;
+        const genderValue = selectedGenderInput ? selectedGenderInput.value : '';
 
+        if (!email) {
+            showNotification('error', 'The Email is Required');
+            emailInput.focus();
+            return false;
+        }
         if (!emailPattern.test(email)) {
             showNotification('error', 'Please enter a valid email address.');
             emailInput.focus();
@@ -15753,14 +17514,14 @@ function collectUserFormStepData(step) {
             return false;
         }
         if (!employeeId) {
-            showNotification('error', 'ID is required.');
+            showNotification('error', 'Employee Code is required.');
             employeeIdInput.focus();
             return false;
         }
         const employeeIdError = document.getElementById('userEmployeeIdError');
         if (!/^[A-Za-z0-9_-]+$/.test(employeeId)) {
             if (employeeIdError) {
-                employeeIdError.textContent = 'ID must contain only letters, numbers, hyphens, or underscores.';
+                employeeIdError.textContent = 'Employee Code must contain only letters, numbers, hyphens, or underscores.';
                 employeeIdError.classList.remove('hidden');
                 employeeIdError.style.color = 'red';
             }
@@ -15774,7 +17535,7 @@ function collectUserFormStepData(step) {
 
         const duplicateEmployee = findExistingUserByEmployeeId(employeeId, excludeUserId);
         if (duplicateEmployee) {
-            showNotification('warning', 'This ID Already Exists');
+            showNotification('warning', 'This Employee Code Already Exists');
             if (state.userFormStep !== 1) {
                 setUserFormStep(1);
             }
@@ -15801,6 +17562,27 @@ function collectUserFormStepData(step) {
             return false;
         }
 
+        if (requirePersonalDetails && !genderValue && genderInputs && genderInputs.length) {
+            showNotification('error', 'Gender is required.');
+            const focusTarget = genderInputs[0];
+            focusTarget?.focus();
+            return false;
+        }
+
+        if (phoneValue) {
+            const duplicatePhone = findExistingUserByPhone(phoneValue, excludeUserId);
+            if (duplicatePhone) {
+                showNotification('warning', 'This Phone Number is Already Registered');
+                if (phoneInput) {
+                    phoneInput.focus();
+                    if (typeof phoneInput.select === 'function') {
+                        phoneInput.select();
+                    }
+                }
+                return false;
+            }
+        }
+
         draft.email = email;
         draft.department = department;
         draft.employeeId = employeeId;
@@ -15813,6 +17595,9 @@ function collectUserFormStepData(step) {
         }
         if (phoneInput) {
             draft.phone = phoneValue || draft.phone || '';
+        }
+        if (genderInputs && genderInputs.length) {
+            draft.gender = genderValue || draft.gender || '';
         }
 
         const emailDisplay = document.getElementById('registrationEmail');
@@ -15934,6 +17719,7 @@ function showUserForm(mode, userId = null) {
         firstName: '',
         lastName: '',
         phone: '',
+        gender: '',
         password: '',
         passwordConfirm: '',
         permissionSummary: '',
@@ -15982,13 +17768,14 @@ function showUserForm(mode, userId = null) {
 
         state.editingUserId = userId;
 
-        const accountType = resolveUserAccountType(user);
-        const roleLabel = user.role || '';
-        const roleId = user.roleId || '';
-        const expiresOn = user.expiresOn || '';
-        const firstName = user.firstName || (user.name ? user.name.split(' ')[0] : '');
-        const lastName = user.lastName || (user.name ? user.name.split(' ').slice(1).join(' ') : '');
-        const phone = user.phone || `+96650${String(user.id).padStart(6, '0')}`;
+    const accountType = resolveUserAccountType(user);
+    const roleLabel = user.role || '';
+    const roleId = user.roleId || '';
+    const expiresOn = user.expiresOn || '';
+    const nameParts = resolveRecordNameParts(user);
+    const firstName = nameParts.firstName;
+    const lastName = nameParts.lastName;
+    const phone = typeof user.phone === 'string' ? user.phone : '';
         const normalizedStatus = typeof user.status === 'string' ? user.status.trim().toLowerCase() : '';
         const allowEmailEdit = normalizedStatus === 'pending';
         const hasCompleted = hasUserCompletedRegistration(user);
@@ -16020,6 +17807,7 @@ function showUserForm(mode, userId = null) {
             roleId: accountType === 'system-administrator' ? 'system-administrator' : (roleId || ''),
             firstName,
             lastName,
+            gender: typeof user.gender === 'string' ? user.gender : '',
             phone,
             permissionSummary: user.permissionSummary || (accountType === 'system-administrator'
                 ? 'Full access to all modules.'
@@ -16048,6 +17836,7 @@ function showUserForm(mode, userId = null) {
             firstName,
             lastName,
             phone,
+            gender: typeof user.gender === 'string' ? user.gender : '',
             photoDataUrl: user.photoDataUrl || '',
             photoFileName: user.photoFileName || '',
             email: user.email || '',
@@ -16166,7 +17955,7 @@ async function handleUserFormSubmit(event) {
 
     const duplicateEmployee = findExistingUserByEmployeeId(draft.employeeId, isEditing ? state.editingUserId : null);
     if (duplicateEmployee) {
-    showNotification('warning', 'This ID Already Exists');
+        showNotification('warning', 'This Employee Code Already Exists');
         setUserFormStep(1);
         const employeeIdInput = document.getElementById('userEmployeeId');
         if (employeeIdInput) {
@@ -16176,6 +17965,22 @@ async function handleUserFormSubmit(event) {
             }
         }
         return;
+    }
+
+    if (draft.phone) {
+        const duplicatePhone = findExistingUserByPhone(draft.phone, isEditing ? state.editingUserId : null);
+        if (duplicatePhone) {
+            showNotification('warning', 'This Phone Number is Already Registered');
+            setUserFormStep(1);
+            const phoneInput = document.getElementById('userPhone');
+            if (phoneInput) {
+                phoneInput.focus();
+                if (typeof phoneInput.select === 'function') {
+                    phoneInput.select();
+                }
+            }
+            return;
+        }
     }
 
     if (!isEditing) {
@@ -16189,17 +17994,10 @@ async function handleUserFormSubmit(event) {
 
     const rawFirstName = typeof draft.firstName === 'string' ? draft.firstName.trim() : '';
     const rawLastName = typeof draft.lastName === 'string' ? draft.lastName.trim() : '';
-    const derivedFromEmail = isEditing ? deriveNamePartsFromEmail(draft.email) : { firstName: '', lastName: '', fullName: '' };
-
-    const firstName = rawFirstName || (isEditing ? derivedFromEmail.firstName : '');
-    const lastName = rawLastName || (isEditing ? derivedFromEmail.lastName : '');
-    const combinedName = [firstName, lastName].filter(Boolean).join(' ');
-    const effectiveName = isEditing
-        ? (combinedName || derivedFromEmail.fullName || (typeof draft.email === 'string' ? draft.email.trim() : ''))
-        : (combinedName || '—');
-
-    draft.firstName = firstName;
-    draft.lastName = lastName;
+    const rawGender = typeof draft.gender === 'string' ? draft.gender.trim() : '';
+    let resolvedFirstName = rawFirstName;
+    let resolvedLastName = rawLastName;
+    let resolvedGender = rawGender;
 
     if (isEditing) {
         const user = users.find(u => u.id === state.editingUserId);
@@ -16234,10 +18032,36 @@ async function handleUserFormSubmit(event) {
             draft.email = user.email || draft.email || '';
         }
 
-        const updatedName = combinedName || user.name || effectiveName;
-        user.name = updatedName || user.name || '';
-        user.firstName = firstName || user.firstName || '';
-        user.lastName = lastName || user.lastName || '';
+        const existingFirst = typeof user.firstName === 'string' ? user.firstName.trim() : '';
+    const existingLast = typeof user.lastName === 'string' ? user.lastName.trim() : '';
+    const existingGender = typeof user.gender === 'string' ? user.gender.trim() : '';
+        const sanitizedExistingFirst = existingFirst && !isPlaceholderPersonalName(existingFirst) ? existingFirst : '';
+        const sanitizedExistingLast = existingLast && !isPlaceholderPersonalName(existingLast) ? existingLast : '';
+
+        resolvedFirstName = rawFirstName || sanitizedExistingFirst || '';
+        resolvedLastName = rawLastName || sanitizedExistingLast || '';
+    resolvedGender = rawGender || existingGender || '';
+
+        draft.firstName = resolvedFirstName;
+        draft.lastName = resolvedLastName;
+    draft.gender = resolvedGender;
+
+    const combinedName = [resolvedFirstName, resolvedLastName].filter(Boolean).join(' ');
+    const existingFullName = typeof user.name === 'string' ? user.name.trim() : '';
+    const sanitizedExistingFullName = existingFullName && !isPlaceholderPersonalName(existingFullName) ? existingFullName : '';
+    let fallbackDisplayName = combinedName || sanitizedExistingFullName;
+    if (!fallbackDisplayName && isPendingStatus) {
+        fallbackDisplayName = '-';
+    }
+
+        let updatedDisplayName = fallbackDisplayName || user.name;
+        if ((!updatedDisplayName || isPlaceholderPersonalName(updatedDisplayName)) && isPendingStatus) {
+            updatedDisplayName = '-';
+        }
+        user.name = updatedDisplayName || '';
+    user.firstName = resolvedFirstName;
+    user.lastName = resolvedLastName;
+    user.gender = resolvedGender;
         user.phone = draft.phone;
         user.department = draft.department;
         user.employeeId = draft.employeeId;
@@ -16309,6 +18133,16 @@ async function handleUserFormSubmit(event) {
         return;
     }
 
+    resolvedFirstName = rawFirstName || '';
+    resolvedLastName = rawLastName || '';
+    resolvedGender = rawGender || '';
+    draft.firstName = resolvedFirstName;
+    draft.lastName = resolvedLastName;
+    draft.gender = resolvedGender;
+
+    const combinedName = [resolvedFirstName, resolvedLastName].filter(Boolean).join(' ');
+    const effectiveName = combinedName || '';
+
     const currentMaxId = users.reduce((max, user) => Math.max(max, user.id), 0);
     const newId = currentMaxId + 1;
     const otpCode = generateRegistrationOtp();
@@ -16318,7 +18152,7 @@ async function handleUserFormSubmit(event) {
     const passwordHash = draft.password ? hashPasswordValue(draft.password) : '';
     const passwordTimestamp = draft.password ? createdIso : null;
 
-    const safeName = effectiveName || `Pending User #${newId}`;
+    const safeName = effectiveName || '-';
     const accountType = draft.accountType === 'system-administrator' ? 'system-administrator' : 'platform-administrator';
     const roleId = accountType === 'system-administrator' ? 'system-administrator' : (draft.roleId || '');
     const roleLabel = accountType === 'system-administrator' ? 'Super Admin' : (draft.role || 'Admin');
@@ -16331,8 +18165,9 @@ async function handleUserFormSubmit(event) {
     const newUser = {
         id: newId,
         name: safeName,
-        firstName,
-        lastName,
+        firstName: resolvedFirstName,
+        lastName: resolvedLastName,
+        gender: resolvedGender,
         email: draft.email,
         department: draft.department,
         employeeId: draft.employeeId,
@@ -16340,10 +18175,10 @@ async function handleUserFormSubmit(event) {
         role: roleLabel,
         roleId,
         accountType,
-    status: 'Pending',
-    lastLogin: 'Never',
-    created: createdIso,
-    createdAt: createdIso,
+        status: 'Pending',
+        lastLogin: 'Never',
+        created: createdIso,
+        createdAt: createdIso,
         createdBy: createdById,
         invitation: {
             otp: otpCode,
@@ -16607,9 +18442,10 @@ function openRegistrationFlow(userId, options = {}) {
 
     resetRegistrationFlowForms();
 
-    const initialFirstName = user.firstName || (user.name ? user.name.split(' ')[0] : '');
-    const initialLastName = user.lastName || (user.name ? user.name.split(' ').slice(1).join(' ') : '');
-    const initialPhone = user.phone || `+96650${String(user.id).padStart(6, '0')}`;
+    const nameParts = resolveRecordNameParts(user);
+    const initialFirstName = nameParts.firstName;
+    const initialLastName = nameParts.lastName;
+    const initialPhone = typeof user.phone === 'string' ? user.phone : '';
 
     flowFirstName.value = initialFirstName;
     flowLastName.value = initialLastName;
@@ -16923,6 +18759,77 @@ function updateRoleUserCount(role) {
     return count;
 }
 
+function isRoleCodeDuplicate(code) {
+    if (!code) {
+        return false;
+    }
+    const normalizedTarget = normalizeRoleLookupValue(code);
+    if (!normalizedTarget) {
+        return false;
+    }
+
+    const editingId = state.roleBuilderMode === 'edit' && state.editingRoleId
+        ? normalizeRoleLookupValue(state.editingRoleId)
+        : '';
+
+    return roles.some(role => {
+        if (!role) {
+            return false;
+        }
+        const normalizedRoleId = normalizeRoleLookupValue(role.id);
+        if (!normalizedRoleId) {
+            return false;
+        }
+        if (editingId && normalizedRoleId === editingId) {
+            return false;
+        }
+        return normalizedRoleId === normalizedTarget;
+    });
+}
+
+function getRoleCodeIssue(value) {
+    const trimmed = typeof value === 'string' ? value.trim() : '';
+    if (!trimmed) {
+        return '';
+    }
+    if (!/^[A-Za-z0-9_-]+$/.test(trimmed)) {
+        return 'pattern';
+    }
+    if (isRoleCodeDuplicate(trimmed)) {
+        return 'duplicate';
+    }
+    return '';
+}
+
+function updateRoleCodeInlineFeedback() {
+    const input = document.getElementById('roleIdInput');
+    const errorEl = document.getElementById('roleIdError');
+    if (!input || !errorEl) {
+        return;
+    }
+
+    const issue = getRoleCodeIssue(input.value);
+    let message = '';
+
+    if (issue === 'pattern') {
+        message = 'The role code must be unique and contain only letters, numbers, hyphens, or underscores.';
+    } else if (issue === 'duplicate') {
+        message = 'The role code is already registered.';
+    }
+
+    if (message) {
+        errorEl.textContent = message;
+        errorEl.classList.remove('hidden');
+        errorEl.style.color = 'red';
+        input.setAttribute('aria-invalid', 'true');
+    } else {
+        errorEl.textContent = '';
+        errorEl.classList.add('hidden');
+        errorEl.style.color = '';
+        input.removeAttribute('aria-invalid');
+    }
+}
+
 function syncRoleUserCounts() {
     roles.forEach(updateRoleUserCount);
 }
@@ -16932,13 +18839,25 @@ function applyRoleDeletionToUsers(role, assignedUsers, disableAssignedUsers = fa
         return false;
     }
 
-    const label = (role.nameEnglish || role.name || role.nameArabic || 'Role').trim();
+    const baseLabel = (role.nameEnglish || role.name || role.nameArabic || 'Role').trim();
+    const roleCode = typeof role.id === 'string' ? role.id.trim() : '';
+    const hasCodeInLabel = roleCode && baseLabel.toLowerCase().includes(roleCode.toLowerCase());
+    const displayLabel = hasCodeInLabel
+        ? baseLabel
+        : roleCode
+            ? `${baseLabel} (${roleCode})`
+            : baseLabel;
+
     assignedUsers.forEach(user => {
         if (!user) return;
         user.roleId = null;
-        user.role = disableAssignedUsers ? `${label} (Disabled)` : 'Unassigned';
-        if (disableAssignedUsers && user.status !== 'Inactive') {
-            user.status = 'Inactive';
+        user.role = disableAssignedUsers ? displayLabel : 'Unassigned';
+        if (disableAssignedUsers) {
+            const normalizedStatus = typeof user.status === 'string' ? user.status.trim().toLowerCase() : '';
+            if (normalizedStatus !== 'inactive' && normalizedStatus !== 'pending') {
+                user.status = 'Inactive';
+                updateUserLastEvent(user, 'Deactivated');
+            }
         }
     });
 
@@ -16997,7 +18916,7 @@ async function deleteRole(roleId) {
         return;
     }
 
-    const warningMessage = `The User Role is Assigned to (${platformAdminAssignments.length}) Users. User Accounts Assigned to This Role Will be Disabled. Are You Sure You Want to proceed?`;
+    const warningMessage = `The User Role is Assigned to (${platformAdminAssignments.length}) Users. User Accounts Assigned to This Role Will be Deactivate. Are You Sure You Want to Proceed?`;
     const proceed = await showRoleConfirm(warningMessage, 'OK', 'Cancel');
     if (!proceed) return;
 
@@ -17040,7 +18959,7 @@ async function toggleRoleStatus(roleId) {
 
     if (role.status === 'active') {
         const confirmedDisable = await showRoleConfirm(
-            'Are You Sure You Want to Disable the User Role?',
+            'Are You Sure You Want to Deactivate the User Role?',
             'OK',
             'Cancel'
         );
@@ -17053,7 +18972,7 @@ async function toggleRoleStatus(roleId) {
         let userAccountsUpdated = false;
 
         if (hasPlatformAdminAssignments && totalAssignedUsers > 0) {
-            const warningMessage = `The User Role is Assigned to (${totalAssignedUsers}) Users. User Accounts Assigned to This Role Will be Disabled. Are You Sure You Want to proceed?`;
+            const warningMessage = `The User Role is Assigned to (${totalAssignedUsers}) Users. User Accounts Assigned to This Role Will be Deactivate. Are You Sure You Want to Proceed?`;
             const proceed = await showRoleConfirm(
                 warningMessage,
                 'OK',
@@ -17062,10 +18981,16 @@ async function toggleRoleStatus(roleId) {
             if (!proceed) return;
 
             assignedUsers.forEach(user => {
-                if (user && user.status !== 'Inactive') {
-                    user.status = 'Inactive';
-                    userAccountsUpdated = true;
+                if (!user) {
+                    return;
                 }
+                const normalizedStatus = typeof user.status === 'string' ? user.status.trim().toLowerCase() : '';
+                if (normalizedStatus === 'inactive' || normalizedStatus === 'pending') {
+                    return;
+                }
+                user.status = 'Inactive';
+                updateUserLastEvent(user, 'Deactivated');
+                userAccountsUpdated = true;
             });
 
             if (userAccountsUpdated) {
@@ -17084,11 +19009,11 @@ async function toggleRoleStatus(roleId) {
             renderUsersTable(state.userSearchTerm, state.currentUserPage);
         }
         renderStats();
-        showNotification('success', 'User Role Disabled Successfully');
+    showNotification('success', 'User Role Deactivated Successfully');
     } else {
         const confirmed = await showRoleConfirm(
-            'Are You Sure You Want to Enable the User Role Again?',
-            'Enable',
+            'Are You Sure You Want to Reactivate the User Role?',
+            'OK',
             'Cancel'
         );
         if (!confirmed) return;
@@ -17099,8 +19024,80 @@ async function toggleRoleStatus(roleId) {
         updateUserRolesCount();
         renderRolesTable(state.currentRolePage);
         renderStats();
-        showNotification('success', 'User Role has been Successfully Enabled');
+    showNotification('success', 'User Role Activated Successfully');
     }
+}
+
+function isUserAccountExpired(user) {
+    if (!user || !user.expiresOn) {
+        return false;
+    }
+
+    const expirationDate = new Date(user.expiresOn);
+    if (Number.isNaN(expirationDate.getTime())) {
+        return true;
+    }
+
+    expirationDate.setHours(0, 0, 0, 0);
+    const today = getTodayAtMidnight();
+    return expirationDate < today;
+}
+
+function findRoleAssignedToUser(user) {
+    if (!user) {
+        return null;
+    }
+
+    const normalize = normalizeRoleLookupValue;
+    const attemptMatchById = value => {
+        const lookup = normalize(value);
+        if (!lookup) {
+            return null;
+        }
+        return roles.find(role => normalize(role.id) === lookup) || null;
+    };
+
+    const matchedById = attemptMatchById(user.roleId);
+    if (matchedById) {
+        return matchedById;
+    }
+
+    const labelLookup = normalize(user.role);
+    if (!labelLookup) {
+        return null;
+    }
+
+    return roles.find(role => {
+        const keys = [role.name, role.nameEnglish, role.nameArabic, role.id];
+        return keys.some(entry => normalize(entry) === labelLookup);
+    }) || null;
+}
+
+function validateUserActivation(user) {
+    if (!user) {
+        return { valid: false, reason: 'missing-user' };
+    }
+
+    if (isUserAccountExpired(user)) {
+        return { valid: false, reason: 'expiration' };
+    }
+
+    const accountType = resolveUserAccountType(user);
+    if (accountType === 'system-administrator') {
+        return { valid: true, status: 'active' };
+    }
+
+    const assignedRole = findRoleAssignedToUser(user);
+    if (!assignedRole) {
+        return { valid: false, reason: 'role-deleted' };
+    }
+
+    const normalizedStatus = normalizeRoleLookupValue(assignedRole.status);
+    if (normalizedStatus && normalizedStatus !== 'active') {
+        return { valid: false, reason: 'role-inactive', status: normalizedStatus };
+    }
+
+    return { valid: true, status: 'active' };
 }
 
 async function toggleUserStatus(userId) {
@@ -17115,7 +19112,7 @@ async function toggleUserStatus(userId) {
     if (user.status === 'Active') {
         const confirmed = await showUserConfirm(
             'Are You Sure You Want to Deactivate the User Account?',
-            'Deactivate',
+            'OK',
             'Cancel'
         );
         if (!confirmed) return;
@@ -17128,10 +19125,26 @@ async function toggleUserStatus(userId) {
     } else {
         const confirmed = await showUserConfirm(
             'Are You Sure You Want to Activate the User Account?',
-            'Activate',
+            'OK',
             'Cancel'
         );
         if (!confirmed) return;
+
+        const activationCheck = validateUserActivation(user);
+        if (!activationCheck.valid) {
+            if (activationCheck.reason === 'expiration') {
+                showNotification('error', 'The User Account Cannot be Reactivated Due to the Account Expiration Date. Please Update the Account Expiration Date First.');
+            } else if (activationCheck.reason === 'role-inactive') {
+                const statusLabel = activationCheck.status
+                    ? activationCheck.status.charAt(0).toUpperCase() + activationCheck.status.slice(1)
+                    : 'Inactive';
+                showNotification('error', `The User Account Cannot be Reactivated Because the Assigned User Role is "${statusLabel}". Please Reactivate the User Role First or Assign Another User Role for the User Account.`);
+            } else if (activationCheck.reason === 'role-deleted') {
+                showNotification('error', 'The User Account Cannot be Reactivated Because the Assigned User Role is "Deleted". Please Reactivate the User Role First or Assign Another User Role for the User Account.');
+            }
+            return;
+        }
+
         user.status = 'Active';
         updateUserLastEvent(user, 'Reactivated');
         saveUsersToStorage();
@@ -17335,34 +19348,27 @@ function handleRoleSubmit(event) {
     const permissions = collectPermissionSelections();
     setRolePermissionsError('');
 
-    // Validate ID
+    // Validate Code
     const idValue = idInput ? idInput.value.trim() : '';
-    const idError = document.getElementById('roleIdError');
     if (!idValue) {
-    showNotification('warning', 'ID is Required');
+        showNotification('warning', 'The Role Code is Required');
+        updateRoleCodeInlineFeedback();
         if (idInput) idInput.focus();
         return;
     }
-    if (!/^[A-Za-z0-9_-]+$/.test(idValue)) {
-        if (idError) {
-            idError.textContent = 'ID Must be Unique and Contain Only Letters, Numbers, Dashes, or Underscores';
-            idError.classList.remove('hidden');
-            idError.style.color = 'red';
-        }
+    const codeIssue = getRoleCodeIssue(idValue);
+    if (codeIssue === 'pattern') {
+        updateRoleCodeInlineFeedback();
         if (idInput) idInput.focus();
         return;
     }
-    // Uniqueness check (for add only)
-    if (state.roleBuilderMode !== 'edit' && roles.some(r => r.id === idValue)) {
-    showNotification('warning', 'ID Already Registered');
+    if (codeIssue === 'duplicate' && state.roleBuilderMode !== 'edit') {
+        showNotification('warning', 'The Code is Already Registered');
+        updateRoleCodeInlineFeedback();
         if (idInput) idInput.focus();
         return;
     }
-    if (idError) {
-        idError.textContent = '';
-        idError.classList.add('hidden');
-        idError.style.color = '';
-    }
+    updateRoleCodeInlineFeedback();
 
     if (!nameArabic) {
         showNotification('warning', 'Role Name (Arabic) is Required');
@@ -17394,7 +19400,7 @@ function handleRoleSubmit(event) {
             hideRoleBuilder();
             return;
         }
-        // ID is not editable in edit mode
+    // Code is not editable in edit mode
         role.name = nameEnglish;
         role.nameEnglish = nameEnglish;
         role.nameArabic = nameArabic;
@@ -17440,6 +19446,3435 @@ function handleRoleSubmit(event) {
     renderRolesTable(1);
     hideRoleBuilder();
     showNotification('success', 'User Role Added Successfully');
+}
+
+function extractRoleLabelFromSummary(summary) {
+    if (typeof summary !== 'string' || !summary.trim()) {
+        return '';
+    }
+    const match = summary.match(/Inherits permissions from “(.+?)”/);
+    return match && match[1] ? match[1].trim() : '';
+}
+
+// --- Product Ads Module ---
+const PRODUCT_AD_STATUS_LABELS = new Map([
+    ['pending', 'Pending Review'],
+    ['approved', 'Approved'],
+    ['rejected', 'Rejected'],
+    ['suspended', 'Suspended'],
+    ['draft', 'Draft'],
+    ['expired', 'Expired']
+]);
+
+const PRODUCT_AD_STATUS_CLASSES = new Map([
+    ['pending', 'status-badge status-pending'],
+    ['approved', 'status-badge status-active'],
+    ['rejected', 'status-badge status-danger'],
+    ['suspended', 'status-badge status-warning'],
+    ['draft', 'status-badge status-pending'],
+    ['expired', 'status-badge status-inactive']
+]);
+
+function getProductAdStatusLabel(status) {
+    const normalized = typeof status === 'string' ? status.trim().toLowerCase() : '';
+    return PRODUCT_AD_STATUS_LABELS.get(normalized) || (normalized ? normalized.charAt(0).toUpperCase() + normalized.slice(1) : 'Pending Review');
+}
+
+function getProductAdStatusClass(status) {
+    const normalized = typeof status === 'string' ? status.trim().toLowerCase() : '';
+    return PRODUCT_AD_STATUS_CLASSES.get(normalized) || 'status-badge status-pending';
+}
+
+function resolveProductAdModeratorLabel() {
+    const actor = state.activeSession && state.activeSession.user ? state.activeSession.user : null;
+    if (!actor) {
+        return 'System Moderator';
+    }
+    if (typeof actor.fullName === 'string' && actor.fullName.trim()) {
+        return actor.fullName.trim();
+    }
+    if (typeof actor.name === 'string' && actor.name.trim()) {
+        return actor.name.trim();
+    }
+    if (typeof actor.email === 'string' && actor.email.trim()) {
+        return actor.email.trim();
+    }
+    return `Moderator #${actor.id || 'System'}`;
+}
+
+function appendProductAdHistory(ad, action, context) {
+    if (!ad) return;
+    const entry = normalizeProductAdHistoryEntry(
+        {
+            id: '',
+            action,
+            timestamp: new Date().toISOString(),
+            actor: resolveProductAdModeratorLabel(),
+            context: typeof context === 'string' ? context.trim() : ''
+        },
+        action,
+        ad.history ? ad.history.length : 0
+    );
+    if (!Array.isArray(ad.history)) {
+        ad.history = [];
+    }
+    if (entry) {
+        ad.history.unshift(entry);
+    }
+}
+
+function getFilteredProductAds() {
+    const filters = state.productAdsFilters || {};
+    const searchTerm = typeof filters.search === 'string' ? filters.search.trim().toLowerCase() : '';
+    const byStatus = typeof filters.status === 'string' ? filters.status.trim().toLowerCase() : 'all';
+    const byCategory = typeof filters.category === 'string' ? filters.category.trim().toLowerCase() : 'all';
+    const byCity = typeof filters.city === 'string' ? filters.city.trim().toLowerCase() : 'all';
+    const byAccount = typeof filters.account === 'string' ? filters.account.trim().toLowerCase() : 'all';
+
+    const filtered = (productAds || []).filter(ad => {
+        if (!ad) return false;
+        const searchHaystack = `${ad.id || ''} ${ad.title || ''} ${ad.account || ''} ${ad.category || ''} ${ad.city || ''}`.toLowerCase();
+        if (searchTerm && !searchHaystack.includes(searchTerm)) {
+            return false;
+        }
+        if (byStatus !== 'all') {
+            const statusValue = typeof ad.status === 'string' ? ad.status.trim().toLowerCase() : '';
+            if (statusValue !== byStatus) return false;
+        }
+        if (byCategory !== 'all') {
+            const categoryValue = typeof ad.category === 'string' ? ad.category.trim().toLowerCase() : '';
+            if (categoryValue !== byCategory) return false;
+        }
+        if (byCity !== 'all') {
+            const cityValue = typeof ad.city === 'string' ? ad.city.trim().toLowerCase() : '';
+            if (cityValue !== byCity) return false;
+        }
+        if (byAccount !== 'all') {
+            const accountValue = typeof ad.account === 'string' ? ad.account.trim().toLowerCase() : '';
+            if (accountValue !== byAccount) return false;
+        }
+        return true;
+    });
+
+    return filtered.sort((a, b) => {
+        const aTimestamp = a && a.createdAt ? Date.parse(a.createdAt) : 0;
+        const bTimestamp = b && b.createdAt ? Date.parse(b.createdAt) : 0;
+        if (Number.isFinite(aTimestamp) && Number.isFinite(bTimestamp)) {
+            return bTimestamp - aTimestamp;
+        }
+        return String(b.id || '').localeCompare(String(a.id || ''));
+    });
+}
+
+function updateProductAdsCount(count) {
+    const label = document.getElementById('productAdsCountLabel');
+    if (label) {
+        label.textContent = `#${count} Ads`;
+    }
+}
+
+function renderProductAdsFilterOptions() {
+    const statusSelect = document.getElementById('productAdsStatusFilter');
+    const categorySelect = document.getElementById('productAdsCategoryFilter');
+    const citySelect = document.getElementById('productAdsCityFilter');
+    const accountSelect = document.getElementById('productAdsAccountFilter');
+
+    if (statusSelect) {
+        const current = state.productAdsFilters.status || 'all';
+        const statuses = Array.from(new Set((productAds || []).map(ad => (ad.status || '').trim()).filter(Boolean)))
+            .map(status => status.toLowerCase())
+            .sort();
+        const options = ['<option value="all">All statuses</option>']
+            .concat(statuses.map(status => `<option value="${escapeAttribute(status)}">${escapeHtml(getProductAdStatusLabel(status))}</option>`));
+        statusSelect.innerHTML = options.join('');
+        statusSelect.value = statuses.includes(current) ? current : 'all';
+        state.productAdsFilters.status = statusSelect.value;
+    }
+
+    const assignOptions = (select, values, placeholder) => {
+        if (!select) return;
+        const normalizedCurrent = String(state.productAdsFilters[select.id.replace('productAds', '').replace('Filter', '').toLowerCase()]) || 'all';
+        const sortedValues = Array.from(values).sort((a, b) => a.localeCompare(b));
+        const options = [`<option value="all">${placeholder}</option>`]
+            .concat(sortedValues.map(value => `<option value="${escapeAttribute(value.toLowerCase())}">${escapeHtml(value)}</option>`));
+        select.innerHTML = options.join('');
+        const candidate = normalizedCurrent.trim().toLowerCase();
+        select.value = sortedValues.map(value => value.toLowerCase()).includes(candidate) ? candidate : 'all';
+        const keyMap = {
+            productAdsCategory: 'category',
+            productAdsCity: 'city',
+            productAdsAccount: 'account'
+        };
+        const key = keyMap[select.id.replace('Filter', '')] || '';
+        if (key) {
+            state.productAdsFilters[key] = select.value;
+        }
+    };
+
+    const categoriesSet = new Set();
+    const citiesSet = new Set();
+    const accountsSet = new Set();
+    (productAds || []).forEach(ad => {
+        if (ad && typeof ad.category === 'string' && ad.category.trim()) {
+            categoriesSet.add(ad.category.trim());
+        }
+        if (ad && typeof ad.city === 'string' && ad.city.trim()) {
+            citiesSet.add(ad.city.trim());
+        }
+        if (ad && typeof ad.account === 'string' && ad.account.trim()) {
+            accountsSet.add(ad.account.trim());
+        }
+    });
+
+    assignOptions(categorySelect, categoriesSet, 'All categories');
+    assignOptions(citySelect, citiesSet, 'All cities');
+    assignOptions(accountSelect, accountsSet, 'All accounts');
+}
+
+function renderProductAdsTable(page = state.currentProductAdsPage) {
+    const tbody = document.getElementById('productAdsTableBody');
+    if (!tbody) return;
+
+    renderProductAdsFilterOptions();
+
+    const filtered = getFilteredProductAds();
+    updateProductAdsCount(filtered.length);
+
+    const perPage = state.productAdsPerPage || 10;
+    const totalPages = Math.max(1, Math.ceil(filtered.length / perPage));
+    state.currentProductAdsPage = Math.min(Math.max(page, 1), totalPages);
+    const startIndex = (state.currentProductAdsPage - 1) * perPage;
+    const visible = filtered.slice(startIndex, startIndex + perPage);
+
+    if (!visible.length) {
+        tbody.innerHTML = '<tr><td colspan="10">No product ads match the current filters.</td></tr>';
+    } else {
+        let index = startIndex + 1;
+        tbody.innerHTML = visible.map(ad => {
+            const statusLabel = getProductAdStatusLabel(ad.status);
+            const statusClass = getProductAdStatusClass(ad.status);
+            const createdLabel = formatDateForDisplay(ad.createdAt, { includeTime: true }) || '—';
+            const updatedLabel = formatDateForDisplay(ad.lastEditedAt, { includeTime: true }) || '—';
+            const viewCount = Number.isFinite(ad.views) ? ad.views.toLocaleString('en-US') : '0';
+            const actions = [];
+            actions.push(`<button type="button" class="action-btn info" data-action="history" data-ad-id="${escapeAttribute(ad.id)}" title="View history"><i class="fas fa-clock-rotate-left"></i></button>`);
+            if ((ad.status || '').toLowerCase() !== 'approved') {
+                actions.push(`<button type="button" class="action-btn approve" data-action="approve" data-ad-id="${escapeAttribute(ad.id)}" title="Approve"><i class="fas fa-circle-check"></i></button>`);
+            }
+            if ((ad.status || '').toLowerCase() !== 'rejected') {
+                actions.push(`<button type="button" class="action-btn reject" data-action="reject" data-ad-id="${escapeAttribute(ad.id)}" title="Reject"><i class="fas fa-circle-xmark"></i></button>`);
+            }
+            if ((ad.status || '').toLowerCase() !== 'suspended') {
+                actions.push(`<button type="button" class="action-btn suspend" data-action="suspend" data-ad-id="${escapeAttribute(ad.id)}" title="Suspend"><i class="fas fa-ban"></i></button>`);
+            }
+            if (['rejected', 'suspended', 'expired'].includes((ad.status || '').toLowerCase())) {
+                actions.push(`<button type="button" class="action-btn restore" data-action="reinstate" data-ad-id="${escapeAttribute(ad.id)}" title="Reinstate"><i class="fas fa-rotate-left"></i></button>`);
+            }
+            actions.push(`<button type="button" class="action-btn edit" data-action="edit" data-ad-id="${escapeAttribute(ad.id)}" title="Edit"><i class="fas fa-pen"></i></button>`);
+            actions.push(`<button type="button" class="action-btn delete" data-action="delete" data-ad-id="${escapeAttribute(ad.id)}" title="Delete"><i class="fas fa-trash"></i></button>`);
+
+            const flags = ad.flags || {};
+            const flagLabels = [];
+            if (flags.autoPosting) {
+                flagLabels.push('<span class="helper-chip success">Auto-posting</span>');
+            }
+            if (flags.manualReview) {
+                flagLabels.push('<span class="helper-chip warning">Manual review</span>');
+            }
+            if (flags.blacklisted) {
+                flagLabels.push('<span class="helper-chip danger">Blacklisted</span>');
+            }
+
+            return `
+                <tr data-ad-id="${escapeAttribute(ad.id)}">
+                    <td>${index++}</td>
+                    <td>
+                        <div class="table-cell-title">${escapeHtml(ad.title || 'Untitled Listing')}</div>
+                        <div class="table-cell-meta">ID: ${escapeHtml(ad.id || '—')}</div>
+                        <div class="table-cell-meta">${flagLabels.join(' ')}</div>
+                    </td>
+                    <td>${escapeHtml(ad.category || '—')}</td>
+                    <td>${escapeHtml(ad.city || '—')}</td>
+                    <td>${escapeHtml(ad.account || '—')}</td>
+                    <td><span class="${statusClass}">${escapeHtml(statusLabel)}</span></td>
+                    <td>${viewCount}</td>
+                    <td>${escapeHtml(createdLabel)}</td>
+                    <td>${escapeHtml(updatedLabel)}</td>
+                    <td>
+                        <div class="action-group">
+                            ${actions.join('')}
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    renderProductAdsPagination(totalPages, filtered.length);
+}
+
+function renderProductAdsPagination(totalPages, totalItems) {
+    const container = document.getElementById('productAdsPagination');
+    if (!container) return;
+    container.innerHTML = '';
+
+    if (totalPages <= 1 || totalItems <= state.productAdsPerPage) return;
+
+    const createButton = (label, page, disabled = false, active = false) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.textContent = label;
+        if (disabled) button.disabled = true;
+        if (active) button.classList.add('active');
+        button.addEventListener('click', () => {
+            renderProductAdsTable(page);
+        });
+        return button;
+    };
+
+    container.appendChild(createButton('Prev', state.currentProductAdsPage - 1, state.currentProductAdsPage === 1));
+
+    for (let index = 1; index <= totalPages; index += 1) {
+        container.appendChild(createButton(String(index), index, false, index === state.currentProductAdsPage));
+    }
+
+    container.appendChild(createButton('Next', state.currentProductAdsPage + 1, state.currentProductAdsPage === totalPages));
+}
+
+function handleProductAdsSearch(value) {
+    state.productAdsFilters.search = (value || '').trim();
+    state.currentProductAdsPage = 1;
+    renderProductAdsTable(1);
+}
+
+function handleProductAdsFilterChange(key, value) {
+    if (!key) return;
+    state.productAdsFilters[key] = typeof value === 'string' ? value.trim() : value;
+    state.currentProductAdsPage = 1;
+    renderProductAdsTable(1);
+}
+
+function resetProductAdsFilters() {
+    state.productAdsFilters = {
+        search: '',
+        status: 'all',
+        category: 'all',
+        city: 'all',
+        account: 'all'
+    };
+    state.currentProductAdsPage = 1;
+    const searchInput = document.getElementById('productAdsSearchInput');
+    if (searchInput) {
+        searchInput.value = '';
+    }
+    renderProductAdsTable(1);
+}
+
+function formatProductAdHistoryAction(action) {
+    if (!action) return 'Activity';
+    const normalized = String(action).trim().toLowerCase();
+    return normalized.split(/[-_\s]+/).map(part => part ? part.charAt(0).toUpperCase() + part.slice(1) : '').join(' ');
+}
+
+function renderProductAdHistory(ad) {
+    const drawer = document.getElementById('productAdHistoryDrawer');
+    const titleEl = document.getElementById('productAdHistoryTitle');
+    const subtitleEl = document.getElementById('productAdHistorySubtitle');
+    const content = document.getElementById('productAdHistoryContent');
+    if (!drawer || !titleEl || !content) return;
+
+    if (!ad) {
+        drawer.classList.add('hidden');
+        content.innerHTML = '<p class="empty-state">Select an ad to review its history.</p>';
+        return;
+    }
+
+    titleEl.textContent = `Ad History • ${ad.title || ad.id || 'Listing'}`;
+    if (subtitleEl) {
+        subtitleEl.textContent = `${ad.account || 'Unknown Account'} · ${getProductAdStatusLabel(ad.status)}`;
+    }
+
+    const entries = Array.isArray(ad.history) ? ad.history : [];
+    if (!entries.length) {
+        content.innerHTML = '<p class="empty-state">No history has been recorded for this ad yet.</p>';
+    } else {
+        content.innerHTML = entries.map(entry => {
+            const label = formatProductAdHistoryAction(entry.action);
+            const timeLabel = formatDateForDisplay(entry.timestamp, { includeTime: true }) || 'Unknown time';
+            const actorLabel = entry.actor || 'System';
+            const context = entry.context ? escapeHtml(entry.context) : '<span class="helper-text">No additional notes provided.</span>';
+            return `
+                <article class="history-event">
+                    <header>
+                        <strong>${escapeHtml(label)}</strong>
+                        <span class="history-timestamp">${escapeHtml(timeLabel)}</span>
+                    </header>
+                    <p>${context}</p>
+                    <footer>by ${escapeHtml(actorLabel)}</footer>
+                </article>
+            `;
+        }).join('');
+    }
+
+    drawer.classList.remove('hidden');
+}
+
+function openProductAdHistoryDrawer(adId) {
+    const ad = (productAds || []).find(entry => entry && entry.id === adId);
+    state.activeProductAdId = ad ? ad.id : null;
+    renderProductAdHistory(ad || null);
+}
+
+function closeProductAdHistoryDrawer() {
+    state.activeProductAdId = null;
+    const drawer = document.getElementById('productAdHistoryDrawer');
+    if (drawer) {
+        drawer.classList.add('hidden');
+    }
+}
+
+function openProductAdDecisionOverlay(adId, action) {
+    const overlay = document.getElementById('productAdDecisionOverlay');
+    const titleEl = document.getElementById('productAdDecisionTitle');
+    const messageEl = document.getElementById('productAdDecisionMessage');
+    const textarea = document.getElementById('productAdDecisionReasonInput');
+    if (!overlay || !titleEl || !messageEl || !textarea) return;
+
+    const ad = (productAds || []).find(entry => entry && entry.id === adId);
+    if (!ad) {
+        showNotification('warning', 'Unable to locate the selected ad.');
+        return;
+    }
+
+    const actionLabels = {
+        approve: 'Approve Ad',
+        reject: 'Reject Ad',
+        suspend: 'Suspend Ad',
+        reinstate: 'Reinstate Ad',
+        delete: 'Delete Ad'
+    };
+
+    const promptMessages = {
+        approve: 'Share a note for the audit trail before approving this listing.',
+        reject: 'Explain why this listing is being rejected.',
+        suspend: 'Document the reason for suspending this listing.',
+        reinstate: 'Describe why this listing is being reinstated.',
+        delete: 'Confirm why this listing should be removed from the marketplace.'
+    };
+
+    titleEl.textContent = actionLabels[action] || 'Review Ad';
+    messageEl.textContent = promptMessages[action] || 'Provide a reason to proceed.';
+    textarea.value = '';
+    textarea.focus();
+
+    state.productAdDecisionContext = { id: adId, action };
+    overlay.classList.remove('hidden');
+}
+
+function closeProductAdDecisionOverlay() {
+    const overlay = document.getElementById('productAdDecisionOverlay');
+    if (overlay) {
+        overlay.classList.add('hidden');
+    }
+    state.productAdDecisionContext = null;
+    const textarea = document.getElementById('productAdDecisionReasonInput');
+    if (textarea) {
+        textarea.value = '';
+    }
+}
+
+function applyProductAdStatusChange(ad, action, reason) {
+    if (!ad) return 'No ad selected.';
+    const normalized = (action || '').toLowerCase();
+    const transitions = {
+        approve: 'approved',
+        reject: 'rejected',
+        suspend: 'suspended',
+        reinstate: 'pending'
+    };
+    const nextStatus = transitions[normalized];
+    if (!nextStatus) {
+        return 'Unsupported action requested.';
+    }
+
+    ad.status = nextStatus;
+    ad.lastEditedAt = new Date().toISOString();
+    appendProductAdHistory(ad, normalized, reason || `${resolveProductAdModeratorLabel()} ${normalized} the listing.`);
+
+    if (normalized === 'approve') {
+        ad.flags = ad.flags || {};
+        ad.flags.manualReview = false;
+    }
+
+    saveProductAdsToStorage();
+    renderProductAdsTable(state.currentProductAdsPage);
+    if (state.activeProductAdId === ad.id) {
+        renderProductAdHistory(ad);
+    }
+
+    const messages = {
+        approve: 'Listing approved successfully.',
+        reject: 'Listing rejected and audit trail updated.',
+        suspend: 'Listing suspended and flagged for compliance.',
+        reinstate: 'Listing reinstated for moderation review.'
+    };
+
+    return messages[normalized] || 'Status updated.';
+}
+
+function deleteProductAd(ad, reason) {
+    if (!ad) return 'Unable to remove listing.';
+    const index = productAds.findIndex(entry => entry && entry.id === ad.id);
+    if (index === -1) {
+        return 'Listing no longer exists.';
+    }
+    appendProductAdHistory(ad, 'deleted', reason || 'Listing removed by moderator.');
+    productAds.splice(index, 1);
+    saveProductAdsToStorage();
+    renderProductAdsTable(1);
+    if (state.activeProductAdId === ad.id) {
+        closeProductAdHistoryDrawer();
+    }
+    return 'Listing deleted successfully.';
+}
+
+function confirmProductAdDecision() {
+    const context = state.productAdDecisionContext;
+    if (!context) {
+        closeProductAdDecisionOverlay();
+        return;
+    }
+    const ad = (productAds || []).find(entry => entry && entry.id === context.id);
+    if (!ad) {
+        showNotification('warning', 'The selected listing could not be found.');
+        closeProductAdDecisionOverlay();
+        return;
+    }
+    const textarea = document.getElementById('productAdDecisionReasonInput');
+    const reason = textarea ? textarea.value.trim() : '';
+
+    let message = '';
+    if (context.action === 'delete') {
+        message = deleteProductAd(ad, reason);
+    } else {
+        message = applyProductAdStatusChange(ad, context.action, reason);
+    }
+
+    showNotification('success', message);
+    closeProductAdDecisionOverlay();
+}
+
+function openProductAdEditOverlay(adId) {
+    const ad = (productAds || []).find(entry => entry && entry.id === adId);
+    if (!ad) {
+        showNotification('warning', 'Unable to locate the listing for editing.');
+        return;
+    }
+    state.editingProductAdId = ad.id;
+
+    const overlay = document.getElementById('productAdEditOverlay');
+    if (!overlay) return;
+
+    const titleInput = document.getElementById('productAdEditTitleInput');
+    const categoryInput = document.getElementById('productAdEditCategoryInput');
+    const cityInput = document.getElementById('productAdEditCityInput');
+    const accountInput = document.getElementById('productAdEditAccountInput');
+    const statusSelect = document.getElementById('productAdEditStatusSelect');
+    const viewsInput = document.getElementById('productAdEditViewsInput');
+    const notesInput = document.getElementById('productAdEditNotesInput');
+    const autoToggle = document.getElementById('productAdEditAutoPostingToggle');
+    const manualToggle = document.getElementById('productAdEditManualReviewToggle');
+    const blacklistToggle = document.getElementById('productAdEditBlacklistToggle');
+
+    if (titleInput) titleInput.value = ad.title || '';
+    if (categoryInput) categoryInput.value = ad.category || '';
+    if (cityInput) cityInput.value = ad.city || '';
+    if (accountInput) accountInput.value = ad.account || '';
+    if (statusSelect) statusSelect.value = (ad.status || 'pending').toLowerCase();
+    if (viewsInput) viewsInput.value = Number.isFinite(ad.views) ? String(ad.views) : '0';
+    if (notesInput) notesInput.value = ad.notes || '';
+    const flags = ad.flags || {};
+    if (autoToggle) autoToggle.checked = Boolean(flags.autoPosting);
+    if (manualToggle) manualToggle.checked = Boolean(flags.manualReview);
+    if (blacklistToggle) blacklistToggle.checked = Boolean(flags.blacklisted);
+
+    overlay.classList.remove('hidden');
+}
+
+function closeProductAdEditOverlay() {
+    const overlay = document.getElementById('productAdEditOverlay');
+    if (overlay) {
+        overlay.classList.add('hidden');
+    }
+    state.editingProductAdId = null;
+}
+
+function handleProductAdEditSubmit(event) {
+    event.preventDefault();
+    const ad = (productAds || []).find(entry => entry && entry.id === state.editingProductAdId);
+    if (!ad) {
+        showNotification('warning', 'Unable to update listing.');
+        closeProductAdEditOverlay();
+        return;
+    }
+
+    const titleInput = document.getElementById('productAdEditTitleInput');
+    const categoryInput = document.getElementById('productAdEditCategoryInput');
+    const cityInput = document.getElementById('productAdEditCityInput');
+    const accountInput = document.getElementById('productAdEditAccountInput');
+    const statusSelect = document.getElementById('productAdEditStatusSelect');
+    const viewsInput = document.getElementById('productAdEditViewsInput');
+    const notesInput = document.getElementById('productAdEditNotesInput');
+    const autoToggle = document.getElementById('productAdEditAutoPostingToggle');
+    const manualToggle = document.getElementById('productAdEditManualReviewToggle');
+    const blacklistToggle = document.getElementById('productAdEditBlacklistToggle');
+
+    const title = titleInput ? titleInput.value.trim() : '';
+    const category = categoryInput ? categoryInput.value.trim() : '';
+    const city = cityInput ? cityInput.value.trim() : '';
+    const account = accountInput ? accountInput.value.trim() : '';
+    if (!title || !category || !city || !account) {
+        showNotification('warning', 'Title, category, city, and account are required.');
+        return;
+    }
+
+    ad.title = title;
+    ad.category = category;
+    ad.city = city;
+    ad.account = normalizeEmail(account) || account.toLowerCase();
+    ad.status = statusSelect ? statusSelect.value : ad.status;
+    ad.views = viewsInput ? Math.max(0, Number.parseInt(viewsInput.value, 10) || 0) : ad.views;
+    ad.notes = notesInput ? notesInput.value.trim() : ad.notes;
+    ad.flags = {
+        autoPosting: autoToggle ? Boolean(autoToggle.checked) : Boolean(ad.flags && ad.flags.autoPosting),
+        manualReview: manualToggle ? Boolean(manualToggle.checked) : Boolean(ad.flags && ad.flags.manualReview),
+        blacklisted: blacklistToggle ? Boolean(blacklistToggle.checked) : Boolean(ad.flags && ad.flags.blacklisted)
+    };
+    ad.lastEditedAt = new Date().toISOString();
+
+    appendProductAdHistory(ad, 'updated', 'Listing edited by moderator.');
+    saveProductAdsToStorage();
+    renderProductAdsTable(state.currentProductAdsPage);
+    if (state.activeProductAdId === ad.id) {
+        renderProductAdHistory(ad);
+    }
+    showNotification('success', 'Listing updated successfully.');
+    closeProductAdEditOverlay();
+}
+
+function handleProductAdsTableClick(event) {
+    const actionButton = event.target.closest('button[data-action]');
+    if (actionButton) {
+        const action = actionButton.dataset.action;
+        const adId = actionButton.dataset.adId;
+        if (!adId) return;
+        if (['approve', 'reject', 'suspend', 'reinstate', 'delete'].includes(action)) {
+            openProductAdDecisionOverlay(adId, action);
+        } else if (action === 'edit') {
+            openProductAdEditOverlay(adId);
+        } else if (action === 'history') {
+            openProductAdHistoryDrawer(adId);
+        }
+        return;
+    }
+
+    const row = event.target.closest('tr[data-ad-id]');
+    if (row) {
+        const adId = row.dataset.adId;
+        openProductAdHistoryDrawer(adId);
+    }
+}
+
+function renderProductAdAutomationLists() {
+    const trustedList = document.getElementById('productAdsTrustedList');
+    const reviewList = document.getElementById('productAdsReviewList');
+    const blacklist = document.getElementById('productAdsBlacklist');
+    const trustedCountEl = document.getElementById('productAdsTrustedCount');
+    const reviewCountEl = document.getElementById('productAdsReviewCount');
+    const blacklistCountEl = document.getElementById('productAdsBlacklistCount');
+
+    const trustedEntries = productAdAutomation && Array.isArray(productAdAutomation.trusted) ? productAdAutomation.trusted : [];
+    const manualEntries = productAdAutomation && Array.isArray(productAdAutomation.manualReview) ? productAdAutomation.manualReview : [];
+    const blacklistEntries = productAdAutomation && Array.isArray(productAdAutomation.blacklist) ? productAdAutomation.blacklist : [];
+
+    const buildList = (target, entries, emptyMessage) => {
+        if (!target) return;
+        if (!entries.length) {
+            target.innerHTML = `<li class="empty-state">${emptyMessage}</li>`;
+            return;
+        }
+        target.innerHTML = entries.map(entry => {
+            const addedLabel = formatDateForDisplay(entry.addedAt, { includeTime: false }) || '';
+            const notes = entry.notes ? `<p class="helper-text">${escapeHtml(entry.notes)}</p>` : '';
+            return `
+                <li data-entry-id="${escapeAttribute(entry.id)}" data-list-type="${escapeAttribute(target.id)}">
+                    <div class="automation-item">
+                        <div>
+                            <strong>${escapeHtml(entry.label || entry.account)}</strong>
+                            <div class="helper-text">${escapeHtml(entry.account)}</div>
+                            ${notes}
+                            ${addedLabel ? `<div class="helper-text">Added ${escapeHtml(addedLabel)}</div>` : ''}
+                        </div>
+                        <button type="button" class="btn btn-ghost icon-only" data-action="remove" title="Remove entry">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                </li>
+            `;
+        }).join('');
+    };
+
+    buildList(trustedList, trustedEntries, 'No trusted accounts yet.');
+    buildList(reviewList, manualEntries, 'No accounts require manual review.');
+    buildList(blacklist, blacklistEntries, 'No blocked accounts.');
+
+    if (trustedCountEl) trustedCountEl.textContent = `${trustedEntries.length} auto-post`;
+    if (reviewCountEl) reviewCountEl.textContent = `${manualEntries.length} monitored`;
+    if (blacklistCountEl) blacklistCountEl.textContent = `${blacklistEntries.length} blocked`;
+}
+
+function openProductAdAutomationPrompt(listType) {
+    const listLabelMap = {
+        trusted: 'trusted auto-post list',
+        manualReview: 'manual review list',
+        blacklist: 'blacklist'
+    };
+    const label = listLabelMap[listType] || 'automation list';
+    const accountInput = window.prompt(`Enter the account email to add to the ${label}.`);
+    if (!accountInput) {
+        return;
+    }
+    const normalizedEmail = normalizeEmail(accountInput);
+    if (!normalizedEmail) {
+        showNotification('warning', 'Please enter a valid email address.');
+        return;
+    }
+    const displayName = window.prompt('Enter a label for this account (optional).');
+    const notes = window.prompt('Add an internal note (optional).');
+
+    addProductAdAutomationEntry(listType, {
+        account: normalizedEmail,
+        label: displayName && displayName.trim() ? displayName.trim() : normalizedEmail,
+        notes: notes && notes.trim() ? notes.trim() : ''
+    });
+}
+
+function addProductAdAutomationEntry(listType, payload) {
+    if (!productAdAutomation || typeof productAdAutomation !== 'object') {
+        productAdAutomation = { trusted: [], manualReview: [], blacklist: [] };
+    }
+    const collections = {
+        trusted: productAdAutomation.trusted,
+        manualReview: productAdAutomation.manualReview,
+        blacklist: productAdAutomation.blacklist
+    };
+    const targetList = collections[listType];
+    if (!Array.isArray(targetList)) {
+        showNotification('warning', 'Unable to update automation list.');
+        return;
+    }
+
+    if (targetList.some(entry => entry.account === payload.account)) {
+        showNotification('warning', 'This account is already listed.');
+        return;
+    }
+
+    const normalized = normalizeAutomationEntry({
+        id: '',
+        account: payload.account,
+        label: payload.label,
+        notes: payload.notes,
+        addedAt: new Date().toISOString()
+    }, targetList.length);
+
+    if (!normalized) {
+        showNotification('warning', 'Unable to normalize automation entry.');
+        return;
+    }
+
+    targetList.push(normalized);
+    saveProductAdAutomationToStorage();
+    renderProductAdAutomationLists();
+    showNotification('success', 'Automation list updated.');
+}
+
+function removeProductAdAutomationEntry(listType, entryId) {
+    if (!entryId) return;
+    if (!productAdAutomation || typeof productAdAutomation !== 'object') {
+        return;
+    }
+    const lists = {
+        trusted: productAdAutomation.trusted,
+        manualReview: productAdAutomation.manualReview,
+        blacklist: productAdAutomation.blacklist
+    };
+    const targetList = lists[listType];
+    if (!Array.isArray(targetList)) return;
+    const index = targetList.findIndex(entry => entry && entry.id === entryId);
+    if (index === -1) return;
+    targetList.splice(index, 1);
+    saveProductAdAutomationToStorage();
+    renderProductAdAutomationLists();
+    showNotification('success', 'Automation entry removed.');
+}
+
+function handleProductAdAutomationListClick(event) {
+    const button = event.target.closest('button[data-action="remove"]');
+    if (!button) return;
+    const listItem = button.closest('li[data-entry-id]');
+    if (!listItem) return;
+    const entryId = listItem.dataset.entryId;
+    const listElement = listItem.closest('ul');
+    if (!listElement) return;
+    const listTypeMap = {
+        productAdsTrustedList: 'trusted',
+        productAdsReviewList: 'manualReview',
+        productAdsBlacklist: 'blacklist'
+    };
+    const listType = listTypeMap[listElement.id];
+    if (!listType) return;
+    if (window.confirm('Remove this account from the list?')) {
+        removeProductAdAutomationEntry(listType, entryId);
+    }
+}
+
+function exportProductAds() {
+    if (!productAds || !productAds.length) {
+        showNotification('warning', 'There are no product ads to export.');
+        return;
+    }
+    const headers = ['ID', 'Title', 'Category', 'City', 'Account', 'Status', 'Views', 'Created At', 'Updated At', 'Auto Posting', 'Manual Review', 'Blacklisted', 'Notes'];
+    const rows = productAds.map(ad => [
+        ad.id || '',
+        ad.title || '',
+        ad.category || '',
+        ad.city || '',
+        ad.account || '',
+        getProductAdStatusLabel(ad.status),
+        Number.isFinite(ad.views) ? ad.views : 0,
+        formatDateForDisplay(ad.createdAt, { includeTime: true }) || '',
+        formatDateForDisplay(ad.lastEditedAt, { includeTime: true }) || '',
+        ad.flags && ad.flags.autoPosting ? 'Yes' : 'No',
+        ad.flags && ad.flags.manualReview ? 'Yes' : 'No',
+        ad.flags && ad.flags.blacklisted ? 'Yes' : 'No',
+        ad.notes || ''
+    ]);
+    const csv = buildCsvContent([headers, ...rows]);
+    triggerFileDownload(new Blob([csv], { type: 'text/csv;charset=utf-8;' }), 'product-ads.csv');
+    showNotification('success', 'Product ads exported successfully.');
+}
+
+function updateProductAdsImportStatus(message, type = 'info') {
+    const area = document.getElementById('productAdsImportStatus');
+    if (!area) return;
+    area.textContent = message;
+    area.className = `import-status ${type}`;
+}
+
+async function handleProductAdsImport(file) {
+    if (!file) return;
+    updateProductAdsImportStatus('Parsing import file...', 'info');
+    try {
+        const text = await readFileAsText(file);
+        const parsed = parseCsv(text);
+        if (!parsed.rows.length) {
+            updateProductAdsImportStatus('No rows detected in the import file.', 'warning');
+            return;
+        }
+        const created = [];
+        parsed.rows.forEach((row, index) => {
+            const payload = {
+                id: row.ID || row.Id || row.id || '',
+                title: row.Title || row.title || row['Ad Title'] || `Imported Ad ${index + 1}`,
+                category: row.Category || row.category || 'General',
+                city: row.City || row.city || 'Riyadh',
+                account: row.Account || row.account || row.Email || '',
+                status: (row.Status || row.status || 'pending').toLowerCase(),
+                views: Number.parseInt(row.Views || row.views || '0', 10) || 0,
+                createdAt: row['Created At'] || row.createdAt || row.created || new Date().toISOString(),
+                lastEditedAt: row['Updated At'] || row.updatedAt || row.updated || row['Last Edited'] || new Date().toISOString(),
+                flags: {
+                    autoPosting: ['yes', 'true', '1'].includes(String(row['Auto Posting'] || row.autoposting || row.autoPosting || '').toLowerCase()),
+                    manualReview: ['yes', 'true', '1'].includes(String(row['Manual Review'] || row.manualReview || '').toLowerCase()),
+                    blacklisted: ['yes', 'true', '1'].includes(String(row.Blacklisted || row.blacklisted || '').toLowerCase())
+                },
+                notes: row.Notes || row.notes || ''
+            };
+            const normalized = normalizeProductAdPayload(payload, productAds.length + created.length);
+            if (normalized) {
+                created.push(normalized);
+            }
+        });
+
+        if (!created.length) {
+            updateProductAdsImportStatus('Import completed but no valid listings were detected.', 'warning');
+            return;
+        }
+
+        const existingIds = new Set(productAds.map(entry => entry.id));
+        created.forEach(ad => {
+            if (existingIds.has(ad.id)) {
+                const index = productAds.findIndex(entry => entry.id === ad.id);
+                if (index > -1) {
+                    productAds[index] = ad;
+                }
+            } else {
+                productAds.push(ad);
+            }
+        });
+
+        saveProductAdsToStorage();
+        renderProductAdsTable(1);
+        renderProductAdAutomationLists();
+        updateProductAdsImportStatus(`Imported ${created.length} listings successfully.`, 'success');
+        showNotification('success', 'Product ads dataset updated.');
+    } catch (error) {
+        console.warn('Unable to import product ads:', error);
+        updateProductAdsImportStatus('Failed to import product ads. Please verify the file format.', 'danger');
+    }
+}
+
+async function handleProductAdsImportInputChange(event) {
+    const file = event.target && event.target.files ? event.target.files[0] : null;
+    if (!file) return;
+    await handleProductAdsImport(file);
+    event.target.value = '';
+}
+
+// --- Individual Accounts Module ---
+const INDIVIDUAL_ACCOUNT_STATUS_LABELS = new Map([
+    ['active', 'Active'],
+    ['frozen', 'Frozen'],
+    ['pending', 'Pending'],
+    ['deleted', 'Deleted'],
+    ['suspended', 'Suspended']
+]);
+
+const INDIVIDUAL_ACCOUNT_STATUS_CLASSES = new Map([
+    ['active', 'status-badge status-active'],
+    ['frozen', 'status-badge status-warning'],
+    ['pending', 'status-badge status-pending'],
+    ['deleted', 'status-badge status-inactive'],
+    ['suspended', 'status-badge status-danger']
+]);
+
+function getIndividualAccountStatusLabel(status) {
+    const normalized = typeof status === 'string' ? status.trim().toLowerCase() : '';
+    return INDIVIDUAL_ACCOUNT_STATUS_LABELS.get(normalized) || (normalized ? normalized.charAt(0).toUpperCase() + normalized.slice(1) : 'Pending');
+}
+
+function getIndividualAccountStatusClass(status) {
+    const normalized = typeof status === 'string' ? status.trim().toLowerCase() : '';
+    return INDIVIDUAL_ACCOUNT_STATUS_CLASSES.get(normalized) || 'status-badge status-pending';
+}
+
+function renderIndividualAccountsFilters() {
+    const citySelect = document.getElementById('individualAccountsCityFilter');
+    if (!citySelect) return;
+    const cities = new Set();
+    (individualAccounts || []).forEach(account => {
+        if (account && typeof account.city === 'string' && account.city.trim()) {
+            cities.add(account.city.trim());
+        }
+    });
+    const current = state.individualAccountsFilters.city || 'all';
+    const options = ['<option value="all">All cities</option>']
+        .concat(Array.from(cities).sort((a, b) => a.localeCompare(b)).map(city => `<option value="${escapeAttribute(city.toLowerCase())}">${escapeHtml(city)}</option>`));
+    citySelect.innerHTML = options.join('');
+    const normalized = current.trim().toLowerCase();
+    const availableValues = Array.from(cities).map(city => city.toLowerCase());
+    citySelect.value = availableValues.includes(normalized) ? normalized : 'all';
+    state.individualAccountsFilters.city = citySelect.value;
+}
+
+function getFilteredIndividualAccounts() {
+    const filters = state.individualAccountsFilters || {};
+    const searchTerm = typeof filters.search === 'string' ? filters.search.trim().toLowerCase() : '';
+    const statusFilter = typeof filters.status === 'string' ? filters.status.trim().toLowerCase() : 'all';
+    const cityFilter = typeof filters.city === 'string' ? filters.city.trim().toLowerCase() : 'all';
+
+    return (individualAccounts || [])
+        .filter(account => {
+            if (!account) return false;
+            const haystack = `${account.fullName || ''} ${account.email || ''} ${account.mobile || ''} ${account.id || ''}`.toLowerCase();
+            if (searchTerm && !haystack.includes(searchTerm)) return false;
+            if (statusFilter !== 'all') {
+                const statusValue = typeof account.status === 'string' ? account.status.trim().toLowerCase() : '';
+                if (statusValue !== statusFilter) return false;
+            }
+            if (cityFilter !== 'all') {
+                const cityValue = typeof account.city === 'string' ? account.city.trim().toLowerCase() : '';
+                if (cityValue !== cityFilter) return false;
+            }
+            return true;
+        })
+        .sort((a, b) => {
+            const aTimestamp = a && a.createdAt ? Date.parse(a.createdAt) : 0;
+            const bTimestamp = b && b.createdAt ? Date.parse(b.createdAt) : 0;
+            return bTimestamp - aTimestamp;
+        });
+}
+
+function updateIndividualAccountsCount(count) {
+    const label = document.getElementById('individualAccountsCountLabel');
+    if (label) {
+        label.textContent = `#${count} Users`;
+    }
+}
+
+function renderIndividualAccountsTable(page = state.currentIndividualAccountsPage) {
+    const tbody = document.getElementById('individualAccountsTableBody');
+    if (!tbody) return;
+
+    renderIndividualAccountsFilters();
+
+    const filtered = getFilteredIndividualAccounts();
+    updateIndividualAccountsCount(filtered.length);
+
+    const perPage = state.individualAccountsPerPage || 10;
+    const totalPages = Math.max(1, Math.ceil(filtered.length / perPage));
+    state.currentIndividualAccountsPage = Math.min(Math.max(page, 1), totalPages);
+    const startIndex = (state.currentIndividualAccountsPage - 1) * perPage;
+    const visible = filtered.slice(startIndex, startIndex + perPage);
+
+    if (!visible.length) {
+        tbody.innerHTML = '<tr><td colspan="8">No individual accounts match the current filters.</td></tr>';
+    } else {
+        let index = startIndex + 1;
+        tbody.innerHTML = visible.map(account => {
+            const statusLabel = getIndividualAccountStatusLabel(account.status);
+            const statusClass = getIndividualAccountStatusClass(account.status);
+            const subscriptions = Array.isArray(account.subscriptions) ? account.subscriptions : [];
+            const subscriptionLabel = subscriptions.length ? subscriptions.map(sub => `${sub.name || 'Subscription'} (${sub.status || 'active'})`).join(', ') : '—';
+            const adsMeta = `${Number.isFinite(account.adsCount) ? account.adsCount : 0} / pending ${Number.isFinite(account.pendingAds) ? account.pendingAds : 0}`;
+            const balanceLabel = formatCurrency(account.balance || 0);
+            const actions = [];
+            actions.push(`<button type="button" class="action-btn info" data-action="view" data-account-id="${escapeAttribute(account.id)}" title="View details"><i class="fas fa-eye"></i></button>`);
+            actions.push(`<button type="button" class="action-btn edit" data-action="edit" data-account-id="${escapeAttribute(account.id)}" title="Edit account"><i class="fas fa-pen"></i></button>`);
+            if ((account.status || '').toLowerCase() !== 'active') {
+                actions.push(`<button type="button" class="action-btn activate" data-action="activate" data-account-id="${escapeAttribute(account.id)}" title="Activate"><i class="fas fa-circle-check"></i></button>`);
+            }
+            if ((account.status || '').toLowerCase() !== 'frozen') {
+                actions.push(`<button type="button" class="action-btn freeze" data-action="freeze" data-account-id="${escapeAttribute(account.id)}" title="Freeze"><i class="fas fa-snowflake"></i></button>`);
+            }
+            actions.push(`<button type="button" class="action-btn delete" data-action="delete" data-account-id="${escapeAttribute(account.id)}" title="Delete"><i class="fas fa-trash"></i></button>`);
+
+            return `
+                <tr data-account-id="${escapeAttribute(account.id)}">
+                    <td>${index++}</td>
+                    <td>
+                        <div class="table-cell-title">${escapeHtml(account.fullName || account.email || account.id || 'Account')}</div>
+                        <div class="table-cell-meta">${escapeHtml(account.email || '—')}</div>
+                        <div class="table-cell-meta">ID: ${escapeHtml(account.id || '—')}</div>
+                    </td>
+                    <td>
+                        <div class="table-cell-meta">${escapeHtml(account.mobile || '—')}</div>
+                        <div class="table-cell-meta">${escapeHtml(account.city || '—')}</div>
+                    </td>
+                    <td><span class="${statusClass}">${escapeHtml(statusLabel)}</span></td>
+                    <td>${escapeHtml(balanceLabel)}</td>
+                    <td>${escapeHtml(adsMeta)}</td>
+                    <td>${escapeHtml(subscriptionLabel)}</td>
+                    <td>
+                        <div class="action-group">
+                            ${actions.join('')}
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    renderIndividualAccountsPagination(totalPages, filtered.length);
+}
+
+function renderIndividualAccountsPagination(totalPages, totalItems) {
+    const container = document.getElementById('individualAccountsPagination');
+    if (!container) return;
+    container.innerHTML = '';
+
+    if (totalPages <= 1 || totalItems <= state.individualAccountsPerPage) return;
+
+    const createButton = (label, page, disabled = false, active = false) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.textContent = label;
+        if (disabled) button.disabled = true;
+        if (active) button.classList.add('active');
+        button.addEventListener('click', () => {
+            renderIndividualAccountsTable(page);
+        });
+        return button;
+    };
+
+    container.appendChild(createButton('Prev', state.currentIndividualAccountsPage - 1, state.currentIndividualAccountsPage === 1));
+    for (let index = 1; index <= totalPages; index += 1) {
+        container.appendChild(createButton(String(index), index, false, index === state.currentIndividualAccountsPage));
+    }
+    container.appendChild(createButton('Next', state.currentIndividualAccountsPage + 1, state.currentIndividualAccountsPage === totalPages));
+}
+
+function handleIndividualAccountsSearch(value) {
+    state.individualAccountsFilters.search = (value || '').trim();
+    state.currentIndividualAccountsPage = 1;
+    renderIndividualAccountsTable(1);
+}
+
+function handleIndividualAccountsFilterChange(key, value) {
+    if (!key) return;
+    state.individualAccountsFilters[key] = typeof value === 'string' ? value.trim() : value;
+    state.currentIndividualAccountsPage = 1;
+    renderIndividualAccountsTable(1);
+}
+
+function resetIndividualAccountsFilters() {
+    state.individualAccountsFilters = {
+        search: '',
+        status: 'all',
+        city: 'all'
+    };
+    const searchInput = document.getElementById('individualAccountsSearchInput');
+    if (searchInput) searchInput.value = '';
+    renderIndividualAccountsTable(1);
+}
+
+function renderIndividualAccountQuickActions(account) {
+    const quickActions = document.getElementById('individualAccountQuickActions');
+    if (!quickActions) return;
+    if (!account) {
+        quickActions.hidden = true;
+        return;
+    }
+    quickActions.hidden = false;
+
+    const activateBtn = document.getElementById('individualAccountActivateBtn');
+    const freezeBtn = document.getElementById('individualAccountFreezeBtn');
+    const deleteBtn = document.getElementById('individualAccountDeleteBtn');
+
+    if (activateBtn) {
+        if ((account.status || '').toLowerCase() === 'active') {
+            activateBtn.disabled = true;
+            activateBtn.textContent = 'Active';
+            activateBtn.dataset.action = 'noop';
+        } else if ((account.status || '').toLowerCase() === 'frozen') {
+            activateBtn.disabled = false;
+            activateBtn.textContent = 'Unfreeze';
+            activateBtn.dataset.action = 'activate';
+        } else {
+            activateBtn.disabled = false;
+            activateBtn.textContent = 'Activate';
+            activateBtn.dataset.action = 'activate';
+        }
+    }
+
+    if (freezeBtn) {
+        freezeBtn.disabled = (account.status || '').toLowerCase() === 'frozen';
+        freezeBtn.dataset.action = 'freeze';
+    }
+
+    if (deleteBtn) {
+        deleteBtn.disabled = false;
+        deleteBtn.dataset.action = 'delete';
+    }
+}
+
+function renderIndividualAccountDetail(account) {
+    const titleEl = document.getElementById('individualAccountDetailTitle');
+    const subtitleEl = document.getElementById('individualAccountDetailSubtitle');
+    const body = document.getElementById('individualAccountDetailBody');
+    if (!titleEl || !body) return;
+
+    if (!account) {
+        titleEl.textContent = 'Select an account';
+        if (subtitleEl) {
+            subtitleEl.textContent = 'Choose an account from the directory to review balances, ads, and permissions.';
+        }
+        body.innerHTML = '<p class="empty-state">Account insights, financial history, and support tooling will appear here.</p>';
+        renderIndividualAccountQuickActions(null);
+        return;
+    }
+
+    titleEl.textContent = account.fullName || account.email || account.id || 'Individual Account';
+    if (subtitleEl) {
+        subtitleEl.textContent = `${getIndividualAccountStatusLabel(account.status)} · ${account.city || 'Unknown City'}`;
+    }
+
+    const subscriptions = Array.isArray(account.subscriptions) ? account.subscriptions : [];
+    const financialHistory = Array.isArray(account.financialHistory) ? account.financialHistory : [];
+    const supportRequests = Array.isArray(account.supportRequests) ? account.supportRequests : [];
+    const permissions = account.permissions || {};
+
+    const subscriptionMarkup = subscriptions.length
+        ? subscriptions.map(sub => `<li><strong>${escapeHtml(sub.name || 'Subscription')}</strong> — ${escapeHtml(sub.status || 'active')} ${sub.renewsAt ? `· Renews ${escapeHtml(formatDateForDisplay(sub.renewsAt) || '')}` : ''}</li>`).join('')
+        : '<li class="empty-state">No active subscriptions.</li>';
+
+    const financialMarkup = financialHistory.length
+        ? financialHistory
+            .sort((a, b) => Date.parse(b.timestamp || '') - Date.parse(a.timestamp || ''))
+            .map(entry => {
+                const amountLabel = formatCurrency(entry.amount || 0);
+                const timestampLabel = formatDateForDisplay(entry.timestamp, { includeTime: true }) || 'Unknown date';
+                return `<li><div><strong>${escapeHtml(entry.label || 'Transaction')}</strong> · ${escapeHtml(entry.type || '')}</div><div class="helper-text">${escapeHtml(timestampLabel)}</div><div>${escapeHtml(amountLabel)}</div>${entry.note ? `<div class="helper-text">${escapeHtml(entry.note)}</div>` : ''}</li>`;
+            }).join('')
+        : '<li class="empty-state">No financial history recorded.</li>';
+
+    const supportMarkup = supportRequests.length
+        ? supportRequests
+            .sort((a, b) => Date.parse(b.requestedAt || '') - Date.parse(a.requestedAt || ''))
+            .map(request => {
+                const requested = formatDateForDisplay(request.requestedAt, { includeTime: true }) || 'Unknown date';
+                const expires = request.expiresAt ? formatDateForDisplay(request.expiresAt, { includeTime: true }) : null;
+                return `<li><strong>${escapeHtml(request.reason || 'Support access')}</strong><div class="helper-text">Requested ${escapeHtml(requested)}</div>${expires ? `<div class="helper-text">Expires ${escapeHtml(expires)}</div>` : ''}<div class="helper-chip ${request.status === 'approved' ? 'success' : request.status === 'pending' ? 'warning' : 'neutral'}">${escapeHtml((request.status || '').toUpperCase())}</div></li>`;
+            }).join('')
+        : '<li class="empty-state">No support access has been requested yet.</li>';
+
+    body.innerHTML = `
+        <section class="detail-section">
+            <h4>Profile &amp; Contact</h4>
+            <div class="detail-grid">
+                <div><dt>Email</dt><dd>${escapeHtml(account.email || '—')}</dd></div>
+                <div><dt>Mobile</dt><dd>${escapeHtml(account.mobile || '—')}</dd></div>
+                <div><dt>City</dt><dd>${escapeHtml(account.city || '—')}</dd></div>
+                <div><dt>Created</dt><dd>${escapeHtml(formatDateForDisplay(account.createdAt, { includeTime: true }) || '—')}</dd></div>
+                <div><dt>Last Active</dt><dd>${escapeHtml(formatDateForDisplay(account.lastActiveAt, { includeTime: true }) || '—')}</dd></div>
+                <div><dt>Balance</dt><dd>${escapeHtml(formatCurrency(account.balance || 0))}</dd></div>
+            </div>
+        </section>
+        <section class="detail-section">
+            <h4>Marketplace Activity</h4>
+            <div class="detail-grid">
+                <div><dt>Total Ads</dt><dd>${Number.isFinite(account.adsCount) ? account.adsCount : 0}</dd></div>
+                <div><dt>Pending Ads</dt><dd>${Number.isFinite(account.pendingAds) ? account.pendingAds : 0}</dd></div>
+                <div><dt>Auto Posting</dt><dd>${permissions.autoPosting ? 'Enabled' : 'Disabled'}</dd></div>
+                <div><dt>Manual Review</dt><dd>${permissions.manualReview ? 'Required' : 'Not required'}</dd></div>
+            </div>
+        </section>
+        <section class="detail-section">
+            <h4>Subscriptions</h4>
+            <ul class="detail-list">${subscriptionMarkup}</ul>
+        </section>
+        <section class="detail-section">
+            <h4>Financial History</h4>
+            <ul class="detail-list">${financialMarkup}</ul>
+        </section>
+        <section class="detail-section">
+            <h4>Support Requests</h4>
+            <ul class="detail-list">${supportMarkup}</ul>
+        </section>
+        <section class="detail-section">
+            <h4>Notes</h4>
+            <p>${account.notes ? escapeHtml(account.notes) : '<span class="helper-text">No internal notes recorded.</span>'}</p>
+        </section>
+    `;
+
+    renderIndividualAccountQuickActions(account);
+}
+
+function openIndividualAccountDetail(accountId) {
+    const account = (individualAccounts || []).find(entry => entry && entry.id === accountId);
+    state.activeIndividualAccountId = account ? account.id : null;
+    renderIndividualAccountDetail(account || null);
+}
+
+function updateIndividualAccountStatus(account, status, note) {
+    if (!account) return;
+    account.status = status;
+    if (note) {
+        account.notes = account.notes ? `${account.notes}\n${note}` : note;
+    }
+    saveIndividualAccountsToStorage();
+    renderIndividualAccountsTable(state.currentIndividualAccountsPage);
+    if (state.activeIndividualAccountId === account.id) {
+        renderIndividualAccountDetail(account);
+    }
+    renderIndividualAccountSupportRequests();
+}
+
+function removeIndividualAccount(accountId) {
+    const index = individualAccounts.findIndex(entry => entry && entry.id === accountId);
+    if (index === -1) return;
+    individualAccounts.splice(index, 1);
+    saveIndividualAccountsToStorage();
+    renderIndividualAccountsTable(1);
+    if (state.activeIndividualAccountId === accountId) {
+        state.activeIndividualAccountId = null;
+        renderIndividualAccountDetail(null);
+    }
+    renderIndividualAccountSupportRequests();
+    showNotification('success', 'Individual account deleted.');
+}
+
+function handleIndividualAccountQuickAction(event) {
+    const button = event.target.closest('button[data-action]');
+    if (!button) return;
+    const action = button.dataset.action;
+    if (!action || action === 'noop') return;
+    const account = (individualAccounts || []).find(entry => entry && entry.id === state.activeIndividualAccountId);
+    if (!account) return;
+
+    if (action === 'activate') {
+        updateIndividualAccountStatus(account, 'active', `${resolveProductAdModeratorLabel()} reactivated the account.`);
+        showNotification('success', 'Account activated.');
+    } else if (action === 'freeze') {
+        updateIndividualAccountStatus(account, 'frozen', `${resolveProductAdModeratorLabel()} froze the account.`);
+        showNotification('warning', 'Account frozen pending review.');
+    } else if (action === 'delete') {
+        if (window.confirm('Delete this individual account? This action cannot be undone.')) {
+            removeIndividualAccount(account.id);
+        }
+    }
+}
+
+function handleIndividualAccountsTableClick(event) {
+    const button = event.target.closest('button[data-action]');
+    if (button) {
+        const action = button.dataset.action;
+        const accountId = button.dataset.accountId;
+        if (!accountId) return;
+        const account = (individualAccounts || []).find(entry => entry && entry.id === accountId);
+        if (!account) {
+            showNotification('warning', 'Unable to locate the selected account.');
+            return;
+        }
+        if (action === 'view') {
+            openIndividualAccountDetail(accountId);
+        } else if (action === 'edit') {
+            openIndividualAccountEditOverlay(accountId);
+        } else if (action === 'activate') {
+            updateIndividualAccountStatus(account, 'active', `${resolveProductAdModeratorLabel()} reactivated the account.`);
+            showNotification('success', 'Account activated.');
+        } else if (action === 'freeze') {
+            updateIndividualAccountStatus(account, 'frozen', `${resolveProductAdModeratorLabel()} froze the account.`);
+            showNotification('warning', 'Account frozen pending review.');
+        } else if (action === 'delete') {
+            if (window.confirm('Delete this individual account?')) {
+                removeIndividualAccount(accountId);
+            }
+        }
+        return;
+    }
+
+    const row = event.target.closest('tr[data-account-id]');
+    if (row) {
+        const accountId = row.dataset.accountId;
+        openIndividualAccountDetail(accountId);
+    }
+}
+
+function renderIndividualAccountSupportRequests() {
+    const list = document.getElementById('individualAccountSupportRequests');
+    if (!list) return;
+    const entries = [];
+    (individualAccounts || []).forEach(account => {
+        if (!account) return;
+        const supportRequests = Array.isArray(account.supportRequests) ? account.supportRequests : [];
+        supportRequests.forEach(request => {
+            entries.push({
+                accountName: account.fullName || account.email || account.id,
+                accountId: account.id,
+                requestedAt: request.requestedAt,
+                expiresAt: request.expiresAt,
+                status: request.status || 'pending',
+                reason: request.reason || 'Support access'
+            });
+        });
+    });
+
+    if (!entries.length) {
+        list.innerHTML = '<li class="empty-state">No support access has been requested yet.</li>';
+        return;
+    }
+
+    entries.sort((a, b) => Date.parse(b.requestedAt || '') - Date.parse(a.requestedAt || ''));
+    list.innerHTML = entries.map(entry => {
+        const requested = formatDateForDisplay(entry.requestedAt, { includeTime: true }) || 'Unknown';
+        const expires = entry.expiresAt ? formatDateForDisplay(entry.expiresAt, { includeTime: true }) : null;
+        const statusClass = entry.status === 'approved' ? 'success' : entry.status === 'pending' ? 'warning' : 'neutral';
+        return `
+            <li>
+                <div><strong>${escapeHtml(entry.reason)}</strong> · ${escapeHtml(entry.accountName)}</div>
+                <div class="helper-text">Requested ${escapeHtml(requested)}</div>
+                ${expires ? `<div class="helper-text">Expires ${escapeHtml(expires)}</div>` : ''}
+                <span class="helper-chip ${statusClass}">${escapeHtml(entry.status.toUpperCase())}</span>
+            </li>
+        `;
+    }).join('');
+}
+
+function openIndividualAccountEditOverlay(accountId) {
+    const account = (individualAccounts || []).find(entry => entry && entry.id === accountId);
+    if (!account) {
+        showNotification('warning', 'Unable to locate the selected account.');
+        return;
+    }
+    state.editingIndividualAccountId = account.id;
+
+    const overlay = document.getElementById('individualAccountEditOverlay');
+    if (!overlay) return;
+
+    const nameInput = document.getElementById('individualAccountNameInput');
+    const emailInput = document.getElementById('individualAccountEmailInput');
+    const mobileInput = document.getElementById('individualAccountMobileInput');
+    const cityInput = document.getElementById('individualAccountCityInput');
+    const notesInput = document.getElementById('individualAccountNotesInput');
+    const passwordInput = document.getElementById('individualAccountPasswordInput');
+
+    if (nameInput) nameInput.value = account.fullName || '';
+    if (emailInput) emailInput.value = account.email || '';
+    if (mobileInput) mobileInput.value = account.mobile || '';
+    if (cityInput) cityInput.value = account.city || '';
+    if (notesInput) notesInput.value = account.notes || '';
+    if (passwordInput) passwordInput.value = '';
+
+    overlay.classList.remove('hidden');
+}
+
+function closeIndividualAccountEditOverlay() {
+    const overlay = document.getElementById('individualAccountEditOverlay');
+    if (overlay) {
+        overlay.classList.add('hidden');
+    }
+    state.editingIndividualAccountId = null;
+}
+
+function handleIndividualAccountEditSubmit(event) {
+    event.preventDefault();
+    const account = (individualAccounts || []).find(entry => entry && entry.id === state.editingIndividualAccountId);
+    if (!account) {
+        showNotification('warning', 'Unable to update the account.');
+        closeIndividualAccountEditOverlay();
+        return;
+    }
+
+    const nameInput = document.getElementById('individualAccountNameInput');
+    const emailInput = document.getElementById('individualAccountEmailInput');
+    const mobileInput = document.getElementById('individualAccountMobileInput');
+    const cityInput = document.getElementById('individualAccountCityInput');
+    const notesInput = document.getElementById('individualAccountNotesInput');
+
+    const fullName = nameInput ? nameInput.value.trim() : '';
+    const email = emailInput ? emailInput.value.trim() : '';
+    if (!fullName || !email) {
+        showNotification('warning', 'Full name and email are required.');
+        return;
+    }
+
+    account.fullName = fullName;
+    account.email = normalizeEmail(email) || email.toLowerCase();
+    account.mobile = mobileInput ? mobileInput.value.trim() : account.mobile;
+    account.city = cityInput ? cityInput.value.trim() : account.city;
+    account.notes = notesInput ? notesInput.value.trim() : account.notes;
+
+    saveIndividualAccountsToStorage();
+    renderIndividualAccountsTable(state.currentIndividualAccountsPage);
+    if (state.activeIndividualAccountId === account.id) {
+        renderIndividualAccountDetail(account);
+    }
+    renderIndividualAccountSupportRequests();
+    showNotification('success', 'Individual account updated.');
+    closeIndividualAccountEditOverlay();
+}
+
+function exportIndividualAccounts() {
+    if (!individualAccounts || !individualAccounts.length) {
+        showNotification('warning', 'There are no individual accounts to export.');
+        return;
+    }
+    const headers = ['ID', 'Full Name', 'Email', 'Mobile', 'City', 'Status', 'Balance', 'Ads Count', 'Pending Ads', 'Created At', 'Last Active'];
+    const rows = individualAccounts.map(account => [
+        account.id || '',
+        account.fullName || '',
+        account.email || '',
+        account.mobile || '',
+        account.city || '',
+        getIndividualAccountStatusLabel(account.status),
+        account.balance || 0,
+        account.adsCount || 0,
+        account.pendingAds || 0,
+        formatDateForDisplay(account.createdAt, { includeTime: true }) || '',
+        formatDateForDisplay(account.lastActiveAt, { includeTime: true }) || ''
+    ]);
+    const csv = buildCsvContent([headers, ...rows]);
+    triggerFileDownload(new Blob([csv], { type: 'text/csv;charset=utf-8;' }), 'individual-accounts.csv');
+    showNotification('success', 'Individual accounts exported successfully.');
+}
+
+function updateIndividualAccountsImportStatus(message, type = 'info') {
+    const area = document.getElementById('individualAccountsImportStatus');
+    if (!area) return;
+    area.textContent = message;
+    area.className = `import-status ${type}`;
+}
+
+async function handleIndividualAccountsImport(file) {
+    if (!file) return;
+    updateIndividualAccountsImportStatus('Parsing import file...', 'info');
+    try {
+        const text = await readFileAsText(file);
+        const parsed = parseCsv(text);
+        if (!parsed.rows.length) {
+            updateIndividualAccountsImportStatus('No rows detected in the import file.', 'warning');
+            return;
+        }
+        const created = [];
+        parsed.rows.forEach((row, index) => {
+            const payload = {
+                id: row.ID || row.Id || row.id || `IND-IM-${index + 1}`,
+                fullName: row['Full Name'] || row.fullName || row.Name || '',
+                email: row.Email || row.email || '',
+                mobile: row.Mobile || row.mobile || '',
+                city: row.City || row.city || 'Riyadh',
+                status: (row.Status || row.status || 'pending').toLowerCase(),
+                balance: Number.parseFloat(row.Balance || row.balance || 0) || 0,
+                adsCount: Number.parseInt(row['Ads Count'] || row.adsCount || 0, 10) || 0,
+                pendingAds: Number.parseInt(row['Pending Ads'] || row.pendingAds || 0, 10) || 0,
+                createdAt: row['Created At'] || row.createdAt || new Date().toISOString(),
+                lastActiveAt: row['Last Active'] || row.lastActiveAt || row.lastActive || new Date().toISOString(),
+                notes: row.Notes || row.notes || ''
+            };
+            const normalized = normalizeIndividualAccountPayload(payload, individualAccounts.length + created.length);
+            if (normalized) {
+                created.push(normalized);
+            }
+        });
+
+        if (!created.length) {
+            updateIndividualAccountsImportStatus('Import completed but no valid users were detected.', 'warning');
+            return;
+        }
+
+        const existingMap = new Map(individualAccounts.map(entry => [entry.id, entry]));
+        created.forEach(account => {
+            if (existingMap.has(account.id)) {
+                const index = individualAccounts.findIndex(entry => entry.id === account.id);
+                if (index > -1) {
+                    individualAccounts[index] = account;
+                }
+            } else {
+                individualAccounts.push(account);
+            }
+        });
+
+        saveIndividualAccountsToStorage();
+        renderIndividualAccountsTable(1);
+        renderIndividualAccountSupportRequests();
+        updateIndividualAccountsImportStatus(`Imported ${created.length} accounts successfully.`, 'success');
+        showNotification('success', 'Individual accounts dataset updated.');
+    } catch (error) {
+        console.warn('Unable to import individual accounts:', error);
+        updateIndividualAccountsImportStatus('Failed to import individual accounts. Please verify the file format.', 'danger');
+    }
+}
+
+async function handleIndividualAccountsImportInputChange(event) {
+    const file = event.target && event.target.files ? event.target.files[0] : null;
+    if (!file) return;
+    await handleIndividualAccountsImport(file);
+    event.target.value = '';
+}
+
+// --- Business Accounts Module ---
+const BUSINESS_ACCOUNT_STATUS_LABELS = new Map([
+    ['pending', 'Pending Review'],
+    ['docs-requested', 'Documents Requested'],
+    ['active', 'Active'],
+    ['suspended', 'Suspended'],
+    ['cancelled', 'Cancelled'],
+    ['rejected', 'Rejected']
+]);
+
+const BUSINESS_ACCOUNT_STATUS_CLASSES = new Map([
+    ['pending', 'status-badge status-pending'],
+    ['docs-requested', 'status-badge status-warning'],
+    ['active', 'status-badge status-active'],
+    ['suspended', 'status-badge status-danger'],
+    ['cancelled', 'status-badge status-inactive'],
+    ['rejected', 'status-badge status-danger']
+]);
+
+function getBusinessAccountStatusLabel(status) {
+    const normalized = typeof status === 'string' ? status.trim().toLowerCase() : '';
+    return BUSINESS_ACCOUNT_STATUS_LABELS.get(normalized) || (normalized ? normalized.charAt(0).toUpperCase() + normalized.slice(1) : 'Pending Review');
+}
+
+function getBusinessAccountStatusClass(status) {
+    const normalized = typeof status === 'string' ? status.trim().toLowerCase() : '';
+    return BUSINESS_ACCOUNT_STATUS_CLASSES.get(normalized) || 'status-badge status-pending';
+}
+
+function appendBusinessAccountHistory(account, action, context) {
+    if (!account) return;
+    const entry = normalizeBusinessAccountHistoryEntry({
+        id: '',
+        action,
+        timestamp: new Date().toISOString(),
+        actor: resolveProductAdModeratorLabel(),
+        context: typeof context === 'string' ? context.trim() : ''
+    }, action, account.history ? account.history.length : 0);
+    if (!Array.isArray(account.history)) {
+        account.history = [];
+    }
+    if (entry) {
+        account.history.unshift(entry);
+    }
+}
+
+function renderBusinessAccountsFilters() {
+    const statusSelect = document.getElementById('businessAccountsStatusFilter');
+    const packageSelect = document.getElementById('businessAccountsPackageFilter');
+
+    if (statusSelect) {
+        const current = state.businessAccountsFilters.status || 'all';
+        statusSelect.value = current;
+    }
+
+    if (packageSelect) {
+        const current = state.businessAccountsFilters.package || 'all';
+        const packagesList = Array.isArray(businessPackages) ? businessPackages : [];
+        const options = ['<option value="all">All packages</option>']
+            .concat(packagesList.map(pkg => `<option value="${escapeAttribute(pkg.id)}">${escapeHtml(pkg.name)}</option>`));
+        packageSelect.innerHTML = options.join('');
+        packageSelect.value = packagesList.some(pkg => pkg.id === current) ? current : 'all';
+        state.businessAccountsFilters.package = packageSelect.value;
+    }
+}
+
+function getFilteredBusinessAccounts() {
+    const filters = state.businessAccountsFilters || {};
+    const searchTerm = typeof filters.search === 'string' ? filters.search.trim().toLowerCase() : '';
+    const statusFilter = typeof filters.status === 'string' ? filters.status.trim().toLowerCase() : 'all';
+    const packageFilter = typeof filters.package === 'string' ? filters.package.trim() : 'all';
+
+    return (businessAccounts || [])
+        .filter(account => {
+            if (!account) return false;
+            const haystack = `${account.companyName || ''} ${account.contactName || ''} ${account.email || ''} ${account.id || ''}`.toLowerCase();
+            if (searchTerm && !haystack.includes(searchTerm)) return false;
+            if (statusFilter !== 'all') {
+                const statusValue = typeof account.status === 'string' ? account.status.trim().toLowerCase() : '';
+                if (statusValue !== statusFilter) return false;
+            }
+            if (packageFilter !== 'all') {
+                if ((account.packageId || '') !== packageFilter) return false;
+            }
+            return true;
+        })
+        .sort((a, b) => Date.parse(b.submittedAt || '') - Date.parse(a.submittedAt || ''));
+}
+
+function updateBusinessRequestsCountLabel() {
+    const label = document.getElementById('businessRequestsCountLabel');
+    if (!label) return;
+    const pendingCount = (businessAccounts || []).filter(account => {
+        const status = (account.status || '').toLowerCase();
+        return status === 'pending' || status === 'docs-requested';
+    }).length;
+    label.textContent = `#${pendingCount} Pending`;
+}
+
+function renderBusinessAccountsTable(page = state.currentBusinessAccountsPage) {
+    const tbody = document.getElementById('businessAccountsTableBody');
+    if (!tbody) return;
+
+    renderBusinessAccountsFilters();
+    updateBusinessRequestsCountLabel();
+
+    const filtered = getFilteredBusinessAccounts();
+    const perPage = state.businessAccountsPerPage || 10;
+    const totalPages = Math.max(1, Math.ceil(filtered.length / perPage));
+    state.currentBusinessAccountsPage = Math.min(Math.max(page, 1), totalPages);
+    const startIndex = (state.currentBusinessAccountsPage - 1) * perPage;
+    const visible = filtered.slice(startIndex, startIndex + perPage);
+
+    if (!visible.length) {
+        tbody.innerHTML = '<tr><td colspan="8">Business applications will appear here.</td></tr>';
+    } else {
+        let index = startIndex + 1;
+        tbody.innerHTML = visible.map(account => {
+            const statusLabel = getBusinessAccountStatusLabel(account.status);
+            const statusClass = getBusinessAccountStatusClass(account.status);
+            const packageDetails = businessPackages.find(pkg => pkg.id === account.packageId);
+            const packageLabel = packageDetails ? packageDetails.name : '—';
+            const invoices = Array.isArray(account.invoices) ? account.invoices : [];
+            const invoiceSummary = invoices.length ? `${invoices.length} invoice${invoices.length > 1 ? 's' : ''}` : '0 invoices';
+            const submittedLabel = formatDateForDisplay(account.submittedAt, { includeTime: true }) || '—';
+            const actions = [];
+            actions.push(`<button type="button" class="action-btn info" data-action="detail" data-account-id="${escapeAttribute(account.id)}" title="View details"><i class="fas fa-eye"></i></button>`);
+            if ((account.status || '').toLowerCase() !== 'active') {
+                actions.push(`<button type="button" class="action-btn approve" data-action="approve" data-account-id="${escapeAttribute(account.id)}" title="Approve"><i class="fas fa-circle-check"></i></button>`);
+            }
+            actions.push(`<button type="button" class="action-btn docs" data-action="request-docs" data-account-id="${escapeAttribute(account.id)}" title="Request documents"><i class="fas fa-file-signature"></i></button>`);
+            if (!['rejected', 'cancelled'].includes((account.status || '').toLowerCase())) {
+                actions.push(`<button type="button" class="action-btn reject" data-action="reject" data-account-id="${escapeAttribute(account.id)}" title="Reject"><i class="fas fa-circle-xmark"></i></button>`);
+            }
+
+            return `
+                <tr data-account-id="${escapeAttribute(account.id)}">
+                    <td>${index++}</td>
+                    <td>
+                        <div class="table-cell-title">${escapeHtml(account.companyName || account.id)}</div>
+                        <div class="table-cell-meta">${escapeHtml(account.city || '—')}</div>
+                    </td>
+                    <td>
+                        <div class="table-cell-meta">${escapeHtml(account.contactName || '—')}</div>
+                        <div class="table-cell-meta">${escapeHtml(account.email || '—')}</div>
+                        <div class="table-cell-meta">${escapeHtml(account.phone || '—')}</div>
+                    </td>
+                    <td><span class="${statusClass}">${escapeHtml(statusLabel)}</span></td>
+                    <td>${escapeHtml(packageLabel)}</td>
+                    <td>${escapeHtml(submittedLabel)}</td>
+                    <td>${escapeHtml(invoiceSummary)}</td>
+                    <td>
+                        <div class="action-group">
+                            ${actions.join('')}
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    renderBusinessAccountsPagination(totalPages, filtered.length);
+}
+
+function renderBusinessAccountsPagination(totalPages, totalItems) {
+    const container = document.getElementById('businessAccountsPagination');
+    if (!container) return;
+    container.innerHTML = '';
+    if (totalPages <= 1 || totalItems <= state.businessAccountsPerPage) return;
+
+    const createButton = (label, page, disabled = false, active = false) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.textContent = label;
+        if (disabled) button.disabled = true;
+        if (active) button.classList.add('active');
+        button.addEventListener('click', () => {
+            renderBusinessAccountsTable(page);
+        });
+        return button;
+    };
+
+    container.appendChild(createButton('Prev', state.currentBusinessAccountsPage - 1, state.currentBusinessAccountsPage === 1));
+    for (let index = 1; index <= totalPages; index += 1) {
+        container.appendChild(createButton(String(index), index, false, index === state.currentBusinessAccountsPage));
+    }
+    container.appendChild(createButton('Next', state.currentBusinessAccountsPage + 1, state.currentBusinessAccountsPage === totalPages));
+}
+
+function handleBusinessAccountsSearch(value) {
+    state.businessAccountsFilters.search = (value || '').trim();
+    state.currentBusinessAccountsPage = 1;
+    renderBusinessAccountsTable(1);
+}
+
+function handleBusinessAccountsFilterChange(key, value) {
+    if (!key) return;
+    state.businessAccountsFilters[key] = typeof value === 'string' ? value.trim() : value;
+    state.currentBusinessAccountsPage = 1;
+    renderBusinessAccountsTable(1);
+}
+
+function resetBusinessAccountsFilters() {
+    state.businessAccountsFilters = {
+        search: '',
+        status: 'all',
+        package: 'all'
+    };
+    const searchInput = document.getElementById('businessAccountsSearchInput');
+    if (searchInput) searchInput.value = '';
+    renderBusinessAccountsTable(1);
+}
+
+function renderBusinessAccountDetail(account) {
+    const drawer = document.getElementById('businessAccountDetailDrawer');
+    const titleEl = document.getElementById('businessAccountDetailTitle');
+    const subtitleEl = document.getElementById('businessAccountDetailSubtitle');
+    const content = document.getElementById('businessAccountDetailContent');
+    if (!drawer || !titleEl || !content) return;
+
+    if (!account) {
+        drawer.classList.add('hidden');
+        content.innerHTML = '<p class="empty-state">No business account selected.</p>';
+        return;
+    }
+
+    drawer.classList.remove('hidden');
+    titleEl.textContent = account.companyName || account.id || 'Business Account';
+    if (subtitleEl) {
+        subtitleEl.textContent = `${getBusinessAccountStatusLabel(account.status)} · ${account.city || 'Unknown City'}`;
+    }
+
+    const packageDetails = businessPackages.find(pkg => pkg.id === account.packageId);
+    const invoices = Array.isArray(account.invoices) ? account.invoices : [];
+    const requestedDocs = Array.isArray(account.requestedDocuments) ? account.requestedDocuments : [];
+    const history = Array.isArray(account.history) ? account.history : [];
+
+    const invoicesMarkup = invoices.length
+        ? invoices.map(invoice => {
+            const dueLabel = formatDateForDisplay(invoice.dueDate, { includeTime: false }) || 'No due date';
+            return `<li><strong>${escapeHtml(invoice.id)}</strong> · ${escapeHtml(formatCurrency(invoice.amount || 0))} · ${escapeHtml(invoice.status || 'pending')}<div class="helper-text">Due ${escapeHtml(dueLabel)}</div></li>`;
+        }).join('')
+        : '<li class="empty-state">No invoices on file.</li>';
+
+    const docsMarkup = requestedDocs.length
+        ? requestedDocs.map(doc => `<li><i class="fas fa-file-circle-question"></i> ${escapeHtml(doc)}</li>`).join('')
+        : '<li class="empty-state">No outstanding document requests.</li>';
+
+    const historyMarkup = history.length
+        ? history.map(entry => {
+            const label = formatProductAdHistoryAction(entry.action);
+            const timeLabel = formatDateForDisplay(entry.timestamp, { includeTime: true }) || 'Unknown time';
+            return `<li><strong>${escapeHtml(label)}</strong> · ${escapeHtml(entry.actor || 'System')}<div class="helper-text">${escapeHtml(timeLabel)}</div>${entry.context ? `<div class="helper-text">${escapeHtml(entry.context)}</div>` : ''}</li>`;
+        }).join('')
+        : '<li class="empty-state">No activity logged yet.</li>';
+
+    content.innerHTML = `
+        <section class="detail-section">
+            <h4>Contact &amp; Package</h4>
+            <div class="detail-grid">
+                <div><dt>Contact</dt><dd>${escapeHtml(account.contactName || '—')}</dd></div>
+                <div><dt>Email</dt><dd>${escapeHtml(account.email || '—')}</dd></div>
+                <div><dt>Phone</dt><dd>${escapeHtml(account.phone || '—')}</dd></div>
+                <div><dt>Submitted</dt><dd>${escapeHtml(formatDateForDisplay(account.submittedAt, { includeTime: true }) || '—')}</dd></div>
+                <div><dt>Approved</dt><dd>${escapeHtml(formatDateForDisplay(account.approvedAt, { includeTime: true }) || '—')}</dd></div>
+                <div><dt>Package</dt><dd>${escapeHtml(packageDetails ? packageDetails.name : '—')}</dd></div>
+            </div>
+        </section>
+        <section class="detail-section">
+            <h4>Requested Documents</h4>
+            <ul class="detail-list">${docsMarkup}</ul>
+        </section>
+        <section class="detail-section">
+            <h4>Invoices</h4>
+            <ul class="detail-list">${invoicesMarkup}</ul>
+        </section>
+        <section class="detail-section">
+            <h4>History</h4>
+            <ul class="detail-list">${historyMarkup}</ul>
+        </section>
+    `;
+}
+
+function openBusinessAccountDetail(accountId) {
+    const account = (businessAccounts || []).find(entry => entry && entry.id === accountId);
+    state.activeBusinessAccountId = account ? account.id : null;
+    renderBusinessAccountDetail(account || null);
+}
+
+function closeBusinessAccountDetailDrawer() {
+    state.activeBusinessAccountId = null;
+    const drawer = document.getElementById('businessAccountDetailDrawer');
+    if (drawer) {
+        drawer.classList.add('hidden');
+    }
+}
+
+function openBusinessAccountDecisionOverlay(accountId, action) {
+    const overlay = document.getElementById('businessAccountDecisionOverlay');
+    const titleEl = document.getElementById('businessAccountDecisionTitle');
+    const messageEl = document.getElementById('businessAccountDecisionMessage');
+    const textarea = document.getElementById('businessAccountDecisionReasonInput');
+    if (!overlay || !titleEl || !messageEl || !textarea) return;
+
+    const account = (businessAccounts || []).find(entry => entry && entry.id === accountId);
+    if (!account) {
+        showNotification('warning', 'Unable to locate the business account.');
+        return;
+    }
+
+    const labels = {
+        approve: 'Approve Account',
+        'request-docs': 'Request Documents',
+        reject: 'Reject Account'
+    };
+    const prompts = {
+        approve: 'Add a note before approving this business account.',
+        'request-docs': 'List the documents required to move this application forward.',
+        reject: 'Explain why this business account is being rejected.'
+    };
+
+    titleEl.textContent = labels[action] || 'Review Account';
+    messageEl.textContent = prompts[action] || 'Add a note for audit tracking.';
+    textarea.value = '';
+    textarea.focus();
+
+    state.businessDecisionContext = { id: accountId, action };
+    overlay.classList.remove('hidden');
+}
+
+function closeBusinessAccountDecisionOverlay() {
+    const overlay = document.getElementById('businessAccountDecisionOverlay');
+    if (overlay) {
+        overlay.classList.add('hidden');
+    }
+    state.businessDecisionContext = null;
+    const textarea = document.getElementById('businessAccountDecisionReasonInput');
+    if (textarea) textarea.value = '';
+}
+
+function applyBusinessAccountDecision(account, action, reason) {
+    if (!account) return 'No account selected.';
+    const normalized = (action || '').toLowerCase();
+    if (normalized === 'approve') {
+        account.status = 'active';
+        account.approvedAt = new Date().toISOString();
+        account.financialStatus = 'settled';
+        appendBusinessAccountHistory(account, 'approved', reason || 'Business account approved.');
+    } else if (normalized === 'request-docs') {
+        account.status = 'docs-requested';
+        const note = reason || 'Additional documentation requested.';
+        account.requestedDocuments = Array.isArray(account.requestedDocuments) ? account.requestedDocuments : [];
+        account.requestedDocuments.push(note);
+        appendBusinessAccountHistory(account, 'docs-requested', note);
+    } else if (normalized === 'reject') {
+        account.status = 'rejected';
+        account.financialStatus = 'closed';
+        appendBusinessAccountHistory(account, 'rejected', reason || 'Application rejected.');
+    } else {
+        return 'Unsupported action requested.';
+    }
+
+    saveBusinessAccountsToStorage();
+    renderBusinessAccountsTable(state.currentBusinessAccountsPage);
+    if (state.activeBusinessAccountId === account.id) {
+        renderBusinessAccountDetail(account);
+    }
+    return 'Business account updated.';
+}
+
+function confirmBusinessAccountDecision() {
+    const context = state.businessDecisionContext;
+    if (!context) {
+        closeBusinessAccountDecisionOverlay();
+        return;
+    }
+    const account = (businessAccounts || []).find(entry => entry && entry.id === context.id);
+    if (!account) {
+        showNotification('warning', 'The selected business account could not be found.');
+        closeBusinessAccountDecisionOverlay();
+        return;
+    }
+    const textarea = document.getElementById('businessAccountDecisionReasonInput');
+    const reason = textarea ? textarea.value.trim() : '';
+
+    const message = applyBusinessAccountDecision(account, context.action, reason);
+    showNotification('success', message);
+    closeBusinessAccountDecisionOverlay();
+}
+
+function handleBusinessAccountsTableClick(event) {
+    const button = event.target.closest('button[data-action]');
+    if (button) {
+        const action = button.dataset.action;
+        const accountId = button.dataset.accountId;
+        if (!accountId) return;
+        if (action === 'detail') {
+            openBusinessAccountDetail(accountId);
+        } else if (['approve', 'request-docs', 'reject'].includes(action)) {
+            openBusinessAccountDecisionOverlay(accountId, action);
+        }
+        return;
+    }
+
+    const row = event.target.closest('tr[data-account-id]');
+    if (row) {
+        openBusinessAccountDetail(row.dataset.accountId);
+    }
+}
+
+function generateBusinessPackageId() {
+    const ids = (businessPackages || []).map(pkg => {
+        if (!pkg || typeof pkg.id !== 'string') return NaN;
+        const match = pkg.id.match(/PKG-(\d+)/i);
+        return match ? Number.parseInt(match[1], 10) : NaN;
+    }).filter(Number.isFinite);
+    const nextValue = ids.length ? Math.max(...ids) + 1 : 1;
+    return `PKG-${String(nextValue).padStart(3, '0')}`;
+}
+
+function populateBusinessPackageForm(pkg) {
+    const nameInput = document.getElementById('businessPackageNameInput');
+    const adsInput = document.getElementById('businessPackageAdsInput');
+    const categoriesInput = document.getElementById('businessPackageCategoriesInput');
+    const imagesInput = document.getElementById('businessPackageImagesInput');
+    const videosInput = document.getElementById('businessPackageVideosInput');
+    const highlightsInput = document.getElementById('businessPackageHighlightsInput');
+    const whatsappToggle = document.getElementById('businessPackageWhatsappToggle');
+    const priceInput = document.getElementById('businessPackagePriceInput');
+    const cycleInput = document.getElementById('businessPackageCycleInput');
+
+    if (!pkg) {
+        if (nameInput) nameInput.value = '';
+        if (adsInput) adsInput.value = '';
+        if (categoriesInput) categoriesInput.value = '';
+        if (imagesInput) imagesInput.value = '';
+        if (videosInput) videosInput.value = '';
+        if (highlightsInput) highlightsInput.value = '';
+        if (whatsappToggle) whatsappToggle.checked = false;
+        if (priceInput) priceInput.value = '';
+        if (cycleInput) cycleInput.value = 'Monthly';
+        return;
+    }
+
+    if (nameInput) nameInput.value = pkg.name || '';
+    if (adsInput) adsInput.value = Number.isFinite(pkg.adsIncluded) ? String(pkg.adsIncluded) : '';
+    if (categoriesInput) categoriesInput.value = Number.isFinite(pkg.categoriesIncluded) ? String(pkg.categoriesIncluded) : '';
+    if (imagesInput) imagesInput.value = Number.isFinite(pkg.images) ? String(pkg.images) : '';
+    if (videosInput) videosInput.value = Number.isFinite(pkg.videos) ? String(pkg.videos) : '';
+    if (highlightsInput) highlightsInput.value = Number.isFinite(pkg.highlights) ? String(pkg.highlights) : '';
+    if (whatsappToggle) whatsappToggle.checked = Boolean(pkg.whatsapp);
+    if (priceInput) priceInput.value = Number.isFinite(pkg.price) ? String(pkg.price) : '';
+    if (cycleInput) cycleInput.value = pkg.billingCycle || 'Monthly';
+}
+
+function resetBusinessPackageForm() {
+    state.editingBusinessPackageId = null;
+    populateBusinessPackageForm(null);
+}
+
+function handleBusinessPackageFormSubmit(event) {
+    event.preventDefault();
+    const nameInput = document.getElementById('businessPackageNameInput');
+    const adsInput = document.getElementById('businessPackageAdsInput');
+    const categoriesInput = document.getElementById('businessPackageCategoriesInput');
+    const imagesInput = document.getElementById('businessPackageImagesInput');
+    const videosInput = document.getElementById('businessPackageVideosInput');
+    const highlightsInput = document.getElementById('businessPackageHighlightsInput');
+    const whatsappToggle = document.getElementById('businessPackageWhatsappToggle');
+    const priceInput = document.getElementById('businessPackagePriceInput');
+    const cycleInput = document.getElementById('businessPackageCycleInput');
+
+    const name = nameInput ? nameInput.value.trim() : '';
+    if (!name) {
+        showNotification('warning', 'Package name is required.');
+        return;
+    }
+
+    const payload = {
+        id: state.editingBusinessPackageId || generateBusinessPackageId(),
+        name,
+        adsIncluded: adsInput ? Math.max(0, Number.parseInt(adsInput.value, 10) || 0) : 0,
+        categoriesIncluded: categoriesInput ? Math.max(0, Number.parseInt(categoriesInput.value, 10) || 0) : 0,
+        images: imagesInput ? Math.max(0, Number.parseInt(imagesInput.value, 10) || 0) : 0,
+        videos: videosInput ? Math.max(0, Number.parseInt(videosInput.value, 10) || 0) : 0,
+        highlights: highlightsInput ? Math.max(0, Number.parseInt(highlightsInput.value, 10) || 0) : 0,
+        whatsapp: whatsappToggle ? Boolean(whatsappToggle.checked) : false,
+        price: priceInput ? Math.max(0, Number.parseFloat(priceInput.value) || 0) : 0,
+        billingCycle: cycleInput ? cycleInput.value : 'Monthly'
+    };
+
+    const normalized = normalizeBusinessPackagePayload(payload, businessPackages.length);
+    if (!normalized) {
+        showNotification('warning', 'Unable to normalize package details.');
+        return;
+    }
+
+    const existingIndex = businessPackages.findIndex(pkg => pkg.id === normalized.id);
+    if (existingIndex > -1) {
+        businessPackages[existingIndex] = normalized;
+        showNotification('success', 'Package updated successfully.');
+    } else {
+        businessPackages.push(normalized);
+        showNotification('success', 'Package created successfully.');
+    }
+
+    saveBusinessPackagesToStorage();
+    renderBusinessPackagesTable();
+    renderBusinessAccountsFilters();
+    resetBusinessPackageForm();
+}
+
+function handleBusinessPackageCancel() {
+    resetBusinessPackageForm();
+}
+
+function renderBusinessPackagesTable() {
+    const tbody = document.getElementById('businessPackagesTableBody');
+    if (!tbody) return;
+    if (!businessPackages || !businessPackages.length) {
+        tbody.innerHTML = '<tr><td colspan="8">Packages will appear here.</td></tr>';
+        return;
+    }
+    tbody.innerHTML = businessPackages.map(pkg => `
+        <tr data-package-id="${escapeAttribute(pkg.id)}">
+            <td>${escapeHtml(pkg.name)}</td>
+            <td>${Number.isFinite(pkg.adsIncluded) ? pkg.adsIncluded : 0}</td>
+            <td>${Number.isFinite(pkg.categoriesIncluded) ? pkg.categoriesIncluded : 0}</td>
+            <td>${Number.isFinite(pkg.images) ? pkg.images : 0} images / ${Number.isFinite(pkg.videos) ? pkg.videos : 0} videos</td>
+            <td>${Number.isFinite(pkg.highlights) ? pkg.highlights : 0}</td>
+            <td>${pkg.whatsapp ? 'Yes' : 'No'}</td>
+            <td>${escapeHtml(formatCurrency(pkg.price || 0))} / ${escapeHtml(pkg.billingCycle || 'Monthly')}</td>
+            <td>
+                <div class="action-group">
+                    <button type="button" class="action-btn edit" data-action="edit" data-package-id="${escapeAttribute(pkg.id)}" title="Edit package"><i class="fas fa-pen"></i></button>
+                    <button type="button" class="action-btn delete" data-action="delete" data-package-id="${escapeAttribute(pkg.id)}" title="Delete package"><i class="fas fa-trash"></i></button>
+                </div>
+            </td>
+        </tr>
+    `).join('');
+}
+
+function handleBusinessPackagesTableClick(event) {
+    const button = event.target.closest('button[data-action]');
+    if (!button) return;
+    const action = button.dataset.action;
+    const packageId = button.dataset.packageId;
+    if (!packageId) return;
+
+    if (action === 'edit') {
+        const pkg = businessPackages.find(entry => entry && entry.id === packageId);
+        if (!pkg) {
+            showNotification('warning', 'Unable to locate the selected package.');
+            return;
+        }
+        state.editingBusinessPackageId = pkg.id;
+        populateBusinessPackageForm(pkg);
+        window.scrollTo({ top: document.getElementById('businessPackageForm').offsetTop - 120, behavior: 'smooth' });
+    } else if (action === 'delete') {
+        const inUse = (businessAccounts || []).some(account => account && account.packageId === packageId)
+            || (businessSubscribers || []).some(subscriber => subscriber && subscriber.packageId === packageId);
+        if (inUse) {
+            showNotification('warning', 'Cannot delete a package that is currently assigned to accounts or subscribers.');
+            return;
+        }
+        if (window.confirm('Delete this package?')) {
+            const index = businessPackages.findIndex(pkg => pkg.id === packageId);
+            if (index > -1) {
+                businessPackages.splice(index, 1);
+                saveBusinessPackagesToStorage();
+                renderBusinessPackagesTable();
+                renderBusinessAccountsFilters();
+                showNotification('success', 'Package deleted.');
+            }
+        }
+    }
+}
+
+function renderBusinessSubscribersTable() {
+    const tbody = document.getElementById('businessSubscribersTableBody');
+    if (!tbody) return;
+    if (!businessSubscribers || !businessSubscribers.length) {
+        tbody.innerHTML = '<tr><td colspan="8">Subscriber insights will appear here.</td></tr>';
+        return;
+    }
+    tbody.innerHTML = businessSubscribers.map(subscriber => {
+        const account = businessAccounts.find(entry => entry && entry.id === subscriber.accountId);
+        const pkg = businessPackages.find(entry => entry && entry.id === subscriber.packageId);
+        const startLabel = formatDateForDisplay(subscriber.startDate, { includeTime: false }) || '—';
+        const endLabel = formatDateForDisplay(subscriber.endDate, { includeTime: false }) || '—';
+        return `
+            <tr>
+                <td>${escapeHtml(account ? account.companyName : subscriber.accountId)}</td>
+                <td>${escapeHtml(pkg ? pkg.name : subscriber.packageId)}</td>
+                <td>${escapeHtml(startLabel)}</td>
+                <td>${escapeHtml(endLabel)}</td>
+                <td><span class="status-badge">${escapeHtml((subscriber.status || '').toUpperCase() || 'ACTIVE')}</span></td>
+                <td>${subscriber.autoRenew ? 'Yes' : 'No'}</td>
+                <td>${escapeHtml((subscriber.paymentStatus || '').toUpperCase() || 'PENDING')}</td>
+                <td><div class="helper-text">—</div></td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function renderBusinessPackageStats() {
+    const totalEl = document.getElementById('businessSubscribersTotal');
+    const renewalEl = document.getElementById('businessRenewalRate');
+    const revenueEl = document.getElementById('businessRevenueTotal');
+    const expiringEl = document.getElementById('businessExpiringSoon');
+    const renewalNoteEl = document.getElementById('businessRenewalNote');
+    const revenueDeltaEl = document.getElementById('businessRevenueDelta');
+    const expiringNoteEl = document.getElementById('businessExpiringNote');
+
+    const totalSubscribers = businessSubscribers ? businessSubscribers.length : 0;
+    const activeSubscribers = businessSubscribers ? businessSubscribers.filter(sub => (sub.status || '').toLowerCase() === 'active') : [];
+    const autoRenewActive = activeSubscribers.filter(sub => sub.autoRenew).length;
+    const renewalRate = activeSubscribers.length ? Math.round((autoRenewActive / activeSubscribers.length) * 100) : 0;
+    const revenue = activeSubscribers.reduce((sum, sub) => {
+        const pkg = businessPackages.find(entry => entry && entry.id === sub.packageId);
+        return sum + (pkg ? pkg.price || 0 : 0);
+    }, 0);
+    const expiringSoon = (businessSubscribers || []).filter(sub => {
+        if (!sub || !sub.endDate) return false;
+        const end = Date.parse(sub.endDate);
+        if (!Number.isFinite(end)) return false;
+        const diff = end - Date.now();
+        return diff > 0 && diff <= 1000 * 60 * 60 * 24 * 30;
+    }).length;
+
+    if (totalEl) totalEl.textContent = String(totalSubscribers);
+    if (renewalEl) renewalEl.textContent = `${renewalRate}%`;
+    if (revenueEl) revenueEl.textContent = formatCurrency(revenue, 'SAR');
+    if (expiringEl) expiringEl.textContent = String(expiringSoon);
+    if (renewalNoteEl) renewalNoteEl.textContent = `Auto-renew enabled for ${autoRenewActive} merchants.`;
+    if (revenueDeltaEl) revenueDeltaEl.textContent = activeSubscribers.length ? `${activeSubscribers.length} active subscriptions` : 'No active subscriptions';
+    if (expiringNoteEl) expiringNoteEl.textContent = expiringSoon ? 'Follow up within 30 days.' : 'All renewals on track.';
+}
+
+function renderBusinessFinancialIntegration() {
+    const indicator = document.getElementById('businessFinancialStatus');
+    if (!indicator) return;
+    const connected = Boolean(state.businessFinancialIntegration);
+    indicator.textContent = connected ? 'Connected' : 'Disconnected';
+    indicator.className = `integration-status-indicator ${connected ? 'success' : 'danger'}`;
+}
+
+function toggleBusinessFinancialIntegration() {
+    state.businessFinancialIntegration = !state.businessFinancialIntegration;
+    renderBusinessFinancialIntegration();
+    showNotification('success', state.businessFinancialIntegration ? 'Finance integration connected.' : 'Finance integration disconnected.');
+}
+
+function exportBusinessAccounts() {
+    if (!businessAccounts || !businessAccounts.length) {
+        showNotification('warning', 'There are no business accounts to export.');
+        return;
+    }
+    const headers = ['ID', 'Company Name', 'Contact Name', 'Email', 'Phone', 'City', 'Status', 'Package', 'Submitted', 'Approved', 'Financial Status'];
+    const rows = businessAccounts.map(account => {
+        const pkg = businessPackages.find(entry => entry && entry.id === account.packageId);
+        return [
+            account.id || '',
+            account.companyName || '',
+            account.contactName || '',
+            account.email || '',
+            account.phone || '',
+            account.city || '',
+            getBusinessAccountStatusLabel(account.status),
+            pkg ? pkg.name : account.packageId || '',
+            formatDateForDisplay(account.submittedAt, { includeTime: true }) || '',
+            formatDateForDisplay(account.approvedAt, { includeTime: true }) || '',
+            account.financialStatus || ''
+        ];
+    });
+    const csv = buildCsvContent([headers, ...rows]);
+    triggerFileDownload(new Blob([csv], { type: 'text/csv;charset=utf-8;' }), 'business-accounts.csv');
+    showNotification('success', 'Business accounts exported successfully.');
+}
+
+function updateBusinessAccountsImportStatus(message, type = 'info') {
+    const area = document.getElementById('businessAccountsImportStatus');
+    if (!area) return;
+    area.textContent = message;
+    area.className = `import-status ${type}`;
+}
+
+async function handleBusinessAccountsImport(file) {
+    if (!file) return;
+    updateBusinessAccountsImportStatus('Parsing import file...', 'info');
+    try {
+        const text = await readFileAsText(file);
+        const parsed = parseCsv(text);
+        if (!parsed.rows.length) {
+            updateBusinessAccountsImportStatus('No rows detected in the import file.', 'warning');
+            return;
+        }
+        const created = [];
+        parsed.rows.forEach((row, index) => {
+            const payload = {
+                id: row.ID || row.Id || row.id || `BUS-IM-${index + 1}`,
+                companyName: row['Company Name'] || row.companyName || row.Name || '',
+                contactName: row['Contact Name'] || row.contactName || '',
+                email: row.Email || row.email || '',
+                phone: row.Phone || row.phone || '',
+                city: row.City || row.city || 'Riyadh',
+                status: (row.Status || row.status || 'pending').toLowerCase(),
+                packageId: row.Package || row.package || '',
+                submittedAt: row['Submitted At'] || row.submittedAt || new Date().toISOString(),
+                approvedAt: row['Approved At'] || row.approvedAt || null,
+                financialStatus: row['Financial Status'] || row.financialStatus || 'pending'
+            };
+            const normalized = normalizeBusinessAccountPayload(payload, businessAccounts.length + created.length);
+            if (normalized) {
+                created.push(normalized);
+            }
+        });
+
+        if (!created.length) {
+            updateBusinessAccountsImportStatus('Import completed but no valid business accounts were detected.', 'warning');
+            return;
+        }
+
+        const existingMap = new Map(businessAccounts.map(entry => [entry.id, entry]));
+        created.forEach(account => {
+            if (existingMap.has(account.id)) {
+                const index = businessAccounts.findIndex(entry => entry.id === account.id);
+                if (index > -1) {
+                    businessAccounts[index] = account;
+                }
+            } else {
+                businessAccounts.push(account);
+            }
+        });
+
+        saveBusinessAccountsToStorage();
+        renderBusinessAccountsTable(1);
+        updateBusinessAccountsImportStatus(`Imported ${created.length} business accounts successfully.`, 'success');
+        showNotification('success', 'Business accounts dataset updated.');
+    } catch (error) {
+        console.warn('Unable to import business accounts:', error);
+        updateBusinessAccountsImportStatus('Failed to import business accounts. Please verify the file format.', 'danger');
+    }
+}
+
+async function handleBusinessAccountsImportInputChange(event) {
+    const file = event.target && event.target.files ? event.target.files[0] : null;
+    if (!file) return;
+    await handleBusinessAccountsImport(file);
+    event.target.value = '';
+}
+
+// --- Finance & Payments Module ---
+const FINANCE_TRANSACTION_STATUS_LABELS = new Map([
+    ['pending', 'Pending'],
+    ['processing', 'Processing'],
+    ['settled', 'Settled'],
+    ['failed', 'Failed'],
+    ['refunded', 'Refunded']
+]);
+
+const FINANCE_TRANSACTION_STATUS_CLASSES = new Map([
+    ['pending', 'status-badge status-pending'],
+    ['processing', 'status-badge status-warning'],
+    ['settled', 'status-badge status-active'],
+    ['failed', 'status-badge status-danger'],
+    ['refunded', 'status-badge status-active']
+]);
+
+const FINANCE_DIRECTION_LABELS = new Map([
+    ['incoming', 'Incoming'],
+    ['outgoing', 'Outgoing'],
+    ['refund', 'Refund']
+]);
+
+const FINANCE_AUDIT_STATUS_CLASSES = new Map([
+    ['completed', 'success'],
+    ['in-progress', 'warning'],
+    ['scheduled', 'info'],
+    ['warning', 'danger']
+]);
+
+function slugifyFinanceChannel(value) {
+    if (typeof value !== 'string') return 'manual-entry';
+    return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'manual-entry';
+}
+
+function formatFinanceChannelLabel(value) {
+    if (typeof value !== 'string' || !value.trim()) {
+        return 'Manual Entry';
+    }
+    const trimmed = value.trim();
+    const spaced = trimmed
+        .replace(/([a-z\d])([A-Z])/g, '$1 $2')
+        .replace(/[-_]+/g, ' ')
+        .replace(/\s+/g, ' ') // collapse multiple spaces
+        .trim();
+    const parts = spaced.split(' ').filter(Boolean);
+    if (!parts.length) {
+        return trimmed;
+    }
+    return parts
+        .map(part => {
+            const upper = part.toUpperCase();
+            if (part.length <= 3 && part === upper) {
+                return upper;
+            }
+            return part.charAt(0).toUpperCase() + part.slice(1);
+        })
+        .join(' ');
+}
+
+function normalizeFinanceMetadata(metadata) {
+    if (!metadata || typeof metadata !== 'object') {
+        return {};
+    }
+    const normalized = {};
+    Object.entries(metadata).forEach(([key, value]) => {
+        if (value === undefined || value === null) return;
+        const label = typeof key === 'string' && key.trim() ? key.trim() : `field_${Object.keys(normalized).length + 1}`;
+        if (typeof value === 'object') {
+            if (Array.isArray(value)) {
+                normalized[label] = value.map(entry => (entry === null || entry === undefined) ? '' : String(entry)).join(', ');
+            } else {
+                normalized[label] = JSON.stringify(value);
+            }
+        } else {
+            normalized[label] = String(value);
+        }
+    });
+    return normalized;
+}
+
+function normalizeFinanceTransactionPayload(entry, index = 0) {
+    if (!entry || typeof entry !== 'object') {
+        return null;
+    }
+    const fallbackId = `FIN-${String(index + 1).padStart(4, '0')}`;
+    const id = typeof entry.id === 'string' && entry.id.trim() ? entry.id.trim() : fallbackId;
+    const reference = typeof entry.reference === 'string' && entry.reference.trim() ? entry.reference.trim() : `REF-${id}`;
+    const counterparty = typeof entry.counterparty === 'string' && entry.counterparty.trim() ? entry.counterparty.trim() : 'Unknown Counterparty';
+    const accountId = typeof entry.accountId === 'string' && entry.accountId.trim() ? entry.accountId.trim() : '';
+    const directionCandidate = typeof entry.direction === 'string' && entry.direction.trim() ? entry.direction.trim().toLowerCase() : '';
+    const typeCandidate = typeof entry.type === 'string' && entry.type.trim() ? entry.type.trim().toLowerCase() : '';
+    const allowedDirections = new Set(['incoming', 'outgoing', 'refund']);
+    const allowedTypes = new Set(['credit', 'debit', 'refund']);
+    let type = allowedTypes.has(typeCandidate) ? typeCandidate : '';
+    let direction = allowedDirections.has(directionCandidate) ? directionCandidate : '';
+    if (!direction) {
+        if (type === 'credit') direction = 'incoming';
+        else if (type === 'refund') direction = 'refund';
+    }
+    if (!type) {
+        if (direction === 'incoming') type = 'credit';
+        else if (direction === 'refund') type = 'refund';
+        else type = 'debit';
+    }
+    if (!direction) {
+        direction = type === 'credit' ? 'incoming' : type === 'refund' ? 'refund' : 'outgoing';
+    }
+
+    const statusCandidate = typeof entry.status === 'string' && entry.status.trim() ? entry.status.trim().toLowerCase() : '';
+    const allowedStatuses = new Set(['pending', 'processing', 'settled', 'failed', 'refunded']);
+    const status = allowedStatuses.has(statusCandidate) ? statusCandidate : 'pending';
+
+    const channelRaw = typeof entry.channel === 'string' && entry.channel.trim() ? entry.channel.trim() : '';
+    const channelLabelRaw = typeof entry.channelLabel === 'string' && entry.channelLabel.trim() ? entry.channelLabel.trim() : '';
+    const channel = slugifyFinanceChannel(channelRaw || channelLabelRaw || direction);
+    const channelLabel = channelLabelRaw || formatFinanceChannelLabel(channelRaw || channel);
+
+    const amount = Number.isFinite(entry.amount) ? Number(entry.amount) : Number.parseFloat(entry.amount) || 0;
+    const commission = Number.isFinite(entry.commission) ? Number(entry.commission) : Number.parseFloat(entry.commission) || 0;
+    const fees = Number.isFinite(entry.fees) ? Number(entry.fees) : Number.parseFloat(entry.fees) || 0;
+    const currency = typeof entry.currency === 'string' && entry.currency.trim() ? entry.currency.trim().toUpperCase() : 'SAR';
+    const category = typeof entry.category === 'string' && entry.category.trim() ? entry.category.trim() : (direction === 'incoming' ? 'Revenue' : direction === 'refund' ? 'Refunds' : 'Expenses');
+    const createdAt = normalizeIsoTimestamp(entry.createdAt, new Date().toISOString());
+    const settledAt = normalizeIsoTimestamp(entry.settledAt, null);
+    const notes = typeof entry.notes === 'string' ? entry.notes.trim() : '';
+    const metadata = normalizeFinanceMetadata(entry.metadata);
+    if (!metadata.channel) {
+        metadata.channel = channelLabel;
+    }
+    const gateway = typeof entry.gateway === 'string' && entry.gateway.trim() ? entry.gateway.trim() : '';
+    if (gateway) {
+        metadata.gateway = gateway;
+    }
+
+    return {
+        id,
+        reference,
+        accountId,
+        counterparty,
+        direction,
+        type,
+        status,
+        channel,
+        channelLabel,
+        amount,
+        commission,
+        fees,
+        currency,
+        category,
+        createdAt,
+        settledAt,
+        notes,
+        metadata
+    };
+}
+
+function loadFinanceTransactionsFromStorage() {
+    try {
+        const raw = localStorage.getItem(FINANCE_TRANSACTIONS_STORAGE_KEY);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed) || !parsed.length) return null;
+        const normalized = parsed.map((entry, index) => normalizeFinanceTransactionPayload(entry, index)).filter(Boolean);
+        return normalized.length ? normalized : null;
+    } catch (error) {
+        console.warn('Unable to load finance transactions:', error);
+        return null;
+    }
+}
+
+function saveFinanceTransactionsToStorage() {
+    try {
+        if (!Array.isArray(financeTransactions)) {
+            return;
+        }
+        localStorage.setItem(FINANCE_TRANSACTIONS_STORAGE_KEY, JSON.stringify(financeTransactions));
+    } catch (error) {
+        console.warn('Unable to persist finance transactions:', error);
+    }
+}
+
+function loadFinanceAuditTrailFromStorage() {
+    try {
+        const raw = localStorage.getItem(FINANCE_AUDIT_STORAGE_KEY);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed) || !parsed.length) return null;
+        const normalized = parsed.map((entry, index) => normalizeFinanceAuditEntry(entry, index)).filter(Boolean);
+        return normalized.length ? normalized : null;
+    } catch (error) {
+        console.warn('Unable to load finance audit trail:', error);
+        return null;
+    }
+}
+
+function saveFinanceAuditTrailToStorage() {
+    try {
+        const snapshot = Array.isArray(state.financeAuditTrail) ? state.financeAuditTrail : [];
+        localStorage.setItem(FINANCE_AUDIT_STORAGE_KEY, JSON.stringify(snapshot));
+    } catch (error) {
+        console.warn('Unable to persist finance audit trail:', error);
+    }
+}
+
+function normalizeFinanceAuditEntry(entry, index = 0) {
+    if (!entry || typeof entry !== 'object') {
+        return null;
+    }
+    const fallbackId = `AUD-${Date.now()}-${index}`;
+    const id = typeof entry.id === 'string' && entry.id.trim() ? entry.id.trim() : fallbackId;
+    const title = typeof entry.title === 'string' && entry.title.trim() ? entry.title.trim() : 'Finance Event';
+    const description = typeof entry.description === 'string' ? entry.description.trim() : '';
+    const timestamp = normalizeIsoTimestamp(entry.timestamp, new Date().toISOString());
+    const statusCandidate = typeof entry.status === 'string' && entry.status.trim() ? entry.status.trim().toLowerCase() : 'completed';
+    const allowed = new Set(['completed', 'in-progress', 'scheduled', 'warning']);
+    const status = allowed.has(statusCandidate) ? statusCandidate : 'completed';
+    return { id, title, description, timestamp, status };
+}
+
+function appendFinanceAuditEvent(entry) {
+    const normalized = normalizeFinanceAuditEntry(entry, state.financeAuditTrail.length);
+    if (!normalized) return;
+    state.financeAuditTrail.push(normalized);
+    state.financeAuditTrail.sort((a, b) => {
+        const aTime = a && a.timestamp ? Date.parse(a.timestamp) : 0;
+        const bTime = b && b.timestamp ? Date.parse(b.timestamp) : 0;
+        return bTime - aTime;
+    });
+    saveFinanceAuditTrailToStorage();
+    renderFinanceAuditTimeline();
+}
+
+function getFinanceStatusLabel(status) {
+    const normalized = typeof status === 'string' ? status.trim().toLowerCase() : '';
+    if (FINANCE_TRANSACTION_STATUS_LABELS.has(normalized)) {
+        return FINANCE_TRANSACTION_STATUS_LABELS.get(normalized);
+    }
+    if (!normalized) return 'Pending';
+    return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+}
+
+function getFinanceStatusClass(status) {
+    const normalized = typeof status === 'string' ? status.trim().toLowerCase() : '';
+    return FINANCE_TRANSACTION_STATUS_CLASSES.get(normalized) || FINANCE_TRANSACTION_STATUS_CLASSES.get('pending');
+}
+
+function getFinanceDirectionLabel(direction) {
+    const normalized = typeof direction === 'string' ? direction.trim().toLowerCase() : '';
+    if (FINANCE_DIRECTION_LABELS.has(normalized)) {
+        return FINANCE_DIRECTION_LABELS.get(normalized);
+    }
+    return normalized ? normalized.charAt(0).toUpperCase() + normalized.slice(1) : 'Incoming';
+}
+
+function renderFinanceTransactionsFilters() {
+    const channelSelect = document.getElementById('financeChannelFilter');
+    if (channelSelect) {
+        const current = state.financeFilters.channel || 'all';
+        const channels = new Map();
+        (financeTransactions || []).forEach(txn => {
+            if (!txn) return;
+            const slug = txn.channel || slugifyFinanceChannel(txn.channelLabel || 'manual');
+            const label = txn.channelLabel || formatFinanceChannelLabel(slug);
+            channels.set(slug, label);
+        });
+        const options = ['<option value="all">All channels</option>'];
+        Array.from(channels.entries())
+            .sort((a, b) => a[1].localeCompare(b[1]))
+            .forEach(([slug, label]) => {
+                options.push(`<option value="${escapeAttribute(slug)}">${escapeHtml(label)}</option>`);
+            });
+        channelSelect.innerHTML = options.join('');
+        channelSelect.value = channels.has(current) ? current : 'all';
+        state.financeFilters.channel = channelSelect.value;
+    }
+
+    const directionSelect = document.getElementById('financeDirectionFilter');
+    if (directionSelect) {
+        directionSelect.value = state.financeFilters.direction || 'all';
+    }
+
+    const statusSelect = document.getElementById('financeStatusFilter');
+    if (statusSelect) {
+        statusSelect.value = state.financeFilters.status || 'all';
+    }
+
+    const startInput = document.getElementById('financeStartDateInput');
+    if (startInput) {
+        startInput.value = state.financeFilters.startDate || '';
+    }
+
+    const endInput = document.getElementById('financeEndDateInput');
+    if (endInput) {
+        endInput.value = state.financeFilters.endDate || '';
+    }
+}
+
+function getFilteredFinanceTransactions() {
+    const filters = state.financeFilters || {};
+    const searchTerm = typeof filters.search === 'string' ? filters.search.trim().toLowerCase() : '';
+    const directionFilter = typeof filters.direction === 'string' ? filters.direction.trim().toLowerCase() : 'all';
+    const statusFilter = typeof filters.status === 'string' ? filters.status.trim().toLowerCase() : 'all';
+    const channelFilter = typeof filters.channel === 'string' ? filters.channel.trim().toLowerCase() : 'all';
+    const start = filters.startDate ? Date.parse(`${filters.startDate}T00:00:00.000Z`) : null;
+    const end = filters.endDate ? Date.parse(`${filters.endDate}T23:59:59.999Z`) : null;
+
+    return (financeTransactions || [])
+        .filter(txn => {
+            if (!txn) return false;
+            const haystack = `${txn.id || ''} ${txn.reference || ''} ${txn.counterparty || ''} ${txn.accountId || ''}`.toLowerCase();
+            if (searchTerm && !haystack.includes(searchTerm)) return false;
+            if (directionFilter !== 'all' && (txn.direction || '').toLowerCase() !== directionFilter) return false;
+            if (statusFilter !== 'all' && (txn.status || '').toLowerCase() !== statusFilter) return false;
+            if (channelFilter !== 'all') {
+                const channelSlug = (txn.channel || '').toLowerCase();
+                if (channelSlug !== channelFilter) return false;
+            }
+            const created = txn.createdAt ? Date.parse(txn.createdAt) : null;
+            if (start && (!Number.isFinite(created) || created < start)) return false;
+            if (end && Number.isFinite(created) && created > end) return false;
+            return true;
+        })
+        .sort((a, b) => {
+            const aTime = a && a.createdAt ? Date.parse(a.createdAt) : 0;
+            const bTime = b && b.createdAt ? Date.parse(b.createdAt) : 0;
+            return bTime - aTime;
+        });
+}
+
+function updateFinanceTransactionsCount(count) {
+    const label = document.getElementById('financeTransactionsCountLabel');
+    if (label) {
+        label.textContent = `#${count} Records`;
+    }
+}
+
+function renderFinanceTransactionsTable(page = state.currentFinanceTransactionsPage) {
+    const tbody = document.getElementById('financeTransactionsTableBody');
+    if (!tbody) return;
+
+    renderFinanceTransactionsFilters();
+
+    const filtered = getFilteredFinanceTransactions();
+    updateFinanceTransactionsCount(filtered.length);
+
+    const perPage = state.financeTransactionsPerPage || 10;
+    const totalPages = Math.max(1, Math.ceil(filtered.length / perPage));
+    state.currentFinanceTransactionsPage = Math.min(Math.max(page, 1), totalPages);
+    const startIndex = (state.currentFinanceTransactionsPage - 1) * perPage;
+    const visible = filtered.slice(startIndex, startIndex + perPage);
+
+    if (!visible.length) {
+        tbody.innerHTML = '<tr><td colspan="10">Financial transactions will appear here.</td></tr>';
+    } else {
+        let index = startIndex + 1;
+        tbody.innerHTML = visible.map(txn => {
+            const statusLabel = getFinanceStatusLabel(txn.status);
+            const statusClass = getFinanceStatusClass(txn.status);
+            const directionLabel = getFinanceDirectionLabel(txn.direction);
+            const amountLabel = formatCurrency(txn.amount || 0, txn.currency || 'SAR');
+            const createdLabel = formatDateForDisplay(txn.createdAt, { includeTime: true }) || '—';
+            const settledLabel = formatDateForDisplay(txn.settledAt, { includeTime: true }) || '—';
+            const actions = [];
+            actions.push(`<button type="button" class="action-btn info" data-action="view" data-transaction-id="${escapeAttribute(txn.id)}" title="View details"><i class="fas fa-eye"></i></button>`);
+            if (txn.direction === 'incoming' && ['settled', 'processing'].includes((txn.status || '').toLowerCase())) {
+                actions.push(`<button type="button" class="action-btn refund" data-action="refund" data-transaction-id="${escapeAttribute(txn.id)}" title="Refund"><i class="fas fa-arrow-rotate-left"></i></button>`);
+            }
+            actions.push(`<button type="button" class="action-btn debit" data-action="debit" data-transaction-id="${escapeAttribute(txn.id)}" title="Manual debit"><i class="fas fa-minus-circle"></i></button>`);
+            actions.push(`<button type="button" class="action-btn credit" data-action="credit" data-transaction-id="${escapeAttribute(txn.id)}" title="Add credit"><i class="fas fa-plus-circle"></i></button>`);
+            if (txn.direction === 'outgoing' && ['pending', 'processing'].includes((txn.status || '').toLowerCase())) {
+                actions.push(`<button type="button" class="action-btn transfer" data-action="transfer" data-transaction-id="${escapeAttribute(txn.id)}" title="Transfer receivable"><i class="fas fa-paper-plane"></i></button>`);
+            }
+
+            const directionChip = `<span class="helper-chip ${txn.direction === 'incoming' ? 'success' : txn.direction === 'refund' ? 'warning' : 'info'}">${escapeHtml(directionLabel)}</span>`;
+
+            return `
+                <tr data-transaction-id="${escapeAttribute(txn.id)}">
+                    <td>${index++}</td>
+                    <td>
+                        <div class="table-cell-title">${escapeHtml(txn.reference || txn.id)}</div>
+                        <div class="table-cell-meta">${escapeHtml(txn.id)}</div>
+                        <div class="table-cell-meta helper-text">${escapeHtml(directionLabel)}</div>
+                    </td>
+                    <td>
+                        <div class="table-cell-title">${escapeHtml(txn.counterparty || '—')}</div>
+                        <div class="table-cell-meta">${escapeHtml(txn.accountId || '—')}</div>
+                    </td>
+                    <td>${directionChip}</td>
+                    <td>${escapeHtml(txn.channelLabel || '—')}</td>
+                    <td><span class="${statusClass}">${escapeHtml(statusLabel)}</span></td>
+                    <td>${escapeHtml(amountLabel)}</td>
+                    <td>${escapeHtml(createdLabel)}</td>
+                    <td>${escapeHtml(settledLabel)}</td>
+                    <td>
+                        <div class="action-group">
+                            ${actions.join('')}
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    renderFinanceTransactionsPagination(totalPages, filtered.length);
+}
+
+function renderFinanceTransactionsPagination(totalPages, totalItems) {
+    const container = document.getElementById('financeTransactionsPagination');
+    if (!container) return;
+    container.innerHTML = '';
+    if (totalPages <= 1 || totalItems <= state.financeTransactionsPerPage) return;
+
+    const createButton = (label, page, disabled = false, active = false) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.textContent = label;
+        if (disabled) button.disabled = true;
+        if (active) button.classList.add('active');
+        button.addEventListener('click', () => {
+            renderFinanceTransactionsTable(page);
+        });
+        return button;
+    };
+
+    container.appendChild(createButton('Prev', state.currentFinanceTransactionsPage - 1, state.currentFinanceTransactionsPage === 1));
+    for (let page = 1; page <= totalPages; page += 1) {
+        container.appendChild(createButton(String(page), page, false, page === state.currentFinanceTransactionsPage));
+    }
+    container.appendChild(createButton('Next', state.currentFinanceTransactionsPage + 1, state.currentFinanceTransactionsPage === totalPages));
+}
+
+function handleFinanceTransactionsSearch(value) {
+    state.financeFilters.search = (value || '').trim();
+    state.currentFinanceTransactionsPage = 1;
+    renderFinanceTransactionsTable(1);
+}
+
+function handleFinanceFilterChange(key, value) {
+    if (!key) return;
+    state.financeFilters[key] = typeof value === 'string' ? value.trim() : value;
+    state.currentFinanceTransactionsPage = 1;
+    renderFinanceTransactionsTable(1);
+}
+
+function handleFinanceDateFilterChange() {
+    const startInput = document.getElementById('financeStartDateInput');
+    const endInput = document.getElementById('financeEndDateInput');
+    state.financeFilters.startDate = startInput ? (startInput.value || null) : null;
+    state.financeFilters.endDate = endInput ? (endInput.value || null) : null;
+    state.currentFinanceTransactionsPage = 1;
+    renderFinanceTransactionsTable(1);
+}
+
+function resetFinanceFilters() {
+    state.financeFilters = {
+        search: '',
+        direction: 'all',
+        status: 'all',
+        channel: 'all',
+        startDate: null,
+        endDate: null
+    };
+    state.currentFinanceTransactionsPage = 1;
+    const searchInput = document.getElementById('financeTransactionsSearchInput');
+    if (searchInput) searchInput.value = '';
+    renderFinanceTransactionsTable(1);
+}
+
+function renderFinanceTransactionDetail(transaction) {
+    const drawer = document.getElementById('financeTransactionDetailDrawer');
+    const titleEl = document.getElementById('financeTransactionDetailTitle');
+    const subtitleEl = document.getElementById('financeTransactionDetailSubtitle');
+    const content = document.getElementById('financeTransactionDetailContent');
+    if (!drawer || !titleEl || !content) return;
+
+    if (!transaction) {
+        drawer.classList.add('hidden');
+        content.innerHTML = '<p class="empty-state">Transaction insights will appear here.</p>';
+        state.activeFinanceTransactionId = null;
+        return;
+    }
+
+    state.activeFinanceTransactionId = transaction.id;
+    drawer.classList.remove('hidden');
+    titleEl.textContent = transaction.reference || transaction.id || 'Transaction';
+    if (subtitleEl) {
+        subtitleEl.textContent = `${getFinanceStatusLabel(transaction.status)} · ${formatCurrency(transaction.amount || 0, transaction.currency || 'SAR')}`;
+    }
+
+    const metadataEntries = Object.entries(transaction.metadata || {});
+    const metadataMarkup = metadataEntries.length
+        ? metadataEntries.map(([key, value]) => `<li><strong>${escapeHtml(formatFinanceChannelLabel(key))}</strong><span class="helper-text">${escapeHtml(String(value))}</span></li>`).join('')
+        : '<li class="empty-state">No metadata recorded.</li>';
+
+    content.innerHTML = `
+        <section class="detail-section">
+            <h4>Summary</h4>
+            <div class="detail-grid">
+                <div><dt>Direction</dt><dd>${escapeHtml(getFinanceDirectionLabel(transaction.direction))}</dd></div>
+                <div><dt>Status</dt><dd>${escapeHtml(getFinanceStatusLabel(transaction.status))}</dd></div>
+                <div><dt>Channel</dt><dd>${escapeHtml(transaction.channelLabel || '—')}</dd></div>
+                <div><dt>Created</dt><dd>${escapeHtml(formatDateForDisplay(transaction.createdAt, { includeTime: true }) || '—')}</dd></div>
+                <div><dt>Settled</dt><dd>${escapeHtml(formatDateForDisplay(transaction.settledAt, { includeTime: true }) || '—')}</dd></div>
+                <div><dt>Commission</dt><dd>${escapeHtml(formatCurrency(transaction.commission || 0, transaction.currency || 'SAR'))}</dd></div>
+                <div><dt>Fees</dt><dd>${escapeHtml(formatCurrency(transaction.fees || 0, transaction.currency || 'SAR'))}</dd></div>
+                <div><dt>Category</dt><dd>${escapeHtml(transaction.category || '—')}</dd></div>
+            </div>
+        </section>
+        <section class="detail-section">
+            <h4>Notes</h4>
+            <p class="helper-text">${escapeHtml(transaction.notes || 'No notes captured for this transaction.')}</p>
+        </section>
+        <section class="detail-section">
+            <h4>Channel Metadata</h4>
+            <ul class="detail-list">${metadataMarkup}</ul>
+        </section>
+    `;
+}
+
+function openFinanceTransactionDetail(transactionId) {
+    const txn = (financeTransactions || []).find(entry => entry && entry.id === transactionId);
+    renderFinanceTransactionDetail(txn || null);
+}
+
+function closeFinanceTransactionDetailDrawer() {
+    state.activeFinanceTransactionId = null;
+    const drawer = document.getElementById('financeTransactionDetailDrawer');
+    if (drawer) {
+        drawer.classList.add('hidden');
+    }
+}
+
+function generateFinanceTransactionId() {
+    return `FIN-${Date.now()}-${Math.floor(Math.random() * 1_000)}`;
+}
+
+function openFinanceActionOverlay(transactionId, action) {
+    const overlay = document.getElementById('financeActionOverlay');
+    const titleEl = document.getElementById('financeActionTitle');
+    const messageEl = document.getElementById('financeActionMessage');
+    const amountInput = document.getElementById('financeActionAmountInput');
+    const channelInput = document.getElementById('financeActionChannelInput');
+    const notesInput = document.getElementById('financeActionNotesInput');
+    const transactionIdInput = document.getElementById('financeActionTransactionIdInput');
+    const typeInput = document.getElementById('financeActionTypeInput');
+    if (!overlay || !titleEl || !messageEl || !amountInput || !channelInput || !transactionIdInput || !typeInput) return;
+
+    const transaction = (financeTransactions || []).find(entry => entry && entry.id === transactionId);
+    if (!transaction) {
+        showNotification('warning', 'Unable to locate the selected transaction.');
+        return;
+    }
+
+    const labels = {
+        refund: 'Issue Refund',
+        debit: 'Record Manual Debit',
+        credit: 'Add Manual Credit'
+    };
+    const prompts = {
+        refund: 'Confirm the refund amount and add a note for audit tracking.',
+        debit: 'Record an adjustment that withdraws funds from the balance.',
+        credit: 'Grant a manual credit to the counterparty balance.'
+    };
+
+    titleEl.textContent = labels[action] || 'Manual Adjustment';
+    messageEl.textContent = prompts[action] || 'Document this adjustment for finance reviews.';
+    amountInput.value = Math.abs(Number(transaction.amount) || 0).toFixed(2);
+    channelInput.value = transaction.channelLabel || '';
+    if (notesInput) {
+        notesInput.value = '';
+    }
+    transactionIdInput.value = transaction.id;
+    typeInput.value = action;
+    state.financeActionContext = { id: transaction.id, type: action };
+
+    overlay.classList.remove('hidden');
+    amountInput.focus();
+}
+
+function closeFinanceActionOverlay() {
+    const overlay = document.getElementById('financeActionOverlay');
+    if (overlay) {
+        overlay.classList.add('hidden');
+    }
+    state.financeActionContext = null;
+    const amountInput = document.getElementById('financeActionAmountInput');
+    if (amountInput) amountInput.value = '';
+    const notesInput = document.getElementById('financeActionNotesInput');
+    if (notesInput) notesInput.value = '';
+}
+
+function handleFinanceActionFormSubmit(event) {
+    event.preventDefault();
+    const context = state.financeActionContext;
+    if (!context) {
+        closeFinanceActionOverlay();
+        return;
+    }
+
+    const amountInput = document.getElementById('financeActionAmountInput');
+    const channelInput = document.getElementById('financeActionChannelInput');
+    const notesInput = document.getElementById('financeActionNotesInput');
+    const typeInput = document.getElementById('financeActionTypeInput');
+
+    const amount = amountInput ? Math.max(0, Number.parseFloat(amountInput.value) || 0) : 0;
+    if (!amount) {
+        showNotification('warning', 'Enter a valid amount for the adjustment.');
+        return;
+    }
+
+    const channelLabel = channelInput ? channelInput.value.trim() : '';
+    const note = notesInput ? notesInput.value.trim() : '';
+    const action = typeInput ? typeInput.value : context.type;
+    const transaction = financeTransactions.find(entry => entry && entry.id === context.id);
+    const now = new Date().toISOString();
+
+    if (transaction) {
+        if (action === 'refund') {
+            transaction.status = 'refunded';
+            transaction.settledAt = now;
+        } else if (action === 'credit') {
+            transaction.status = 'settled';
+            transaction.settledAt = now;
+        } else {
+            transaction.status = 'processing';
+        }
+        const auditNote = `Manual ${action} initiated ${formatDateForDisplay(now, { includeTime: true })}`;
+        transaction.notes = transaction.notes ? `${transaction.notes} • ${auditNote}` : auditNote;
+    }
+
+    const adjustment = normalizeFinanceTransactionPayload({
+        id: generateFinanceTransactionId(),
+        reference: `${action.toUpperCase()}-${Date.now()}`,
+        accountId: transaction ? transaction.accountId : '',
+        counterparty: transaction ? transaction.counterparty : 'Manual Adjustment',
+        direction: action === 'credit' ? 'incoming' : action === 'refund' ? 'refund' : 'outgoing',
+        type: action === 'credit' ? 'credit' : action === 'refund' ? 'refund' : 'debit',
+        status: action === 'credit' ? 'settled' : 'processing',
+        channel: channelLabel,
+        channelLabel: channelLabel,
+        amount,
+        currency: transaction ? transaction.currency : 'SAR',
+        category: action === 'credit' ? 'Manual Credit' : action === 'refund' ? 'Customer Refund' : 'Manual Debit',
+        createdAt: now,
+        settledAt: action === 'credit' ? now : null,
+        notes: note || `Manual ${action} recorded by finance operations.`,
+        metadata: {
+            parentTransaction: transaction ? transaction.id : null,
+            initiatedBy: resolveProductAdModeratorLabel()
+        }
+    }, financeTransactions.length);
+
+    if (adjustment) {
+        financeTransactions.push(adjustment);
+    }
+
+    saveFinanceTransactionsToStorage();
+    renderFinanceTransactionsTable(state.currentFinanceTransactionsPage);
+    renderFinanceInsights();
+    renderFinanceChannelSummaries();
+    if (state.activeFinanceTransactionId) {
+        const active = financeTransactions.find(entry => entry && entry.id === state.activeFinanceTransactionId);
+        renderFinanceTransactionDetail(active || null);
+    }
+
+    appendFinanceAuditEvent({
+        title: `Manual ${action} recorded`,
+        description: `${formatCurrency(amount, adjustment.currency)} ${action} for ${transaction ? transaction.counterparty : 'counterparty unknown'}.`,
+        timestamp: now,
+        status: action === 'credit' ? 'completed' : action === 'refund' ? 'completed' : 'in-progress'
+    });
+
+    closeFinanceActionOverlay();
+    showNotification('success', `Manual ${action} recorded successfully.`);
+}
+
+function openFinanceTransferOverlay(context = {}) {
+    const overlay = document.getElementById('financeTransferOverlay');
+    const vendorInput = document.getElementById('financeTransferVendorInput');
+    const ibanInput = document.getElementById('financeTransferIbanInput');
+    const bankInput = document.getElementById('financeTransferBankInput');
+    const amountInput = document.getElementById('financeTransferAmountInput');
+    const referenceInput = document.getElementById('financeTransferReferenceInput');
+    const notesInput = document.getElementById('financeTransferNotesInput');
+    if (!overlay || !vendorInput || !ibanInput || !amountInput || !referenceInput) return;
+
+    let baseTransaction = null;
+    if (context && context.transactionId) {
+        baseTransaction = financeTransactions.find(entry => entry && entry.id === context.transactionId) || null;
+    }
+
+    vendorInput.value = context.vendor || (baseTransaction ? baseTransaction.counterparty || '' : '');
+    ibanInput.value = context.iban || '';
+    bankInput.value = context.bank || (baseTransaction && baseTransaction.metadata ? baseTransaction.metadata.bank || '' : '');
+    const contextAmount = Number.parseFloat(context.amount);
+    const derivedAmount = baseTransaction ? Math.max(0, Number(baseTransaction.amount) - Number(baseTransaction.fees || 0)) : 0;
+    const amountValue = Number.isFinite(contextAmount) ? contextAmount : derivedAmount;
+    amountInput.value = (Number.isFinite(amountValue) ? amountValue : 0).toFixed(2);
+    referenceInput.value = context.reference || (baseTransaction ? `${baseTransaction.reference}-XFER` : `TRF-${Date.now()}`);
+    if (notesInput) {
+        notesInput.value = context.notes || '';
+    }
+
+    state.financeTransferContext = baseTransaction ? { transactionId: baseTransaction.id } : null;
+    overlay.classList.remove('hidden');
+    vendorInput.focus();
+}
+
+function closeFinanceTransferOverlay() {
+    const overlay = document.getElementById('financeTransferOverlay');
+    if (overlay) overlay.classList.add('hidden');
+    state.financeTransferContext = null;
+}
+
+function handleFinanceTransferFormSubmit(event) {
+    event.preventDefault();
+    const vendorInput = document.getElementById('financeTransferVendorInput');
+    const ibanInput = document.getElementById('financeTransferIbanInput');
+    const bankInput = document.getElementById('financeTransferBankInput');
+    const amountInput = document.getElementById('financeTransferAmountInput');
+    const referenceInput = document.getElementById('financeTransferReferenceInput');
+    const notesInput = document.getElementById('financeTransferNotesInput');
+
+    const vendor = vendorInput ? vendorInput.value.trim() : '';
+    const iban = ibanInput ? ibanInput.value.trim() : '';
+    const amount = amountInput ? Math.max(0, Number.parseFloat(amountInput.value) || 0) : 0;
+    if (!vendor || !iban || !amount) {
+        showNotification('warning', 'Vendor name, IBAN, and amount are required.');
+        return;
+    }
+
+    const bank = bankInput ? bankInput.value.trim() : '';
+    const reference = referenceInput ? referenceInput.value.trim() : `TRF-${Date.now()}`;
+    const note = notesInput ? notesInput.value.trim() : '';
+
+    const now = new Date().toISOString();
+    let sourceAccountId = '';
+    let baseTransaction = null;
+    if (state.financeTransferContext && state.financeTransferContext.transactionId) {
+        baseTransaction = financeTransactions.find(entry => entry && entry.id === state.financeTransferContext.transactionId) || null;
+        if (baseTransaction) {
+            sourceAccountId = baseTransaction.accountId || '';
+        }
+    }
+
+    const payload = normalizeFinanceTransactionPayload({
+        id: generateFinanceTransactionId(),
+        reference,
+        accountId: sourceAccountId,
+        counterparty: vendor,
+        direction: 'outgoing',
+        type: 'debit',
+        status: 'processing',
+        channel: bank ? 'bank-transfer' : 'manual-transfer',
+        channelLabel: bank ? `${bank} Transfer` : 'Manual Transfer',
+        amount,
+        currency: 'SAR',
+        category: 'Vendor Payout',
+        createdAt: now,
+        settledAt: null,
+        notes: note || `Transfer scheduled to ${vendor}.`,
+        metadata: {
+            iban,
+            bank,
+            initiatedBy: resolveProductAdModeratorLabel()
+        }
+    }, financeTransactions.length);
+
+    if (payload) {
+        financeTransactions.push(payload);
+        if (baseTransaction) {
+            if (!baseTransaction.metadata) baseTransaction.metadata = {};
+            baseTransaction.metadata.transferLinkedId = payload.id;
+            baseTransaction.metadata.transferReference = reference;
+            baseTransaction.status = 'processing';
+        }
+    }
+
+    saveFinanceTransactionsToStorage();
+    renderFinanceTransactionsTable(state.currentFinanceTransactionsPage);
+    renderFinanceChannelSummaries();
+    renderFinanceInsights();
+    if (state.activeFinanceTransactionId) {
+        const active = financeTransactions.find(entry => entry && entry.id === state.activeFinanceTransactionId);
+        renderFinanceTransactionDetail(active || null);
+    }
+
+    appendFinanceAuditEvent({
+        title: 'Vendor transfer initiated',
+        description: `Scheduled ${formatCurrency(amount, 'SAR')} to ${vendor}.`,
+        timestamp: now,
+        status: 'scheduled'
+    });
+
+    closeFinanceTransferOverlay();
+    showNotification('success', 'Vendor transfer queued for processing.');
+}
+
+function handleFinanceTransactionsTableClick(event) {
+    const button = event.target.closest('button[data-action]');
+    if (button) {
+        const action = button.dataset.action;
+        const transactionId = button.dataset.transactionId;
+        if (!transactionId) return;
+        if (action === 'view') {
+            openFinanceTransactionDetail(transactionId);
+        } else if (['refund', 'debit', 'credit'].includes(action)) {
+            openFinanceActionOverlay(transactionId, action);
+        } else if (action === 'transfer') {
+            const txn = financeTransactions.find(entry => entry && entry.id === transactionId);
+            openFinanceTransferOverlay({
+                transactionId,
+                vendor: txn ? txn.counterparty : '',
+                bank: txn && txn.metadata ? txn.metadata.bank || '' : '',
+                amount: txn ? Math.max(0, Number(txn.amount) - Number(txn.fees || 0)) : 0,
+                reference: txn ? `${txn.reference}-XFER` : undefined
+            });
+        }
+        return;
+    }
+
+    const row = event.target.closest('tr[data-transaction-id]');
+    if (row) {
+        openFinanceTransactionDetail(row.dataset.transactionId);
+    }
+}
+
+function renderFinanceInsights() {
+    const revenueEl = document.getElementById('financeRevenueTotal');
+    const revenueNoteEl = document.getElementById('financeRevenueNote');
+    const commissionEl = document.getElementById('financeCommissionTotal');
+    const commissionNoteEl = document.getElementById('financeCommissionNote');
+    const expenseEl = document.getElementById('financeExpenseTotal');
+    const expenseNoteEl = document.getElementById('financeExpenseNote');
+    const netEl = document.getElementById('financeNetCashTotal');
+    const netNoteEl = document.getElementById('financeNetCashNote');
+
+    const revenueTransactions = (financeTransactions || []).filter(txn => txn && txn.direction === 'incoming');
+    const expenseTransactions = (financeTransactions || []).filter(txn => txn && (txn.direction === 'outgoing' || txn.direction === 'refund'));
+    const revenueTotal = revenueTransactions.reduce((sum, txn) => sum + (Number(txn.amount) || 0), 0);
+    const commissionTotal = revenueTransactions.reduce((sum, txn) => sum + (Number(txn.commission) || 0), 0);
+    const expenseTotal = expenseTransactions.reduce((sum, txn) => sum + (Number(txn.amount) || 0), 0);
+    const netTotal = revenueTotal - expenseTotal;
+
+    if (revenueEl) revenueEl.textContent = formatCurrency(revenueTotal, 'SAR');
+    if (commissionEl) commissionEl.textContent = formatCurrency(commissionTotal, 'SAR');
+    if (expenseEl) expenseEl.textContent = formatCurrency(expenseTotal, 'SAR');
+    if (netEl) netEl.textContent = formatCurrency(netTotal, 'SAR');
+
+    if (revenueNoteEl) revenueNoteEl.textContent = `${revenueTransactions.length} incoming ${revenueTransactions.length === 1 ? 'transaction' : 'transactions'} recorded.`;
+    if (commissionNoteEl) commissionNoteEl.textContent = commissionTotal ? 'Commission includes trusted merchant uplifts.' : 'Commission captured once transactions settle.';
+    if (expenseNoteEl) expenseNoteEl.textContent = `${expenseTransactions.length} outgoing items across vendor payouts and refunds.`;
+    const pendingOutgoings = expenseTransactions.filter(txn => (txn.status || '').toLowerCase() !== 'settled').length;
+    if (netNoteEl) netNoteEl.textContent = pendingOutgoings ? `${pendingOutgoings} payouts pending settlement.` : 'All payouts settled.';
+}
+
+function renderFinanceChannelSummaries() {
+    const bankList = document.getElementById('financeBankSettlementsList');
+    const bankSummary = document.getElementById('financeBankSettlementSummary');
+    const gatewayList = document.getElementById('financeGatewaySettlementsList');
+    const gatewaySummary = document.getElementById('financeGatewaySettlementSummary');
+    const expenseList = document.getElementById('financeExpenseBreakdownList');
+    const expenseSummary = document.getElementById('financeExpenseBreakdownSummary');
+
+    const bankTransactions = (financeTransactions || []).filter(txn => txn && txn.channel && txn.channel.includes('bank'));
+    const gatewayTransactions = (financeTransactions || []).filter(txn => txn && txn.channel && txn.channel.includes('gateway'));
+    const expenseMap = new Map();
+    (financeTransactions || []).forEach(txn => {
+        if (!txn || (txn.direction !== 'outgoing' && txn.direction !== 'refund')) return;
+        const key = txn.category || 'Expenses';
+        expenseMap.set(key, (expenseMap.get(key) || 0) + (Number(txn.amount) || 0));
+    });
+
+    if (bankList) {
+        if (!bankTransactions.length) {
+            bankList.innerHTML = '<li class="empty-state">No bank settlements recorded.</li>';
+        } else {
+            bankList.innerHTML = bankTransactions.slice(0, 6).map(txn => {
+                const statusLabel = getFinanceStatusLabel(txn.status);
+                return `<li><strong>${escapeHtml(txn.counterparty || txn.reference)}</strong><span class="helper-text">${escapeHtml(formatCurrency(txn.amount || 0, txn.currency || 'SAR'))} · ${escapeHtml(statusLabel)}</span></li>`;
+            }).join('');
+        }
+    }
+    if (bankSummary) {
+        const pending = bankTransactions.filter(txn => (txn.status || '').toLowerCase() !== 'settled').length;
+        bankSummary.textContent = `${pending} pending`;
+    }
+
+    if (gatewayList) {
+        if (!gatewayTransactions.length) {
+            gatewayList.innerHTML = '<li class="empty-state">Gateway payouts will appear here.</li>';
+        } else {
+            gatewayList.innerHTML = gatewayTransactions.slice(0, 6).map(txn => {
+                const settlement = txn.metadata && txn.metadata.settlementWindow ? ` · ${txn.metadata.settlementWindow}` : '';
+                return `<li><strong>${escapeHtml(txn.metadata && txn.metadata.gateway ? txn.metadata.gateway : txn.channelLabel || 'Gateway')}</strong><span class="helper-text">${escapeHtml(formatCurrency(txn.amount || 0, txn.currency || 'SAR'))}${escapeHtml(settlement)}</span></li>`;
+            }).join('');
+        }
+    }
+    if (gatewaySummary) {
+        const pending = gatewayTransactions.filter(txn => (txn.status || '').toLowerCase() !== 'settled').length;
+        gatewaySummary.textContent = `${pending} pending`;
+    }
+
+    if (expenseList) {
+        if (!expenseMap.size) {
+            expenseList.innerHTML = '<li class="empty-state">Upload transactions to populate expense categories.</li>';
+        } else {
+            expenseList.innerHTML = Array.from(expenseMap.entries())
+                .sort((a, b) => b[1] - a[1])
+                .map(([category, value]) => `<li><strong>${escapeHtml(category)}</strong><span class="helper-text">${escapeHtml(formatCurrency(value, 'SAR'))}</span></li>`)
+                .join('');
+        }
+    }
+    if (expenseSummary) {
+        expenseSummary.textContent = `${expenseMap.size} categories`;
+    }
+}
+
+function renderFinanceAuditTimeline() {
+    const list = document.getElementById('financeAuditTimeline');
+    if (!list) return;
+    const events = Array.isArray(state.financeAuditTrail) ? state.financeAuditTrail : [];
+    if (!events.length) {
+        list.innerHTML = '<li class="empty-state">Audit events will appear after transactions are processed.</li>';
+        return;
+    }
+
+    list.innerHTML = events
+        .sort((a, b) => {
+            const aTime = a && a.timestamp ? Date.parse(a.timestamp) : 0;
+            const bTime = b && b.timestamp ? Date.parse(b.timestamp) : 0;
+            return bTime - aTime;
+        })
+        .map(event => {
+            const status = event.status || 'completed';
+            const chipClass = FINANCE_AUDIT_STATUS_CLASSES.get(status) || 'info';
+            const statusLabel = status.charAt(0).toUpperCase() + status.slice(1);
+            const timestamp = formatDateForDisplay(event.timestamp, { includeTime: true }) || 'Unknown time';
+            const description = event.description ? `<p class="helper-text" style="margin-top:6px;">${escapeHtml(event.description)}</p>` : '';
+            return `
+                <li>
+                    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
+                        <strong>${escapeHtml(event.title)}</strong>
+                        <span class="helper-chip ${chipClass}">${escapeHtml(statusLabel)}</span>
+                    </div>
+                    <div class="helper-text">${escapeHtml(timestamp)}</div>
+                    ${description}
+                </li>
+            `;
+        })
+        .join('');
+}
+
+function updateFinanceImportStatus(message, type = 'info') {
+    const area = document.getElementById('financeImportStatus');
+    if (!area) return;
+    area.textContent = message;
+    area.className = `import-status ${type}`;
+}
+
+async function handleFinanceTransactionsImport(file) {
+    if (!file) return;
+    updateFinanceImportStatus('Parsing import file...', 'info');
+    try {
+        const text = await readFileAsText(file);
+        const parsed = parseCsv(text);
+        if (!parsed.rows.length) {
+            updateFinanceImportStatus('No rows detected in the import file.', 'warning');
+            return;
+        }
+        const created = [];
+        parsed.rows.forEach((row, index) => {
+            const payload = {
+                id: row['Transaction ID'] || row['Id'] || row.id || `FIN-IM-${index + 1}`,
+                reference: row['Reference'] || row.reference || '',
+                counterparty: row['Counterparty'] || row.counterparty || row['Vendor'] || '',
+                accountId: row['Account ID'] || row.accountId || row.account || '',
+                direction: row['Direction'] || row.direction || '',
+                type: row['Type'] || row.type || '',
+                status: row['Status'] || row.status || 'pending',
+                channel: row['Channel'] || row.channel || '',
+                channelLabel: row['Channel Label'] || row.channelLabel || '',
+                amount: row['Amount'] || row.amount || 0,
+                commission: row['Commission'] || row.commission || 0,
+                fees: row['Fees'] || row.fees || 0,
+                currency: row['Currency'] || row.currency || 'SAR',
+                category: row['Category'] || row.category || '',
+                createdAt: row['Created At'] || row.createdAt || row.created || new Date().toISOString(),
+                settledAt: row['Settled At'] || row.settledAt || row.settled || null,
+                notes: row['Notes'] || row.notes || ''
+            };
+            const normalized = normalizeFinanceTransactionPayload(payload, financeTransactions.length + created.length);
+            if (normalized) {
+                created.push(normalized);
+            }
+        });
+
+        if (!created.length) {
+            updateFinanceImportStatus('Import completed but no valid transactions were detected.', 'warning');
+            return;
+        }
+
+        const existingMap = new Map(financeTransactions.map(entry => [entry.id, entry]));
+        created.forEach(txn => {
+            if (existingMap.has(txn.id)) {
+                const index = financeTransactions.findIndex(entry => entry.id === txn.id);
+                if (index > -1) {
+                    financeTransactions[index] = txn;
+                }
+            } else {
+                financeTransactions.push(txn);
+            }
+        });
+
+        saveFinanceTransactionsToStorage();
+        renderFinanceTransactionsTable(1);
+        renderFinanceInsights();
+        renderFinanceChannelSummaries();
+        updateFinanceImportStatus(`Imported ${created.length} transactions successfully.`, 'success');
+        showNotification('success', 'Finance transactions dataset updated.');
+    } catch (error) {
+        console.warn('Unable to import finance transactions:', error);
+        updateFinanceImportStatus('Failed to import transactions. Please verify the file format.', 'danger');
+    }
+}
+
+async function handleFinanceImportInputChange(event) {
+    const file = event.target && event.target.files ? event.target.files[0] : null;
+    if (!file) return;
+    await handleFinanceTransactionsImport(file);
+    event.target.value = '';
+}
+
+function exportFinanceTransactions() {
+    if (!financeTransactions || !financeTransactions.length) {
+        showNotification('warning', 'There are no finance transactions to export.');
+        return;
+    }
+    const headers = ['Transaction ID', 'Reference', 'Counterparty', 'Account ID', 'Direction', 'Status', 'Channel', 'Amount', 'Commission', 'Fees', 'Currency', 'Category', 'Created At', 'Settled At', 'Notes'];
+    const rows = financeTransactions.map(txn => [
+        txn.id || '',
+        txn.reference || '',
+        txn.counterparty || '',
+        txn.accountId || '',
+        getFinanceDirectionLabel(txn.direction),
+        getFinanceStatusLabel(txn.status),
+        txn.channelLabel || txn.channel || '',
+        txn.amount || 0,
+        txn.commission || 0,
+        txn.fees || 0,
+        txn.currency || 'SAR',
+        txn.category || '',
+        txn.createdAt || '',
+        txn.settledAt || '',
+        txn.notes || ''
+    ]);
+    const csv = buildCsvContent([headers, ...rows]);
+    triggerFileDownload(new Blob([csv], { type: 'text/csv;charset=utf-8;' }), 'finance-transactions.csv');
+    showNotification('success', 'Finance transactions exported successfully.');
+}
+
+// --- Shared Utilities (CSV, Formatting) ---
+function formatCurrency(value, currency = 'SAR') {
+    const numeric = Number.isFinite(value) ? value : Number.parseFloat(value) || 0;
+    try {
+        return new Intl.NumberFormat('en-SA', { style: 'currency', currency }).format(numeric);
+    } catch (error) {
+        return `${currency} ${numeric.toFixed(2)}`;
+    }
+}
+
+function buildCsvContent(rows) {
+    if (!Array.isArray(rows) || !rows.length) {
+        return '';
+    }
+    const escapeValue = value => {
+        const raw = value === null || value === undefined ? '' : String(value);
+        if (/[",\n]/.test(raw)) {
+            return `"${raw.replace(/"/g, '""')}"`;
+        }
+        return raw;
+    };
+    return rows.map(row => Array.isArray(row) ? row.map(escapeValue).join(',') : '').join('\r\n');
+}
+
+function triggerFileDownload(blob, filename) {
+    if (!blob) return;
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = filename || 'download';
+    document.body.appendChild(anchor);
+    anchor.click();
+    document.body.removeChild(anchor);
+    URL.revokeObjectURL(url);
+}
+
+function readFileAsText(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result || '');
+        reader.onerror = () => reject(reader.error || new Error('Unable to read file.'));
+        reader.readAsText(file);
+    });
+}
+
+function splitCsvLine(line) {
+    const result = [];
+    let current = '';
+    let inQuotes = false;
+    for (let index = 0; index < line.length; index += 1) {
+        const char = line[index];
+        if (char === '"') {
+            if (inQuotes && line[index + 1] === '"') {
+                current += '"';
+                index += 1;
+            } else {
+                inQuotes = !inQuotes;
+            }
+        } else if (char === ',' && !inQuotes) {
+            result.push(current);
+            current = '';
+        } else {
+            current += char;
+        }
+    }
+    result.push(current);
+    return result;
+}
+
+function parseCsv(text) {
+    if (typeof text !== 'string' || !text.trim()) {
+        return { headers: [], rows: [] };
+    }
+    const lines = text.split(/\r?\n/).filter(line => line.trim().length);
+    if (!lines.length) {
+        return { headers: [], rows: [] };
+    }
+    const headerLine = lines.shift();
+    const headers = splitCsvLine(headerLine.replace(/^\ufeff/, '')).map(header => header.trim());
+    const rows = lines.map(line => {
+        const columns = splitCsvLine(line).map(column => column.trim());
+        const row = {};
+        headers.forEach((header, index) => {
+            row[header] = columns[index] !== undefined ? columns[index] : '';
+        });
+        return row;
+    });
+    return { headers, rows };
 }
 
 function renderUsersTable(searchTerm = state.userSearchTerm, page = state.currentUserPage) {
@@ -17491,8 +22926,13 @@ function renderUsersTable(searchTerm = state.userSearchTerm, page = state.curren
             const accountTypeTag = isSuperAdminAccount
                 ? `<span class="account-type-tag ${accountTypeClass}">${accountTypeLabel}</span>`
                 : '';
-            const displayRole = isSuperAdminAccount ? '—' : (user.role || '—');
-            const expirationLabel = user.expiresOn ? formatDateForDisplay(user.expiresOn) : '—';
+            const roleSummaryLabel = extractRoleLabelFromSummary(user.permissionSummary);
+            const rawRoleValue = typeof user.role === 'string' ? user.role.trim() : '';
+            const disabledMatch = rawRoleValue.match(/^(.*)\(Disabled\)\s*$/i);
+            const strippedRoleValue = disabledMatch && disabledMatch[1] ? disabledMatch[1].trim() : rawRoleValue;
+            const resolvedRoleValue = strippedRoleValue || roleSummaryLabel;
+            const displayRole = isSuperAdminAccount ? '—' : (resolvedRoleValue || '—');
+            const expirationLabel = user.expiresOn ? formatDateForDisplay(user.expiresOn, { includeTime: true }) : '—';
             const invitation = user.invitation || {};
             const registrationCompleted = Boolean(invitation.completedAt || invitation.verifiedAt);
             const photoUrl = user.photoDataUrl && user.photoDataUrl.trim() ? user.photoDataUrl.trim() : '';
@@ -17517,7 +22957,7 @@ function renderUsersTable(searchTerm = state.userSearchTerm, page = state.curren
             const fallbackInitialMatch = typeof displayName === 'string' ? displayName.match(/[A-Za-z0-9]/) : null;
             const fallbackInitial = fallbackInitialMatch ? fallbackInitialMatch[0].toUpperCase() : '';
             const lastEventLabel = formatUserActivityLabel(user.lastEvent || user.lastAction || '');
-            const lastEventMarkup = lastEventLabel ? `<div class="user-meta">${escapeHtml(lastEventLabel)}</div>` : '';
+            const lastEventMarkup = lastEventLabel ? `<div class="user-meta user-activity">${escapeHtml(lastEventLabel)}</div>` : '';
             const actionButtons = [];
 
             actionButtons.push(`<button class="action-btn edit" onclick="showUserForm('edit', ${user.id})" title="Edit user"><i class="fas fa-pen"></i></button>`);
@@ -17539,7 +22979,7 @@ function renderUsersTable(searchTerm = state.userSearchTerm, page = state.curren
                 <tr>
                     <td>${index++}</td>
                     <td>
-                        <div style="display: flex; align-items: center; gap: 12px;">
+                        <div class="user-cell">
                             <div class="user-avatar" aria-hidden="true">
                                 ${photoUrl
                                     ? `<img src="${escapeAttribute(photoUrl)}" alt="${escapeAttribute(displayName)}" class="user-avatar-img">`
@@ -17547,14 +22987,14 @@ function renderUsersTable(searchTerm = state.userSearchTerm, page = state.curren
                                         ? `<span class="user-avatar-fallback">${escapeHtml(fallbackInitial)}</span>`
                                         : '<span class="user-avatar-fallback" aria-hidden="true"></span>'}
                             </div>
-                            <div>
+                            <div class="user-cell-details">
                                 <div class="user-name-row">
                                     <span class="user-name">${displayName}</span>
                                     ${accountTypeTag}
                                 </div>
-                                <div class="user-meta">${user.email}</div>
-                                <div class="user-meta">${phoneDisplay}</div>
-                                <div class="user-meta">ID: ${employeeIdDisplay}</div>
+                                <div class="user-meta user-email">${user.email}</div>
+                                <div class="user-meta user-phone">${phoneDisplay}</div>
+                                <div class="user-meta user-employee-id">Code: ${employeeIdDisplay}</div>
                                 ${lastEventMarkup}
                             </div>
                         </div>
@@ -17607,7 +23047,7 @@ function exportUsers() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = 'onruf-users.csv';
+    link.download = 'platform-users.csv';
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -17616,6 +23056,22 @@ function exportUsers() {
 
 function toggleTheme() {
     document.body.classList.toggle('dark-mode');
+}
+
+function updateSidebarMenuTooltips() {
+    const sidebar = document.getElementById('sidebar');
+    if (!sidebar) return;
+    const isCollapsed = sidebar.classList.contains('collapsed');
+    const menuItems = sidebar.querySelectorAll('.menu-item');
+    menuItems.forEach(item => {
+        const labelSource = item.querySelector('.menu-text');
+        const label = labelSource ? labelSource.textContent.trim() : (item.dataset.section || '').trim();
+        if (isCollapsed && label) {
+            item.setAttribute('title', label);
+        } else {
+            item.removeAttribute('title');
+        }
+    });
 }
 
 function toggleSidebar() {
@@ -17628,6 +23084,8 @@ function toggleSidebar() {
         const isCollapsed = sidebar.classList.contains('collapsed');
         menuToggle.setAttribute('aria-expanded', String(!isCollapsed));
     }
+
+    updateSidebarMenuTooltips();
 }
 
 function saveSettings() {

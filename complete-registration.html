@@ -42,15 +42,30 @@
                                         <label for="registrationPhone" class="form-label">Phone number</label>
                                         <input type="tel" id="registrationPhone" class="form-input" autocomplete="tel" required aria-required="true" placeholder="+9665XXXXXXXX">
                                     </div>
-                                    <div class="form-group full-span">
+                                    <div class="form-group full-span profile-identity-row">
+                                        <div class="profile-photo-column">
                                             <label for="registrationPhoto" class="form-label">Profile Photo</label>
-                                        <input type="file" id="registrationPhoto" class="form-input file-input" accept="image/*">
-                                        <p class="form-hint">PNG or JPG, up to 5&nbsp;MB.</p>
+                                            <input type="file" id="registrationPhoto" class="form-input file-input" accept="image/*">
+                                            <p class="form-hint">PNG or JPG, up to 5&nbsp;MB.</p>
+                                        </div>
+                                        <div class="gender-column">
+                                            <span class="form-label required" id="registrationGenderLabel">Gender</span>
+                                            <div class="gender-options" role="radiogroup" aria-labelledby="registrationGenderLabel">
+                                                <label for="registrationGenderMale" class="gender-option">
+                                                    <input type="radio" id="registrationGenderMale" name="registrationGender" value="Male" required aria-required="true">
+                                                    <span>Male</span>
+                                                </label>
+                                                <label for="registrationGenderFemale" class="gender-option">
+                                                    <input type="radio" id="registrationGenderFemale" name="registrationGender" value="Female">
+                                                    <span>Female</span>
+                                                </label>
+                                            </div>
+                                        </div>
                                     </div>
                                     <div class="form-group">
                                         <label for="registrationPassword" class="form-label">Create password</label>
                                         <div class="input-with-toggle">
-                                            <input type="password" id="registrationPassword" class="form-input" autocomplete="new-password" required aria-required="true" placeholder="Minimum 8 characters">
+                                            <input type="password" id="registrationPassword" class="form-input" autocomplete="new-password" required aria-required="true" placeholder="Minimum 8 characters" pattern="(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}" title="Password must include uppercase and lowercase letters, a number, and be at least 8 characters long">
                                             <button type="button" class="input-toggle" data-toggle-target="registrationPassword" aria-label="Show password">
                                                 <svg class="password-toggle-icon password-icon-show" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
                                                     <path d="M2.036 12.322a.75.75 0 010-.643C3.423 8.945 7.052 6 12 6s8.577 2.945 9.964 5.679a.75.75 0 010 .643C20.577 15.055 16.948 18 12 18s-8.577-2.945-9.964-5.678z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
@@ -62,11 +77,12 @@
                                                 </svg>
                                             </button>
                                         </div>
+                                        <p id="registrationPasswordError" class="form-error-text hidden" role="alert"></p>
                                     </div>
                                     <div class="form-group">
                                         <label for="registrationPasswordConfirm" class="form-label">Confirm password</label>
                                         <div class="input-with-toggle">
-                                            <input type="password" id="registrationPasswordConfirm" class="form-input" autocomplete="new-password" required aria-required="true" placeholder="Repeat your password">
+                                            <input type="password" id="registrationPasswordConfirm" class="form-input" autocomplete="new-password" required aria-required="true" placeholder="Repeat your password" pattern="(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}" title="Password must include uppercase and lowercase letters, a number, and be at least 8 characters long">
                                             <button type="button" class="input-toggle" data-toggle-target="registrationPasswordConfirm" aria-label="Show password">
                                                 <svg class="password-toggle-icon password-icon-show" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
                                                     <path d="M2.036 12.322a.75.75 0 010-.643C3.423 8.945 7.052 6 12 6s8.577 2.945 9.964 5.679a.75.75 0 010 .643C20.577 15.055 16.948 18 12 18s-8.577-2.945-9.964-5.678z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
@@ -78,12 +94,13 @@
                                                 </svg>
                                             </button>
                                         </div>
+                                        <p id="registrationPasswordConfirmError" class="form-error-text hidden" role="alert"></p>
                                     </div>
                                 </div>
                             </fieldset>
                             <div class="form-group form-checkbox">
                                 <input type="checkbox" id="registrationPrivacyAgree" class="form-checkbox-input" required aria-required="true">
-                                <label for="registrationPrivacyAgree">I agree to the <a href="#" class="inline-link" id="registrationPrivacyLink" aria-controls="registrationPrivacyModal">Privacy Policy and Terms of Use</a>.</label>
+                                   <label for="registrationPrivacyAgree" id="registrationPrivacyAgreeLabel">I agree to the <a href="#" class="inline-link" id="registrationPrivacyLink" aria-controls="registrationPrivacyModal">Privacy Policy and Terms of Use</a>.</label>
                             </div>
                             <button type="submit" class="btn btn-primary" id="registrationAccountSubmit">
                                 <span>Submit</span>
@@ -96,7 +113,7 @@
                         <h3>Step 2: Verify Information</h3>
                         <div class="otp-panel" role="group" aria-labelledby="otpHeading">
                             <h3 id="otpHeading">Enter the six-digit verification code</h3>
-                            <p id="otpDescription">We've sent a code to <strong id="otpEmailLabel">user@email.com</strong>.<br>Enter it below to activate your access.</p>
+                            <p id="otpDescription">We've sent a code to <strong id="otpContactLabel">+9665XXXXXXXX</strong>.<br>Enter it below to activate your access.</p>
                             <p class="otp-timer" aria-live="polite">
                                 <i class="fas fa-clock"></i>
                                 Code Expires in
@@ -167,7 +184,7 @@
                         <strong id="summaryDepartment">—</strong>
                     </div>
                     <div class="summary-row">
-                        <span>ID</span>
+                        <span>Code</span>
                         <strong id="summaryEmployeeId">—</strong>
                     </div>
                     <div class="summary-row">
