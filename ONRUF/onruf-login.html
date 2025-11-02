@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>ONRUF – Individual Login</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" integrity="sha512-1ycn6IcaQQ40/MKBW2W4Rhis/DbILU74C1vSrLJxCq57o941Ym01SwNsOMqvEBFlcgUa6r0zE1x4rOzT9kZf3g==" crossorigin="anonymous" referrerpolicy="no-referrer">
+    <link rel="stylesheet" href="assets/css/onruf-sign-up.css">
+</head>
+<body class="signup-body login-body">
+    <div class="signup-shell">
+        <section class="signup-panel" aria-labelledby="loginHeading">
+            <div class="language-toggle" role="tablist" aria-label="Language toggle">
+                <button type="button" class="lang-btn" data-lang="ar" role="tab" aria-selected="false">AR</button>
+                <button type="button" class="lang-btn active" data-lang="en" role="tab" aria-selected="true">EN</button>
+            </div>
+
+            <header>
+                <h1 id="loginHeading" class="step-heading">welcome back</h1>
+                <p class="step-subheading">Log in with your email</p>
+            </header>
+
+            <form id="loginForm" class="login-form" novalidate>
+                <div class="input-field">
+                    <label class="input-label" for="loginEmail">E-Mail</label>
+                    <div class="input-shell">
+                        <i class="fa-solid fa-envelope input-icon" aria-hidden="true"></i>
+                        <input type="email" id="loginEmail" name="email" placeholder="E-Mail" autocomplete="email" required>
+                    </div>
+                </div>
+                <div class="input-field">
+                    <label class="input-label" for="loginPassword">Password</label>
+                    <div class="input-shell">
+                        <i class="fa-solid fa-lock input-icon" aria-hidden="true"></i>
+                        <input type="password" id="loginPassword" name="password" placeholder="Password" autocomplete="current-password" required>
+                        <button type="button" class="password-toggle" data-password-toggle="loginPassword" aria-label="Show password" aria-pressed="false">
+                            <i class="fa-solid fa-eye"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="form-helper-row">
+                    <button type="button" id="forgotPasswordBtn" class="ghost-btn inline-link">Forgot your password?</button>
+                    <label class="checkbox-inline" for="rememberMe">
+                        <input type="checkbox" id="rememberMe" name="remember">
+                        Keep me Sign In
+                    </label>
+                </div>
+                <div class="login-actions">
+                    <button type="submit" class="primary-btn">Log in</button>
+                </div>
+            </form>
+
+            <p class="form-footnote">Don't have an account? <a href="onruf-sign-up.html" class="inline-link">new registration</a></p>
+        </section>
+
+        <aside class="signup-hero" aria-label="ONRUF overview">
+            <div class="hero-content">
+                <div class="hero-logo">
+                    <span class="hero-mark">ON</span>
+                    <span class="hero-word">RUF</span>
+                </div>
+                <h2 class="hero-title">All You Need In ONRUF</h2>
+                <p class="hero-copy">Follow bids, buy items, or display your own item in an online auction or sell it at a direct price. All this and more from ONRUF.</p>
+                <div class="hero-shape" aria-hidden="true"></div>
+            </div>
+        </aside>
+    </div>
+
+    <div class="signup-toast" id="signupToast" role="status" aria-live="polite"></div>
+
+    <script src="assets/js/onruf-login.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ONRUF – Listing Checkout</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" integrity="sha512-1ycn6IcaQQ40/MKBW2W4Rhis/DbILU74C1vSrLJxCq57o941Ym01SwNsOMqvEBFlcgUa6r0zE1x4rOzT9kZf3g==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <link rel="stylesheet" href="assets/css/onruf-add-product.css" />
+</head>
+<body>
+    <header class="add-product-header">
+        <div class="header-brand">
+            <span class="brand-mark">ON</span>
+            <span class="brand-text">RUF</span>
+        </div>
+        <div class="header-center">
+            <div class="header-search" role="search">
+                <i class="fas fa-search" aria-hidden="true"></i>
+                <input type="search" placeholder="Search the marketplace" aria-label="Search" />
+            </div>
+        </div>
+        <nav class="header-actions" aria-label="Page actions">
+            <a class="header-link" href="onruf-platform.html">Marketplace</a>
+            <button type="button" class="header-link" id="checkoutProfileBtn">Profile</button>
+            <button type="button" class="header-link" id="checkoutSignOutBtn">Sign out</button>
+        </nav>
+    </header>
+
+    <main class="checkout-page" id="checkoutMain" hidden>
+        <div class="checkout-shell">
+            <div class="checkout-content">
+                <section class="checkout-main">
+                    <header class="checkout-header">
+                        <div class="checkout-header__text">
+                            <h2>Review your listing</h2>
+                            <p>Double-check the details before publishing your product on ONRUF.</p>
+                        </div>
+                        <div class="checkout-header__actions">
+                            <button type="button" class="secondary-btn" id="checkoutBackBtn">Back to listing</button>
+                        </div>
+                    </header>
+
+                    <article class="checkout-section">
+                        <header class="checkout-section__header">
+                            <h3>Item specification</h3>
+                            <button type="button" class="checkout-edit" data-edit-step="2">Edit</button>
+                        </header>
+                        <div class="checkout-item">
+                            <img src="" alt="Listing preview" id="summaryItemImage" />
+                            <div class="checkout-item__details">
+                                <h4 id="summaryItemTitle"></h4>
+                                <p id="summaryItemSubtitle"></p>
+                                <p id="summaryItemNotes"></p>
+                            </div>
+                            <dl class="checkout-item__meta">
+                                <div><dt>Condition</dt><dd id="summaryItemCondition"></dd></div>
+                                <div><dt>Quantity</dt><dd id="summaryItemQuantity"></dd></div>
+                            </dl>
+                        </div>
+                    </article>
+
+                    <article class="checkout-section">
+                        <header class="checkout-section__header">
+                            <h3>Sale details</h3>
+                            <button type="button" class="checkout-edit" data-edit-step="4">Edit</button>
+                        </header>
+                        <dl class="checkout-list">
+                            <div><dt>Sales type</dt><dd id="summarySaleTypes"></dd></div>
+                            <div><dt>Purchasing price</dt><dd id="summaryPurchasePrice"></dd></div>
+                            <div><dt>Minimum bid</dt><dd id="summaryMinimumBid"></dd></div>
+                            <div><dt>Price negotiable</dt><dd id="summaryNegotiable"></dd></div>
+                            <div><dt>Payment options</dt><dd id="summaryPaymentOptions"></dd></div>
+                        </dl>
+                    </article>
+
+                    <article class="checkout-section">
+                        <header class="checkout-section__header">
+                            <h3>Shipping options</h3>
+                            <button type="button" class="checkout-edit" data-edit-step="5">Edit</button>
+                        </header>
+                        <dl class="checkout-list">
+                            <div><dt>Auction closing time</dt><dd id="summaryAuctionClosing"></dd></div>
+                            <div><dt>Shipping options</dt><dd id="summaryShippingOptions"></dd></div>
+                            <div><dt>Pick-up options</dt><dd id="summaryPickupOptions"></dd></div>
+                        </dl>
+                    </article>
+                </section>
+
+                <aside class="checkout-aside">
+                    <section class="checkout-card">
+                        <header class="checkout-card__header">
+                            <h3>Order details</h3>
+                            <button type="button" class="checkout-edit" data-edit-step="4">Edit</button>
+                        </header>
+                        <dl class="checkout-totals">
+                            <div><dt>Fixed sale price option fees</dt><dd id="summaryFeeFixed">0 SAR</dd></div>
+                            <div><dt>Negotiable price option fees</dt><dd id="summaryFeeNegotiable">0 SAR</dd></div>
+                            <div><dt>Public auction option fees</dt><dd id="summaryFeeAuction">0 SAR</dd></div>
+                            <div><dt>Subtotal</dt><dd id="summaryFeeSubtotal">0 SAR</dd></div>
+                            <div><dt>Tax</dt><dd id="summaryFeeTax">0 SAR</dd></div>
+                            <div><dt>Total</dt><dd id="summaryFeeTotal">0 SAR</dd></div>
+                        </dl>
+                        <div class="checkout-points">
+                            <span>My points</span>
+                            <strong id="summaryPoints">0</strong>
+                        </div>
+                    </section>
+                    <section class="checkout-card">
+                        <header class="checkout-card__header">
+                            <h3>Payment method</h3>
+                        </header>
+                        <div class="checkout-payment" id="checkoutPaymentSummary"></div>
+                        <button type="button" class="primary-btn checkout-submit" id="checkoutConfirmBtn">Check out</button>
+                    </section>
+                </aside>
+            </div>
+        </div>
+    </main>
+
+    <section class="guard" id="checkoutGuard" hidden>
+        <div class="guard-card">
+            <h2>We could not find your draft</h2>
+            <p>Return to the listing form to start again and we will save the details for checkout.</p>
+            <div class="guard-actions">
+                <a class="primary-btn" href="onruf-add-product.html">Back to listing form</a>
+                <a class="secondary-btn" href="onruf-platform.html">Marketplace</a>
+            </div>
+        </div>
+    </section>
+
+    <div class="add-product-toast" id="checkoutToast" role="status" aria-live="polite"></div>
+    <script src="assets/js/onruf-add-product-checkout.js"></script>
+</body>
+</html>

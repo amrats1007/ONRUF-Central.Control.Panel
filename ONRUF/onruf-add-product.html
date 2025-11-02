@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ONRUF – Add Product Ad</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" integrity="sha512-1ycn6IcaQQ40/MKBW2W4Rhis/DbILU74C1vSrLJxCq57o941Ym01SwNsOMqvEBFlcgUa6r0zE1x4rOzT9kZf3g==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <link rel="stylesheet" href="assets/css/onruf-add-product.css" />
+</head>
+<body>
+    <header class="add-product-header">
+        <div class="header-brand">
+            <span class="brand-mark">ON</span>
+            <span class="brand-text">RUF</span>
+        </div>
+        <div class="header-center">
+            <div class="header-search" role="search">
+                <i class="fas fa-search" aria-hidden="true"></i>
+                <input type="search" placeholder="What are you listing today?" aria-label="Search" />
+            </div>
+        </div>
+        <nav class="header-actions" aria-label="Page actions">
+            <a class="header-link" href="onruf-platform.html">Marketplace</a>
+            <button type="button" class="header-link" id="addProductProfileBtn">Profile</button>
+            <button type="button" class="header-link" id="addProductSignOutBtn">Sign out</button>
+        </nav>
+    </header>
+
+    <main class="add-product-main" id="addProductMain" hidden>
+        <section class="add-product-top">
+            <div class="category-select" id="categorySelector">
+                <h1>Describe what you're selling</h1>
+                <form class="category-form" id="categoryForm">
+                    <div class="category-levels" id="categoryLevels"></div>
+                    <button type="submit" class="primary-btn" id="categoryNextBtn" disabled aria-disabled="true">Next</button>
+                </form>
+            </div>
+        </section>
+
+        <form class="add-product-form" id="addProductForm" novalidate>
+            <section class="form-step" data-step="1">
+                <header class="form-step__header">
+                    <button type="button" class="step-toggle" data-step-toggle>
+                        <span class="step-index">1</span>
+                        <span class="step-title">Add photos</span>
+                        <i class="fas fa-chevron-down" aria-hidden="true"></i>
+                    </button>
+                </header>
+                <div class="form-step__content">
+                    <p class="hint" id="photoGuidance">You can upload 3 images and 1 video link for free; each additional image costs 1 SAR, and each additional video link costs 1 SAR.</p>
+                    <div class="upload-area">
+                        <label class="upload-drop" for="photoUpload">
+                            <i class="fas fa-camera"></i>
+                            <span>Drag images here or click to browse</span>
+                            <input id="photoUpload" type="file" accept="image/*" multiple hidden />
+                        </label>
+                        <div class="upload-gallery" id="uploadGallery"></div>
+                        <div class="video-link-group">
+                            <span class="video-label">Video links (optional)</span>
+                            <div class="video-link-list" id="videoLinkList"></div>
+                            <button type="button" class="secondary-btn video-link-add" id="videoLinkAddBtn">
+                                <i class="fas fa-plus" aria-hidden="true"></i>
+                                <span>Add video link</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="step-actions">
+                        <button type="button" class="primary-btn" id="photoNextBtn" disabled aria-disabled="true">Next</button>
+                    </div>
+                </div>
+            </section>
+
+            <section class="form-step" data-step="2">
+                <header class="form-step__header">
+                    <button type="button" class="step-toggle" data-step-toggle>
+                        <span class="step-index">2</span>
+                        <span class="step-title">Item details</span>
+                        <i class="fas fa-chevron-down" aria-hidden="true"></i>
+                    </button>
+                </header>
+                <div class="form-step__content">
+                    <div class="specification-section">
+                        <p class="hint" id="itemSpecificationHint">Select a category to load the required item details.</p>
+                        <div class="specification-fields" id="itemSpecificationContainer"></div>
+                    </div>
+                    <div class="step-actions">
+                        <button type="button" class="primary-btn step-next-btn" data-step-next="3">Next</button>
+                    </div>
+                </div>
+            </section>
+
+            <section class="form-step" data-step="3">
+                <header class="form-step__header">
+                    <button type="button" class="step-toggle" data-step-toggle>
+                        <span class="step-index">3</span>
+                        <span class="step-title">Ad details</span>
+                        <i class="fas fa-chevron-down" aria-hidden="true"></i>
+                    </button>
+                </header>
+                <div class="form-step__content">
+                    <div class="form-grid">
+                        <label class="form-field">Item title (Arabic) *<input type="text" id="adTitleAr" required /></label>
+                        <label class="form-field">Sub title (Arabic)
+                            <span class="field-hint" id="subtitleFeeHint" aria-live="polite">
+                                Please Note That Adding A Subtitle To Your Product Ad Will Cost You
+                                <span class="field-hint__value" id="subtitleFeeValue">3 SAR</span>.
+                            </span>
+                            <input type="text" id="adSubtitleAr" />
+                        </label>
+                        <label class="form-field">Item details (Arabic) *<textarea id="adDetailsAr" required></textarea></label>
+                        <label class="form-field">Add English info
+                            <label class="switch">
+                                <input type="checkbox" id="enableEnglishInfo" />
+                                <span class="slider"></span>
+                            </label>
+                        </label>
+                        <div class="form-field form-field--half">
+                            <label>Item title (English)<input type="text" id="adTitleEn" /></label>
+                            <label>Item details (English)<textarea id="adDetailsEn"></textarea></label>
+                        </div>
+                        <div class="form-grid form-grid--three">
+                            <fieldset class="form-field">
+                                <legend>Item status *</legend>
+                                <label class="pill-toggle"><input type="radio" name="itemStatus" value="new" required /> New</label>
+                                <label class="pill-toggle"><input type="radio" name="itemStatus" value="used" /> Used</label>
+                            </fieldset>
+                            <label class="form-field">Quantity *
+                                <div class="quantity-control">
+                                    <button type="button" data-quantity="-1" aria-label="Decrease quantity"><i class="fas fa-minus"></i></button>
+                                    <input type="number" id="itemQuantity" value="1" min="1" required />
+                                    <button type="button" data-quantity="1" aria-label="Increase quantity"><i class="fas fa-plus"></i></button>
+                                </div>
+                            </label>
+                            <div class="form-field">
+                                <label>Address</label>
+                                <div class="address-grid">
+                                    <select id="addressCountry"><option value="">Choose country</option></select>
+                                    <select id="addressRegion"><option value="">Choose region</option></select>
+                                    <select id="addressCity"><option value="">Choose city</option></select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="step-actions">
+                        <button type="button" class="primary-btn step-next-btn" data-step-next="4">Next</button>
+                    </div>
+                </div>
+            </section>
+
+            <section class="form-step" data-step="4">
+                <header class="form-step__header">
+                    <button type="button" class="step-toggle" data-step-toggle>
+                        <span class="step-index">4</span>
+                        <span class="step-title">Sale details</span>
+                        <i class="fas fa-chevron-down" aria-hidden="true"></i>
+                    </button>
+                </header>
+                <div class="form-step__content">
+                    <fieldset class="sale-toggles" id="saleToggleGroup">
+                        <legend>Sales type *</legend>
+                        <label class="sale-toggle">
+                            <input type="checkbox" data-fee="3" id="saleFixedToggle" />
+                            <span>Fixed price</span>
+                        </label>
+                        <label class="sale-toggle">
+                            <input type="checkbox" data-fee="3" id="saleAuctionToggle" />
+                            <span>Auction</span>
+                        </label>
+                        <label class="sale-toggle">
+                            <input type="checkbox" data-fee="3" id="saleNegotiableToggle" />
+                            <span>Price negotiable</span>
+                        </label>
+                    </fieldset>
+                    <div class="form-grid">
+                        <label class="form-field">Purchasing price *<input type="number" id="pricePurchase" min="1" required /></label>
+                        <label class="form-field">Minimum bid<input type="number" id="priceBid" min="0" /></label>
+                        <label class="form-field">Minimum price<input type="number" id="priceMinimum" min="0" /></label>
+                        <label class="form-field">Auction length
+                            <select id="auctionLength">
+                                <option value="1">1 day</option>
+                                <option value="2">2 days</option>
+                                <option value="3">3 days</option>
+                                <option value="4">4 days</option>
+                                <option value="7">7 days</option>
+                            </select>
+                        </label>
+                        <label class="form-field">Auction closing datetime<input type="datetime-local" id="auctionClosing" /></label>
+                    </div>
+                    <fieldset class="payment-toggle" id="paymentOptions">
+                        <legend>Payment options *</legend>
+                        <label><input type="checkbox" data-method="bank" /> Bank transfer</label>
+                        <label><input type="checkbox" data-method="cash" /> Cash</label>
+                        <label><input type="checkbox" data-method="credit" /> Credit card</label>
+                        <label><input type="checkbox" data-method="mada" /> Mada</label>
+                    </fieldset>
+                    <div class="step-actions">
+                        <button type="button" class="primary-btn step-next-btn" data-step-next="5">Next</button>
+                    </div>
+                </div>
+            </section>
+
+            <section class="form-step" data-step="5">
+                <header class="form-step__header">
+                    <button type="button" class="step-toggle" data-step-toggle>
+                        <span class="step-index">5</span>
+                        <span class="step-title">Shipping</span>
+                        <i class="fas fa-chevron-down" aria-hidden="true"></i>
+                    </button>
+                </header>
+                <div class="form-step__content">
+                    <fieldset class="shipping-options">
+                        <legend>Pick-up options *</legend>
+                        <label><input type="checkbox" data-shipping="seller" /> Pick-up from seller</label>
+                        <label><input type="checkbox" data-shipping="no-pickup" /> No pick-up</label>
+                        <label><input type="checkbox" data-shipping="alt" /> Pick-up from seller (alternative)</label>
+                    </fieldset>
+                    <fieldset class="shipping-options">
+                        <legend>Shipping options *</legend>
+                        <label><input type="checkbox" data-shipping-option="integrated" /> Integrated shipping company options</label>
+                        <label><input type="checkbox" data-shipping-option="free" /> Free shipping within Saudi Arabia</label>
+                        <label><input type="checkbox" data-shipping-option="arrange" /> Arrangement with seller</label>
+                    </fieldset>
+                    <div class="step-actions">
+                        <button type="button" class="primary-btn step-next-btn" data-step-next="6">Next</button>
+                    </div>
+                </div>
+            </section>
+
+            <section class="form-step" data-step="6">
+                <header class="form-step__header">
+                    <button type="button" class="step-toggle" data-step-toggle>
+                        <span class="step-index">6</span>
+                        <span class="step-title">Packages</span>
+                        <i class="fas fa-chevron-down" aria-hidden="true"></i>
+                    </button>
+                </header>
+                <div class="form-step__content">
+                    <p class="hint">Choose one of our special packages to highlight your product. No packages are available right now.</p>
+                </div>
+            </section>
+        </form>
+        <div class="packages-actions packages-actions--footer">
+            <button type="button" class="secondary-btn" id="packageAddBtn">Add</button>
+            <button type="button" class="secondary-btn" id="packageSkipBtn">No thanks</button>
+        </div>
+    </main>
+
+    <div class="add-product-toast" id="addProductToast" role="status" aria-live="polite"></div>
+    <script src="assets/js/onruf-add-product.js"></script>
+</body>
+</html>

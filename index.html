@@ -16,52 +16,29 @@
                 <div class="brand-text">OnRuf Control</div>
             </div>
             <nav class="sidebar-menu">
-                <a href="#dashboard" class="menu-item active" data-section="dashboard">
-                    <i class="fas fa-chart-pie"></i>
-                    <span class="menu-text">Dashboard</span>
-                </a>
-                <a href="#users" class="menu-item" data-section="users">
+                <a href="#users" class="menu-item active" data-section="users">
                     <i class="fas fa-users"></i>
                     <span class="menu-text">Users</span>
+                </a>
+                <a href="#onruf-users" class="menu-item" data-section="onruf-users">
+                    <i class="fas fa-address-card"></i>
+                    <span class="menu-text">ONRUF Users</span>
+                </a>
+                <a href="#product-ads" class="menu-item" data-section="product-ads">
+                    <i class="fas fa-bullhorn"></i>
+                    <span class="menu-text">Product Ads</span>
                 </a>
                 <a href="#categories" class="menu-item" data-section="categories">
                     <i class="fas fa-layer-group"></i>
                     <span class="menu-text">Categories and Specifications</span>
                 </a>
-                <a href="#settings" class="menu-item" data-section="settings">
-                    <i class="fas fa-sliders-h"></i>
-                    <span class="menu-text">Settings</span>
-                </a>
-                <a href="#reports" class="menu-item" data-section="reports">
-                    <i class="fas fa-chart-line"></i>
-                    <span class="menu-text">Reports</span>
-                </a>
-                <a href="#diagrams" class="menu-item" data-section="diagrams">
-                    <i class="fas fa-project-diagram"></i>
-                    <span class="menu-text">Diagrams</span>
-                </a>
-                <a href="#packages" class="menu-item" data-section="packages">
-                    <i class="fas fa-box-open"></i>
-                    <span class="menu-text">Packages</span>
-                </a>
-                <a href="#products" class="menu-item" data-section="products">
-                    <i class="fas fa-store"></i>
-                    <span class="menu-text">Products</span>
-                </a>
-                <a href="#onruf-users" class="menu-item" data-section="onruf-users">
-                    <i class="fas fa-user-group"></i>
-                    <span class="menu-text">ONRUF Users</span>
-                </a>
-                <a href="#advertisments" class="menu-item" data-section="advertisments">
-                    <i class="fas fa-bullhorn"></i>
-                    <span class="menu-text">Advertisments</span>
-                </a>
             </nav>
             <div class="sidebar-footer">
-                <div class="support-card">
-                    <h4>Need help?</h4>
-                    <p>Our support team is available 24/7.</p>
-                    <button type="button" onclick="openSupport()">Contact</button>
+                <div class="sidebar-launch" role="group" aria-label="Open ONRUF platform">
+                    <button type="button" class="sidebar-launch-btn" id="openOnrufPlatformBtn" aria-label="Open ONRUF platform">
+                        <span class="sidebar-launch-label">OnRuf</span>
+                        <i class="fas fa-external-link-alt" aria-hidden="true"></i>
+                    </button>
                 </div>
             </div>
         </aside>
@@ -73,7 +50,7 @@
                         <i class="fas fa-bars"></i>
                     </button>
                     <nav class="breadcrumb" aria-label="Breadcrumb">
-                        <span id="breadcrumbTrail">Control Panel / Dashboard / App 1</span>
+                        <span id="breadcrumbTrail">Control Panel / Users / User Roles</span>
                     </nav>
                 </div>
                 <div class="topbar-right">
@@ -98,173 +75,86 @@
             <div class="notification-area" id="globalNotificationArea" aria-live="polite"></div>
 
             <div class="content-scroll">
-                <section id="dashboard" class="section-content active">
-                    <div class="section-header">
-                        <h1 class="section-title">Executive Dashboard</h1>
-                        <p class="section-subtitle">Monitor platform operations, workforce performance, and customer engagement.</p>
-                    </div>
-                    <div class="sub-apps-nav">
-                        <button class="sub-app-btn active" data-target="dashboard-app1" data-label="App 1">
-                            <span>App 1</span>
-                            <span>Executive Overview</span>
-                        </button>
-                        <button class="sub-app-btn" data-target="dashboard-app2" data-label="App 2">
-                            <span>App 2</span>
-                            <span>Operational Insights</span>
-                        </button>
-                    </div>
-
-                    <div id="dashboard-app1" class="sub-app active">
-                        <div class="stats-grid">
-                            <div class="stat-card">
-                                <div class="stat-heading">
-                                    <span>Total Users</span>
-                                    <i class="fas fa-users"></i>
-                                </div>
-                                <div class="stat-value" id="totalUsersStat">0</div>
-                                <div class="stat-delta positive" id="totalUsersDelta">
-                                    <i class="fas fa-arrow-trend-up"></i>
-                                    +8.4% this month
-                                </div>
-                            </div>
-                            <div class="stat-card">
-                                <div class="stat-heading">
-                                    <span>Active Accounts</span>
-                                    <i class="fas fa-building"></i>
-                                </div>
-                                <div class="stat-value" id="activeUsersStat">0</div>
-                                <div class="stat-delta positive">
-                                    <i class="fas fa-arrow-trend-up"></i>
-                                    +3.1% new activations
-                                </div>
-                            </div>
-                            <div class="stat-card">
-                                <div class="stat-heading">
-                                    <span>Roles</span>
-                                    <i class="fas fa-user-shield"></i>
-                                </div>
-                                <div class="stat-value" id="totalRolesStat">0</div>
-                                <div class="stat-delta">
-                                    <i class="fas fa-gauge-high"></i>
-                                    100% coverage
-                                </div>
-                            </div>
-                            <div class="stat-card">
-                                <div class="stat-heading">
-                                    <span>SLA Compliance</span>
-                                    <i class="fas fa-bolt"></i>
-                                </div>
-                                <div class="stat-value" id="complianceStat">0%</div>
-                                <div class="stat-delta positive">
-                                    <i class="fas fa-arrow-trend-up"></i>
-                                    +1.6% vs last week
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="charts-row">
-                            <div class="chart-card">
-                                <div class="chart-header">
-                                    <div class="chart-title">Engagement Trend</div>
-                                    <div class="period-buttons">
-                                        <button class="period-btn active" data-period="monthly">Monthly</button>
-                                        <button class="period-btn" data-period="quarterly">Quarterly</button>
-                                        <button class="period-btn" data-period="yearly">Yearly</button>
-                                    </div>
-                                </div>
-                                <canvas id="performanceChart" height="260"></canvas>
-                            </div>
-                            <div class="activity-feed" id="activityFeed">
-                                <!-- Activity entries injected by script -->
-                            </div>
-                        </div>
-                    </div>
-
-                    <div id="dashboard-app2" class="sub-app">
-                        <div class="operations-grid">
-                            <div class="operation-card">
-                                <div class="operation-header">
-                                    <h3>Field Teams</h3>
-                                    <span class="status-pill success">Operational</span>
-                                </div>
-                                <div class="operation-metric" id="fieldTeamsMetric">37</div>
-                                <p>Active inspection crews deployed across municipalities.</p>
-                                <div class="operation-footer">
-                                    <span><i class="fas fa-location-dot"></i> 12 regions</span>
-                                    <span><i class="fas fa-clock"></i> Updated 5 mins ago</span>
-                                </div>
-                            </div>
-                            <div class="operation-card">
-                                <div class="operation-header">
-                                    <h3>Service Level Compliance</h3>
-                                    <span class="status-pill warning">Monitor</span>
-                                </div>
-                                <div class="operation-metric">92.4%</div>
-                                <p>Average SLA compliance across premium inspection services.</p>
-                                <div class="operation-footer">
-                                    <span><i class="fas fa-triangle-exclamation"></i> 4 risks</span>
-                                    <span><i class="fas fa-arrow-trend-up"></i> +2.1% vs last week</span>
-                                </div>
-                            </div>
-                            <div class="operation-card">
-                                <div class="operation-header">
-                                    <h3>Regional Performance</h3>
-                                    <span class="status-pill info">Balanced</span>
-                                </div>
-                                <div class="operation-metric">Top 3</div>
-                                <ul class="operation-list">
-                                    <li><span>Riyadh</span><strong>97%</strong></li>
-                                    <li><span>Jeddah</span><strong>94%</strong></li>
-                                    <li><span>Dammam</span><strong>92%</strong></li>
-                                </ul>
-                                <div class="operation-footer">
-                                    <span><i class="fas fa-arrows-rotate"></i> Weekly refresh</span>
-                                    <span><i class="fas fa-chart-line"></i> Stable trend</span>
-                                </div>
-                            </div>
-                            <div class="operation-card">
-                                <div class="operation-header">
-                                    <h3>Inspection Backlog</h3>
-                                    <span class="status-pill danger">Action</span>
-                                </div>
-                                <div class="operation-metric">126</div>
-                                <p>Pending inspections awaiting dispatch prioritisation.</p>
-                                <div class="operation-footer">
-                                    <span><i class="fas fa-calendar-day"></i> Avg 3.2 days</span>
-                                    <span><i class="fas fa-bolt"></i> 18 urgent</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </section>
-
-                <section id="users" class="section-content">
+                <section id="users" class="section-content active">
                     <div class="sub-apps-nav">
                         <button class="sub-app-btn active" data-target="users-app1" data-label="User Roles Management">
                             <span>User Roles Management</span>
-                            <span class="count" id="userRolesCount">#0 Roles</span>
                         </button>
-                        <button class="sub-app-btn" data-target="users-app2" data-label="Users Management">
-                            <span>Users Management</span>
-                            <span class="count" id="usersManagementCount">#0 Users</span>
+                        <button class="sub-app-btn" data-target="users-app2" data-label="User Accounts Management">
+                            <span>User Accounts Management</span>
                         </button>
                     </div>
 
                     <div id="users-app1" class="sub-app active">
                         <div class="roles-header">
                             <div class="header-stack">
-                                <h2 class="module-title" id="roleModuleTitle">User Roles</h2>
-                                <div class="search-box" id="roleSearchContainer">
-                                    <i class="fas fa-search"></i>
-                                    <input type="text" id="roleSearchInput" placeholder="Search by User Role Name, Code, or Description" />
+                                <h2 class="module-title" id="roleModuleTitle">
+                                    <span id="roleModuleTitleText">User Roles</span>
+                                    <span class="count-badge" id="userRolesCount">#0 Roles</span>
+                                </h2>
+                                <div class="detail-controls role-directory-controls">
+                                    <div class="search-box" id="roleSearchContainer">
+                                        <i class="fas fa-search"></i>
+                                        <input type="search" id="roleSearchInput" placeholder="Search by User Role Name, Code, or Description" />
+                                    </div>
+                                    <div class="detail-filters role-directory-filters" id="roleFiltersContainer">
+                                        <label class="filter-control" for="roleStatusFilter">Status
+                                            <select id="roleStatusFilter">
+                                                <option value="all">All</option>
+                                                <option value="active">Active</option>
+                                                <option value="inactive">Inactive</option>
+                                            </select>
+                                        </label>
+                                        <label class="filter-control" for="roleCreatedFilter">Created
+                                            <select id="roleCreatedFilter">
+                                                <option value="all">All</option>
+                                                <option value="last-7">Last 7 days</option>
+                                                <option value="last-30">Last 30 days</option>
+                                                <option value="last-90">Last 90 days</option>
+                                                <option value="older-90">Older than 90 days</option>
+                                            </select>
+                                        </label>
+                                        <label class="filter-control" for="roleAssignmentFilter">Members
+                                            <select id="roleAssignmentFilter">
+                                                <option value="all">All</option>
+                                            </select>
+                                        </label>
+                                        <label class="filter-control filter-wide" for="roleModuleFilter">Module
+                                            <select id="roleModuleFilter">
+                                                <option value="all">All</option>
+                                            </select>
+                                        </label>
+                                    </div>
                                 </div>
                             </div>
-                            <div class="roles-actions">
-                                <button class="btn btn-primary" id="addRoleBtn">
-                                    <i class="fas fa-plus"></i>
-                                    Add User Role
+                        </div>
+                        <div class="role-bulk-actions" id="roleBulkActions">
+                            <div class="role-bulk-group">
+                                <button type="button" class="btn btn-outline role-action-btn role-action-edit" id="roleEditBtn" disabled>
+                                    <i class="fas fa-pen"></i>
+                                    Modify
+                                </button>
+                                <button type="button" class="btn btn-outline role-action-btn role-action-activate" id="roleActivateBtn" disabled>
+                                    <i class="fas fa-rotate-right"></i>
+                                    Activate
+                                </button>
+                                <button type="button" class="btn btn-outline role-action-btn role-action-deactivate" id="roleDeactivateBtn" disabled>
+                                    <i class="fas fa-power-off"></i>
+                                    Deactivate
+                                </button>
+                                <button type="button" class="btn btn-outline role-action-btn role-action-delete" id="roleDeleteBtn" disabled>
+                                    <i class="fas fa-trash"></i>
+                                    Delete
+                                </button>
+                                <button type="button" class="btn btn-outline" id="roleFiltersResetBtn" title="Reset filters and search">
+                                    <i class="fas fa-rotate-left"></i>
+                                    Reset
                                 </button>
                             </div>
+                            <button class="btn btn-primary" id="addRoleBtn">
+                                <i class="fas fa-plus"></i>
+                                Add User Role
+                            </button>
                         </div>
                         <div class="notification-area" id="roleNotificationArea" aria-live="polite"></div>
                         <div id="roleDirectoryView">
@@ -276,11 +166,10 @@
                                             <th>Code</th>
                                             <th class="role-column">Role</th>
                                             <th>Description</th>
-                                            <th>Users</th>
                                             <th>Permissions</th>
+                                            <th>Users</th>
                                             <th>Status</th>
                                             <th>Created</th>
-                                            <th>Actions</th>
                                         </tr>
                                     </thead>
                                     <tbody id="rolesTableBody">
@@ -383,18 +272,76 @@
                     <div id="users-app2" class="sub-app">
                         <div class="users-header">
                             <div class="header-stack">
-                                <h2 class="module-title" id="usersModuleTitle">User Accounts</h2>
-                                <div class="search-box">
-                                    <i class="fas fa-search"></i>
-                                    <input type="text" id="userSearch" placeholder="Search by User Name, Email, Phone, Role, Status, Department, or ID" />
+                                <h2 class="module-title" id="usersModuleTitle">
+                                    <span id="usersModuleTitleText">User Accounts</span>
+                                    <span class="count-badge" id="usersManagementCount">#0 Account</span>
+                                </h2>
+                                <div class="detail-controls user-directory-controls">
+                                    <div class="search-box">
+                                        <i class="fas fa-search"></i>
+                                        <input type="text" id="userSearch" placeholder="Search by User Name, Email, Phone, or Code" />
+                                    </div>
+                                    <div class="detail-filters user-directory-filters" id="userFiltersContainer">
+                                        <label class="filter-control" for="userStatusFilter">Status
+                                            <select id="userStatusFilter">
+                                                <option value="all">All</option>
+                                                <option value="active">Active</option>
+                                                <option value="pending">Pending</option>
+                                                <option value="inactive">Inactive</option>
+                                            </select>
+                                        </label>
+                                        <label class="filter-control" for="userAccountTypeFilter">Account Type
+                                            <select id="userAccountTypeFilter">
+                                                <option value="all">All</option>
+                                            </select>
+                                        </label>
+                                        <label class="filter-control filter-wide" for="userDepartmentFilter">Department
+                                            <select id="userDepartmentFilter">
+                                                <option value="all">All</option>
+                                            </select>
+                                        </label>
+                                        <label class="filter-control filter-wide" for="userRoleFilter">Role
+                                            <select id="userRoleFilter">
+                                                <option value="all">All</option>
+                                            </select>
+                                        </label>
+                                    </div>
                                 </div>
                             </div>
-                            <div class="users-actions">
-                                <button class="btn btn-primary" id="addUserBtn">
-                                    <i class="fas fa-user-plus"></i>
-                                    Add User
-                                </button>
-                            </div>
+                        </div>
+                        <div class="user-bulk-actions" id="userBulkActions">
+                            <button type="button" class="btn btn-outline user-action-btn user-action-invite" id="userInviteLinkBtn" disabled>
+                                <i class="fas fa-envelope-open-text"></i>
+                                Invitation Link
+                            </button>
+                            <button type="button" class="btn btn-outline user-action-btn user-action-resend" id="userResendInviteBtn" disabled>
+                                <i class="fas fa-paper-plane"></i>
+                                Resend Invitation
+                            </button>
+                            <button type="button" class="btn btn-outline user-action-btn user-action-edit" id="userEditBtn" disabled>
+                                <i class="fas fa-pen"></i>
+                                    Modify
+                            </button>
+                            <button type="button" class="btn btn-outline user-action-btn user-action-activate" id="userActivateBtn" disabled>
+                                <i class="fas fa-rotate-right"></i>
+                                Activate
+                            </button>
+                            <button type="button" class="btn btn-outline user-action-btn user-action-deactivate" id="userDeactivateBtn" disabled>
+                                <i class="fas fa-power-off"></i>
+                                Deactivate
+                            </button>
+                            <button type="button" class="btn btn-outline user-action-btn user-action-delete" id="userDeleteBtn" disabled>
+                                <i class="fas fa-trash"></i>
+                                Delete
+                            </button>
+                            <button type="button" class="btn btn-outline" id="userFiltersResetBtn" title="Reset filters and search">
+                                <i class="fas fa-rotate-left"></i>
+                                Reset
+                            </button>
+                            <button type="button" class="btn btn-primary user-action-btn user-action-add" id="addUserBtn">
+                                <i class="fas fa-user-plus"></i>
+                                Add User
+                            </button>
                         </div>
                         <div id="usersListView">
                             <div class="table-shell">
@@ -409,7 +356,6 @@
                                             <th>Last Login</th>
                                             <th>Created</th>
                                             <th>Expiration</th>
-                                            <th>Actions</th>
                                         </tr>
                                     </thead>
                                     <tbody id="usersTableBody">
@@ -505,11 +451,28 @@
                                                     </div>
                                                     <div class="completed-registration-grid">
                                                         <div class="form-group" id="userPhotoGroup">
-                                                            <label class="form-label" for="userPhotoInput">Profile Photo</label>
-                                                            <div class="user-photo-field">
-                                                                <img id="userPhotoPreview" alt="Profile photo preview" src="" aria-hidden="true" />
-                                                                <div class="user-photo-actions">
-                                                                    <input type="file" class="form-input file-input" id="userPhotoInput" accept="image/*" />
+                                                            <div class="user-photo-row">
+                                                                <div class="user-photo-column">
+                                                                    <label class="form-label" for="userPhotoInput">Profile Photo</label>
+                                                                    <div class="user-photo-field">
+                                                                        <img id="userPhotoPreview" alt="Profile photo preview" src="" aria-hidden="true" />
+                                                                        <div class="user-photo-actions">
+                                                                            <input type="file" class="form-input file-input" id="userPhotoInput" accept="image/*" />
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                                <div class="user-gender-column">
+                                                                    <span class="form-label required" id="userGenderLabel">Gender</span>
+                                                                    <div class="gender-options" role="radiogroup" aria-labelledby="userGenderLabel">
+                                                                        <label class="gender-option" for="userGenderMale">
+                                                                            <input type="radio" id="userGenderMale" name="userGender" value="Male" />
+                                                                            <span>Male</span>
+                                                                        </label>
+                                                                        <label class="gender-option" for="userGenderFemale">
+                                                                            <input type="radio" id="userGenderFemale" name="userGender" value="Female" />
+                                                                            <span>Female</span>
+                                                                        </label>
+                                                                    </div>
                                                                 </div>
                                                             </div>
                                                         </div>
@@ -684,23 +647,656 @@
                     </div>
 
                 </section>
+                <section id="onruf-users" class="section-content">
+                    <div class="sub-apps-nav">
+                        <button class="sub-app-btn active" data-target="onruf-users-individual" data-label="Individual Accounts Management">
+                            <span>Individual Accounts Management</span>
+                        </button>
+                        <button class="sub-app-btn" data-target="onruf-users-business" data-label="Business Accounts Operations">
+                            <span>Business Accounts Operations</span>
+                        </button>
+                        <button class="sub-app-btn" data-target="onruf-users-automation" data-label="Automation Policies">
+                            <span>Automation Policies</span>
+                            <span class="count" id="onrufAutomationCountLabel">#0 Entries</span>
+                        </button>
+                    </div>
+
+                    <div id="onruf-users-individual" class="sub-app active">
+                        <div class="users-header">
+                            <div class="header-stack">
+                                <h2 class="module-title" id="individualAccountsModuleTitle">
+                                    <span id="individualAccountsModuleTitleText">Individual Accounts</span>
+                                    <span class="count-badge" id="individualAccountsCountLabel">#0 Users</span>
+                                </h2>
+                                <div class="detail-controls directory-controls">
+                                    <div class="search-box">
+                                        <i class="fas fa-search"></i>
+                                        <input type="search" id="individualAccountsSearchInput" placeholder="Search by name, email, mobile, or account ID" />
+                                    </div>
+                                    <div class="detail-filters directory-filters">
+                                        <label class="filter-control" for="individualAccountsStatusFilter">Status
+                                            <select id="individualAccountsStatusFilter">
+                                                <option value="all">All</option>
+                                                <option value="active">Active</option>
+                                                <option value="pending">Pending</option>
+                                                <option value="frozen">Frozen</option>
+                                                <option value="suspended">Suspended</option>
+                                                <option value="deleted">Deleted</option>
+                                            </select>
+                                        </label>
+                                        <label class="filter-control" for="individualAccountsCityFilter">City
+                                            <select id="individualAccountsCityFilter">
+                                                <option value="all">All cities</option>
+                                            </select>
+                                        </label>
+                                        <button type="button" class="btn btn-outline" id="individualAccountsResetFiltersBtn">
+                                            <i class="fas fa-rotate-left"></i>
+                                            Reset
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="individual-actions-toolbar" id="individualAccountsToolbar" role="group" aria-label="Individual account actions">
+                            <button type="button" class="btn btn-secondary" id="individualAccountsActionViewBtn" data-action="view" disabled>
+                                <i class="fas fa-eye"></i>
+                                <span>View Details</span>
+                            </button>
+                            <button type="button" class="btn btn-outline" id="individualAccountsActionEditBtn" data-action="edit" disabled>
+                                <i class="fas fa-pen"></i>
+                                <span>Edit Account</span>
+                            </button>
+                            <button type="button" class="btn btn-outline" id="individualAccountsActionBusinessBtn" data-action="view-businesses" disabled>
+                                <i class="fas fa-briefcase"></i>
+                                <span>Business Links</span>
+                            </button>
+                            <button type="button" class="btn btn-secondary" id="individualAccountsActionActivateBtn" data-action="activate" disabled>
+                                <i class="fas fa-circle-check"></i>
+                                <span>Activate</span>
+                            </button>
+                            <button type="button" class="btn btn-outline" id="individualAccountsActionFreezeBtn" data-action="freeze" disabled>
+                                <i class="fas fa-snowflake"></i>
+                                <span>Freeze</span>
+                            </button>
+                            <button type="button" class="btn btn-outline user-action-delete" id="individualAccountsActionDeleteBtn" data-action="delete" disabled>
+                                <i class="fas fa-trash"></i>
+                                <span>Delete</span>
+                            </button>
+                            <button type="button" class="btn btn-outline" id="exportIndividualAccountsBtn">
+                                <i class="fas fa-file-export"></i>
+                                Export
+                            </button>
+                        </div>
+
+                        <div class="onruf-users-grid">
+                            <div class="onruf-users-directory">
+                                <div class="table-shell">
+                                    <table>
+                                        <thead>
+                                            <tr>
+                                                <th>#</th>
+                                                <th>User</th>
+                                                <th>Contact</th>
+                                                <th>Status</th>
+                                                <th>Balance</th>
+                                                <th>Ads</th>
+                                                <th>Created</th>
+                                                <th>Business Accounts</th>
+                                                <th>Last Login</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="individualAccountsTableBody">
+                                            <tr>
+                                                <td colspan="9">Individual marketplace accounts will appear here.</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <div class="pagination" id="individualAccountsPagination"></div>
+                            </div>
+                        </div>
+                        <div id="individualAccountDetailOverlay" class="role-detail-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="individualAccountDetailTitle">
+                            <div class="role-detail-modal" role="document">
+                                <header>
+                                    <div>
+                                        <h3 id="individualAccountDetailTitle">Select an account</h3>
+                                        <p class="section-subtitle" id="individualAccountDetailSubtitle">Choose an individual profile to review balances, ads, and permissions.</p>
+                                    </div>
+                                    <button type="button" class="modal-close-btn" id="individualAccountDetailCloseBtn" aria-label="Close account details">
+                                        <i class="fas fa-xmark"></i>
+                                    </button>
+                                </header>
+                                <div class="role-detail-content individual-account-detail-content">
+                                    <div id="individualAccountQuickActions" class="account-quick-actions" hidden>
+                                        <button type="button" class="btn btn-secondary" id="individualAccountActivateBtn" data-action="activate">
+                                            <i class="fas fa-circle-check"></i>
+                                            Activate
+                                        </button>
+                                        <button type="button" class="btn btn-outline" id="individualAccountFreezeBtn" data-action="freeze">
+                                            <i class="fas fa-snowflake"></i>
+                                            Freeze
+                                        </button>
+                                        <button type="button" class="btn btn-outline" id="individualAccountDeleteBtn" data-action="delete">
+                                            <i class="fas fa-trash"></i>
+                                            Delete
+                                        </button>
+                                    </div>
+                                    <div id="individualAccountDetailBody" class="detail-card-body">
+                                        <p class="empty-state">Account insights, financial history, and support tooling will appear here.</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="individualAccountEditOverlay" class="role-detail-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="individualAccountEditTitle">
+                            <div class="role-detail-modal" role="document">
+                                <header>
+                                    <div>
+                                        <h3 id="individualAccountEditTitle">Edit Individual Account</h3>
+                                        <p class="section-subtitle">Update profile information and internal notes.</p>
+                                    </div>
+                                    <button type="button" class="modal-close-btn" id="individualAccountEditCloseBtn" aria-label="Close edit overlay">
+                                        <i class="fas fa-xmark"></i>
+                                    </button>
+                                </header>
+                                <form id="individualAccountEditForm" class="form-grid" novalidate>
+                                    <div class="form-group">
+                                        <label class="form-label required" for="individualAccountNameInput">Full Name</label>
+                                        <input type="text" class="form-input" id="individualAccountNameInput" placeholder="Full name" required />
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label required" for="individualAccountEmailInput">Email</label>
+                                        <input type="email" class="form-input" id="individualAccountEmailInput" placeholder="user@example.com" required />
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label" for="individualAccountMobileInput">Mobile</label>
+                                        <input type="tel" class="form-input" id="individualAccountMobileInput" placeholder="+9665..." />
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label" for="individualAccountCityInput">City</label>
+                                        <input type="text" class="form-input" id="individualAccountCityInput" placeholder="City" />
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label" for="individualAccountPasswordInput">Assign Temporary Password</label>
+                                        <input type="password" class="form-input" id="individualAccountPasswordInput" placeholder="Leave blank to keep existing" autocomplete="new-password" />
+                                    </div>
+                                    <div class="form-group" style="grid-column: 1 / -1;">
+                                        <label class="form-label" for="individualAccountNotesInput">Internal Notes</label>
+                                        <textarea id="individualAccountNotesInput" class="form-input" placeholder="Document any moderation context or support notes"></textarea>
+                                    </div>
+                                    <div class="form-actions">
+                                        <button type="button" class="btn btn-outline" id="individualAccountEditCancelBtn">
+                                            <i class="fas fa-xmark"></i>
+                                            Cancel
+                                        </button>
+                                        <button type="submit" class="btn btn-primary">
+                                            <i class="fas fa-floppy-disk"></i>
+                                            Save Changes
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                        <div id="individualAccountBusinessOverlay" class="role-detail-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="individualAccountBusinessTitle">
+                            <div class="role-detail-modal" role="document">
+                                <header>
+                                    <div>
+                                        <h3 id="individualAccountBusinessTitle">Linked Business Accounts</h3>
+                                        <p class="section-subtitle" id="individualAccountBusinessSubtitle">Review associated business accounts for this individual.</p>
+                                    </div>
+                                    <button type="button" class="modal-close-btn" id="individualAccountBusinessCloseBtn" aria-label="Close linked business accounts">
+                                        <i class="fas fa-xmark"></i>
+                                    </button>
+                                </header>
+                                <div id="individualAccountBusinessContent" class="role-detail-content">
+                                    <p class="empty-state">No business associations detected for this account.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="onruf-users-business" class="sub-app">
+                        <div class="users-header">
+                            <div class="header-stack">
+                                <h2 class="module-title" id="businessMerchantsModuleTitle">
+                                    <span id="businessMerchantsModuleTitleText">Business Merchants</span>
+                                    <span class="count-badge" id="businessRequestsCountLabel">#0 Pending</span>
+                                </h2>
+                                <div class="search-box">
+                                    <i class="fas fa-search"></i>
+                                    <input type="search" id="businessAccountsSearchInput" placeholder="Search by company, contact, email, or account ID" />
+                                </div>
+                            </div>
+                            <div class="users-actions">
+                                <button type="button" class="btn btn-outline" id="openBusinessAccountsImportBtn">
+                                    <i class="fas fa-file-import"></i>
+                                    Import
+                                </button>
+                                <input type="file" id="businessAccountsImportInput" accept=".csv,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden />
+                                <button type="button" class="btn btn-outline" id="exportBusinessAccountsBtn">
+                                    <i class="fas fa-file-export"></i>
+                                    Export
+                                </button>
+                                <div class="import-status" id="businessAccountsImportStatus" role="status" aria-live="polite"></div>
+                            </div>
+                        </div>
+
+                        <div class="detail-quick-actions">
+                            <div class="quick-action-group">
+                                <span class="section-subtitle">Approval queue</span>
+                                <button type="button" class="btn btn-outline" id="businessAccountsResetFiltersBtn">
+                                    <i class="fas fa-rotate-left"></i>
+                                    Reset Filters
+                                </button>
+                            </div>
+                            <div class="detail-filters">
+                                <span class="filter-label" aria-hidden="true">Filter:</span>
+                                <label class="filter-control" for="businessAccountsStatusFilter">Status
+                                    <select id="businessAccountsStatusFilter">
+                                        <option value="all">All</option>
+                                        <option value="pending">Pending review</option>
+                                        <option value="docs-requested">Documents requested</option>
+                                        <option value="active">Active</option>
+                                        <option value="suspended">Suspended</option>
+                                        <option value="rejected">Rejected</option>
+                                        <option value="cancelled">Cancelled</option>
+                                    </select>
+                                </label>
+                                <label class="filter-control" for="businessAccountsPackageFilter">Package
+                                    <select id="businessAccountsPackageFilter">
+                                        <option value="all">All packages</option>
+                                    </select>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="business-accounts-grid">
+                            <div class="business-accounts-directory">
+                                <div class="table-shell">
+                                    <table>
+                                        <thead>
+                                            <tr>
+                                                <th>#</th>
+                                                <th>Business</th>
+                                                <th>Contact</th>
+                                                <th>Status</th>
+                                                <th>Package</th>
+                                                <th>Submitted</th>
+                                                <th>Invoices</th>
+                                                <th>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="businessAccountsTableBody">
+                                            <tr>
+                                                <td colspan="8">Business onboarding requests will appear here.</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <div class="pagination" id="businessAccountsPagination"></div>
+                            </div>
+
+                            <aside id="businessAccountDetailDrawer" class="form-card business-account-drawer hidden" role="complementary" aria-labelledby="businessAccountDetailTitle">
+                                <header class="detail-card-header">
+                                    <div>
+                                        <h3 id="businessAccountDetailTitle">No business selected</h3>
+                                        <p class="section-subtitle" id="businessAccountDetailSubtitle">Open an application to review requested documents, invoices, and history.</p>
+                                    </div>
+                                    <button type="button" class="modal-close-btn" id="businessAccountDetailCloseBtn" aria-label="Close business summary">
+                                        <i class="fas fa-xmark"></i>
+                                    </button>
+                                </header>
+                                <div id="businessAccountDetailContent" class="detail-card-body">
+                                    <p class="empty-state">Select a merchant to load their onboarding progress.</p>
+                                </div>
+                            </aside>
+                        </div>
+
+                        <div id="businessAccountDecisionOverlay" class="confirm-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="businessAccountDecisionTitle">
+                            <div class="confirm-dialog" role="document">
+                                <h3 id="businessAccountDecisionTitle">Review Account</h3>
+                                <p class="helper-text" id="businessAccountDecisionMessage">Add a note to capture the decision context.</p>
+                                <label class="form-label" for="businessAccountDecisionReasonInput">Decision note</label>
+                                <textarea id="businessAccountDecisionReasonInput" class="form-input" placeholder="Explain the approval, document request, or rejection"></textarea>
+                                <div class="confirm-actions">
+                                    <button type="button" class="btn btn-outline" id="businessAccountDecisionCancelBtn">
+                                        <i class="fas fa-xmark"></i>
+                                        Cancel
+                                    </button>
+                                    <button type="button" class="btn btn-primary" id="businessAccountDecisionConfirmBtn">
+                                        <i class="fas fa-circle-check"></i>
+                                        Confirm
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <section class="business-subscriber-section">
+                            <div class="business-stats-grid" role="group" aria-label="Subscription insights">
+                                <article class="stats-card">
+                                    <span class="stats-label">Total Subscribers</span>
+                                    <strong id="businessSubscribersTotal">0</strong>
+                                    <p class="helper-text" id="businessRenewalNote">Auto-renew enabled for 0 merchants.</p>
+                                </article>
+                                <article class="stats-card">
+                                    <span class="stats-label">Renewal Rate</span>
+                                    <strong id="businessRenewalRate">0%</strong>
+                                    <p class="helper-text" id="businessRevenueDelta">No active subscriptions</p>
+                                </article>
+                                <article class="stats-card">
+                                    <span class="stats-label">Monthly Revenue</span>
+                                    <strong id="businessRevenueTotal">SAR 0.00</strong>
+                                    <p class="helper-text">Recurring totals from active merchants.</p>
+                                </article>
+                                <article class="stats-card">
+                                    <span class="stats-label">Expiring Soon</span>
+                                    <strong id="businessExpiringSoon">0</strong>
+                                    <p class="helper-text" id="businessExpiringNote">All renewals on track.</p>
+                                </article>
+                            </div>
+
+                            <div class="table-shell">
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>Business</th>
+                                            <th>Package</th>
+                                            <th>Start</th>
+                                            <th>End</th>
+                                            <th>Status</th>
+                                            <th>Auto-Renew</th>
+                                            <th>Payment</th>
+                                            <th>Notes</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="businessSubscribersTableBody">
+                                        <tr>
+                                            <td colspan="8">Subscriber insights will appear here.</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </section>
+                    </div>
+
+                    <div id="onruf-users-automation" class="sub-app">
+                        <section class="automation-section" aria-labelledby="productAdsAutomationTitle">
+                            <header>
+                                <h3 id="productAdsAutomationTitle">Automation Lists</h3>
+                                <p class="helper-text">Maintain automation policies for ONRUF marketplace accounts.</p>
+                            </header>
+                            <div class="automation-grid">
+                                <article class="automation-card">
+                                    <div class="automation-card-header">
+                                        <div>
+                                            <h4>Trusted Accounts</h4>
+                                            <p class="helper-text" id="productAdsTrustedCount">0 auto-post</p>
+                                        </div>
+                                        <button type="button" class="btn btn-secondary btn-compact" id="addTrustedAdsBtn">
+                                            <i class="fas fa-user-check"></i>
+                                            Add account
+                                        </button>
+                                    </div>
+                                    <ul class="automation-list" id="productAdsTrustedList">
+                                        <li class="empty-state">No trusted accounts yet.</li>
+                                    </ul>
+                                </article>
+                                <article class="automation-card">
+                                    <div class="automation-card-header">
+                                        <div>
+                                            <h4>Manual Review</h4>
+                                            <p class="helper-text" id="productAdsReviewCount">0 monitored</p>
+                                        </div>
+                                        <button type="button" class="btn btn-secondary btn-compact" id="addManualReviewAdsBtn">
+                                            <i class="fas fa-user-shield"></i>
+                                            Add account
+                                        </button>
+                                    </div>
+                                    <ul class="automation-list" id="productAdsReviewList">
+                                        <li class="empty-state">No accounts require manual review.</li>
+                                    </ul>
+                                </article>
+                                <article class="automation-card">
+                                    <div class="automation-card-header">
+                                        <div>
+                                            <h4>Blacklist</h4>
+                                            <p class="helper-text" id="productAdsBlacklistCount">0 blocked</p>
+                                        </div>
+                                        <button type="button" class="btn btn-secondary btn-compact" id="addBlacklistedAdsBtn">
+                                            <i class="fas fa-user-slash"></i>
+                                            Add account
+                                        </button>
+                                    </div>
+                                    <ul class="automation-list" id="productAdsBlacklist">
+                                        <li class="empty-state">No blocked accounts.</li>
+                                    </ul>
+                                </article>
+                            </div>
+                        </section>
+                    </div>
+                </section>
+                <section id="product-ads" class="section-content">
+                    <div class="users-header">
+                        <div class="header-stack">
+                            <h2 class="module-title" id="productAdsModuleTitle">Product Ads Governance</h2>
+                            <div class="search-box">
+                                <i class="fas fa-search"></i>
+                                <input type="text" id="productAdsSearchInput" placeholder="Search by listing title, ID, account, category, or city" />
+                            </div>
+                        </div>
+                        <div class="users-actions">
+                            <button type="button" class="btn btn-outline" id="openProductAdsImportBtn">
+                                <i class="fas fa-file-import"></i>
+                                Import
+                            </button>
+                            <input type="file" id="productAdsImportInput" accept=".csv,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden />
+                            <button type="button" class="btn btn-outline" id="exportProductAdsBtn">
+                                <i class="fas fa-file-export"></i>
+                                Export
+                            </button>
+                            <div class="import-status" id="productAdsImportStatus" role="status" aria-live="polite"></div>
+                        </div>
+                    </div>
+
+                    <div class="detail-quick-actions product-ads-toolbar">
+                        <div class="quick-action-group">
+                            <span class="section-subtitle" id="productAdsCountLabel">#0 Ads</span>
+                            <button type="button" class="btn btn-outline" id="productAdsResetFiltersBtn">
+                                <i class="fas fa-rotate-left"></i>
+                                Reset Filters
+                            </button>
+                        </div>
+                        <div class="detail-filters">
+                            <span class="filter-label" aria-hidden="true">Filter:</span>
+                            <label class="filter-control" for="productAdsStatusFilter">Status
+                                <select id="productAdsStatusFilter">
+                                    <option value="all">All</option>
+                                </select>
+                            </label>
+                            <label class="filter-control" for="productAdsCategoryFilter">Category
+                                <select id="productAdsCategoryFilter">
+                                    <option value="all">All categories</option>
+                                </select>
+                            </label>
+                            <label class="filter-control" for="productAdsCityFilter">City
+                                <select id="productAdsCityFilter">
+                                    <option value="all">All cities</option>
+                                </select>
+                            </label>
+                            <label class="filter-control" for="productAdsAccountFilter">Account
+                                <select id="productAdsAccountFilter">
+                                    <option value="all">All accounts</option>
+                                </select>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="table-shell">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>#</th>
+                                    <th>Listing</th>
+                                    <th>Category</th>
+                                    <th>City</th>
+                                    <th>Account</th>
+                                    <th>Status</th>
+                                    <th>Views</th>
+                                    <th>Created</th>
+                                    <th>Updated</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="productAdsTableBody">
+                                <tr>
+                                    <td colspan="10">Use the filters above to load product listings.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="pagination" id="productAdsPagination"></div>
+
+                    <div id="productAdHistoryDrawer" class="spec-detail-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="productAdHistoryTitle">
+                        <div class="spec-detail-modal" role="document">
+                            <header>
+                                <div>
+                                    <h3 id="productAdHistoryTitle">Ad History</h3>
+                                    <p class="section-subtitle" id="productAdHistorySubtitle">Review moderation activity for the selected listing.</p>
+                                </div>
+                                <button type="button" class="modal-close-btn" id="productAdHistoryCloseBtn" aria-label="Close history">
+                                    <i class="fas fa-xmark"></i>
+                                </button>
+                            </header>
+                            <div class="spec-detail-content" id="productAdHistoryContent">
+                                <p class="empty-state">Select an ad to review its history.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="productAdDecisionOverlay" class="confirm-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="productAdDecisionTitle">
+                        <div class="confirm-dialog" role="document">
+                            <h3 id="productAdDecisionTitle">Review Listing</h3>
+                            <p class="helper-text" id="productAdDecisionMessage">Provide a reason before updating the listing status.</p>
+                            <label class="form-label" for="productAdDecisionReasonInput">Moderator note</label>
+                            <textarea id="productAdDecisionReasonInput" class="form-input" placeholder="Capture the decision context for the audit trail"></textarea>
+                            <div class="confirm-actions">
+                                <button type="button" class="btn btn-outline" id="productAdDecisionCancelBtn">
+                                    <i class="fas fa-xmark"></i>
+                                    Cancel
+                                </button>
+                                <button type="button" class="btn btn-primary" id="productAdDecisionConfirmBtn">
+                                    <i class="fas fa-circle-check"></i>
+                                    Confirm
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="productAdEditOverlay" class="role-detail-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="productAdEditTitle">
+                        <div class="role-detail-modal" role="document">
+                            <header>
+                                <div>
+                                    <h3 id="productAdEditTitle">Edit Listing</h3>
+                                    <p class="section-subtitle" id="productAdEditSubtitle">Adjust listing details, ownership, and moderation flags.</p>
+                                </div>
+                                <button type="button" class="modal-close-btn" id="productAdEditCancelBtn" aria-label="Close editing panel">
+                                    <i class="fas fa-xmark"></i>
+                                </button>
+                            </header>
+                            <div class="role-detail-content">
+                                <form id="productAdEditForm" class="form-grid" novalidate>
+                                    <div class="form-group">
+                                        <label class="form-label required" for="productAdEditTitleInput">Listing Title</label>
+                                        <input type="text" id="productAdEditTitleInput" class="form-input" placeholder="Enter listing title" required />
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label required" for="productAdEditCategoryInput">Category</label>
+                                        <input type="text" id="productAdEditCategoryInput" class="form-input" placeholder="Enter category" required />
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label required" for="productAdEditCityInput">City</label>
+                                        <input type="text" id="productAdEditCityInput" class="form-input" placeholder="Enter city" required />
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label required" for="productAdEditAccountInput">Account Email</label>
+                                        <input type="email" id="productAdEditAccountInput" class="form-input" placeholder="account@example.com" required />
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label" for="productAdEditStatusSelect">Status</label>
+                                        <select id="productAdEditStatusSelect" class="form-select">
+                                            <option value="pending">Pending Review</option>
+                                            <option value="approved">Approved</option>
+                                            <option value="rejected">Rejected</option>
+                                            <option value="suspended">Suspended</option>
+                                            <option value="draft">Draft</option>
+                                            <option value="expired">Expired</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label" for="productAdEditViewsInput">Views</label>
+                                        <input type="number" id="productAdEditViewsInput" class="form-input" min="0" step="1" placeholder="0" />
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label" for="productAdEditNotesInput">Internal Notes</label>
+                                        <textarea id="productAdEditNotesInput" class="form-input" placeholder="Add moderator notes or context"></textarea>
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label" for="productAdEditAutoPostingToggle">Auto Posting Enabled?</label>
+                                        <label class="toggle-switch">
+                                            <input type="checkbox" id="productAdEditAutoPostingToggle" />
+                                            <span class="toggle-slider"></span>
+                                        </label>
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label" for="productAdEditManualReviewToggle">Force Manual Review?</label>
+                                        <label class="toggle-switch">
+                                            <input type="checkbox" id="productAdEditManualReviewToggle" />
+                                            <span class="toggle-slider"></span>
+                                        </label>
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label" for="productAdEditBlacklistToggle">Blacklist Account?</label>
+                                        <label class="toggle-switch">
+                                            <input type="checkbox" id="productAdEditBlacklistToggle" />
+                                            <span class="toggle-slider"></span>
+                                        </label>
+                                    </div>
+                                    <div class="form-group" style="grid-column: 1 / -1;">
+                                        <div class="modal-actions">
+                                            <button type="button" class="btn btn-outline" id="productAdEditCancelBtnSecondary">
+                                                <i class="fas fa-xmark"></i>
+                                                Cancel
+                                            </button>
+                                            <button type="submit" class="btn btn-primary">
+                                                <i class="fas fa-floppy-disk"></i>
+                                                Save Changes
+                                            </button>
+                                        </div>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
                 <section id="categories" class="section-content">
                     <!-- section-header removed: title and subtitle deleted as requested -->
                     <div class="sub-apps-nav">
-                        <button class="sub-app-btn active" data-target="categories-app1" data-label="Category Management">
-                            <span>Category Management</span>
-                            <span class="count" id="categoryCountLabel">#0 Categories</span>
+                        <button class="sub-app-btn active" data-target="categories-app1" data-label="Categories Management">
+                            <span>Categories Management</span>
                         </button>
                         <button class="sub-app-btn" data-target="categories-app2" data-label="Specifications Management">
                             <span>Specifications Management</span>
-                            <span class="count" id="specificationCountLabel">#0 Specifications</span>
                         </button>
                     </div>
 
                     <div id="categories-app1" class="sub-app active">
                         <div class="roles-header">
                             <div class="header-stack">
-                                <h2 class="module-title" id="categoryModuleTitle">Categories</h2>
+                                <h2 class="module-title" id="categoryModuleTitle">
+                                    <span id="categoryModuleTitleText">Categories</span>
+                                    <span class="count-badge" id="categoryCountLabel">#0 Categories</span>
+                                </h2>
                             </div>
                             <div class="roles-actions">
                                 <button class="btn btn-primary" id="newCategoryBtn">
@@ -753,10 +1349,9 @@
                                     <div class="detail-controls">
                                         <div class="detail-search">
                                             <i class="fas fa-search"></i>
-                                            <input type="text" id="categoryDetailSearchInput" placeholder="Search by Category Name, Category Code, or Description" aria-label="Filter categories" />
+                                            <input type="text" id="categoryDetailSearchInput" placeholder="Search by Category Name, Code, or Description" aria-label="Filter categories" />
                                         </div>
                                         <div class="detail-filters">
-                                            <span class="filter-label" aria-hidden="true">Filter:</span>
                                             <label class="filter-control" for="categoryStatusFilter">Status
                                                 <select id="categoryStatusFilter">
                                                     <option value="all">All</option>
@@ -787,6 +1382,10 @@
                                         <button type="button" class="btn btn-outline" id="categoryBulkActivateBtn" disabled>
                                             <i class="fas fa-rotate-right"></i>
                                             Activate
+                                        </button>
+                                        <button type="button" class="btn btn-outline" id="categoryResetBtn" title="Reset filters and search">
+                                            <i class="fas fa-rotate-left"></i>
+                                            Reset
                                         </button>
                                         <button type="button" class="btn btn-outline" id="categoryDeleteAllBtn">
                                             <i class="fas fa-trash"></i>
@@ -1134,14 +1733,62 @@
                         <div id="specificationNotificationArea" class="notification-area"></div>
                         <div class="users-header" id="specificationHeader">
                             <div class="header-stack">
-                                <h2 class="module-title" id="specificationModuleTitle">Specifications</h2>
-                                <div class="search-box" id="specificationSearchContainer">
-                                    <i class="fas fa-search"></i>
-                                    <input type="text" id="specificationSearch" placeholder="Search by Category Name, Description, or Code" />
+                                <h2 class="module-title" id="specificationModuleTitle">
+                                    <span id="specificationModuleTitleText">Specifications</span>
+                                    <span class="count-badge" id="specificationCountLabel">#0 Specifications</span>
+                                </h2>
+                                <div class="specification-header-controls">
+                                    <div class="search-box" id="specificationSearchContainer">
+                                        <i class="fas fa-search"></i>
+                                        <input type="text" id="specificationSearch" placeholder="Search by Category Name, Code, or Description" />
+                                    </div>
+                                    <div class="detail-filters specification-filters" id="specificationFiltersContainer">
+                                        <label class="filter-control" for="specificationStatusFilter">Status
+                                            <select id="specificationStatusFilter">
+                                                <option value="all">All</option>
+                                            </select>
+                                        </label>
+                                        <label class="filter-control" for="specificationDataTypeFilter">Data Type
+                                            <select id="specificationDataTypeFilter">
+                                                <option value="all">All</option>
+                                            </select>
+                                        </label>
+                                        <label class="filter-control" for="specificationRequirementFilter">Requirement
+                                            <select id="specificationRequirementFilter">
+                                                <option value="all">All</option>
+                                                <option value="required">Required</option>
+                                                <option value="optional">Optional</option>
+                                            </select>
+                                        </label>
+                                    </div>
                                 </div>
                             </div>
-                            <div class="users-actions" id="specificationActions">
-                                <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:center;">
+                        </div>
+                        <div id="specificationsListView">
+                            <div class="specification-bulk-actions" id="specificationBulkActions">
+                                <div class="specification-action-group">
+                                    <button type="button" class="btn btn-outline specification-action-btn specification-action-edit" id="specificationEditBtn" disabled>
+                                        <i class="fas fa-pen"></i>
+                                        Modify
+                                    </button>
+                                    <button type="button" class="btn btn-outline specification-action-btn specification-action-activate" id="specificationActivateBtn" disabled>
+                                        <i class="fas fa-rotate-right"></i>
+                                        Activate
+                                    </button>
+                                    <button type="button" class="btn btn-outline specification-action-btn specification-action-deactivate" id="specificationDeactivateBtn" disabled>
+                                        <i class="fas fa-power-off"></i>
+                                        Deactivate
+                                    </button>
+                                    <button type="button" class="btn btn-outline" id="specificationResetBtn" title="Reset filters and search">
+                                        <i class="fas fa-rotate-left"></i>
+                                        Reset
+                                    </button>
+                                    <button type="button" class="btn btn-outline" id="specificationDeleteAllBtn">
+                                        <i class="fas fa-trash"></i>
+                                        Delete All
+                                    </button>
+                                </div>
+                                <div class="specification-action-group specification-action-group-secondary" id="specificationActions">
                                     <button class="btn btn-primary" id="addSpecificationBtn">
                                         <i class="fas fa-file-circle-plus"></i>
                                         Add Specification
@@ -1156,14 +1803,6 @@
                                     </button>
                                 </div>
                             </div>
-                        </div>
-                        <div id="specificationsListView">
-                            <div class="table-actions" style="display:flex; align-items:center; justify-content:flex-start; gap:12px; flex-wrap:wrap; margin-bottom:18px;">
-                                <button type="button" class="btn btn-outline" id="specificationDeleteAllBtn" /*style="display:none;"*/>
-                                    <i class="fas fa-trash"></i>
-                                    Delete All
-                                </button>
-                            </div>
                             <div class="table-shell">
                                 <table>
                                     <thead>
@@ -1172,18 +1811,17 @@
                                             <th>Code</th>
                                             <th>Specification</th>
                                             <th>Description</th>
-                                            <th>Type</th>
-                                            <th>Required?</th>
-                                            <th>Categories</th>
+                                            <th>Data Type</th>
                                             <th>Sub-Specifications</th>
+                                            <th>Categories</th>
                                             <th>Status</th>
                                             <th>Created</th>
-                                            <th>Actions</th>
                                         </tr>
                                     </thead>
                                     <tbody id="specificationsTableBody"></tbody>
                                 </table>
                             </div>
+                            <div class="pagination" id="specificationsPagination"></div>
                         </div>
 
                         <div id="specificationImportOverlay" class="confirm-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="specificationImportTitle" aria-hidden="true">
@@ -1372,1396 +2010,8 @@
                     </div>
                 </section>
 
-                <section id="settings" class="section-content">
-                    <div class="section-header">
-                        <h1 class="section-title">Platform Settings</h1>
-                        <p class="section-subtitle">Configure tenancy defaults, security controls, and system automations.</p>
-                    </div>
-                    <div class="sub-apps-nav">
-                        <button class="sub-app-btn active" data-target="settings-app1" data-label="App 1">
-                            <span>App 1</span>
-                            <span>Configuration</span>
-                        </button>
-                        <button class="sub-app-btn" data-target="settings-app2" data-label="App 2">
-                            <span>App 2</span>
-                            <span>Integrations</span>
-                        </button>
-                    </div>
 
-                    <div id="settings-app1" class="sub-app active">
-                        <div class="form-grid">
-                            <div class="form-card">
-                                <h3 style="margin:0;">General</h3>
-                                <div class="form-group">
-                                    <label class="form-label" for="platformName">Platform Name</label>
-                                    <input type="text" class="form-input" id="platformName" value="OnRuf Platform" />
-                                </div>
-                                <div class="form-group">
-                                    <label class="form-label" for="supportEmail">Support Email</label>
-                                    <input type="email" class="form-input" id="supportEmail" value="support@onruf.com" />
-                                </div>
-                                <div class="form-group">
-                                    <label class="form-label" for="maintenanceMode">Maintenance Mode</label>
-                                    <label class="toggle-switch">
-                                        <input type="checkbox" id="maintenanceMode">
-                                        <span class="toggle-slider"></span>
-                                    </label>
-                                </div>
-                            </div>
-                            <div class="form-card">
-                                <h3 style="margin:0;">Security</h3>
-                                <div class="form-group">
-                                    <label class="form-label" for="sessionTimeout">Session Timeout (minutes)</label>
-                                    <input type="number" class="form-input" id="sessionTimeout" value="60" min="15" />
-                                </div>
-                                <div class="form-group">
-                                    <label class="form-label">Two-Factor Authentication</label>
-                                    <label class="toggle-switch">
-                                        <input type="checkbox" id="twoFactorAuth" checked>
-                                        <span class="toggle-slider"></span>
-                                    </label>
-                                </div>
-                                <div class="form-group">
-                                    <label class="form-label" for="passwordPolicy">Password Policy</label>
-                                    <select id="passwordPolicy" class="form-select">
-                                        <option value="basic">Basic</option>
-                                        <option value="medium" selected>Medium</option>
-                                        <option value="strong">Strong</option>
-                                    </select>
-                                </div>
-                            </div>
-                            <div class="form-card">
-                                <h3 style="margin:0;">Notifications</h3>
-                                <div class="form-group">
-                                    <label class="form-label">Email Alerts</label>
-                                    <label class="toggle-switch">
-                                        <input type="checkbox" id="emailNotifications" checked>
-                                        <span class="toggle-slider"></span>
-                                    </label>
-                                </div>
-                                <div class="form-group">
-                                    <label class="form-label">SMS Alerts</label>
-                                    <label class="toggle-switch">
-                                        <input type="checkbox" id="smsNotifications">
-                                        <span class="toggle-slider"></span>
-                                    </label>
-                                </div>
-                                <div class="form-group">
-                                    <label class="form-label">Push Notifications</label>
-                                    <label class="toggle-switch">
-                                        <input type="checkbox" id="pushNotifications" checked>
-                                        <span class="toggle-slider"></span>
-                                    </label>
-                                </div>
-                            </div>
-                            <div class="form-card">
-                                <h3 style="margin:0;">API & Access</h3>
-                                <div class="form-group">
-                                    <label class="form-label" for="apiRateLimit">API Rate Limit (req/min)</label>
-                                    <input type="number" class="form-input" id="apiRateLimit" value="1000" min="100" />
-                                </div>
-                                <div class="form-group">
-                                    <label class="form-label" for="apiExpiration">API Key Expiration (days)</label>
-                                    <input type="number" class="form-input" id="apiExpiration" value="365" min="30" />
-                                </div>
-                                <div class="form-group">
-                                    <label class="form-label">CORS Enabled</label>
-                                    <label class="toggle-switch">
-                                        <input type="checkbox" id="corsEnabled" checked>
-                                        <span class="toggle-slider"></span>
-                                    </label>
-                                </div>
-                            </div>
-                        </div>
-                        <div style="margin-top: 24px; display:flex; justify-content:flex-end;">
-                            <button class="btn btn-primary" id="saveSettingsBtn">
-                                <i class="fas fa-save"></i>
-                                Save Changes
-                            </button>
-                        </div>
-                    </div>
 
-                    <div id="settings-app2" class="sub-app">
-                        <div class="integration-grid">
-                            <div class="integration-card">
-                                <div class="integration-header">
-                                    <h3 class="integration-name">Elm Inspection Sync</h3>
-                                    <span class="integration-status active">Connected</span>
-                                </div>
-                                <p class="integration-description">Synchronise inspection assignments, violation outcomes, and compliance statuses with Elm systems.</p>
-                                <ul class="integration-list">
-                                    <li><i class="fas fa-check-circle"></i> Real-time task dispatch</li>
-                                    <li><i class="fas fa-check-circle"></i> Evidence archiving every 15 minutes</li>
-                                    <li><i class="fas fa-check-circle"></i> Automatic status reconciliation</li>
-                                </ul>
-                                <div class="integration-footer">
-                                    <button type="button" onclick="manageIntegration('elm-inspection')">
-                                        <i class="fas fa-sliders-h"></i>
-                                        Manage
-                                    </button>
-                                </div>
-                            </div>
-                            <div class="integration-card">
-                                <div class="integration-header">
-                                    <h3 class="integration-name">Municipality Services</h3>
-                                    <span class="integration-status pending">Pending</span>
-                                </div>
-                                <p class="integration-description">Push inspection certificates, violation escalations, and payment updates into municipal service backbones.</p>
-                                <ul class="integration-list">
-                                    <li><i class="fas fa-circle-notch"></i> Data residency review</li>
-                                    <li><i class="fas fa-circle-notch"></i> Pilot with Riyadh municipality</li>
-                                    <li><i class="fas fa-circle-notch"></i> Weekly interoperability meetings</li>
-                                </ul>
-                                <div class="integration-footer">
-                                    <button type="button" onclick="viewIntegrationRoadmap()">
-                                        <i class="fas fa-road"></i>
-                                        View Roadmap
-                                    </button>
-                                </div>
-                            </div>
-                            <div class="integration-card">
-                                <div class="integration-header">
-                                    <h3 class="integration-name">Financial Clearing</h3>
-                                    <span class="integration-status draft">Draft</span>
-                                </div>
-                                <p class="integration-description">Automate settlement of inspection fees, invoicing, and refunds through certified financial gateways.</p>
-                                <ul class="integration-list">
-                                    <li><i class="fas fa-circle-notch"></i> STCPay certification</li>
-                                    <li><i class="fas fa-circle-notch"></i> Settlement rule simulation</li>
-                                    <li><i class="fas fa-circle-notch"></i> Daily reconciliation exports</li>
-                                </ul>
-                                <div class="integration-footer">
-                                    <button type="button" onclick="scheduleIntegrationWorkshop()">
-                                        <i class="fas fa-calendar-check"></i>
-                                        Schedule Workshop
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </section>
-
-                <section id="reports" class="section-content">
-                    <div class="section-header">
-                        <h1 class="section-title">Reports & Intelligence</h1>
-                        <p class="section-subtitle">Deliver actionable analytics across inspections, finances, and customer sentiment.</p>
-                    </div>
-                    <div class="sub-apps-nav">
-                        <button class="sub-app-btn active" data-target="reports-app1" data-label="App 1">
-                            <span>App 1</span>
-                            <span>Executive Reports</span>
-                        </button>
-                        <button class="sub-app-btn" data-target="reports-app2" data-label="App 2">
-                            <span>App 2</span>
-                            <span>Compliance Library</span>
-                        </button>
-                        <button class="sub-app-btn" data-target="reports-app3" data-label="App 3">
-                            <span>App 3</span>
-                            <span>Distribution Schedules</span>
-                        </button>
-                    </div>
-
-                    <div id="reports-app1" class="sub-app active">
-                        <div class="report-summary-grid">
-                            <div class="report-card">
-                                <div class="report-card-header">
-                                    <span>Inspection Coverage</span>
-                                    <i class="fas fa-clipboard-check"></i>
-                                </div>
-                                <div class="report-card-value">96.2%</div>
-                                <div class="report-card-trend positive">
-                                    <i class="fas fa-arrow-trend-up"></i> +2.4% vs last quarter
-                                </div>
-                            </div>
-                            <div class="report-card">
-                                <div class="report-card-header">
-                                    <span>Revenue Impact</span>
-                                    <i class="fas fa-sack-dollar"></i>
-                                </div>
-                                <div class="report-card-value">SAR 4.8M</div>
-                                <div class="report-card-trend positive">
-                                    <i class="fas fa-arrow-trend-up"></i> +11.3% YoY
-                                </div>
-                            </div>
-                            <div class="report-card">
-                                <div class="report-card-header">
-                                    <span>Customer Satisfaction</span>
-                                    <i class="fas fa-face-smile"></i>
-                                </div>
-                                <div class="report-card-value">4.6 / 5</div>
-                                <div class="report-card-trend neutral">
-                                    <i class="fas fa-minus"></i> Stable vs last month
-                                </div>
-                            </div>
-                            <div class="report-card">
-                                <div class="report-card-header">
-                                    <span>Violation Recovery</span>
-                                    <i class="fas fa-scale-balanced"></i>
-                                </div>
-                                <div class="report-card-value">SAR 820K</div>
-                                <div class="report-card-trend positive">
-                                    <i class="fas fa-arrow-trend-up"></i> +7.8% QoQ
-                                </div>
-                            </div>
-                        </div>
-                        <div class="table-shell" style="margin-top:24px;">
-                            <table>
-                                <thead>
-                                    <tr>
-                                        <th>Report Name</th>
-                                        <th>Scope</th>
-                                        <th>Frequency</th>
-                                        <th>Owner</th>
-                                        <th>Last Refresh</th>
-                                        <th>Status</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr>
-                                        <td>Executive Inspection Pulse</td>
-                                        <td>Nationwide</td>
-                                        <td>Weekly</td>
-                                        <td>Strategy Office</td>
-                                        <td>Today 06:10</td>
-                                        <td><span class="status-badge status-active">Active</span></td>
-                                    </tr>
-                                    <tr>
-                                        <td>Financial Performance Digest</td>
-                                        <td>Top 20 Accounts</td>
-                                        <td>Monthly</td>
-                                        <td>Finance Bureau</td>
-                                        <td>Sep 25</td>
-                                        <td><span class="status-badge status-active">Active</span></td>
-                                    </tr>
-                                    <tr>
-                                        <td>Violation Heatmap Insights</td>
-                                        <td>Western Region</td>
-                                        <td>Weekly</td>
-                                        <td>Compliance Unit</td>
-                                        <td>Sep 27</td>
-                                        <td><span class="status-badge status-active">Active</span></td>
-                                    </tr>
-                                    <tr>
-                                        <td>Customer Sentiment Tracker</td>
-                                        <td>Digital Channels</td>
-                                        <td>Daily</td>
-                                        <td>Experience Lab</td>
-                                        <td>Today 04:20</td>
-                                        <td><span class="status-badge status-active">Active</span></td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-
-                    <div id="reports-app2" class="sub-app">
-                        <div class="compliance-library">
-                            <div class="compliance-card">
-                                <div class="compliance-header">
-                                    <h3>Food Safety Compliance Pack</h3>
-                                    <span class="status-badge status-active">Current</span>
-                                </div>
-                                <p>All reports required by Food & Drug Authority audits including violations, remediation workflows, and photographic evidence.</p>
-                                <ul class="compliance-items">
-                                    <li><i class="fas fa-file-pdf"></i> Daily Inspection Summary</li>
-                                    <li><i class="fas fa-file-alt"></i> Corrective Action Register</li>
-                                    <li><i class="fas fa-image"></i> Evidence Attachment Pack</li>
-                                </ul>
-                                <div class="compliance-footer">
-                                    <button class="btn btn-outline" type="button">Download Bundle</button>
-                                    <button class="btn btn-primary" type="button">Start Audit Mode</button>
-                                </div>
-                            </div>
-                            <div class="compliance-card">
-                                <div class="compliance-header">
-                                    <h3>Environmental Compliance Suite</h3>
-                                    <span class="status-badge status-pending">Updating</span>
-                                </div>
-                                <p>Emission monitoring, waste management, and sustainability maturity dashboards compiled for green compliance reviews.</p>
-                                <ul class="compliance-items">
-                                    <li><i class="fas fa-chart-area"></i> Emission Footprint Trend</li>
-                                    <li><i class="fas fa-recycle"></i> Recycling Performance Ledger</li>
-                                    <li><i class="fas fa-leaf"></i> Sustainability Scorecard</li>
-                                </ul>
-                                <div class="compliance-footer">
-                                    <button class="btn btn-outline" type="button">Preview Pack</button>
-                                    <button class="btn btn-primary" type="button">Notify Stakeholders</button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div id="reports-app3" class="sub-app">
-                        <div class="distribution-schedule">
-                            <div class="schedule-card">
-                                <div class="schedule-header">
-                                    <div>
-                                        <h3>Executive Board Digest</h3>
-                                        <span class="schedule-meta">Email + Teams Channel</span>
-                                    </div>
-                                    <span class="schedule-frequency">Every Monday 08:00</span>
-                                </div>
-                                <div class="schedule-body">
-                                    <div>
-                                        <strong>Recipients</strong>
-                                        <p>12 stakeholders</p>
-                                    </div>
-                                    <div>
-                                        <strong>Included Reports</strong>
-                                        <p>Executive Pulse, Revenue Digest, SLA Tracker</p>
-                                    </div>
-                                    <div>
-                                        <strong>Last Sent</strong>
-                                        <p>Sep 29, 2025</p>
-                                    </div>
-                                </div>
-                                <div class="schedule-actions">
-                                    <button class="btn btn-outline" type="button">Pause</button>
-                                    <button class="btn btn-primary" type="button">Send Now</button>
-                                </div>
-                            </div>
-                            <div class="schedule-card">
-                                <div class="schedule-header">
-                                    <div>
-                                        <h3>Municipality Compliance Bundle</h3>
-                                        <span class="schedule-meta">Secure SFTP</span>
-                                    </div>
-                                    <span class="schedule-frequency">1st business day monthly</span>
-                                </div>
-                                <div class="schedule-body">
-                                    <div>
-                                        <strong>Recipients</strong>
-                                        <p>4 municipal offices</p>
-                                    </div>
-                                    <div>
-                                        <strong>Included Reports</strong>
-                                        <p>Environmental Suite, Violation Ledger</p>
-                                    </div>
-                                    <div>
-                                        <strong>Last Sent</strong>
-                                        <p>Sep 02, 2025</p>
-                                    </div>
-                                </div>
-                                <div class="schedule-actions">
-                                    <button class="btn btn-outline" type="button">Edit Recipients</button>
-                                    <button class="btn btn-primary" type="button">Generate Preview</button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </section>
-
-                <section id="diagrams" class="section-content">
-                    <div class="section-header">
-                        <h1 class="section-title">Architecture Diagrams</h1>
-                        <p class="section-subtitle">Centralize platform blueprints, interaction models, and operating flows for quick stakeholder alignment.</p>
-                    </div>
-                    <div class="sub-apps-nav">
-                        <button class="sub-app-btn active" data-target="diagrams-component" data-label="Component Diagrams">
-                            <span>Component Diagrams</span>
-                            <span>Service Inventory</span>
-                        </button>
-                        <button class="sub-app-btn" data-target="diagrams-package" data-label="Package Diagrams">
-                            <span>Package Diagrams</span>
-                            <span>Delivery Bundles</span>
-                        </button>
-                        <button class="sub-app-btn" data-target="diagrams-usecase" data-label="Use Case Diagrams">
-                            <span>Use Case Diagrams</span>
-                            <span>Stakeholder Journeys</span>
-                        </button>
-                        <button class="sub-app-btn" data-target="diagrams-activity" data-label="Activity Diagrams">
-                            <span>Activity Diagrams</span>
-                            <span>Process Orchestration</span>
-                        </button>
-                        <button class="sub-app-btn" data-target="diagrams-interaction" data-label="Interaction Overview">
-                            <span>Interaction Overview</span>
-                            <span>Cross-Team Plays</span>
-                        </button>
-                        <button class="sub-app-btn" data-target="diagrams-communication" data-label="Communication Diagrams">
-                            <span>Communication Diagrams</span>
-                            <span>Signal Exchange</span>
-                        </button>
-                    </div>
-
-                    <div id="diagrams-component" class="sub-app active">
-                        <div class="diagram-intro">
-                            <p>Map every core service, microservice, and shared utility to clarify ownership, dependencies, and deployment scope. Use these component snapshots to accelerate onboarding and reduce integration ambiguity.</p>
-                        </div>
-                        <div class="diagram-grid">
-                            <article class="diagram-card">
-                                <header class="diagram-card-header">
-                                    <div>
-                                        <h3>Central Services Mesh</h3>
-                                        <p>Shows orchestration between authentication, workflow, notification, and analytics engines.</p>
-                                    </div>
-                                    <span class="diagram-tag">Current</span>
-                                </header>
-                                <div class="diagram-preview" role="img" aria-label="Component diagram placeholder for central services">
-                                    <div class="diagram-preview-placeholder">
-                                        <i class="fas fa-project-diagram" aria-hidden="true"></i>
-                                        <span>Core Components</span>
-                                    </div>
-                                </div>
-                                <dl class="diagram-metadata">
-                                    <div>
-                                        <dt>Owner</dt>
-                                        <dd>Platform Engineering</dd>
-                                    </div>
-                                    <div>
-                                        <dt>Last Review</dt>
-                                        <dd>Sep 2025</dd>
-                                    </div>
-                                    <div>
-                                        <dt>Format</dt>
-                                        <dd>Visio · PDF</dd>
-                                    </div>
-                                </dl>
-                            </article>
-                            <article class="diagram-card">
-                                <header class="diagram-card-header">
-                                    <div>
-                                        <h3>Field Operations Edge</h3>
-                                        <p>Details mobile inspector tooling, offline sync agents, and telemetry ingestion services.</p>
-                                    </div>
-                                    <span class="diagram-tag status-in-progress">Draft</span>
-                                </header>
-                                <div class="diagram-preview" role="img" aria-label="Component diagram placeholder for field operations edge">
-                                    <div class="diagram-preview-placeholder">
-                                        <i class="fas fa-tablet-screen-button" aria-hidden="true"></i>
-                                        <span>Edge Modules</span>
-                                    </div>
-                                </div>
-                                <ul class="diagram-highlights">
-                                    <li>Offline-first sync contracts</li>
-                                    <li>Geo-fencing & dispatch integration</li>
-                                    <li>Escalation channels to command center</li>
-                                </ul>
-                                <div class="diagram-card-footer">
-                                    <button class="btn btn-outline" type="button">Request SME Review</button>
-                                    <button class="btn btn-primary" type="button">Open Workspace</button>
-                                </div>
-                            </article>
-                        </div>
-                    </div>
-
-                    <div id="diagrams-package" class="sub-app">
-                        <div class="diagram-intro">
-                            <p>Connect business capabilities to delivery bundles so finance, product, and operations teams can coordinate release roadmaps and contract structures.</p>
-                        </div>
-                        <div class="diagram-grid">
-                            <article class="diagram-card">
-                                <header class="diagram-card-header">
-                                    <div>
-                                        <h3>Inspection Services Package</h3>
-                                        <p>Bundled modules for scheduling, crew routing, compliance validation, and invoicing.</p>
-                                    </div>
-                                    <span class="diagram-tag">Ready</span>
-                                </header>
-                                <div class="diagram-preview" role="img" aria-label="Package diagram placeholder for inspection services">
-                                    <div class="diagram-preview-placeholder">
-                                        <i class="fas fa-boxes-stacked" aria-hidden="true"></i>
-                                        <span>Package Layers</span>
-                                    </div>
-                                </div>
-                                <dl class="diagram-metadata">
-                                    <div>
-                                        <dt>Primary Owner</dt>
-                                        <dd>Service Design Office</dd>
-                                    </div>
-                                    <div>
-                                        <dt>Renewal Cycle</dt>
-                                        <dd>Bi-Annual</dd>
-                                    </div>
-                                    <div>
-                                        <dt>Artifact</dt>
-                                        <dd>Archimate · PPT</dd>
-                                    </div>
-                                </dl>
-                            </article>
-                            <article class="diagram-card">
-                                <header class="diagram-card-header">
-                                    <div>
-                                        <h3>Marketplace Growth Package</h3>
-                                        <p>Marketing automation, seller enablement, and partner analytics delivered as one stack.</p>
-                                    </div>
-                                </header>
-                                <div class="diagram-preview" role="img" aria-label="Package diagram placeholder for marketplace growth">
-                                    <div class="diagram-preview-placeholder">
-                                        <i class="fas fa-layer-group" aria-hidden="true"></i>
-                                        <span>Growth Modules</span>
-                                    </div>
-                                </div>
-                                <ul class="diagram-highlights">
-                                    <li>Campaign studio + recommendation engine</li>
-                                    <li>Seller onboarding and scoring bundle</li>
-                                    <li>Partner revenue dashboards</li>
-                                </ul>
-                                <div class="diagram-card-footer">
-                                    <button class="btn btn-outline" type="button">Share With Sales</button>
-                                    <button class="btn btn-primary" type="button">Download Assets</button>
-                                </div>
-                            </article>
-                        </div>
-                    </div>
-
-                    <div id="diagrams-usecase" class="sub-app">
-                        <div class="diagram-intro">
-                            <p>Clarify the objectives and participating actors for every strategic workflow. These diagrams keep product, policy, and technology teams aligned on expected value delivery.</p>
-                        </div>
-                        <div class="diagram-grid">
-                            <article class="diagram-card">
-                                <header class="diagram-card-header">
-                                    <div>
-                                        <h3>Rapid Inspection Response</h3>
-                                        <p>Captures municipality, inspector, command center, and citizen touchpoints.</p>
-                                    </div>
-                                    <span class="diagram-tag">Featured</span>
-                                </header>
-                                <div class="diagram-preview" role="img" aria-label="Use case diagram placeholder for rapid inspection">
-                                    <div class="diagram-preview-placeholder">
-                                        <i class="fas fa-person-running" aria-hidden="true"></i>
-                                        <span>Scenario Actors</span>
-                                    </div>
-                                </div>
-                                <ul class="diagram-highlights">
-                                    <li>Incident intake and prioritisation</li>
-                                    <li>Automated route assignment</li>
-                                    <li>Outcome confirmation loop</li>
-                                </ul>
-                            </article>
-                            <article class="diagram-card">
-                                <header class="diagram-card-header">
-                                    <div>
-                                        <h3>Seller Onboarding Journey</h3>
-                                        <p>Illustrates collaboration between seller, compliance reviewer, and marketplace admin.</p>
-                                    </div>
-                                </header>
-                                <div class="diagram-preview" role="img" aria-label="Use case diagram placeholder for seller onboarding">
-                                    <div class="diagram-preview-placeholder">
-                                        <i class="fas fa-user-check" aria-hidden="true"></i>
-                                        <span>Engagement Model</span>
-                                    </div>
-                                </div>
-                                <dl class="diagram-metadata">
-                                    <div>
-                                        <dt>Owner</dt>
-                                        <dd>Customer Success</dd>
-                                    </div>
-                                    <div>
-                                        <dt>Last Workshop</dt>
-                                        <dd>Aug 2025</dd>
-                                    </div>
-                                    <div>
-                                        <dt>KPIs</dt>
-                                        <dd>Activation SLA · NPS</dd>
-                                    </div>
-                                </dl>
-                            </article>
-                        </div>
-                    </div>
-
-                    <div id="diagrams-activity" class="sub-app">
-                        <div class="diagram-intro">
-                            <p>Outline the end-to-end process choreography so teams can coordinate hand-offs, service levels, and automation triggers.</p>
-                        </div>
-                        <div class="diagram-timeline">
-                            <div class="timeline-entry">
-                                <div class="timeline-point"></div>
-                                <div class="timeline-content">
-                                    <h4>Inspection Lifecycle Flow</h4>
-                                    <p>From request submission through assignment, field execution, quality assurance, and billing.</p>
-                                    <span class="timeline-meta">Owner: Operations Control · SLA: 48 hours</span>
-                                </div>
-                            </div>
-                            <div class="timeline-entry">
-                                <div class="timeline-point"></div>
-                                <div class="timeline-content">
-                                    <h4>Marketplace Dispute Resolution</h4>
-                                    <p>Highlights automated triage, agent investigation, and merchant remediation steps.</p>
-                                    <span class="timeline-meta">Owner: Trust & Safety · SLA: 72 hours</span>
-                                </div>
-                            </div>
-                            <div class="timeline-entry">
-                                <div class="timeline-point"></div>
-                                <div class="timeline-content">
-                                    <h4>Invoice Reconciliation Loop</h4>
-                                    <p>Accounts receivable activities, exception management, and reporting checkpoints.</p>
-                                    <span class="timeline-meta">Owner: Finance Ops · SLA: 5 days</span>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="diagram-card-footer diagram-action-bar">
-                            <button class="btn btn-outline" type="button">Export BPMN</button>
-                            <button class="btn btn-primary" type="button">Launch RPA Assessment</button>
-                        </div>
-                    </div>
-
-                    <div id="diagrams-interaction" class="sub-app">
-                        <div class="diagram-intro">
-                            <p>Illustrate cross-team handshakes for priority programs so leaders can monitor readiness, escalation points, and contingency plays.</p>
-                        </div>
-                        <div class="diagram-grid">
-                            <article class="diagram-card">
-                                <header class="diagram-card-header">
-                                    <div>
-                                        <h3>Emergency Response Play</h3>
-                                        <p>Links municipalities, command center, field teams, and analytics for rapid situational awareness.</p>
-                                    </div>
-                                    <span class="diagram-tag">Operational</span>
-                                </header>
-                                <div class="diagram-preview" role="img" aria-label="Interaction overview placeholder for emergency response">
-                                    <div class="diagram-preview-placeholder">
-                                        <i class="fas fa-wave-square" aria-hidden="true"></i>
-                                        <span>Coordination Flow</span>
-                                    </div>
-                                </div>
-                                <ul class="diagram-highlights">
-                                    <li>Notification fan-out in under 5 minutes</li>
-                                    <li>Cross-agency command cadence</li>
-                                    <li>After-action insight loop</li>
-                                </ul>
-                            </article>
-                            <article class="diagram-card">
-                                <header class="diagram-card-header">
-                                    <div>
-                                        <h3>Vendor Escalation Path</h3>
-                                        <p>Shows how procurement, legal, and service owners coordinate on contract breaches.</p>
-                                    </div>
-                                </header>
-                                <div class="diagram-preview" role="img" aria-label="Interaction overview placeholder for vendor escalation">
-                                    <div class="diagram-preview-placeholder">
-                                        <i class="fas fa-sitemap" aria-hidden="true"></i>
-                                        <span>Escalation Map</span>
-                                    </div>
-                                </div>
-                                <dl class="diagram-metadata">
-                                    <div>
-                                        <dt>Owner</dt>
-                                        <dd>Procurement Office</dd>
-                                    </div>
-                                    <div>
-                                        <dt>Trigger Threshold</dt>
-                                        <dd>3 SLA misses</dd>
-                                    </div>
-                                    <div>
-                                        <dt>Contact Matrix</dt>
-                                        <dd>Updated monthly</dd>
-                                    </div>
-                                </dl>
-                            </article>
-                        </div>
-                    </div>
-
-                    <div id="diagrams-communication" class="sub-app">
-                        <div class="diagram-intro">
-                            <p>Document system-to-system message exchanges so integration teams can validate payload design, latency expectations, and retry strategies.</p>
-                        </div>
-                        <div class="diagram-grid">
-                            <article class="diagram-card">
-                                <header class="diagram-card-header">
-                                    <div>
-                                        <h3>Inspection Data Sync</h3>
-                                        <p>Sequence of events between mobile app, event bus, analytics lake, and compliance archive.</p>
-                                    </div>
-                                    <span class="diagram-tag">Stable</span>
-                                </header>
-                                <div class="diagram-preview" role="img" aria-label="Communication diagram placeholder for inspection data sync">
-                                    <div class="diagram-preview-placeholder">
-                                        <i class="fas fa-arrows-turn-to-dots" aria-hidden="true"></i>
-                                        <span>Message Flow</span>
-                                    </div>
-                                </div>
-                                <dl class="diagram-metadata">
-                                    <div>
-                                        <dt>Protocol</dt>
-                                        <dd>REST · Webhook</dd>
-                                    </div>
-                                    <div>
-                                        <dt>Latency Target</dt>
-                                        <dd>< 45 seconds</dd>
-                                    </div>
-                                    <div>
-                                        <dt>Error Budget</dt>
-                                        <dd>0.2%</dd>
-                                    </div>
-                                </dl>
-                            </article>
-                            <article class="diagram-card">
-                                <header class="diagram-card-header">
-                                    <div>
-                                        <h3>Payments Clearing</h3>
-                                        <p>Messaging topology between marketplace, payment gateway, ledger, and banking APIs.</p>
-                                    </div>
-                                </header>
-                                <div class="diagram-preview" role="img" aria-label="Communication diagram placeholder for payments clearing">
-                                    <div class="diagram-preview-placeholder">
-                                        <i class="fas fa-money-check-dollar" aria-hidden="true"></i>
-                                        <span>Settlement Flow</span>
-                                    </div>
-                                </div>
-                                <ul class="diagram-highlights">
-                                    <li>Idempotency + reconciliation logic</li>
-                                    <li>Fraud detection tap points</li>
-                                    <li>Alerting and retry schedules</li>
-                                </ul>
-                                <div class="diagram-card-footer">
-                                    <button class="btn btn-outline" type="button">Download Sequence</button>
-                                    <button class="btn btn-primary" type="button">Open API Spec</button>
-                                </div>
-                            </article>
-                        </div>
-                    </div>
-                </section>
-
-                <section id="packages" class="section-content">
-                    <div class="section-header">
-                        <h1 class="section-title">Service Packages</h1>
-                        <p class="section-subtitle">Design, price, and monitor the value proposition across subscription tiers.</p>
-                    </div>
-                    <div class="sub-apps-nav">
-                        <button class="sub-app-btn active" data-target="packages-app1" data-label="App 1">
-                            <span>App 1</span>
-                            <span>Package Catalog</span>
-                        </button>
-                        <button class="sub-app-btn" data-target="packages-app2" data-label="App 2">
-                            <span>App 2</span>
-                            <span>Performance Metrics</span>
-                        </button>
-                        <button class="sub-app-btn" data-target="packages-app3" data-label="App 3">
-                            <span>App 3</span>
-                            <span>Bundle Builder</span>
-                        </button>
-                    </div>
-
-                    <div id="packages-app1" class="sub-app active">
-                        <div class="package-grid">
-                            <div class="package-card premium">
-                                <div class="package-tier">Premium</div>
-                                <h3>Elite Compliance Suite</h3>
-                                <div class="package-price">SAR 5,499<span>/month</span></div>
-                                <ul class="package-features">
-                                    <li><i class="fas fa-check"></i> Unlimited inspections</li>
-                                    <li><i class="fas fa-check"></i> 24/7 live coaching</li>
-                                    <li><i class="fas fa-check"></i> Automated evidence archiving</li>
-                                    <li><i class="fas fa-check"></i> Priority integrations</li>
-                                </ul>
-                                <div class="package-footer">
-                                    <span class="package-adoption positive"><i class="fas fa-arrow-trend-up"></i> +14% adoption</span>
-                                    <button class="btn btn-primary" type="button">View Details</button>
-                                </div>
-                            </div>
-                            <div class="package-card popular">
-                                <div class="package-tier">Standard</div>
-                                <h3>Operational Excellence</h3>
-                                <div class="package-price">SAR 2,999<span>/month</span></div>
-                                <ul class="package-features">
-                                    <li><i class="fas fa-check"></i> 300 inspections/mo</li>
-                                    <li><i class="fas fa-check"></i> SLA monitoring</li>
-                                    <li><i class="fas fa-check"></i> Analytics dashboards</li>
-                                    <li><i class="fas fa-check"></i> Dedicated customer success</li>
-                                </ul>
-                                <div class="package-footer">
-                                    <span class="package-adoption neutral"><i class="fas fa-circle"></i> Stable demand</span>
-                                    <button class="btn btn-primary" type="button">View Details</button>
-                                </div>
-                            </div>
-                            <div class="package-card">
-                                <div class="package-tier">Starter</div>
-                                <h3>Launch Essentials</h3>
-                                <div class="package-price">SAR 1,199<span>/month</span></div>
-                                <ul class="package-features">
-                                    <li><i class="fas fa-check"></i> 80 inspections/mo</li>
-                                    <li><i class="fas fa-check"></i> Self-service training</li>
-                                    <li><i class="fas fa-check"></i> Core analytics</li>
-                                    <li><i class="fas fa-check"></i> Email support</li>
-                                </ul>
-                                <div class="package-footer">
-                                    <span class="package-adoption positive"><i class="fas fa-arrow-trend-up"></i> +5% signups</span>
-                                    <button class="btn btn-outline" type="button">Compare</button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div id="packages-app2" class="sub-app">
-                        <div class="table-shell">
-                            <table>
-                                <thead>
-                                    <tr>
-                                        <th>Tier</th>
-                                        <th>Active Accounts</th>
-                                        <th>Avg Contract Value</th>
-                                        <th>Renewal Rate</th>
-                                        <th>Upsell Potential</th>
-                                        <th>Trend</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr>
-                                        <td>Premium</td>
-                                        <td>54</td>
-                                        <td>SAR 71K</td>
-                                        <td>97%</td>
-                                        <td>High</td>
-                                        <td><span class="package-trend positive"><i class="fas fa-arrow-trend-up"></i> +9.4%</span></td>
-                                    </tr>
-                                    <tr>
-                                        <td>Standard</td>
-                                        <td>218</td>
-                                        <td>SAR 32K</td>
-                                        <td>91%</td>
-                                        <td>Medium</td>
-                                        <td><span class="package-trend neutral"><i class="fas fa-circle"></i> +0.8%</span></td>
-                                    </tr>
-                                    <tr>
-                                        <td>Starter</td>
-                                        <td>407</td>
-                                        <td>SAR 12K</td>
-                                        <td>84%</td>
-                                        <td>Low</td>
-                                        <td><span class="package-trend negative"><i class="fas fa-arrow-trend-down"></i> -1.7%</span></td>
-                                    </tr>
-                                    <tr>
-                                        <td>Enterprise Custom</td>
-                                        <td>12</td>
-                                        <td>SAR 180K</td>
-                                        <td>100%</td>
-                                        <td>Very High</td>
-                                        <td><span class="package-trend positive"><i class="fas fa-arrow-trend-up"></i> +15.2%</span></td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-
-                    <div id="packages-app3" class="sub-app">
-                        <div class="bundle-builder">
-                            <div class="form-card">
-                                <h3 style="margin:0 0 12px;">Create Bundle Offer</h3>
-                                <div class="form-group">
-                                    <label class="form-label" for="bundleName">Bundle Name</label>
-                                    <input class="form-input" id="bundleName" placeholder="e.g. Smart City Accelerator" />
-                                </div>
-                                <div class="form-group">
-                                    <label class="form-label" for="bundleBaseTier">Base Tier</label>
-                                    <select id="bundleBaseTier" class="form-select">
-                                        <option>Premium</option>
-                                        <option>Standard</option>
-                                        <option>Starter</option>
-                                    </select>
-                                </div>
-                                <div class="form-group">
-                                    <label class="form-label" for="bundleInclusions">Additional Inclusions</label>
-                                    <textarea id="bundleInclusions" placeholder="Describe added services, integrations, or consulting hours"></textarea>
-                                </div>
-                                <div class="form-group">
-                                    <label class="form-label" for="bundleDiscount">Introductory Discount (%)</label>
-                                    <input class="form-input" id="bundleDiscount" type="number" min="0" max="100" value="15" />
-                                </div>
-                                <div style="display:flex; justify-content:flex-end; gap:12px;">
-                                    <button class="btn btn-outline" type="button">Preview Pricing</button>
-                                    <button class="btn btn-primary" type="button">Generate Proposal</button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </section>
-
-                <section id="products" class="section-content">
-                    <div class="section-header">
-                        <h1 class="section-title">Marketplace Products</h1>
-                        <p class="section-subtitle">Curate field devices, accessories, and software plugins that power inspectors on-site.</p>
-                    </div>
-                    <div class="sub-apps-nav">
-                        <button class="sub-app-btn active" data-target="products-app1" data-label="App 1">
-                            <span>App 1</span>
-                            <span>Catalog</span>
-                        </button>
-                        <button class="sub-app-btn" data-target="products-app2" data-label="App 2">
-                            <span>App 2</span>
-                            <span>Inventory & SLAs</span>
-                        </button>
-                        <button class="sub-app-btn" data-target="products-app3" data-label="App 3">
-                            <span>App 3</span>
-                            <span>Supplier Matrix</span>
-                        </button>
-                    </div>
-
-                    <div id="products-app1" class="sub-app active">
-                        <div class="product-grid">
-                            <div class="product-card">
-                                <div class="product-thumb"><i class="fas fa-mobile-alt"></i></div>
-                                <h3>Rugged Inspector Tablet</h3>
-                                <p>IP68-certified tablet with offline sync and thermal imaging support.</p>
-                                <div class="product-meta">
-                                    <span><i class="fas fa-warehouse"></i> Stock: 48</span>
-                                    <span><i class="fas fa-badge-check"></i> Warranty: 24 mo</span>
-                                </div>
-                                <div class="product-footer">
-                                    <span class="product-price">SAR 3,250</span>
-                                    <button class="btn btn-primary" type="button">Add to Bundle</button>
-                                </div>
-                            </div>
-                            <div class="product-card">
-                                <div class="product-thumb"><i class="fas fa-camera"></i></div>
-                                <h3>Evidence Capture Kit</h3>
-                                <p>High-resolution body camera with automatic cloud upload and geo-tagging.</p>
-                                <div class="product-meta">
-                                    <span><i class="fas fa-warehouse"></i> Stock: 112</span>
-                                    <span><i class="fas fa-clock"></i> SLA: 2 hrs replacement</span>
-                                </div>
-                                <div class="product-footer">
-                                    <span class="product-price">SAR 1,180</span>
-                                    <button class="btn btn-outline" type="button">View Specs</button>
-                                </div>
-                            </div>
-                            <div class="product-card">
-                                <div class="product-thumb"><i class="fas fa-vr-cardboard"></i></div>
-                                <h3>Immersive Training Module</h3>
-                                <p>VR-based training for new inspectors with scenario scoring and heatmaps.</p>
-                                <div class="product-meta">
-                                    <span><i class="fas fa-warehouse"></i> Stock: 20</span>
-                                    <span><i class="fas fa-sync"></i> Auto updates</span>
-                                </div>
-                                <div class="product-footer">
-                                    <span class="product-price">SAR 8,750</span>
-                                    <button class="btn btn-primary" type="button">Launch Demo</button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div id="products-app2" class="sub-app">
-                        <div class="table-shell">
-                            <table>
-                                <thead>
-                                    <tr>
-                                        <th>SKU</th>
-                                        <th>Product</th>
-                                        <th>Supplier</th>
-                                        <th>On-hand</th>
-                                        <th>Reserved</th>
-                                        <th>Reorder Point</th>
-                                        <th>SLA Breaches (30d)</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr>
-                                        <td>INSP-TAB-01</td>
-                                        <td>Rugged Inspector Tablet</td>
-                                        <td>Tech4Field</td>
-                                        <td>48</td>
-                                        <td>12</td>
-                                        <td>30</td>
-                                        <td><span class="status-badge status-active">0</span></td>
-                                    </tr>
-                                    <tr>
-                                        <td>CAP-KIT-11</td>
-                                        <td>Evidence Capture Kit</td>
-                                        <td>Safeguard Optics</td>
-                                        <td>112</td>
-                                        <td>40</td>
-                                        <td>60</td>
-                                        <td><span class="status-badge status-active">1</span></td>
-                                    </tr>
-                                    <tr>
-                                        <td>VR-TRAIN-07</td>
-                                        <td>Immersive Training Module</td>
-                                        <td>VirtuaSense</td>
-                                        <td>20</td>
-                                        <td>4</td>
-                                        <td>10</td>
-                                        <td><span class="status-badge status-pending">2</span></td>
-                                    </tr>
-                                    <tr>
-                                        <td>AI-ASSIST-03</td>
-                                        <td>AI Anomaly Detection</td>
-                                        <td>Insight Labs</td>
-                                        <td>Unlimited</td>
-                                        <td>-</td>
-                                        <td>-</td>
-                                        <td><span class="status-badge status-active">0</span></td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-
-                    <div id="products-app3" class="sub-app">
-                        <div class="supplier-matrix">
-                            <div class="supplier-card">
-                                <div class="supplier-header">
-                                    <h3>Tech4Field</h3>
-                                    <span class="supplier-rating positive"><i class="fas fa-star"></i> 4.8</span>
-                                </div>
-                                <p>Primary supplier for ruggedised devices and field sensors across the GCC.</p>
-                                <ul class="supplier-tags">
-                                    <li><i class="fas fa-globe"></i> Global coverage</li>
-                                    <li><i class="fas fa-truck"></i> 24h dispatch</li>
-                                    <li><i class="fas fa-shield-halved"></i> 3-year warranty</li>
-                                </ul>
-                                <div class="supplier-actions">
-                                    <button class="btn btn-outline" type="button">View Contracts</button>
-                                    <button class="btn btn-primary" type="button">Raise Ticket</button>
-                                </div>
-                            </div>
-                            <div class="supplier-card">
-                                <div class="supplier-header">
-                                    <h3>Insight Labs</h3>
-                                    <span class="supplier-rating neutral"><i class="fas fa-star"></i> 4.2</span>
-                                </div>
-                                <p>Delivers AI-driven analytics, anomaly detection plugins, and predictive maintenance insights.</p>
-                                <ul class="supplier-tags">
-                                    <li><i class="fas fa-robot"></i> AI partner</li>
-                                    <li><i class="fas fa-code"></i> API-first</li>
-                                    <li><i class="fas fa-cloud"></i> SaaS delivery</li>
-                                </ul>
-                                <div class="supplier-actions">
-                                    <button class="btn btn-outline" type="button">Usage Stats</button>
-                                    <button class="btn btn-primary" type="button">Schedule QBR</button>
-                                </div>
-                            </div>
-                            <div class="supplier-card">
-                                <div class="supplier-header">
-                                    <h3>Safeguard Optics</h3>
-                                    <span class="supplier-rating positive"><i class="fas fa-star"></i> 4.7</span>
-                                </div>
-                                <p>Specialists in high-fidelity cameras, smart sensors, and secure evidence handling services.</p>
-                                <ul class="supplier-tags">
-                                    <li><i class="fas fa-shield"></i> Gov certified</li>
-                                    <li><i class="fas fa-lock"></i> Secure chain</li>
-                                    <li><i class="fas fa-headset"></i> 24/7 support</li>
-                                </ul>
-                                <div class="supplier-actions">
-                                    <button class="btn btn-outline" type="button">Compliance Docs</button>
-                                    <button class="btn btn-primary" type="button">Open Case</button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </section>
-
-                    <section id="onruf-users" class="section-content">
-                        <div class="section-header">
-                            <h1 class="section-title">ONRUF Users Operations</h1>
-                            <p class="section-subtitle">Oversee tenant onboarding, account health, and engagement signals across the ecosystem.</p>
-                        </div>
-                        <div class="sub-apps-nav">
-                            <button class="sub-app-btn active" data-target="onruf-users-app1" data-label="App 1">
-                                <span>App 1</span>
-                                <span>Directory Overview</span>
-                            </button>
-                            <button class="sub-app-btn" data-target="onruf-users-app2" data-label="App 2">
-                                <span>App 2</span>
-                                <span>Verification Queue</span>
-                            </button>
-                            <button class="sub-app-btn" data-target="onruf-users-app3" data-label="App 3">
-                                <span>App 3</span>
-                                <span>Engagement Insights</span>
-                            </button>
-                        </div>
-
-                        <div id="onruf-users-app1" class="sub-app active">
-                            <div class="table-shell">
-                                <table>
-                                    <thead>
-                                        <tr>
-                                            <th>Segment</th>
-                                            <th>Total Accounts</th>
-                                            <th>Active</th>
-                                            <th>Pending Verification</th>
-                                            <th>Suspended</th>
-                                            <th>Last Sync</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <tr>
-                                            <td>Municipality Tenants</td>
-                                            <td>1,284</td>
-                                            <td>1,112</td>
-                                            <td>48</td>
-                                            <td>6</td>
-                                            <td>Today 09:05</td>
-                                        </tr>
-                                        <tr>
-                                            <td>Business Operators</td>
-                                            <td>864</td>
-                                            <td>782</td>
-                                            <td>32</td>
-                                            <td>11</td>
-                                            <td>Today 08:20</td>
-                                        </tr>
-                                        <tr>
-                                            <td>Field Inspectors</td>
-                                            <td>432</td>
-                                            <td>418</td>
-                                            <td>6</td>
-                                            <td>2</td>
-                                            <td>Today 07:45</td>
-                                        </tr>
-                                        <tr>
-                                            <td>Control Center Staff</td>
-                                            <td>196</td>
-                                            <td>188</td>
-                                            <td>4</td>
-                                            <td>1</td>
-                                            <td>Yesterday 22:10</td>
-                                        </tr>
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-
-                        <div id="onruf-users-app2" class="sub-app">
-                            <div class="integration-grid">
-                                <div class="integration-card">
-                                    <div class="integration-header">
-                                        <h3 class="integration-name">High Priority Reviews</h3>
-                                        <span class="integration-status warning">12 Pending</span>
-                                    </div>
-                                    <p class="integration-description">Accounts flagged for accelerated KYC due to policy escalations or repeated failed logins.</p>
-                                    <ul class="integration-list">
-                                        <li><i class="fas fa-circle-exclamation"></i> 5 require manual document check</li>
-                                        <li><i class="fas fa-id-card"></i> 4 awaiting ID re-upload</li>
-                                        <li><i class="fas fa-comments"></i> 3 waiting for customer response</li>
-                                    </ul>
-                                    <div class="integration-footer">
-                                        <button type="button">
-                                            <i class="fas fa-inbox"></i>
-                                            Open Work Queue
-                                        </button>
-                                    </div>
-                                </div>
-                                <div class="integration-card">
-                                    <div class="integration-header">
-                                        <h3 class="integration-name">Auto Approved</h3>
-                                        <span class="integration-status active">27 Today</span>
-                                    </div>
-                                    <p class="integration-description">Accounts cleared via automated verification rules synced with the national digital registry.</p>
-                                    <ul class="integration-list">
-                                        <li><i class="fas fa-check-circle"></i> 89% biometric match rate</li>
-                                        <li><i class="fas fa-shield"></i> Continuous fraud screening active</li>
-                                        <li><i class="fas fa-link"></i> Linked to business CR data</li>
-                                    </ul>
-                                    <div class="integration-footer">
-                                        <button type="button">
-                                            <i class="fas fa-chart-line"></i>
-                                            View Automations
-                                        </button>
-                                    </div>
-                                </div>
-                                <div class="integration-card">
-                                    <div class="integration-header">
-                                        <h3 class="integration-name">Pending Field Confirmation</h3>
-                                        <span class="integration-status pending">8 Visits</span>
-                                    </div>
-                                    <p class="integration-description">Accounts needing on-site verification of operating licenses or facility readiness.</p>
-                                    <ul class="integration-list">
-                                        <li><i class="fas fa-clipboard-list"></i> Route sheet generated</li>
-                                        <li><i class="fas fa-truck-fast"></i> Inspector assignments in progress</li>
-                                        <li><i class="fas fa-clock"></i> Target completion: 48 hours</li>
-                                    </ul>
-                                    <div class="integration-footer">
-                                        <button type="button">
-                                            <i class="fas fa-map-location-dot"></i>
-                                            Dispatch Teams
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div id="onruf-users-app3" class="sub-app">
-                            <div class="stats-grid">
-                                <div class="stat-card">
-                                    <div class="stat-heading">
-                                        <span>Daily Active Accounts</span>
-                                        <i class="fas fa-chart-line"></i>
-                                    </div>
-                                    <div class="stat-value">2,500</div>
-                                    <div class="stat-delta positive">
-                                        <i class="fas fa-arrow-trend-up"></i>
-                                        +5.1% vs last week
-                                    </div>
-                                </div>
-                                <div class="stat-card">
-                                    <div class="stat-heading">
-                                        <span>Support Tickets</span>
-                                        <i class="fas fa-headset"></i>
-                                    </div>
-                                    <div class="stat-value">73</div>
-                                    <div class="stat-delta neutral">
-                                        <i class="fas fa-minus"></i>
-                                        Stable volume
-                                    </div>
-                                </div>
-                                <div class="stat-card">
-                                    <div class="stat-heading">
-                                        <span>Churn Watchlist</span>
-                                        <i class="fas fa-user-clock"></i>
-                                    </div>
-                                    <div class="stat-value">18</div>
-                                    <div class="stat-delta warning">
-                                        <i class="fas fa-arrow-trend-up"></i>
-                                        Spike detected
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="table-shell" style="margin-top:24px;">
-                                <table>
-                                    <thead>
-                                        <tr>
-                                            <th>Indicator</th>
-                                            <th>Description</th>
-                                            <th>Current Value</th>
-                                            <th>Goal</th>
-                                            <th>Status</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <tr>
-                                            <td>Activation Rate</td>
-                                            <td>Users completing onboarding within 72 hours.</td>
-                                            <td>92%</td>
-                                            <td>90%</td>
-                                            <td><span class="status-badge status-active">On Track</span></td>
-                                        </tr>
-                                        <tr>
-                                            <td>Engaged Tenants</td>
-                                            <td>Accounts with 5+ sessions per week.</td>
-                                            <td>64%</td>
-                                            <td>70%</td>
-                                            <td><span class="status-badge status-pending">Monitor</span></td>
-                                        </tr>
-                                        <tr>
-                                            <td>Dormant Accounts</td>
-                                            <td>No logins in the last 30 days.</td>
-                                            <td>143</td>
-                                            <td>&lt; 100</td>
-                                            <td><span class="status-badge status-warning">Action Needed</span></td>
-                                        </tr>
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </section>
-
-                    <section id="advertisments" class="section-content">
-                        <div class="section-header">
-                            <h1 class="section-title">Advertisments Control Hub</h1>
-                            <p class="section-subtitle">Plan marketplace promotions, track performance, and curate creative assets for upcoming pushes.</p>
-                        </div>
-                        <div class="sub-apps-nav">
-                            <button class="sub-app-btn active" data-target="advertisments-app1" data-label="App 1">
-                                <span>App 1</span>
-                                <span>Campaign Planner</span>
-                            </button>
-                            <button class="sub-app-btn" data-target="advertisments-app2" data-label="App 2">
-                                <span>App 2</span>
-                                <span>Creative Assets</span>
-                            </button>
-                        </div>
-
-                        <div id="advertisments-app1" class="sub-app active">
-                            <div class="table-shell">
-                                <table>
-                                    <thead>
-                                        <tr>
-                                            <th>Campaign</th>
-                                            <th>Channel</th>
-                                            <th>Status</th>
-                                            <th>Budget (SAR)</th>
-                                            <th>Impressions</th>
-                                            <th>CTR</th>
-                                            <th>Owner</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <tr>
-                                            <td>Premium Inspector Launch</td>
-                                            <td>Email + In-app</td>
-                                            <td><span class="status-badge status-active">Live</span></td>
-                                            <td>45,000</td>
-                                            <td>1.8M</td>
-                                            <td>3.9%</td>
-                                            <td>Growth Team</td>
-                                        </tr>
-                                        <tr>
-                                            <td>Inspection Safety Week</td>
-                                            <td>Social</td>
-                                            <td><span class="status-badge status-pending">Scheduled</span></td>
-                                            <td>28,000</td>
-                                            <td>--</td>
-                                            <td>--</td>
-                                            <td>Brand Office</td>
-                                        </tr>
-                                        <tr>
-                                            <td>Referral Booster Q4</td>
-                                            <td>SMS + Push</td>
-                                            <td><span class="status-badge status-active">Live</span></td>
-                                            <td>18,500</td>
-                                            <td>740K</td>
-                                            <td>4.6%</td>
-                                            <td>Lifecycle Marketing</td>
-                                        </tr>
-                                        <tr>
-                                            <td>Vendor Spotlight Series</td>
-                                            <td>Marketplace Banner</td>
-                                            <td><span class="status-badge status-draft">Draft</span></td>
-                                            <td>12,000</td>
-                                            <td>--</td>
-                                            <td>--</td>
-                                            <td>Partner Alliances</td>
-                                        </tr>
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-
-                        <div id="advertisments-app2" class="sub-app">
-                            <div class="product-grid">
-                                <div class="product-card">
-                                    <div class="product-thumb"><i class="fas fa-bullseye"></i></div>
-                                    <h3>Hero Carousel Set</h3>
-                                    <p>Five responsive hero creatives optimised for light and dark themes.</p>
-                                    <div class="product-meta">
-                                        <span><i class="fas fa-image"></i> Formats: JPG, PNG</span>
-                                        <span><i class="fas fa-arrows-rotate"></i> Updated: 2 days ago</span>
-                                    </div>
-                                    <div class="product-footer">
-                                        <span class="product-price">Creative Kit</span>
-                                        <button class="btn btn-primary" type="button">Download</button>
-                                    </div>
-                                </div>
-                                <div class="product-card">
-                                    <div class="product-thumb"><i class="fas fa-video"></i></div>
-                                    <h3>30s Awareness Video</h3>
-                                    <p>High-energy explainer with Arabic voiceover and subtitle variants.</p>
-                                    <div class="product-meta">
-                                        <span><i class="fas fa-photo-film"></i> Formats: MP4, MOV</span>
-                                        <span><i class="fas fa-language"></i> EN &amp; AR captions</span>
-                                    </div>
-                                    <div class="product-footer">
-                                        <span class="product-price">Media Asset</span>
-                                        <button class="btn btn-outline" type="button">Preview</button>
-                                    </div>
-                                </div>
-                                <div class="product-card">
-                                    <div class="product-thumb"><i class="fas fa-envelopes-bulk"></i></div>
-                                    <h3>Retention Email Pack</h3>
-                                    <p>Seven-step nurture journey templates with dynamic content blocks.</p>
-                                    <div class="product-meta">
-                                        <span><i class="fas fa-code"></i> HTML + MJML</span>
-                                        <span><i class="fas fa-user-check"></i> Approved by compliance</span>
-                                    </div>
-                                    <div class="product-footer">
-                                        <span class="product-price">Template Bundle</span>
-                                        <button class="btn btn-primary" type="button">Add to Library</button>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </section>
             </div>
         </main>
     </div>

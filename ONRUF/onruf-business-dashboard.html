@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ONRUF Business Console</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" integrity="sha512-1ycn6IcaQQ40/MKBW2W4Rhis/DbILU74C1vSrLJxCq57o941Ym01SwNsOMqvEBFlcgUa6r0zE1x4rOzT9kZf3g==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <link rel="stylesheet" href="assets/css/onruf-business-dashboard.css" />
+</head>
+<body>
+    <div class="dashboard-shell" id="businessDashboard" data-state="loading">
+        <aside class="sidebar" id="dashboardSidebar">
+            <div class="sidebar-brand">
+                <div class="brand-mark">ON</div>
+                <div class="brand-text">RUF Merchant</div>
+            </div>
+            <nav class="sidebar-nav" aria-label="Merchant navigation">
+                <a href="#" class="nav-item active" data-view="home">
+                    <i class="fas fa-house"></i>
+                    <span>Home</span>
+                </a>
+                <a href="#" class="nav-item" data-view="products">
+                    <i class="fas fa-box"></i>
+                    <span>Products</span>
+                </a>
+                <a href="#" class="nav-item" data-view="negotiations">
+                    <i class="fas fa-comments-dollar"></i>
+                    <span>Negotiation offers</span>
+                </a>
+                <a href="#" class="nav-item" data-view="orders">
+                    <i class="fas fa-receipt"></i>
+                    <span>Orders</span>
+                </a>
+                <a href="#" class="nav-item" data-view="clients">
+                    <i class="fas fa-user-friends"></i>
+                    <span>Clients</span>
+                </a>
+                <a href="#" class="nav-item" data-view="reports">
+                    <i class="fas fa-chart-line"></i>
+                    <span>Reports</span>
+                </a>
+                <a href="#" class="nav-item" data-view="ratings">
+                    <i class="fas fa-star"></i>
+                    <span>Ratings &amp; Questions</span>
+                </a>
+                <button type="button" class="nav-item nav-item--expandable" id="marketingToggle" aria-expanded="false">
+                    <div class="nav-item__icon">
+                        <i class="fas fa-bullhorn"></i>
+                    </div>
+                    <span>Marketing</span>
+                    <i class="fas fa-chevron-down nav-item__chevron" aria-hidden="true"></i>
+                </button>
+                <div class="nav-submenu" id="marketingSubmenu">
+                    <button type="button">Campaigns</button>
+                    <button type="button">Audience</button>
+                    <button type="button">Discount codes</button>
+                </div>
+                <a href="#" class="nav-item" data-view="settings">
+                    <i class="fas fa-gear"></i>
+                    <span>Settings</span>
+                </a>
+            </nav>
+            <div class="sidebar-footer">
+                <button type="button" class="support-btn" id="contactSupportBtn">Do you need help? <span>Contact us</span></button>
+            </div>
+        </aside>
+        <main class="main" id="dashboardMain">
+            <header class="topbar" id="dashboardTopbar">
+                <form class="search" role="search">
+                    <i class="fas fa-search" aria-hidden="true"></i>
+                    <input type="search" id="dashboardSearchInput" name="search" placeholder="Search by order number, product" aria-label="Search by order number or product" />
+                </form>
+                <div class="topbar-actions">
+                    <div class="language-switch">
+                        <button type="button" id="languageSwitchBtn">English <i class="fas fa-chevron-down" aria-hidden="true"></i></button>
+                    </div>
+                    <div class="user-summary">
+                        <div class="user-info">
+                            <span class="user-name" id="topbarUserName">Merchant</span>
+                            <button type="button" class="switch-account" id="switchAccountBtn">Switch accounts <i class="fas fa-right-left" aria-hidden="true"></i></button>
+                        </div>
+                        <div class="user-avatar" id="topbarUserAvatar" aria-hidden="true">M</div>
+                    </div>
+                </div>
+            </header>
+            <section class="content" id="dashboardContent">
+                <div class="content-header">
+                    <div class="content-title">
+                        <h1 id="companyNameHeading">Business account</h1>
+                        <span class="status-pill" id="accountStatusPill">Status pending</span>
+                    </div>
+                    <div class="content-meta" id="accountMeta"></div>
+                </div>
+                <div class="content-grid">
+                    <article class="card profit-card">
+                        <div class="card-header">
+                            <button type="button" class="metric-tag" id="profitMetricTag">Profit</button>
+                        </div>
+                        <div class="profit-body">
+                            <div class="profit-summary">
+                                <h2 id="profitValue">0 SAR</h2>
+                                <p>Profit</p>
+                                <span class="profit-trend" id="profitTrend">0%</span>
+                            </div>
+                            <canvas id="profitChart" width="520" height="280" aria-label="Profit chart" role="img"></canvas>
+                        </div>
+                    </article>
+                    <aside class="card notifications-card">
+                        <div class="card-header">
+                            <h3>Notifications</h3>
+                            <button type="button" class="view-all" id="notificationsViewAll">View All</button>
+                        </div>
+                        <ul class="notifications-list" id="notificationsList">
+                            <li class="empty-state">No notifications found</li>
+                        </ul>
+                    </aside>
+                </div>
+                <div class="content-grid content-grid--wide">
+                    <article class="card data-card">
+                        <div class="card-header">
+                            <h3>Last Orders</h3>
+                            <button type="button" class="view-all" id="lastOrdersViewAll">View All</button>
+                        </div>
+                        <div class="table-wrapper">
+                            <table class="data-table" aria-label="Last orders">
+                                <thead>
+                                    <tr>
+                                        <th>Order Number</th>
+                                        <th>Client</th>
+                                        <th>Order History</th>
+                                        <th>Shipping</th>
+                                        <th>Payment</th>
+                                        <th>Status</th>
+                                        <th>Total</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="lastOrdersBody">
+                                    <tr class="empty">
+                                        <td colspan="7">No data found</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="table-pagination" id="lastOrdersPagination">
+                            <button type="button" disabled aria-label="Previous page"><i class="fas fa-chevron-left"></i></button>
+                            <button type="button" disabled aria-label="Next page"><i class="fas fa-chevron-right"></i></button>
+                        </div>
+                    </article>
+                </div>
+                <div class="content-grid content-grid--thirds">
+                    <article class="card insight-card">
+                        <div class="card-header">
+                            <h3>Latest Clients Orders</h3>
+                        </div>
+                        <div class="insight-body" id="latestClientsInsight">
+                            <p class="empty-state">No orders exist</p>
+                        </div>
+                    </article>
+                    <article class="card insight-card">
+                        <div class="card-header">
+                            <h3>All Clients</h3>
+                        </div>
+                        <div class="insight-body" id="allClientsInsight">
+                            <p class="empty-state">No clients added</p>
+                        </div>
+                    </article>
+                    <article class="card insight-card">
+                        <div class="card-header">
+                            <h3>Products Almost Out</h3>
+                            <button type="button" class="view-all" id="productsViewAll">View all</button>
+                        </div>
+                        <div class="insight-body" id="productsLowStockInsight">
+                            <p class="empty-state">No products</p>
+                        </div>
+                    </article>
+                </div>
+            </section>
+            <section class="empty-state" id="missingAccountState" hidden>
+                <div class="empty-card">
+                    <h2>We could not load this business account.</h2>
+                    <p>Check that you used a valid invitation link or return to the marketplace to choose another account.</p>
+                    <div class="empty-actions">
+                        <a href="onruf-platform.html" class="btn-link">Back to ONRUF marketplace</a>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+    <div class="toast" id="dashboardToast" role="status" aria-live="polite"></div>
+    <script src="assets/js/onruf-business-dashboard.js"></script>
+</body>
+</html>

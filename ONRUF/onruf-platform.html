@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ONRUF Marketplace Simulator</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" integrity="sha512-1ycn6IcaQQ40/MKBW2W4Rhis/DbILU74C1vSrLJxCq57o941Ym01SwNsOMqvEBFlcgUa6r0zE1x4rOzT9kZf3g==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <link rel="stylesheet" href="assets/css/onruf-platform.css" />
+</head>
+<body>
+    <header class="site-header">
+        <div class="site-header__top">
+            <a class="site-header__brand" href="#">
+                <span class="brand-mark">ON</span>
+                <span class="brand-text">RUF</span>
+            </a>
+            <div class="site-header__search">
+                <input type="search" id="marketSearchInput" placeholder="What are you looking for?" aria-label="Search listings" />
+                <button type="button" id="marketSearchBtn">Search</button>
+            </div>
+            <div class="site-header__actions">
+                <button type="button" class="ghost" id="languageToggleBtn">العربية</button>
+                <div class="auth-actions" id="guestActions" aria-label="Guest actions">
+                    <button type="button" class="link" id="marketLoginBtn">Login</button>
+                    <a href="onruf-sign-up.html" class="primary" id="marketSignUpBtn">Sign Up</a>
+                </div>
+                <div class="user-menu is-hidden" id="userMenu">
+                    <button type="button" class="user-menu__trigger" id="userMenuTrigger" aria-haspopup="true" aria-expanded="false">
+                        <span class="user-menu__avatar" aria-hidden="true">
+                            <i class="fas fa-user"></i>
+                        </span>
+                        <span class="user-menu__summary">
+                            <span class="user-menu__label" id="userMenuLabel">User account</span>
+                            <span class="user-menu__role is-hidden" id="userMenuRole"></span>
+                        </span>
+                        <i class="fas fa-chevron-down user-menu__chevron" aria-hidden="true"></i>
+                    </button>
+                    <div class="user-menu__dropdown" id="userMenuDropdown" role="menu" aria-hidden="true">
+                        <div class="user-menu__header">
+                            <button type="button" class="user-menu__profile-link" id="userMenuProfileLink">
+                                <strong id="userMenuFullName">User Name</strong>
+                            </button>
+                            <span class="user-menu__email" id="userMenuEmail">user@example.com</span>
+                        </div>
+                        <div class="user-menu__section is-hidden" id="userMenuBusinessSection" aria-label="Business accounts">
+                            <div class="user-menu__section-head">
+                                <span class="user-menu__section-title">Business Accounts</span>
+                            </div>
+                            <div class="user-menu__account-list" id="userMenuBusinessList"></div>
+                        </div>
+                        <button type="button" class="user-menu__item" id="userMenuMerchantBtn" role="menuitem">
+                            <i class="fas fa-store"></i>
+                            <span>Register as a merchant</span>
+                        </button>
+                        <hr class="user-menu__divider" />
+                        <button type="button" class="user-menu__item user-menu__item--danger" id="userMenuSignOutBtn" role="menuitem">
+                            <i class="fas fa-sign-out-alt"></i>
+                            <span>Sign Out</span>
+                        </button>
+                    </div>
+                </div>
+                <button type="button" class="ghost" title="Saved"><i class="fas fa-heart"></i></button>
+                <button type="button" class="ghost" title="Cart"><i class="fas fa-shopping-cart"></i></button>
+            </div>
+        </div>
+        <nav class="site-header__nav" aria-label="Marketplace navigation">
+            <button type="button" class="nav-pill active">Categories</button>
+            <button type="button" class="nav-pill">Malqaa</button>
+            <button type="button" class="nav-pill">All Sales Type</button>
+            <button type="button" class="nav-pill">iOS</button>
+            <button type="button" class="nav-pill">Negotiable</button>
+            <button type="button" class="nav-pill">Onruf</button>
+            <button type="button" class="nav-pill">YousefM</button>
+            <button type="button" class="nav-pill">Sub-category</button>
+            <button type="button" class="nav-pill nav-pill--highlight" id="sellNavButton">Sell</button>
+        </nav>
+    </header>
+
+    <main>
+        <section class="categories-strip" aria-label="Browse categories">
+            <h2 class="section-title">Categories</h2>
+            <div class="categories-strip__track" id="categoriesCarousel"></div>
+        </section>
+
+        <section class="hero-banner">
+            <div class="hero-banner__content">
+                <div>
+                    <span class="hero-tag">5000+ Advertising</span>
+                    <h1>Discover premium listings with ONRUF</h1>
+                    <p>All you need in one marketplace. Shop with confidence and stay close to the best deals.</p>
+                    <button type="button" class="primary">Order now</button>
+                </div>
+            </div>
+            <div class="hero-banner__media">
+                <img src="https://images.unsplash.com/photo-1522312346375-d1a52e2b99b3?auto=format&fit=crop&w=440&q=80" alt="Headphones" />
+                <img src="https://images.unsplash.com/photo-1512436991641-6745cdb1723f?auto=format&fit=crop&w=360&q=80" alt="Smart phone" />
+                <img src="https://images.unsplash.com/photo-1585951237317-1c159bc09af3?auto=format&fit=crop&w=360&q=80" alt="Remote" />
+            </div>
+        </section>
+
+        <section id="showcaseContainer" class="showcase"></section>
+
+        <section class="closing-soon" aria-labelledby="closingSoonTitle">
+            <div class="section-heading">
+                <h2 id="closingSoonTitle">Closing Soon</h2>
+            </div>
+            <div class="card-grid" id="closingSoonGrid"></div>
+        </section>
+    </main>
+
+    <footer class="site-footer">
+        <div class="site-footer__brand">
+            <span class="brand-mark">ON</span>
+            <span class="brand-text">RUF</span>
+        </div>
+        <div class="site-footer__links">
+            <a href="#">About Malqaa</a>
+            <a href="#">Privacy Policy</a>
+            <a href="#">Join as a Merchant</a>
+            <a href="#">Contact Us</a>
+        </div>
+        <div class="site-footer__stores">
+            <a href="#" class="store-badge">Get it on <strong>Google Play</strong></a>
+            <a href="#" class="store-badge">Download on the <strong>App Store</strong></a>
+        </div>
+        <div class="site-footer__social">
+            <a href="#" aria-label="Instagram"><i class="fab fa-instagram"></i></a>
+            <a href="#" aria-label="LinkedIn"><i class="fab fa-linkedin-in"></i></a>
+            <a href="#" aria-label="X"><i class="fab fa-x-twitter"></i></a>
+            <a href="#" aria-label="Facebook"><i class="fab fa-facebook-f"></i></a>
+        </div>
+    </footer>
+
+    <script src="assets/js/onruf-platform.js"></script>
+</body>
+</html>

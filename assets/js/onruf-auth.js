@@ -4,7 +4,7 @@
     const USERS_STORAGE_KEY = 'onruf_users_v1';
     const SESSION_STORAGE_KEY = 'onruf_active_session_v1';
     const OTP_EXPIRY_MINUTES = 10;
-    const DATA_RESET_VERSION = '20241005-super-admin-seed';
+    const DATA_RESET_VERSION = '20251029-remove-specification-seed';
     const DATA_RESET_KEY = 'onruf_data_reset_version';
     const INVITATION_SERVICE_ENDPOINT_DEFAULT = '/api/invitations/send';
     const INVITATION_VALIDITY_MS = 7 * 24 * 60 * 60 * 1000;
@@ -1073,7 +1073,7 @@
 
         if (tokenResult.status === 'not-found') {
             showInactiveInvitationView({
-                title: 'The Invitation Link is not Active',
+                title: 'The Invitation Link is Inactive',
                 message: 'For More Information, Please Contact ONRUF Administrator',
                 statusMarkup: '<i class="fas fa-link-slash"></i> Invitation inactive',
                 statusTone: 'warning'
@@ -1084,7 +1084,7 @@
         if (tokenResult.status === 'revoked') {
             const revokedUser = tokenResult.user;
             showInactiveInvitationView({
-                title: 'The Invitation Link is not Active',
+                title: 'The Invitation Link is Inactive',
                 message: 'For More Information, Please Contact ONRUF Administrator',
                 statusMarkup: '<i class="fas fa-link-slash"></i> Invitation inactive',
                 statusTone: 'warning',
@@ -1159,7 +1159,7 @@
         // Check if account has expired before registration completes
         if (isAccountExpired(user)) {
             showInactiveInvitationView({
-                title: 'The Invitation Link is not Active',
+                title: 'The Invitation Link is Inactive',
                 message: 'For More Information, Please Contact ONRUF Administrator',
                 statusMarkup: '<i class="fas fa-link-slash"></i> Invitation inactive',
                 statusTone: 'warning',

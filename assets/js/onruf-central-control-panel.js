@@ -37,255 +37,191 @@ function normalizeCategoryModalKey(entry) {
     return (entry && (entry.nameEnglish || entry.nameArabic || entry.id) || '').trim();
 }
 
-function buildCategoryDisplayPath(entry, categories) {
-    if (!entry) return '';
-    const registry = Array.isArray(categories) ? categories : [];
-    const lookup = new Map();
-    const canonicalize = value => (typeof value === 'string' ? value.trim().toLowerCase() : '');
-
-    registry.forEach(item => {
-        const key = normalizeCategoryModalKey(item);
-        if (key) {
-            lookup.set(canonicalize(key), item);
-        }
-        if (item.id) {
-            lookup.set(canonicalize(item.id), item);
-        }
-        if (typeof item.nameEnglish === 'string') {
-            lookup.set(canonicalize(item.nameEnglish), item);
-        }
-        if (typeof item.nameArabic === 'string') {
-            lookup.set(canonicalize(item.nameArabic), item);
-        }
-    });
-
-    const path = [];
-    let current = entry;
-    const guard = new Set();
-    while (current && !guard.has(current)) {
-        guard.add(current);
-        const label = current.nameEnglish || current.nameArabic || current.id;
-        if (label) {
-            path.unshift(label);
-        }
-        const parentRef = typeof current.parentCategoryId === 'string' && current.parentCategoryId.trim()
-            ? current.parentCategoryId.trim()
-            : typeof current.parent === 'string'
-                ? current.parent.trim()
-                : '';
-        if (!parentRef) {
-            break;
-        }
-        current = lookup.get(canonicalize(parentRef)) || null;
-    }
-    return path.join(' / ');
-}
-
 function buildCategoryModalHierarchy(items) {
-    const nodes = new Map();
-    const aliasLookup = new Map();
     const canonicalize = value => (typeof value === 'string' ? value.trim().toLowerCase() : '');
+    const nodeRegistry = new Map();
+    const aliasLookup = new Map();
+
+    const ensureNode = (key, entry = null) => {
+        const inferredKey = key || normalizeCategoryModalKey(entry);
+        const canonicalKey = canonicalize(inferredKey);
+        if (!canonicalKey) {
+            return null;
+        }
+
+        let node = nodeRegistry.get(canonicalKey);
+        if (!node) {
+            node = { key: canonicalKey, entry: null, children: [], parent: null };
+            nodeRegistry.set(canonicalKey, node);
+        }
+
+        if (entry && !node.entry) {
+            node.entry = entry;
+        }
+
+        if (!node.entry) {
+            const fallback = inferredKey || canonicalKey;
+            node.entry = {
+                id: fallback,
+                nameEnglish: fallback
+            };
+        }
+
+        return node;
+    };
 
     const registerAliases = (node, ...aliases) => {
         aliases.forEach(alias => {
             const canonicalAlias = canonicalize(alias);
-            if (!canonicalAlias) return;
-            const existing = aliasLookup.get(canonicalAlias);
-            if (!existing || existing === node || (existing.synthetic && !node.synthetic)) {
+            if (!canonicalAlias) {
+                return;
+            }
+            if (!aliasLookup.has(canonicalAlias)) {
                 aliasLookup.set(canonicalAlias, node);
             }
         });
     };
 
-    const createNode = (key, entry, synthetic) => {
-        const node = { key, entry, synthetic, children: [], parentKey: null };
-        nodes.set(key, node);
-        const entryId = entry && typeof entry.id === 'string' ? entry.id : null;
-        const entryNameEn = entry && typeof entry.nameEnglish === 'string' ? entry.nameEnglish : null;
-        const entryNameAr = entry && typeof entry.nameArabic === 'string' ? entry.nameArabic : null;
-        registerAliases(node, key, entryId, entryNameEn, entryNameAr);
-        return node;
-    };
+    const source = Array.isArray(items) ? items.filter(Boolean) : [];
 
-    const ensureNodeForEntry = entry => {
-        const primaryKey = normalizeCategoryModalKey(entry);
-        if (!primaryKey) {
-            return null;
-        }
-
-        const candidates = [primaryKey, entry.id, entry.nameEnglish, entry.nameArabic];
-        let node = null;
-        for (const candidate of candidates) {
-            const match = aliasLookup.get(canonicalize(candidate));
-            if (match) {
-                node = match;
-                break;
-            }
-        }
-
+    source.forEach(entry => {
+        const keySource = normalizeCategoryModalKey(entry) || entry.id || entry.nameEnglish || entry.nameArabic;
+        const node = ensureNode(keySource, entry);
         if (!node) {
-            node = createNode(primaryKey, entry, false);
-        } else {
-            const previousKey = node.key;
-            node.entry = entry;
-            node.synthetic = false;
-            if (previousKey !== primaryKey) {
-                nodes.delete(previousKey);
-                node.key = primaryKey;
-                nodes.set(primaryKey, node);
-                nodes.forEach(candidate => {
-                    if (candidate.parentKey === previousKey) {
-                        candidate.parentKey = primaryKey;
-                    }
-                });
-                registerAliases(node, previousKey);
-            } else if (!nodes.has(node.key)) {
-                nodes.set(node.key, node);
-            }
+            return;
         }
 
-        registerAliases(node, entry.id, entry.nameEnglish, entry.nameArabic, primaryKey);
-        return node;
-    };
+        registerAliases(
+            node,
+            keySource,
+            entry.id,
+            entry.nameEnglish,
+            entry.nameArabic,
+            entry.categoryCode
+        );
 
-    const ensureNodeForLabel = (label, sourceEntry) => {
-        const trimmed = typeof label === 'string' ? label.trim() : '';
-        if (!trimmed) {
-            return null;
-        }
+        const parentCandidates = [
+            typeof entry.parentCategoryId === 'string' ? entry.parentCategoryId : '',
+            typeof entry.parentCategoryCode === 'string' ? entry.parentCategoryCode : '',
+            typeof entry.parent === 'string' ? entry.parent : '',
+            typeof entry.parentCategory === 'string' ? entry.parentCategory : '',
+            typeof entry.parentCategoryLabel === 'string' ? entry.parentCategoryLabel : ''
+        ];
 
-        const existing = aliasLookup.get(canonicalize(trimmed));
-        if (existing) {
-            return existing;
-        }
-
-        const syntheticEntry = {
-            id: trimmed,
-            nameEnglish: trimmed,
-            nameArabic: sourceEntry && typeof sourceEntry.parentArabic === 'string'
-                ? sourceEntry.parentArabic.trim()
-                : '',
-            synthetic: true
-        };
-        return createNode(trimmed, syntheticEntry, true);
-    };
-
-    const list = Array.isArray(items) ? items : [];
-    list.forEach(entry => {
-        const node = ensureNodeForEntry(entry);
-        if (!node) return;
-
-        const parentLabel = typeof entry.parent === 'string' ? entry.parent.trim() : '';
-        if (parentLabel) {
-            const parentNode = ensureNodeForLabel(parentLabel, entry);
+        const parentKeySource = parentCandidates.find(value => value && String(value).trim());
+        if (parentKeySource) {
+            const parentNode = ensureNode(parentKeySource);
             if (parentNode) {
-                node.parentKey = parentNode.key;
+                node.parent = parentNode;
                 if (!parentNode.children.includes(node)) {
                     parentNode.children.push(node);
                 }
             }
-        } else {
-            node.parentKey = null;
         }
     });
 
+    nodeRegistry.forEach(node => {
+        if (Array.isArray(node.children)) {
+            node.children = node.children.filter((child, index, array) => array.indexOf(child) === index);
+        }
+    });
+
+    const resolveLabel = entry => (entry && (entry.nameEnglish || entry.name || entry.nameArabic || entry.id || '')) || '';
+
+    const sortNodes = list => {
+        list.sort((a, b) => resolveLabel(a.entry).localeCompare(resolveLabel(b.entry), undefined, { sensitivity: 'base' }));
+        list.forEach(child => {
+            if (Array.isArray(child.children) && child.children.length) {
+                sortNodes(child.children);
+            }
+        });
+    };
+
     const roots = [];
-    nodes.forEach(node => {
-        if (!node.parentKey || !nodes.has(node.parentKey)) {
+    nodeRegistry.forEach(node => {
+        if (!node.parent) {
             roots.push(node);
         }
     });
 
-    const compareNodesForTree = (a, b) => {
-        if (a === b) return 0;
-        if (!a || !b) return 0;
-        if (!a.synthetic && b.synthetic) return -1;
-        if (a.synthetic && !b.synthetic) return 1;
-        const entryA = a.entry || {};
-        const entryB = b.entry || {};
-        const result = compareCategoriesForTree(entryA, entryB);
-        if (result !== 0) {
-            return result;
-        }
-        return String(a.key || '').localeCompare(String(b.key || ''));
-    };
+    sortNodes(roots);
 
-    const sortTree = node => {
-        node.children.sort(compareNodesForTree).forEach(sortTree);
-    };
-
-    roots.sort(compareNodesForTree).forEach(sortTree);
-    return { roots, nodeMap: nodes };
+    return { roots, aliasLookup };
 }
 
 function renderCategoryModalTree(items, onSelect, options = {}) {
     const container = document.getElementById('categoryModalList');
     if (!container) return;
+
+    const canonicalize = value => (typeof value === 'string' ? value.trim().toLowerCase() : '');
+
+    const {
+        expandedKeys = new Set(),
+        selectedKey = null,
+        disableEntry = null
+    } = options;
+
+    const expandedSet = expandedKeys instanceof Set
+        ? expandedKeys
+        : new Set(Array.isArray(expandedKeys) ? expandedKeys.map(canonicalize) : []);
+
+    const selectedKeyCanonical = canonicalize(selectedKey);
+    const selectedKeyOriginal = selectedKey || null;
+    const disableEntryFn = typeof disableEntry === 'function' ? disableEntry : null;
+    const handleSelect = typeof onSelect === 'function' ? onSelect : () => {};
+
     container.innerHTML = '';
 
-    const hierarchy = buildCategoryModalHierarchy(items);
-    const roots = hierarchy.roots;
-    const nodeMap = hierarchy.nodeMap;
-    if (!roots.length) {
-        container.innerHTML = '<div style="color:#888;text-align:center;padding:16px;">There is no Data Available</div>';
+    const source = Array.isArray(items) ? items.filter(Boolean) : [];
+    if (!source.length) {
+        container.innerHTML = '<div class="empty-tree">No categories available.</div>';
         return;
     }
 
-    const expandedSet = options.expandedKeys instanceof Set ? options.expandedKeys : new Set();
-    const selectedKey = options.selectedKey || null;
-    const disableEntry = typeof options.disableEntry === 'function' ? options.disableEntry : null;
+    const { roots } = buildCategoryModalHierarchy(source);
 
-    const ul = document.createElement('ul');
-    ul.className = 'tree-root';
-
-    const collectPathKeys = node => {
-        const keys = [];
-        let current = node;
-        const guard = new Set();
-        while (current && !guard.has(current) && typeof current.key === 'string' && current.key.trim()) {
-            guard.add(current);
-            keys.push(current.key);
-            if (!current.parentKey) {
-                break;
-            }
-            const parent = nodeMap.get(current.parentKey);
-            if (!parent) {
-                break;
-            }
-            current = parent;
+    const addToExpanded = key => {
+        const canonical = canonicalize(key);
+        if (canonical) {
+            expandedSet.add(canonical);
         }
-        return keys;
+    };
+
+    const removeFromExpanded = key => {
+        const canonical = canonicalize(key);
+        if (canonical) {
+            expandedSet.delete(canonical);
+        }
     };
 
     const enforceExclusiveExpansion = node => {
-        if (!node) {
-            return;
+        if (!node) return;
+        addToExpanded(node.key);
+        let current = node.parent;
+        while (current) {
+            addToExpanded(current.key);
+            current = current.parent;
         }
-        const allowedKeys = new Set(collectPathKeys(node));
-        expandedSet.forEach(key => {
-            if (!allowedKeys.has(key)) {
-                expandedSet.delete(key);
-            }
-        });
-        allowedKeys.forEach(key => expandedSet.add(key));
     };
 
     const renderNode = node => {
+        if (!node || !node.entry) {
+            return document.createDocumentFragment();
+        }
+
         const li = document.createElement('li');
         li.className = 'tree-node';
         const hasChildren = Array.isArray(node.children) && node.children.length > 0;
-        const label = node.entry.nameEnglish || node.entry.nameArabic || node.entry.id || '';
+        const label = node.entry.nameEnglish || node.entry.name || node.entry.nameArabic || node.entry.id || '';
         const code = typeof node.entry.categoryCode === 'string' ? node.entry.categoryCode.trim() : '';
 
-        const disableMeta = disableEntry ? disableEntry(node.entry) : null;
-        const isDisabled = !!(disableMeta && disableMeta.disabled !== false);
-        const disabledReason = isDisabled && disableMeta && disableMeta.reason
-            ? String(disableMeta.reason)
-            : '';
+        const disableMeta = disableEntryFn ? disableEntryFn(node.entry) : null;
+        const isDisabled = Boolean(disableMeta && disableMeta.disabled !== false);
+        const disabledReason = disableMeta && disableMeta.reason ? String(disableMeta.reason) : '';
 
         const row = document.createElement('div');
         row.className = 'tree-row';
-        if (selectedKey && node.key === selectedKey) {
+        if (selectedKeyCanonical && node.key === selectedKeyCanonical) {
             row.classList.add('selected');
         }
         if (isDisabled) {
@@ -400,35 +336,41 @@ function renderCategoryModalTree(items, onSelect, options = {}) {
                 }
                 const currentlyExpanded = expandedSet.has(node.key);
                 if (currentlyExpanded) {
-                    expandedSet.delete(node.key);
+                    removeFromExpanded(node.key);
                 } else {
                     enforceExclusiveExpansion(node);
                 }
-                renderCategoryModalTree(items, onSelect, { expandedKeys: expandedSet, selectedKey, disableEntry });
-            } else {
-                if (!isDisabled) {
-                    onSelect(node.entry);
-                }
+                renderCategoryModalTree(items, onSelect, {
+                    expandedKeys: expandedSet,
+                    selectedKey: selectedKeyOriginal,
+                    disableEntry: disableEntryFn
+                });
+            } else if (!isDisabled) {
+                handleSelect(node.entry);
             }
         });
 
-        if (hasChildren) {
+        if (hasChildren && toggleButton) {
             toggleButton.addEventListener('click', event => {
                 event.stopPropagation();
                 const currentlyExpanded = expandedSet.has(node.key);
                 if (currentlyExpanded) {
-                    expandedSet.delete(node.key);
+                    removeFromExpanded(node.key);
                 } else {
                     enforceExclusiveExpansion(node);
                 }
-                renderCategoryModalTree(items, onSelect, { expandedKeys: expandedSet, selectedKey, disableEntry });
+                renderCategoryModalTree(items, onSelect, {
+                    expandedKeys: expandedSet,
+                    selectedKey: selectedKeyOriginal,
+                    disableEntry: disableEntryFn
+                });
             });
         }
 
         labelBtn.addEventListener('dblclick', event => {
             event.stopPropagation();
             if (!isDisabled) {
-                onSelect(node.entry);
+                handleSelect(node.entry);
             }
         });
 
@@ -436,7 +378,7 @@ function renderCategoryModalTree(items, onSelect, options = {}) {
             selectBtn.addEventListener('click', event => {
                 event.stopPropagation();
                 if (!isDisabled) {
-                    onSelect(node.entry);
+                    handleSelect(node.entry);
                 }
             });
         }
@@ -448,7 +390,12 @@ function renderCategoryModalTree(items, onSelect, options = {}) {
         return li;
     };
 
-    roots.forEach(node => ul.appendChild(renderNode(node)));
+    const ul = document.createElement('ul');
+    ul.className = 'tree-root';
+    roots.forEach(node => {
+        ul.appendChild(renderNode(node));
+    });
+
     container.appendChild(ul);
 }
 
@@ -532,7 +479,7 @@ let categoryModalSelectedKey = null;
 function setupCategoryModal() {
     const openBtn = document.getElementById('openCategoryModalBtn');
     const modal = document.getElementById('categoryModal');
-    const cancelBtn = modal.querySelector('[data-category-modal-cancel]');
+    const cancelBtn = modal ? modal.querySelector('[data-category-modal-cancel]') : null;
     const input = document.getElementById('categoryParentInput');
     const clearBtn = document.getElementById('clearParentCategoryBtn');
     if (!openBtn || !modal || !input) {
@@ -2145,9 +2092,26 @@ const state = {
     usersPerPage: 10,
     currentCategoryPage: 1,
     categoriesPerPage: 10,
+    currentSpecificationPage: 1,
+    specificationsPerPage: 10,
     currentPeriod: 'monthly',
     roleSearchTerm: '',
+    roleFilters: {
+        status: 'all',
+        created: 'all',
+        assignment: 'all',
+        module: 'all'
+    },
+    selectedRoleId: null,
     userSearchTerm: '',
+    userFilters: {
+        status: 'all',
+        accountType: 'all',
+        department: 'all',
+        role: 'all'
+    },
+    selectedUserId: null,
+    selectedSpecificationId: null,
     roleBuilderMode: 'create',
     editingRoleId: null,
     editingUserId: null,
@@ -2160,6 +2124,11 @@ const state = {
     permissionCatalog: [],
     categorySearchTerm: '',
     specificationSearchTerm: '',
+    specificationFilters: {
+        status: 'all',
+        dataType: 'all',
+        requirement: 'all'
+    },
     specificationFilteredList: [],
     specificationBuilderMode: 'create',
     editingSpecificationId: null,
@@ -2188,6 +2157,7 @@ const state = {
     },
     activeIndividualAccountId: null,
     editingIndividualAccountId: null,
+    individualBusinessOverlayAccountId: null,
     currentBusinessAccountsPage: 1,
     businessAccountsPerPage: 10,
     businessAccountsFilters: {
@@ -2367,37 +2337,28 @@ function formatCategoryNumericValue(value) {
 }
 
 function formatCategoryBooleanLabel(value) {
+    if (value === null || value === undefined) {
+        return '';
+    }
     if (typeof value === 'boolean') {
         return value ? 'Yes' : 'No';
     }
-    if (typeof value === 'number') {
-        return value !== 0 ? 'Yes' : 'No';
+    const normalized = String(value).trim().toLowerCase();
+    if (!normalized) {
+        return '';
     }
-    if (typeof value === 'string') {
-        const normalized = value.trim().toLowerCase();
-        if (!normalized) {
-            return 'No';
-        }
-        return ['true', '1', 'yes', 'y', 'on'].includes(normalized) ? 'Yes' : 'No';
+    if (['yes', 'true', '1', 'enabled', 'active'].includes(normalized)) {
+        return 'Yes';
     }
-    return 'No';
+    if (['no', 'false', '0', 'disabled', 'inactive'].includes(normalized)) {
+        return 'No';
+    }
+    return formatCategoryTokenLabel(value);
 }
 
 function formatCategoryAuctionPeriods(entries) {
     const summary = formatAuctionPeriodsSummary(entries);
     return summary || '';
-}
-
-function formatCategoryMinimumBid(value, sellerCanModify) {
-    const valueLabel = formatCategoryNumericValue(value);
-    const sellerLabel = formatCategoryBooleanLabel(sellerCanModify);
-    if (!valueLabel && !sellerLabel) {
-        return '';
-    }
-    if (!valueLabel) {
-        return sellerLabel;
-    }
-    return `${valueLabel} (${sellerLabel || 'No'})`;
 }
 
 // TODO: Point to the API route that accepts category import uploads.
@@ -2657,25 +2618,6 @@ const permissionActions = [
 
 const permissionSectionsTemplate = [
     {
-        id: 'dashboard',
-        label: 'Dashboard',
-        description: 'Executive KPIs and operational monitoring for the platform.',
-        apps: [
-            {
-                id: 'dashboard-executive',
-                label: 'Executive Overview',
-                description: 'Top-line performance tiles and leadership scorecards.',
-                defaultAction: 'view'
-            },
-            {
-                id: 'dashboard-operations',
-                label: 'Operational Insights',
-                description: 'Field team utilisation, SLA status, and backlog trends.',
-                defaultAction: 'view'
-            }
-        ]
-    },
-    {
         id: 'users',
         label: 'Users',
         description: 'Role templates and access provisioning for platform staff.',
@@ -2688,7 +2630,7 @@ const permissionSectionsTemplate = [
             },
             {
                 id: 'users-management',
-                label: 'Users Management',
+                label: 'User Accounts Management',
                 description: 'Onboard, suspend, and maintain user accounts.',
                 defaultAction: 'enter'
             }
@@ -2701,7 +2643,7 @@ const permissionSectionsTemplate = [
         apps: [
             {
                 id: 'categories-management',
-                label: 'Category Management',
+                label: 'Categories Management',
                 description: 'Structure category trees, assign stewards, and publish updates.',
                 defaultAction: 'modify'
             },
@@ -2709,174 +2651,6 @@ const permissionSectionsTemplate = [
                 id: 'categories-specifications',
                 label: 'Specifications Management',
                 description: 'Craft inspection blueprints and coordinate data collection standards.',
-                defaultAction: 'modify'
-            }
-        ]
-    },
-    {
-        id: 'settings',
-        label: 'Settings',
-        description: 'Tenant defaults, security controls, and integration setup.',
-        apps: [
-            {
-                id: 'settings-configuration',
-                label: 'Configuration',
-                description: 'General settings, notifications, and API access.',
-                defaultAction: 'delete'
-            },
-            {
-                id: 'settings-integrations',
-                label: 'Integrations',
-                description: 'Third-party connections and data exchange management.',
-                defaultAction: 'delete'
-            }
-        ]
-    },
-    {
-        id: 'reports',
-        label: 'Reports',
-        description: 'Analytics, compliance artefacts, and report distribution.',
-        apps: [
-            {
-                id: 'reports-executive',
-                label: 'Executive Reports',
-                description: 'Inspection coverage, revenue impact, and satisfaction KPIs.',
-                defaultAction: 'view'
-            },
-            {
-                id: 'reports-compliance',
-                label: 'Compliance Library',
-                description: 'Regulatory artefacts, audit packs, and evidence exports.',
-                defaultAction: 'modify'
-            },
-            {
-                id: 'reports-distribution',
-                label: 'Distribution Schedules',
-                description: 'Report scheduling, recipient lists, and delivery tracking.',
-                defaultAction: 'modify'
-            }
-        ]
-    },
-    {
-        id: 'diagrams',
-        label: 'Diagrams',
-        description: 'Architecture references, interaction models, and communication blueprints.',
-        apps: [
-            {
-                id: 'diagrams-component',
-                label: 'Component Diagrams',
-                description: 'Service inventory, dependencies, and deployment scope.',
-                defaultAction: 'view'
-            },
-            {
-                id: 'diagrams-package',
-                label: 'Package Diagrams',
-                description: 'Capability bundles mapped to delivery offerings.',
-                defaultAction: 'modify'
-            },
-            {
-                id: 'diagrams-usecase',
-                label: 'Use Case Diagrams',
-                description: 'Stakeholder journeys and value exchanges.',
-                defaultAction: 'view'
-            },
-            {
-                id: 'diagrams-activity',
-                label: 'Activity Diagrams',
-                description: 'Process choreography and automation triggers.',
-                defaultAction: 'view'
-            },
-            {
-                id: 'diagrams-interaction',
-                label: 'Interaction Overview',
-                description: 'Cross-team plays and escalation pathways.',
-                defaultAction: 'view'
-            },
-            {
-                id: 'diagrams-communication',
-                label: 'Communication Diagrams',
-                description: 'Message flows, latency targets, and reliability patterns.',
-                defaultAction: 'view'
-            }
-        ]
-    },
-    {
-        id: 'packages',
-        label: 'Packages',
-        description: 'Subscription tiers, pricing, and performance metrics.',
-        apps: [
-            {
-                id: 'packages-catalog',
-                label: 'Package Catalog',
-                description: 'Tier definitions, benefits, and pricing structures.',
-                defaultAction: 'modify'
-            },
-            {
-                id: 'packages-performance',
-                label: 'Performance Metrics',
-                description: 'Adoption, renewal rate, and upsell indicators.',
-                defaultAction: 'view'
-            },
-            {
-                id: 'packages-bundles',
-                label: 'Bundle Builder',
-                description: 'Compose bespoke bundles and generate proposals.',
-                defaultAction: 'modify'
-            }
-        ]
-    },
-    {
-        id: 'product-ads',
-        label: 'Product Ads Governance',
-        description: 'Listing moderation, automation rules, and catalog oversight.',
-        apps: [
-            {
-                id: 'product-ads-directory',
-                label: 'Ads Directory',
-                description: 'Moderate listings, review statuses, and maintain audit history.',
-                defaultAction: 'modify'
-            },
-            {
-                id: 'product-ads-automation',
-                label: 'Automation Controls',
-                description: 'Trusted accounts, review queues, and blacklist policies.',
-                defaultAction: 'modify'
-            },
-            {
-                id: 'product-ads-data',
-                label: 'Data Tools',
-                description: 'Import/export pipelines and automation policy overview.',
-                defaultAction: 'modify'
-            },
-            {
-                id: 'product-ads-catalog',
-                label: 'Marketplace Catalog',
-                description: 'Curate device bundles, merchandising assets, and pricing.',
-                defaultAction: 'modify'
-            },
-            {
-                id: 'product-ads-suppliers',
-                label: 'Inventory & Suppliers',
-                description: 'Stock governance, SLA monitoring, and partner performance.',
-                defaultAction: 'view'
-            }
-        ]
-    },
-    {
-        id: 'advertisments',
-        label: 'Advertisments',
-        description: 'Campaign planning, creative assets, and performance tracking.',
-        apps: [
-            {
-                id: 'advertising-planner',
-                label: 'Campaign Planner',
-                description: 'Plan programmes, budgets, and rollout timelines.',
-                defaultAction: 'modify'
-            },
-            {
-                id: 'advertising-assets',
-                label: 'Creative Assets',
-                description: 'Manage media kits, templates, and approvals.',
                 defaultAction: 'modify'
             }
         ]
@@ -3059,7 +2833,11 @@ const defaultIndividualAccounts = [
             { id: 'txn-2001-2', label: 'Ad Publishing Fee', amount: -150, type: 'debit', timestamp: '2025-09-10T12:00:00.000Z' }
         ],
         supportRequests: [],
-        notes: 'Prefers SMS notifications.'
+        notes: 'Prefers SMS notifications.',
+        businessAssociations: [
+            { businessId: 'BUS-3210', companyName: 'Gulf Auto Hub', relationship: 'Fleet buyer', linkedAt: '2025-07-03T10:15:00.000Z' },
+            { businessId: 'BUS-3144', companyName: 'Najd Hospitality Group', relationship: 'Corporate leasing partner', linkedAt: '2025-08-22T09:30:00.000Z' }
+        ]
     },
     {
         id: 'IND-2078',
@@ -3083,7 +2861,10 @@ const defaultIndividualAccounts = [
         supportRequests: [
             { id: 'support-2078-1', reason: 'Fraud review', expiresAt: '2025-11-01T00:00:00.000Z', requestedAt: '2025-10-02T12:10:00.000Z', status: 'pending' }
         ],
-        notes: 'Account frozen pending identity confirmation.'
+        notes: 'Account frozen pending identity confirmation.',
+        businessAssociations: [
+            { businessId: 'BUS-3101', companyName: 'Al-Majd Trading Co.', relationship: 'Affiliate seller', linkedAt: '2025-07-19T11:20:00.000Z' }
+        ]
     },
     {
         id: 'IND-2110',
@@ -3101,7 +2882,8 @@ const defaultIndividualAccounts = [
         subscriptions: [],
         financialHistory: [],
         supportRequests: [],
-        notes: 'Awaiting OTP verification.'
+        notes: 'Awaiting OTP verification.',
+        businessAssociations: []
     }
 ];
 
@@ -3502,7 +3284,7 @@ const BUSINESS_PACKAGES_STORAGE_KEY = 'onruf_business_packages_v1';
 const BUSINESS_SUBSCRIBERS_STORAGE_KEY = 'onruf_business_subscribers_v1';
 const FINANCE_TRANSACTIONS_STORAGE_KEY = 'onruf_finance_transactions_v1';
 const FINANCE_AUDIT_STORAGE_KEY = 'onruf_finance_audit_v1';
-const DATA_RESET_VERSION = '20251029-remove-specification-seed';
+const DATA_RESET_VERSION = '20251102-individual-business-links';
 const DATA_RESET_KEY = 'onruf_data_reset_version';
 const CATEGORY_RESET_VERSION = '20251021-delete-all-categories';
 const CATEGORY_RESET_KEY = 'onruf_category_reset_version';
@@ -5617,6 +5399,27 @@ function normalizeIndividualAccountPayload(account, index = 0) {
             return { id: requestId, reason, requestedAt, expiresAt, status: statusLabel };
         }).filter(Boolean)
         : [];
+    const associationsSource = Array.isArray(account.businessAssociations)
+        ? account.businessAssociations
+        : Array.isArray(account.linkedBusinesses)
+            ? account.linkedBusinesses
+            : [];
+    const businessAssociations = associationsSource
+        .map((entry, assocIndex) => {
+            if (!entry || typeof entry !== 'object') {
+                return null;
+            }
+            const businessId = typeof entry.businessId === 'string' && entry.businessId.trim()
+                ? entry.businessId.trim()
+                : typeof entry.id === 'string' && entry.id.trim()
+                    ? entry.id.trim()
+                    : `BUS-LINK-${index + 1}-${assocIndex + 1}`;
+            const companyName = typeof entry.companyName === 'string' && entry.companyName.trim() ? entry.companyName.trim() : '';
+            const relationship = typeof entry.relationship === 'string' && entry.relationship.trim() ? entry.relationship.trim() : 'Linked account';
+            const linkedAt = normalizeIsoTimestamp(entry.linkedAt, null);
+            return { businessId, companyName, relationship, linkedAt };
+        })
+        .filter(Boolean);
     const notes = typeof account.notes === 'string' ? account.notes.trim() : '';
     return {
         id,
@@ -5634,6 +5437,7 @@ function normalizeIndividualAccountPayload(account, index = 0) {
         subscriptions,
         financialHistory,
         supportRequests,
+        businessAssociations,
         notes
     };
 }
@@ -6339,8 +6143,23 @@ function setRoleModuleTitle(title) {
     if (!titleEl) {
         return;
     }
+
     const text = typeof title === 'string' && title.trim() ? title.trim() : 'User Roles';
-    titleEl.textContent = text;
+    const textSpan = document.getElementById('roleModuleTitleText');
+    if (textSpan) {
+        textSpan.textContent = text;
+    } else {
+        titleEl.textContent = text;
+    }
+
+    const countBadge = document.getElementById('userRolesCount');
+    if (countBadge) {
+        if (text.toLowerCase() === 'user roles') {
+            countBadge.classList.remove('hidden');
+        } else {
+            countBadge.classList.add('hidden');
+        }
+    }
 }
 
 function setCategoryModuleTitle(title) {
@@ -6349,7 +6168,21 @@ function setCategoryModuleTitle(title) {
         return;
     }
     const text = typeof title === 'string' && title.trim() ? title.trim() : 'Categories';
-    titleEl.textContent = text;
+    const textSpan = document.getElementById('categoryModuleTitleText');
+    if (textSpan) {
+        textSpan.textContent = text;
+    } else {
+        titleEl.textContent = text;
+    }
+
+    const countBadge = document.getElementById('categoryCountLabel');
+    if (countBadge) {
+        if (text.toLowerCase() === 'categories') {
+            countBadge.classList.remove('hidden');
+        } else {
+            countBadge.classList.add('hidden');
+        }
+    }
 }
 
 function setSpecificationModuleTitle(title) {
@@ -6358,7 +6191,21 @@ function setSpecificationModuleTitle(title) {
         return;
     }
     const text = typeof title === 'string' && title.trim() ? title.trim() : 'Specifications';
-    titleEl.textContent = text;
+    const textSpan = document.getElementById('specificationModuleTitleText');
+    if (textSpan) {
+        textSpan.textContent = text;
+    } else {
+        titleEl.textContent = text;
+    }
+
+    const countBadge = document.getElementById('specificationCountLabel');
+    if (countBadge) {
+        if (text.toLowerCase() === 'specifications') {
+            countBadge.classList.remove('hidden');
+        } else {
+            countBadge.classList.add('hidden');
+        }
+    }
 }
 
 function setUsersModuleTitle(title) {
@@ -6367,7 +6214,21 @@ function setUsersModuleTitle(title) {
         return;
     }
     const text = typeof title === 'string' && title.trim() ? title.trim() : 'User Accounts';
-    titleEl.textContent = text;
+    const textSpan = document.getElementById('usersModuleTitleText');
+    if (textSpan) {
+        textSpan.textContent = text;
+    } else {
+        titleEl.textContent = text;
+    }
+
+    const countBadge = document.getElementById('usersManagementCount');
+    if (countBadge) {
+        if (text.toLowerCase() === 'user accounts') {
+            countBadge.classList.remove('hidden');
+        } else {
+            countBadge.classList.add('hidden');
+        }
+    }
 }
 
 function showRoleBuilder(mode = 'create', role = null) {
@@ -6376,6 +6237,8 @@ function showRoleBuilder(mode = 'create', role = null) {
     const builder = document.getElementById('roleBuilderView');
     const addBtn = document.getElementById('addRoleBtn');
     const searchContainer = document.getElementById('roleSearchContainer');
+    const roleFiltersContainer = document.getElementById('roleFiltersContainer');
+    const roleBulkActions = document.getElementById('roleBulkActions');
     const roleForm = document.getElementById('roleForm');
     if (!directory || !builder || !addBtn || !roleForm) return;
 
@@ -6406,6 +6269,8 @@ function showRoleBuilder(mode = 'create', role = null) {
     builder.classList.remove('hidden');
     addBtn.classList.add('hidden');
     searchContainer?.classList.add('hidden');
+    roleFiltersContainer?.classList.add('hidden');
+    roleBulkActions?.classList.add('hidden');
     updateBreadcrumb('users');
 }
 
@@ -6414,6 +6279,8 @@ function hideRoleBuilder() {
     const builder = document.getElementById('roleBuilderView');
     const addBtn = document.getElementById('addRoleBtn');
     const searchContainer = document.getElementById('roleSearchContainer');
+    const roleFiltersContainer = document.getElementById('roleFiltersContainer');
+    const roleBulkActions = document.getElementById('roleBulkActions');
     const roleForm = document.getElementById('roleForm');
     if (!directory || !builder || !addBtn || !roleForm) return;
 
@@ -6424,6 +6291,8 @@ function hideRoleBuilder() {
     directory.classList.remove('hidden');
     addBtn.classList.remove('hidden');
     searchContainer?.classList.remove('hidden');
+    roleFiltersContainer?.classList.remove('hidden');
+    roleBulkActions?.classList.remove('hidden');
     setRoleModuleTitle('User Roles');
     updateBreadcrumb('users');
 }
@@ -6627,6 +6496,15 @@ function initializeApp() {
     renderStats();
     updateBreadcrumb();
 
+    renderProductAdsTable(1);
+    renderProductAdAutomationLists();
+    renderIndividualAccountsTable(1);
+    renderBusinessAccountsTable(1);
+    renderBusinessPackagesTable();
+    renderBusinessSubscribersTable();
+    renderBusinessPackageStats();
+    renderBusinessFinancialIntegration();
+
     const roleSearchInput = document.getElementById('roleSearchInput');
     if (roleSearchInput) {
         roleSearchInput.value = state.roleSearchTerm || '';
@@ -6645,6 +6523,31 @@ function initializeApp() {
     const specificationSearchInput = document.getElementById('specificationSearch');
     if (specificationSearchInput) {
         specificationSearchInput.value = state.specificationSearchTerm || '';
+    }
+
+    const specificationFiltersState = ensureSpecificationFiltersState();
+    const specificationStatusFilter = document.getElementById('specificationStatusFilter');
+    if (specificationStatusFilter) {
+        const desiredStatus = typeof specificationFiltersState.status === 'string' ? specificationFiltersState.status : 'all';
+        if (specificationStatusFilter.value !== desiredStatus) {
+            specificationStatusFilter.value = desiredStatus;
+        }
+    }
+
+    const specificationDataTypeFilter = document.getElementById('specificationDataTypeFilter');
+    if (specificationDataTypeFilter) {
+        const desiredType = typeof specificationFiltersState.dataType === 'string' ? specificationFiltersState.dataType : 'all';
+        if (specificationDataTypeFilter.value !== desiredType) {
+            specificationDataTypeFilter.value = desiredType;
+        }
+    }
+
+    const specificationRequirementFilter = document.getElementById('specificationRequirementFilter');
+    if (specificationRequirementFilter) {
+        const desiredRequirement = typeof specificationFiltersState.requirement === 'string' ? specificationFiltersState.requirement : 'all';
+        if (specificationRequirementFilter.value !== desiredRequirement) {
+            specificationRequirementFilter.value = desiredRequirement;
+        }
     }
 
     setupCategoryConfirmOverlay();
@@ -6687,6 +6590,18 @@ function setupEventListeners() {
             navigateToSection(sectionId);
         });
     });
+
+    const openOnrufBtn = document.getElementById('openOnrufPlatformBtn');
+    if (openOnrufBtn && openOnrufBtn.dataset.bound !== 'true') {
+        openOnrufBtn.addEventListener('click', () => {
+            const targetUrl = 'ONRUF/onruf-platform.html';
+            const newWindow = window.open(targetUrl, '_blank', 'noopener');
+            if (newWindow) {
+                newWindow.opener = null;
+            }
+        });
+        openOnrufBtn.dataset.bound = 'true';
+    }
 
     const financeSearchInput = document.getElementById('financeTransactionsSearchInput');
     if (financeSearchInput && financeSearchInput.dataset.bound !== 'true') {
@@ -6811,7 +6726,7 @@ function setupEventListeners() {
             // Ensure default landing views for Categories & Specifications apps
             if (sectionId === 'categories') {
                 if (targetId === 'categories-app1') {
-                    // Category Management → always show Categories by default
+                    // Categories Management → always show Categories by default
                     try {
                         hideCategoryBuilder();
                         if (typeof setCategoryModuleTitle === 'function') {
@@ -7048,6 +6963,14 @@ function setupEventListeners() {
         exportBtn.addEventListener('click', () => exportCategoryView());
     }
 
+    const resetBtn = document.getElementById('categoryResetBtn');
+    if (resetBtn && resetBtn.dataset.bound !== 'true') {
+        resetBtn.addEventListener('click', () => {
+            resetCategoryDirectoryFilters({ refresh: true });
+        });
+        resetBtn.dataset.bound = 'true';
+    }
+
     initializeCategoryImportWorkflow();
     initializeSpecificationImportWorkflow();
 
@@ -7105,6 +7028,12 @@ function setupEventListeners() {
         specificationExportBtn.dataset.bound = 'true';
     }
 
+    const specificationResetBtn = document.getElementById('specificationResetBtn');
+    if (specificationResetBtn && specificationResetBtn.dataset.bound !== 'true') {
+        specificationResetBtn.addEventListener('click', resetSpecificationFiltersAndSearch);
+        specificationResetBtn.dataset.bound = 'true';
+    }
+
     const specificationDeleteAllBtn = document.getElementById('specificationDeleteAllBtn');
     if (specificationDeleteAllBtn && specificationDeleteAllBtn.dataset.bound !== 'true') {
         specificationDeleteAllBtn.addEventListener('click', () => {
@@ -7136,10 +7065,86 @@ function setupEventListeners() {
         specificationSearch.dataset.bound = 'true';
     }
 
+    const specificationStatusFilter = document.getElementById('specificationStatusFilter');
+    if (specificationStatusFilter && specificationStatusFilter.dataset.bound !== 'true') {
+        specificationStatusFilter.addEventListener('change', event => {
+            handleSpecificationStatusFilterChange(event.target.value);
+        });
+        specificationStatusFilter.dataset.bound = 'true';
+    }
+
+    const specificationDataTypeFilter = document.getElementById('specificationDataTypeFilter');
+    if (specificationDataTypeFilter && specificationDataTypeFilter.dataset.bound !== 'true') {
+        specificationDataTypeFilter.addEventListener('change', event => {
+            handleSpecificationDataTypeFilterChange(event.target.value);
+        });
+        specificationDataTypeFilter.dataset.bound = 'true';
+    }
+
+    const specificationRequirementFilter = document.getElementById('specificationRequirementFilter');
+    if (specificationRequirementFilter && specificationRequirementFilter.dataset.bound !== 'true') {
+        specificationRequirementFilter.addEventListener('change', event => {
+            handleSpecificationRequirementFilterChange(event.target.value);
+        });
+        specificationRequirementFilter.dataset.bound = 'true';
+    }
+
     const specificationTableBody = document.getElementById('specificationsTableBody');
     if (specificationTableBody && specificationTableBody.dataset.bound !== 'true') {
         specificationTableBody.addEventListener('click', handleSpecificationTableClick);
+        specificationTableBody.addEventListener('dblclick', handleSpecificationTableDblClick);
         specificationTableBody.dataset.bound = 'true';
+    }
+
+    const specificationEditBtn = document.getElementById('specificationEditBtn');
+    if (specificationEditBtn && specificationEditBtn.dataset.bound !== 'true') {
+        specificationEditBtn.addEventListener('click', () => {
+            const selectedSpecification = getSelectedSpecification();
+            if (!selectedSpecification) {
+                return;
+            }
+            setSelectedSpecification(selectedSpecification.id, { toggle: false });
+            startSpecificationEdit(selectedSpecification.id);
+        });
+        specificationEditBtn.dataset.bound = 'true';
+    }
+
+    const specificationActivateBtn = document.getElementById('specificationActivateBtn');
+    if (specificationActivateBtn && specificationActivateBtn.dataset.bound !== 'true') {
+        specificationActivateBtn.addEventListener('click', () => {
+            const selectedSpecification = getSelectedSpecification();
+            if (!selectedSpecification) {
+                return;
+            }
+            const normalizedStatus = typeof selectedSpecification.status === 'string'
+                ? selectedSpecification.status.trim().toLowerCase()
+                : 'active';
+            if (normalizedStatus === 'active') {
+                return;
+            }
+            setSelectedSpecification(selectedSpecification.id, { toggle: false });
+            toggleSpecificationStatus(selectedSpecification.id);
+        });
+        specificationActivateBtn.dataset.bound = 'true';
+    }
+
+    const specificationDeactivateBtn = document.getElementById('specificationDeactivateBtn');
+    if (specificationDeactivateBtn && specificationDeactivateBtn.dataset.bound !== 'true') {
+        specificationDeactivateBtn.addEventListener('click', () => {
+            const selectedSpecification = getSelectedSpecification();
+            if (!selectedSpecification) {
+                return;
+            }
+            const normalizedStatus = typeof selectedSpecification.status === 'string'
+                ? selectedSpecification.status.trim().toLowerCase()
+                : 'active';
+            if (normalizedStatus === 'inactive') {
+                return;
+            }
+            setSelectedSpecification(selectedSpecification.id, { toggle: false });
+            toggleSpecificationStatus(selectedSpecification.id);
+        });
+        specificationDeactivateBtn.dataset.bound = 'true';
     }
 
     const productAdsSearchInput = document.getElementById('productAdsSearchInput');
@@ -7214,6 +7219,12 @@ function setupEventListeners() {
     if (productAdEditCancelBtn && productAdEditCancelBtn.dataset.bound !== 'true') {
         productAdEditCancelBtn.addEventListener('click', closeProductAdEditOverlay);
         productAdEditCancelBtn.dataset.bound = 'true';
+    }
+
+    const productAdEditCancelBtnSecondary = document.getElementById('productAdEditCancelBtnSecondary');
+    if (productAdEditCancelBtnSecondary && productAdEditCancelBtnSecondary.dataset.bound !== 'true') {
+        productAdEditCancelBtnSecondary.addEventListener('click', closeProductAdEditOverlay);
+        productAdEditCancelBtnSecondary.dataset.bound = 'true';
     }
 
     const addTrustedAdsBtn = document.getElementById('addTrustedAdsBtn');
@@ -7296,6 +7307,27 @@ function setupEventListeners() {
     if (individualAccountQuickActions && individualAccountQuickActions.dataset.bound !== 'true') {
         individualAccountQuickActions.addEventListener('click', handleIndividualAccountQuickAction);
         individualAccountQuickActions.dataset.bound = 'true';
+    }
+
+    const individualAccountDetailOverlay = document.getElementById('individualAccountDetailOverlay');
+    const individualAccountDetailCloseBtn = document.getElementById('individualAccountDetailCloseBtn');
+    if (individualAccountDetailCloseBtn && individualAccountDetailCloseBtn.dataset.bound !== 'true') {
+        individualAccountDetailCloseBtn.addEventListener('click', closeIndividualAccountDetailOverlay);
+        individualAccountDetailCloseBtn.dataset.bound = 'true';
+    }
+    if (individualAccountDetailOverlay && individualAccountDetailOverlay.dataset.bound !== 'true') {
+        individualAccountDetailOverlay.addEventListener('click', event => {
+            if (event.target === individualAccountDetailOverlay) {
+                closeIndividualAccountDetailOverlay();
+            }
+        });
+        individualAccountDetailOverlay.dataset.bound = 'true';
+    }
+
+    const individualAccountsToolbar = document.getElementById('individualAccountsToolbar');
+    if (individualAccountsToolbar && individualAccountsToolbar.dataset.bound !== 'true') {
+        individualAccountsToolbar.addEventListener('click', handleIndividualAccountsToolbarClick);
+        individualAccountsToolbar.dataset.bound = 'true';
     }
 
     const individualAccountEditForm = document.getElementById('individualAccountEditForm');
@@ -7450,6 +7482,44 @@ function setupEventListeners() {
         });
     }
 
+    const roleStatusFilter = document.getElementById('roleStatusFilter');
+    if (roleStatusFilter && roleStatusFilter.dataset.bound !== 'true') {
+        roleStatusFilter.addEventListener('change', event => {
+            handleRoleFilterChange('status', event.target.value);
+        });
+        roleStatusFilter.dataset.bound = 'true';
+    }
+
+    const roleCreatedFilter = document.getElementById('roleCreatedFilter');
+    if (roleCreatedFilter && roleCreatedFilter.dataset.bound !== 'true') {
+        roleCreatedFilter.addEventListener('change', event => {
+            handleRoleFilterChange('created', event.target.value);
+        });
+        roleCreatedFilter.dataset.bound = 'true';
+    }
+
+    const roleAssignmentFilter = document.getElementById('roleAssignmentFilter');
+    if (roleAssignmentFilter && roleAssignmentFilter.dataset.bound !== 'true') {
+        roleAssignmentFilter.addEventListener('change', event => {
+            handleRoleFilterChange('assignment', event.target.value);
+        });
+        roleAssignmentFilter.dataset.bound = 'true';
+    }
+
+    const roleModuleFilter = document.getElementById('roleModuleFilter');
+    if (roleModuleFilter && roleModuleFilter.dataset.bound !== 'true') {
+        roleModuleFilter.addEventListener('change', event => {
+            handleRoleFilterChange('module', event.target.value);
+        });
+        roleModuleFilter.dataset.bound = 'true';
+    }
+
+    const roleFiltersResetBtn = document.getElementById('roleFiltersResetBtn');
+    if (roleFiltersResetBtn && roleFiltersResetBtn.dataset.bound !== 'true') {
+        roleFiltersResetBtn.addEventListener('click', resetRoleFiltersAndSearch);
+        roleFiltersResetBtn.dataset.bound = 'true';
+    }
+
     const roleIdInput = document.getElementById('roleIdInput');
     if (roleIdInput && roleIdInput.dataset.bound !== 'true') {
         const triggerRoleCodeValidation = () => updateRoleCodeInlineFeedback();
@@ -7467,6 +7537,141 @@ function setupEventListeners() {
         userSearch.addEventListener('search', event => {
             renderUsersTable(event.target.value);
         });
+    }
+
+    const userStatusFilter = document.getElementById('userStatusFilter');
+    if (userStatusFilter && userStatusFilter.dataset.bound !== 'true') {
+        userStatusFilter.addEventListener('change', event => {
+            handleUserFilterChange('status', event.target.value);
+        });
+        userStatusFilter.dataset.bound = 'true';
+    }
+
+    const userAccountTypeFilter = document.getElementById('userAccountTypeFilter');
+    if (userAccountTypeFilter && userAccountTypeFilter.dataset.bound !== 'true') {
+        userAccountTypeFilter.addEventListener('change', event => {
+            handleUserFilterChange('accountType', event.target.value);
+        });
+        userAccountTypeFilter.dataset.bound = 'true';
+    }
+
+    const userDepartmentFilter = document.getElementById('userDepartmentFilter');
+    if (userDepartmentFilter && userDepartmentFilter.dataset.bound !== 'true') {
+        userDepartmentFilter.addEventListener('change', event => {
+            handleUserFilterChange('department', event.target.value);
+        });
+        userDepartmentFilter.dataset.bound = 'true';
+    }
+
+    const userRoleFilter = document.getElementById('userRoleFilter');
+    if (userRoleFilter && userRoleFilter.dataset.bound !== 'true') {
+        userRoleFilter.addEventListener('change', event => {
+            handleUserFilterChange('role', event.target.value);
+        });
+        userRoleFilter.dataset.bound = 'true';
+    }
+
+    const userFiltersResetBtn = document.getElementById('userFiltersResetBtn');
+    if (userFiltersResetBtn && userFiltersResetBtn.dataset.bound !== 'true') {
+        userFiltersResetBtn.addEventListener('click', resetUserFiltersAndSearch);
+        userFiltersResetBtn.dataset.bound = 'true';
+    }
+
+    const usersTableBody = document.getElementById('usersTableBody');
+    if (usersTableBody && usersTableBody.dataset.bound !== 'true') {
+        usersTableBody.addEventListener('click', event => {
+            const row = event.target.closest('tr[data-user-id]');
+            if (!row) return;
+            if (event.target.closest('button, a, input, label, textarea')) return;
+            const userId = row.dataset.userId;
+            if (!userId) return;
+            setSelectedUser(userId);
+        });
+
+        usersTableBody.addEventListener('dblclick', event => {
+            const row = event.target.closest('tr[data-user-id]');
+            if (!row) return;
+            const userId = row.dataset.userId;
+            if (!userId) return;
+            setSelectedUser(userId, { toggle: false });
+            const selectedUser = getSelectedUser();
+            if (selectedUser) {
+                showUserForm('edit', selectedUser.id);
+            }
+        });
+
+        usersTableBody.dataset.bound = 'true';
+    }
+
+    const userEditToolbarBtn = document.getElementById('userEditBtn');
+    if (userEditToolbarBtn && userEditToolbarBtn.dataset.bound !== 'true') {
+        userEditToolbarBtn.addEventListener('click', () => {
+            const selectedUser = getSelectedUser();
+            if (!selectedUser) return;
+            setSelectedUser(selectedUser.id, { toggle: false });
+            showUserForm('edit', selectedUser.id);
+        });
+        userEditToolbarBtn.dataset.bound = 'true';
+    }
+
+    const userInviteLinkBtn = document.getElementById('userInviteLinkBtn');
+    if (userInviteLinkBtn && userInviteLinkBtn.dataset.bound !== 'true') {
+        userInviteLinkBtn.addEventListener('click', () => {
+            const selectedUser = getSelectedUser();
+            if (!selectedUser) return;
+            showUserInvitationLink(selectedUser.id);
+        });
+        userInviteLinkBtn.dataset.bound = 'true';
+    }
+
+    const userResendInviteBtn = document.getElementById('userResendInviteBtn');
+    if (userResendInviteBtn && userResendInviteBtn.dataset.bound !== 'true') {
+        userResendInviteBtn.addEventListener('click', async () => {
+            const selectedUser = getSelectedUser();
+            if (!selectedUser) return;
+            await resendUserInvitation(selectedUser.id);
+        });
+        userResendInviteBtn.dataset.bound = 'true';
+    }
+
+    const userActivateToolbarBtn = document.getElementById('userActivateBtn');
+    if (userActivateToolbarBtn && userActivateToolbarBtn.dataset.bound !== 'true') {
+        userActivateToolbarBtn.addEventListener('click', async () => {
+            const selectedUser = getSelectedUser();
+            if (!selectedUser) return;
+            const statusValue = typeof selectedUser.status === 'string' ? selectedUser.status.trim().toLowerCase() : '';
+            if (statusValue === 'active' || statusValue === 'pending') {
+                return;
+            }
+            setSelectedUser(selectedUser.id, { toggle: false });
+            await toggleUserStatus(selectedUser.id);
+        });
+        userActivateToolbarBtn.dataset.bound = 'true';
+    }
+
+    const userDeactivateToolbarBtn = document.getElementById('userDeactivateBtn');
+    if (userDeactivateToolbarBtn && userDeactivateToolbarBtn.dataset.bound !== 'true') {
+        userDeactivateToolbarBtn.addEventListener('click', async () => {
+            const selectedUser = getSelectedUser();
+            if (!selectedUser) return;
+            const statusValue = typeof selectedUser.status === 'string' ? selectedUser.status.trim().toLowerCase() : '';
+            if (statusValue !== 'active') {
+                return;
+            }
+            setSelectedUser(selectedUser.id, { toggle: false });
+            await toggleUserStatus(selectedUser.id);
+        });
+        userDeactivateToolbarBtn.dataset.bound = 'true';
+    }
+
+    const userDeleteToolbarBtn = document.getElementById('userDeleteBtn');
+    if (userDeleteToolbarBtn && userDeleteToolbarBtn.dataset.bound !== 'true') {
+        userDeleteToolbarBtn.addEventListener('click', async () => {
+            const selectedUser = getSelectedUser();
+            if (!selectedUser) return;
+            await handleUserDelete(selectedUser.id);
+        });
+        userDeleteToolbarBtn.dataset.bound = 'true';
     }
 
     const addUserBtn = document.getElementById('addUserBtn');
@@ -7529,20 +7734,69 @@ function setupEventListeners() {
     if (rolesTableBody) {
         rolesTableBody.addEventListener('click', async event => {
             const button = event.target.closest('.action-btn');
-            if (!button) return;
-            const roleId = button.dataset.role;
-            if (!roleId) return;
-            if (button.dataset.action === 'view') {
-                viewRole(roleId);
-            } else if (button.dataset.action === 'view-users') {
-                viewRoleUsers(roleId);
-            } else if (button.dataset.action === 'edit') {
-                editRole(roleId);
-            } else if (button.dataset.action === 'toggle') {
-                await toggleRoleStatus(roleId);
-            } else if (button.dataset.action === 'delete') {
-                await deleteRole(roleId);
+            if (button) {
+                const roleId = button.dataset.role;
+                if (!roleId) return;
+                setSelectedRole(roleId, { toggle: false });
+                if (button.dataset.action === 'view') {
+                    viewRole(roleId);
+                } else if (button.dataset.action === 'view-users') {
+                    viewRoleUsers(roleId);
+                }
+                return;
             }
+
+            const row = event.target.closest('tr[data-role-id]');
+            if (!row) return;
+            if (event.target.closest('button')) return;
+            const roleId = row.dataset.roleId;
+            if (!roleId) return;
+            setSelectedRole(roleId);
+        });
+    }
+
+    const roleEditBtn = document.getElementById('roleEditBtn');
+    if (roleEditBtn) {
+        roleEditBtn.addEventListener('click', () => {
+            const selectedRole = getSelectedRole();
+            if (!selectedRole) return;
+            setSelectedRole(selectedRole.id, { toggle: false });
+            editRole(selectedRole.id);
+        });
+    }
+
+    const roleActivateBtn = document.getElementById('roleActivateBtn');
+    if (roleActivateBtn) {
+        roleActivateBtn.addEventListener('click', async () => {
+            const selectedRole = getSelectedRole();
+            if (!selectedRole) return;
+            if (String(selectedRole.status).toLowerCase() === 'active') {
+                return;
+            }
+            setSelectedRole(selectedRole.id, { toggle: false });
+            await toggleRoleStatus(selectedRole.id);
+        });
+    }
+
+    const roleDeactivateBtn = document.getElementById('roleDeactivateBtn');
+    if (roleDeactivateBtn) {
+        roleDeactivateBtn.addEventListener('click', async () => {
+            const selectedRole = getSelectedRole();
+            if (!selectedRole) return;
+            if (String(selectedRole.status).toLowerCase() !== 'active') {
+                return;
+            }
+            setSelectedRole(selectedRole.id, { toggle: false });
+            await toggleRoleStatus(selectedRole.id);
+        });
+    }
+
+    const roleDeleteBtn = document.getElementById('roleDeleteBtn');
+    if (roleDeleteBtn) {
+        roleDeleteBtn.addEventListener('click', async () => {
+            const selectedRole = getSelectedRole();
+            if (!selectedRole) return;
+            await deleteRole(selectedRole.id);
         });
     }
 
@@ -7587,6 +7841,43 @@ function setupEventListeners() {
         });
         specificationDetailOverlay.dataset.bound = 'true';
     }
+    const individualAccountEditOverlay = document.getElementById('individualAccountEditOverlay');
+    const individualAccountEditCloseBtn = document.getElementById('individualAccountEditCloseBtn');
+    if (individualAccountEditCloseBtn && individualAccountEditCloseBtn.dataset.bound !== 'true') {
+        individualAccountEditCloseBtn.addEventListener('click', closeIndividualAccountEditOverlay);
+        individualAccountEditCloseBtn.dataset.bound = 'true';
+    }
+    if (individualAccountEditOverlay && individualAccountEditOverlay.dataset.bound !== 'true') {
+        individualAccountEditOverlay.addEventListener('click', event => {
+            if (event.target === individualAccountEditOverlay) {
+                closeIndividualAccountEditOverlay();
+            }
+        });
+        individualAccountEditOverlay.dataset.bound = 'true';
+    }
+    const individualAccountBusinessOverlay = document.getElementById('individualAccountBusinessOverlay');
+    const individualAccountBusinessCloseBtn = document.getElementById('individualAccountBusinessCloseBtn');
+    if (individualAccountBusinessCloseBtn && individualAccountBusinessCloseBtn.dataset.bound !== 'true') {
+        individualAccountBusinessCloseBtn.addEventListener('click', closeIndividualAccountBusinessOverlay);
+        individualAccountBusinessCloseBtn.dataset.bound = 'true';
+    }
+    if (individualAccountBusinessOverlay && individualAccountBusinessOverlay.dataset.bound !== 'true') {
+        individualAccountBusinessOverlay.addEventListener('click', event => {
+            if (event.target === individualAccountBusinessOverlay) {
+                closeIndividualAccountBusinessOverlay();
+            }
+        });
+        individualAccountBusinessOverlay.dataset.bound = 'true';
+    }
+    const businessAccountDecisionOverlay = document.getElementById('businessAccountDecisionOverlay');
+    if (businessAccountDecisionOverlay && businessAccountDecisionOverlay.dataset.bound !== 'true') {
+        businessAccountDecisionOverlay.addEventListener('click', event => {
+            if (event.target === businessAccountDecisionOverlay) {
+                closeBusinessAccountDecisionOverlay();
+            }
+        });
+        businessAccountDecisionOverlay.dataset.bound = 'true';
+    }
     document.addEventListener('keydown', event => {
         if (event.key !== 'Escape') {
             return;
@@ -7601,6 +7892,22 @@ function setupEventListeners() {
         }
         if (specificationDetailOverlay && !specificationDetailOverlay.classList.contains('hidden')) {
             hideSpecificationSubSpecifications();
+            return;
+        }
+        if (individualAccountDetailOverlay && !individualAccountDetailOverlay.classList.contains('hidden')) {
+            closeIndividualAccountDetailOverlay();
+            return;
+        }
+        if (individualAccountEditOverlay && !individualAccountEditOverlay.classList.contains('hidden')) {
+            closeIndividualAccountEditOverlay();
+            return;
+        }
+        if (individualAccountBusinessOverlay && !individualAccountBusinessOverlay.classList.contains('hidden')) {
+            closeIndividualAccountBusinessOverlay();
+            return;
+        }
+        if (businessAccountDecisionOverlay && !businessAccountDecisionOverlay.classList.contains('hidden')) {
+            closeBusinessAccountDecisionOverlay();
         }
     });
 
@@ -7745,6 +8052,12 @@ function navigateToSection(sectionId) {
         hideSpecificationSubSpecifications();
     }
 
+    if (sectionId !== 'onruf-users') {
+        closeIndividualAccountEditOverlay();
+        closeBusinessAccountDetailDrawer();
+        closeBusinessAccountDecisionOverlay();
+    }
+
     updateBreadcrumb(sectionId);
 }
 
@@ -7772,6 +8085,14 @@ function activateSubApp(sectionId, subAppId) {
         if (subAppId !== 'users-app2') {
             hideUserForm();
         }
+    } else if (sectionId === 'onruf-users') {
+        if (subAppId !== 'onruf-users-individual') {
+            closeIndividualAccountEditOverlay();
+        }
+        if (subAppId !== 'onruf-users-business') {
+            closeBusinessAccountDetailDrawer();
+            closeBusinessAccountDecisionOverlay();
+        }
     }
 }
 
@@ -7789,6 +8110,7 @@ function updateBreadcrumb(sectionId = state.currentSection) {
         packages: 'Packages',
         advertisments: 'Advertisments',
         'product-ads': 'Product Ads Governance',
+        'onruf-users': 'ONRUF Users',
         'individual-accounts': 'Individual Accounts',
         'business-accounts': 'Business Accounts',
         'finance-payments': 'Finance & Payments'
@@ -7965,12 +8287,30 @@ function deleteAllSpecifications({ refresh = true } = {}) {
     subSpecificationWorkingCopy = [];
     subSpecificationPendingFocusIndex = null;
     state.activeCategorySpecificationId = null;
+    state.selectedSpecificationId = null;
     hideSpecificationDetailOverlay();
     hideSpecificationBuilder({ resetForm: true });
     state.specificationSearchTerm = '';
     const specSearchInput = document.getElementById('specificationSearch');
     if (specSearchInput) {
         specSearchInput.value = '';
+    }
+
+    const specFilters = ensureSpecificationFiltersState();
+    specFilters.status = 'all';
+    specFilters.dataType = 'all';
+    specFilters.requirement = 'all';
+    const specStatusFilter = document.getElementById('specificationStatusFilter');
+    if (specStatusFilter) {
+        specStatusFilter.value = 'all';
+    }
+    const specDataTypeFilter = document.getElementById('specificationDataTypeFilter');
+    if (specDataTypeFilter) {
+        specDataTypeFilter.value = 'all';
+    }
+    const specRequirementFilter = document.getElementById('specificationRequirementFilter');
+    if (specRequirementFilter) {
+        specRequirementFilter.value = 'all';
     }
 
     syncCategorySpecificationCounts({
@@ -7985,6 +8325,7 @@ function deleteAllSpecifications({ refresh = true } = {}) {
         updateCategoryBadges();
         refreshSpecificationDetailOverlay();
         refreshCategorySpecificationOverlay();
+        updateSpecificationControls();
     }
 }
 
@@ -7997,6 +8338,7 @@ function showSpecificationBuilder(mode = 'create', specification = null) {
     const builder = document.getElementById('specificationBuilderView');
     const actions = document.getElementById('specificationActions');
     const search = document.getElementById('specificationSearchContainer');
+    const filters = document.getElementById('specificationFiltersContainer');
     if (!builder || !listView) {
         return;
     }
@@ -8032,6 +8374,9 @@ function showSpecificationBuilder(mode = 'create', specification = null) {
     if (search) {
         search.classList.add('hidden');
     }
+    if (filters) {
+        filters.classList.add('hidden');
+    }
 
     if (typeof builder.scrollIntoView === 'function') {
         const rect = builder.getBoundingClientRect();
@@ -8056,6 +8401,7 @@ function hideSpecificationBuilder({ resetForm = true } = {}) {
     const builder = document.getElementById('specificationBuilderView');
     const actions = document.getElementById('specificationActions');
     const search = document.getElementById('specificationSearchContainer');
+    const filters = document.getElementById('specificationFiltersContainer');
     if (!builder || !listView) {
         return;
     }
@@ -8071,6 +8417,9 @@ function hideSpecificationBuilder({ resetForm = true } = {}) {
     }
     if (search) {
         search.classList.remove('hidden');
+    }
+    if (filters) {
+        filters.classList.remove('hidden');
     }
 
     state.specificationBuilderMode = 'create';
@@ -8665,20 +9014,292 @@ function specificationMatchesSearch(specification, searchTerm) {
     return tokens.every(token => haystack.includes(token.toLowerCase()));
 }
 
-function renderSpecificationList() {
-    const tableBody = document.getElementById('specificationsTableBody');
-    if (!tableBody) {
-        state.specificationFilteredList = [];
-        updateCategoryBadges();
-        refreshCategorySpecificationOverlay();
+function normalizeSpecificationStatusValue(value) {
+    if (value === null || value === undefined) {
+        return '';
+    }
+    const normalized = String(value).trim().toLowerCase();
+    if (!normalized) {
+        return '';
+    }
+    if (normalized === 'in-active' || normalized === 'in_active' || normalized === 'in active' || normalized === 'deactivated') {
+        return 'inactive';
+    }
+    if (normalized === 'monitor') {
+        return 'monitoring';
+    }
+    return normalized;
+}
+
+function ensureSpecificationFiltersState() {
+    if (!state.specificationFilters || typeof state.specificationFilters !== 'object') {
+        state.specificationFilters = {
+            status: 'all',
+            dataType: 'all',
+            requirement: 'all'
+        };
+    }
+
+    const filters = state.specificationFilters;
+    if (typeof filters.status !== 'string') {
+        filters.status = 'all';
+    }
+    if (typeof filters.dataType !== 'string') {
+        filters.dataType = 'all';
+    }
+    if (typeof filters.requirement !== 'string') {
+        filters.requirement = 'all';
+    }
+
+    filters.status = filters.status.trim().toLowerCase() || 'all';
+    filters.dataType = filters.dataType.trim().toLowerCase() || 'all';
+    filters.requirement = filters.requirement.trim().toLowerCase() || 'all';
+
+    if (filters.dataType !== 'all') {
+        filters.dataType = normalizeSpecificationDataType(filters.dataType, filters.dataType);
+    }
+    if (filters.requirement !== 'all') {
+        const normalizedRequirement = filters.requirement === 'required' ? 'required' : 'optional';
+        filters.requirement = normalizedRequirement;
+    }
+
+    return filters;
+}
+
+function buildSpecificationStatusFilterOptions() {
+    const options = [{ value: 'all', label: 'All' }];
+    const dataset = Array.isArray(specifications) ? specifications : [];
+    const statuses = new Set();
+
+    dataset.forEach(specification => {
+        if (!specification) {
+            return;
+        }
+        const normalized = normalizeSpecificationStatusValue(specification.status);
+        if (normalized) {
+            statuses.add(normalized);
+        }
+    });
+
+    const preferredOrder = ['active', 'inactive', 'draft', 'monitoring', 'archived'];
+
+    preferredOrder.forEach(status => {
+        if (statuses.has(status)) {
+            options.push({ value: status, label: formatSpecificationStatus(status) });
+            statuses.delete(status);
+        }
+    });
+
+    Array.from(statuses)
+        .sort()
+        .forEach(status => {
+            options.push({ value: status, label: formatSpecificationStatus(status) });
+        });
+
+    return options;
+}
+
+function buildSpecificationDataTypeFilterOptions() {
+    const options = [{ value: 'all', label: 'All' }];
+    const dataset = Array.isArray(specifications) ? specifications : [];
+    const dataTypes = new Set();
+
+    dataset.forEach(specification => {
+        if (!specification) {
+            return;
+        }
+        const canonical = normalizeSpecificationDataType(specification.dataType, 'short-text');
+        if (canonical) {
+            dataTypes.add(canonical);
+        }
+    });
+
+    const preferredOrder = Array.from(SPECIFICATION_TYPE_LABELS.keys());
+
+    preferredOrder.forEach(type => {
+        if (dataTypes.has(type)) {
+            options.push({ value: type, label: formatSpecificationType(type) });
+            dataTypes.delete(type);
+        }
+    });
+
+    Array.from(dataTypes)
+        .sort()
+        .forEach(type => {
+            options.push({ value: type, label: formatSpecificationType(type) });
+        });
+
+    return options;
+}
+
+function renderSpecificationFilters() {
+    const statusSelect = document.getElementById('specificationStatusFilter');
+    const typeSelect = document.getElementById('specificationDataTypeFilter');
+    const requirementSelect = document.getElementById('specificationRequirementFilter');
+
+    if (!statusSelect && !typeSelect && !requirementSelect) {
         return;
     }
 
+    const filters = ensureSpecificationFiltersState();
+    if (statusSelect) {
+        const statusOptions = buildSpecificationStatusFilterOptions();
+        statusSelect.innerHTML = statusOptions
+            .map(option => `<option value="${escapeAttribute(option.value)}">${escapeHtml(option.label)}</option>`)
+            .join('');
+
+        const allowedStatuses = new Set(statusOptions.map(option => option.value));
+        const desiredStatus = typeof filters.status === 'string' ? filters.status : 'all';
+        const appliedStatus = allowedStatuses.has(desiredStatus) ? desiredStatus : 'all';
+        if (filters.status !== appliedStatus) {
+            filters.status = appliedStatus;
+        }
+        if (statusSelect.value !== appliedStatus) {
+            statusSelect.value = appliedStatus;
+        }
+    }
+
+    if (typeSelect) {
+        const typeOptions = buildSpecificationDataTypeFilterOptions();
+        typeSelect.innerHTML = typeOptions
+            .map(option => `<option value="${escapeAttribute(option.value)}">${escapeHtml(option.label)}</option>`)
+            .join('');
+
+        const allowedTypes = new Set(typeOptions.map(option => option.value));
+        const desiredType = typeof filters.dataType === 'string' ? filters.dataType : 'all';
+        const appliedType = allowedTypes.has(desiredType) ? desiredType : 'all';
+        if (filters.dataType !== appliedType) {
+            filters.dataType = appliedType;
+        }
+        if (typeSelect.value !== appliedType) {
+            typeSelect.value = appliedType;
+        }
+    }
+
+    if (requirementSelect) {
+        const requirementOptions = [
+            { value: 'all', label: 'All' },
+            { value: 'required', label: 'Required' },
+            { value: 'optional', label: 'Optional' }
+        ];
+
+        requirementSelect.innerHTML = requirementOptions
+            .map(option => `<option value="${escapeAttribute(option.value)}">${escapeHtml(option.label)}</option>`)
+            .join('');
+
+        const allowedRequirements = new Set(requirementOptions.map(option => option.value));
+        const desiredRequirement = typeof filters.requirement === 'string' ? filters.requirement : 'all';
+        const appliedRequirement = allowedRequirements.has(desiredRequirement) ? desiredRequirement : 'all';
+        if (filters.requirement !== appliedRequirement) {
+            filters.requirement = appliedRequirement;
+        }
+        if (requirementSelect.value !== appliedRequirement) {
+            requirementSelect.value = appliedRequirement;
+        }
+    }
+}
+
+function handleSpecificationStatusFilterChange(rawValue) {
+    const filters = ensureSpecificationFiltersState();
+    let nextValue = typeof rawValue === 'string' ? rawValue.trim().toLowerCase() : 'all';
+    if (nextValue === 'all' || !nextValue) {
+        nextValue = 'all';
+    } else {
+        nextValue = normalizeSpecificationStatusValue(nextValue) || 'all';
+    }
+    if (filters.status !== nextValue) {
+        filters.status = nextValue;
+    }
+    state.currentSpecificationPage = 1;
+    renderSpecificationList(1);
+}
+
+function handleSpecificationDataTypeFilterChange(rawValue) {
+    const filters = ensureSpecificationFiltersState();
+    let nextValue = typeof rawValue === 'string' ? rawValue.trim().toLowerCase() : 'all';
+    if (nextValue === 'all' || !nextValue) {
+        nextValue = 'all';
+    } else {
+        nextValue = normalizeSpecificationDataType(nextValue, nextValue);
+    }
+    if (filters.dataType !== nextValue) {
+        filters.dataType = nextValue;
+    }
+    state.currentSpecificationPage = 1;
+    renderSpecificationList(1);
+}
+
+function handleSpecificationRequirementFilterChange(rawValue) {
+    const filters = ensureSpecificationFiltersState();
+    let nextValue = typeof rawValue === 'string' ? rawValue.trim().toLowerCase() : 'all';
+    if (nextValue === 'all' || !nextValue) {
+        nextValue = 'all';
+    } else {
+        nextValue = nextValue === 'required' ? 'required' : 'optional';
+    }
+    if (filters.requirement !== nextValue) {
+        filters.requirement = nextValue;
+    }
+    state.currentSpecificationPage = 1;
+    renderSpecificationList(1);
+}
+
+function resetSpecificationFiltersAndSearch() {
+    const filters = ensureSpecificationFiltersState();
+    filters.status = 'all';
+    filters.dataType = 'all';
+    filters.requirement = 'all';
+
+    state.specificationSearchTerm = '';
+    state.selectedSpecificationId = null;
+    state.currentSpecificationPage = 1;
+
+    const specificationSearchInput = document.getElementById('specificationSearch');
+    if (specificationSearchInput && specificationSearchInput.value !== '') {
+        specificationSearchInput.value = '';
+    }
+
+    renderSpecificationList(1);
+}
+
+function renderSpecificationList(page = state.currentSpecificationPage) {
+    const tableBody = document.getElementById('specificationsTableBody');
+    if (!tableBody) {
+        state.specificationFilteredList = [];
+        renderSpecificationsPagination(1, 0);
+        updateCategoryBadges();
+        refreshSpecificationDetailOverlay();
+        refreshCategorySpecificationOverlay();
+        updateSpecificationControls();
+        return;
+    }
+
+    renderSpecificationFilters();
+
     const snapshot = Array.isArray(specifications) ? specifications.slice() : [];
     const searchTerm = (state.specificationSearchTerm || '').trim().toLowerCase();
-    const filtered = searchTerm
+    let filtered = searchTerm
         ? snapshot.filter(entry => specificationMatchesSearch(entry, searchTerm))
         : snapshot;
+
+    const filters = ensureSpecificationFiltersState();
+    const statusFilter = typeof filters.status === 'string' ? filters.status : 'all';
+    if (statusFilter && statusFilter !== 'all') {
+        filtered = filtered.filter(entry => normalizeSpecificationStatusValue(entry && entry.status) === statusFilter);
+    }
+
+    const dataTypeFilter = typeof filters.dataType === 'string' ? filters.dataType : 'all';
+    if (dataTypeFilter && dataTypeFilter !== 'all') {
+        filtered = filtered.filter(entry => normalizeSpecificationDataType(entry && entry.dataType, 'short-text') === dataTypeFilter);
+    }
+
+    const requirementFilter = typeof filters.requirement === 'string' ? filters.requirement : 'all';
+    if (requirementFilter && requirementFilter !== 'all') {
+        filtered = filtered.filter(entry => {
+            const isRequired = Boolean(entry && entry.isRequired);
+            return requirementFilter === 'required' ? isRequired : !isRequired;
+        });
+    }
 
     filtered.sort((a, b) => {
         const timeA = Date.parse(a && a.createdAt ? a.createdAt : '') || 0;
@@ -8691,36 +9312,51 @@ function renderSpecificationList() {
         return idA.localeCompare(idB);
     });
 
-    if (!filtered.length) {
-        state.specificationFilteredList = [];
-    tableBody.innerHTML = '<tr><td colspan="11" style="padding:16px;text-align:center;color:#6b7280; font-size:16px; font-weight:600;">There is no Data Available</td></tr>';
-        updateCategoryBadges();
-        refreshCategorySpecificationOverlay();
-        return;
+    if (state.selectedSpecificationId) {
+        const selectedId = String(state.selectedSpecificationId);
+        const stillExists = snapshot.some(entry => entry && String(entry.id) === selectedId);
+        const visibleInFiltered = stillExists && filtered.some(entry => entry && String(entry.id) === selectedId);
+        if (!stillExists || !visibleInFiltered) {
+            state.selectedSpecificationId = null;
+        }
     }
 
     state.specificationFilteredList = filtered;
-    const rows = filtered.map((entry, index) => {
-        const rowNumber = index + 1;
-        const categoriesLabel = formatSpecificationCategories(entry);
-        const categoryIds = Array.isArray(entry.categoryIds)
-            ? entry.categoryIds.map(id => (typeof id === 'string' ? id.trim() : '')).filter(Boolean)
-            : [];
-        const categoryLabelsList = Array.isArray(entry.categoryLabels)
-            ? entry.categoryLabels.map(label => (typeof label === 'string' ? label.trim() : '')).filter(Boolean)
-            : [];
-        const categoryCount = categoryIds.length || categoryLabelsList.length;
-        const categoryCountDisplay = `${categoryCount} ${categoryCount === 1 ? 'category' : 'categories'}`;
-        const categoriesTooltip = categoriesLabel && categoriesLabel !== 'Unassigned'
-            ? categoriesLabel
-            : 'No categories assigned';
-        const categoryButtonLabel = categoryCount
-            ? `View ${categoryCountDisplay} for this specification`
-            : 'View categories (none assigned)';
-        const categoryButtonTitle = categoriesLabel && categoriesLabel !== 'Unassigned'
-            ? `${categoryButtonLabel}: ${categoriesLabel}`
-            : categoryButtonLabel;
-        const requiredLabel = entry.isRequired ? 'Yes' : 'No';
+
+    if (!filtered.length) {
+        tableBody.innerHTML = '<tr><td colspan="9" style="padding:16px;text-align:center;color:#6b7280; font-size:16px; font-weight:600;">There is no Data Available</td></tr>';
+        renderSpecificationsPagination(1, 0);
+        updateCategoryBadges();
+        refreshSpecificationDetailOverlay();
+        refreshCategorySpecificationOverlay();
+        updateSpecificationControls();
+        return;
+    }
+
+    const totalPages = Math.max(1, Math.ceil(filtered.length / state.specificationsPerPage));
+    state.currentSpecificationPage = Math.min(Math.max(page, 1), totalPages);
+    const startIndex = (state.currentSpecificationPage - 1) * state.specificationsPerPage;
+    const visible = filtered.slice(startIndex, startIndex + state.specificationsPerPage);
+
+    const selectedSpecId = state.selectedSpecificationId ? String(state.selectedSpecificationId) : null;
+
+    const rows = visible.map((entry, index) => {
+        if (!entry) {
+            return '';
+        }
+
+        const rowNumber = startIndex + index + 1;
+        const specIdRaw = typeof entry.id === 'string' ? entry.id.trim() : entry.id ? String(entry.id) : '';
+        const hasStableId = Boolean(specIdRaw);
+        const specIdAttribute = hasStableId ? escapeAttribute(specIdRaw) : '';
+        const dataAttribute = hasStableId ? ` data-spec-id="${specIdAttribute}"` : '';
+        const isSelected = hasStableId && selectedSpecId && selectedSpecId === specIdRaw;
+        const rowClassAttr = isSelected ? ' class="selected"' : '';
+        const ariaSelected = isSelected ? 'true' : 'false';
+
+        const typeLabel = formatSpecificationType(entry.dataType);
+        const requirementLabel = entry.isRequired ? 'Required' : 'Optional';
+        const requirementClass = entry.isRequired ? 'required' : 'optional';
         const statusLabel = formatSpecificationStatus(entry.status);
         const statusClass = getSpecificationStatusClass(entry.status);
         const displayName = entry.nameEnglish || entry.name || entry.nameArabic || '—';
@@ -8756,29 +9392,36 @@ function renderSpecificationList() {
         const subSpecCountDisplay = subSpecifications.length === 1
             ? '1 sub-specification'
             : `${subSpecifications.length} sub-specifications`;
-        const specIdAttribute = entry.id ? escapeAttribute(entry.id) : '';
-        const canonicalStatus = typeof entry.status === 'string' ? entry.status.trim().toLowerCase() : 'active';
-        const isActive = canonicalStatus === 'active';
-        const toggleClass = isActive ? 'deactivate' : 'activate';
-        const toggleIcon = isActive ? 'fa-power-off' : 'fa-rotate-right';
-        const toggleLabel = isActive ? 'Deactivate specification' : 'Activate specification';
-        const modifyLabel = 'Modify specification';
         const createdMeta = formatSpecificationCreatedMeta(entry);
-    const specificationCodeCell = specificationCodeLabel ? escapeHtml(specificationCodeLabel) : '—';
+        const categoriesLabel = formatSpecificationCategories(entry);
+        const categoryIds = Array.isArray(entry.categoryIds)
+            ? entry.categoryIds.map(id => (typeof id === 'string' ? id.trim() : '')).filter(Boolean)
+            : [];
+        const categoryLabelsList = Array.isArray(entry.categoryLabels)
+            ? entry.categoryLabels.map(label => (typeof label === 'string' ? label.trim() : '')).filter(Boolean)
+            : [];
+        const categoryCount = categoryIds.length || categoryLabelsList.length;
+        const categoryCountDisplay = `${categoryCount} ${categoryCount === 1 ? 'category' : 'categories'}`;
+        const categoriesTooltip = categoriesLabel && categoriesLabel !== 'Unassigned'
+            ? categoriesLabel
+            : 'No categories assigned';
+        const categoryButtonLabel = categoryCount
+            ? `View ${categoryCountDisplay} for this specification`
+            : 'View categories (none assigned)';
+        const categoryButtonTitle = categoriesLabel && categoriesLabel !== 'Unassigned'
+            ? `${categoryButtonLabel}: ${categoriesLabel}`
+            : categoryButtonLabel;
+
         return `
-            <tr>
+            <tr${dataAttribute} aria-selected="${ariaSelected}"${rowClassAttr}>
                 <td>${rowNumber}</td>
-        <td>${specificationCodeCell}</td>
+                <td>${specificationCodeLabel ? escapeHtml(specificationCodeLabel) : '—'}</td>
                 <td>${specificationNameCell}</td>
                 <td${descriptionTitleAttr}>${escapeHtml(descriptionInfo.display)}</td>
-                <td>${escapeHtml(formatSpecificationType(entry.dataType))}</td>
-                <td>${escapeHtml(requiredLabel)}</td>
                 <td>
-                    <div class="spec-category-cell">
-                        <span class="spec-category-count" title="${escapeAttribute(categoriesTooltip)}">${escapeHtml(categoryCountDisplay)}</span>
-                        <button type="button" class="action-btn view" data-action="view-categories" data-spec-id="${specIdAttribute}" title="${escapeAttribute(categoryButtonTitle)}" aria-label="${escapeAttribute(categoryButtonTitle)}">
-                            <i class="fas fa-eye"></i>
-                        </button>
+                    <div class="spec-type-cell">
+                        <span class="spec-type-label">${escapeHtml(typeLabel)}</span>
+                        <span class="spec-type-requirement spec-type-${requirementClass}">${escapeHtml(requirementLabel)}</span>
                     </div>
                 </td>
                 <td>
@@ -8789,65 +9432,110 @@ function renderSpecificationList() {
                         </button>
                     </div>
                 </td>
-                <td><span class="status-pill ${statusClass}">${escapeHtml(statusLabel)}</span></td>
-                <td>${createdMeta}</td>
                 <td>
-                    <div class="action-group">
-                        <button type="button" class="action-btn edit" data-action="modify" data-spec-id="${specIdAttribute}" title="${escapeAttribute(modifyLabel)}" aria-label="${escapeAttribute(modifyLabel)}">
-                            <i class="fas fa-pen"></i>
-                        </button>
-                        <button type="button" class="action-btn ${toggleClass}" data-action="toggle" data-spec-id="${specIdAttribute}" title="${escapeAttribute(toggleLabel)}" aria-label="${escapeAttribute(toggleLabel)}">
-                            <i class="fas ${toggleIcon}"></i>
+                    <div class="spec-category-cell">
+                        <span class="spec-category-count" title="${escapeAttribute(categoriesTooltip)}">${escapeHtml(categoryCountDisplay)}</span>
+                        <button type="button" class="action-btn view" data-action="view-categories" data-spec-id="${specIdAttribute}" title="${escapeAttribute(categoryButtonTitle)}" aria-label="${escapeAttribute(categoryButtonTitle)}">
+                            <i class="fas fa-eye"></i>
                         </button>
                     </div>
                 </td>
+                <td><span class="status-pill ${statusClass}">${escapeHtml(statusLabel)}</span></td>
+                <td>${createdMeta}</td>
             </tr>
         `;
     }).join('');
 
     tableBody.innerHTML = rows;
+    renderSpecificationsPagination(totalPages, filtered.length);
     updateCategoryBadges();
     refreshSpecificationDetailOverlay();
     refreshCategorySpecificationOverlay();
+    updateSpecificationControls();
 }
+
 
 function handleSpecificationSearch(term) {
     state.specificationSearchTerm = typeof term === 'string' ? term.trim() : '';
-    renderSpecificationList();
+    state.currentSpecificationPage = 1;
+    renderSpecificationList(1);
 }
 
 function handleSpecificationTableClick(event) {
     const trigger = event.target.closest('button[data-spec-id][data-action]');
-    if (!trigger) {
+    if (trigger) {
+        event.preventDefault();
+        const specId = (trigger.dataset.specId || '').trim();
+        const action = (trigger.dataset.action || '').trim().toLowerCase();
+
+        if (specId) {
+            setSelectedSpecification(specId, { toggle: false });
+        }
+
+        if (!specId || !action) {
+            return;
+        }
+
+        if (action === 'modify') {
+            startSpecificationEdit(specId);
+            return;
+        }
+
+        if (action === 'view-sub-specs') {
+            showSpecificationSubSpecifications(specId);
+            return;
+        }
+
+        if (action === 'view-categories') {
+            showSpecificationCategories(specId);
+            return;
+        }
+
+        if (action === 'toggle') {
+            toggleSpecificationStatus(specId);
+        }
         return;
     }
 
-    event.preventDefault();
-
-    const specId = trigger.dataset.specId || '';
-    const action = (trigger.dataset.action || '').trim().toLowerCase();
-    if (!specId || !action) {
+    const row = event.target.closest('tr[data-spec-id]');
+    if (!row) {
         return;
     }
 
-    if (action === 'modify') {
-        startSpecificationEdit(specId);
+    if (event.target.closest('button, a, input, textarea, select, label')) {
         return;
     }
 
-    if (action === 'view-sub-specs') {
-        showSpecificationSubSpecifications(specId);
+    const specId = (row.dataset.specId || '').trim();
+    if (!specId) {
+        setSelectedSpecification(null);
         return;
     }
 
-    if (action === 'view-categories') {
-        showSpecificationCategories(specId);
+    setSelectedSpecification(specId);
+}
+
+function handleSpecificationTableDblClick(event) {
+    const row = event.target.closest('tr[data-spec-id]');
+    if (!row) {
         return;
     }
 
-    if (action === 'toggle') {
-        toggleSpecificationStatus(specId);
+    if (event.target.closest('button, a, input, textarea, select, label')) {
+        return;
     }
+
+    const specId = (row.dataset.specId || '').trim();
+    if (!specId) {
+        return;
+    }
+
+    setSelectedSpecification(specId, { toggle: false });
+    const selectedSpecification = getSelectedSpecification();
+    if (!selectedSpecification) {
+        return;
+    }
+    startSpecificationEdit(selectedSpecification.id);
 }
 
 function startSpecificationEdit(specId) {
@@ -9762,6 +10450,11 @@ function handleSpecificationFormSubmit(event) {
 
     syncCategorySpecificationCounts({ persistCategories: true, persistSpecifications: false });
     saveSpecificationsToStorage();
+    state.selectedSpecificationId = typeof nextSpecificationId === 'string'
+        ? nextSpecificationId.trim()
+        : nextSpecificationId != null
+            ? String(nextSpecificationId)
+            : null;
     renderSpecificationList();
     hideSpecificationBuilder();
     const successMessage = existingSpecification ? 'Specification updated successfully.' : 'Specification Added Successfully';
@@ -14716,8 +15409,7 @@ function updateUsersManagementCount() {
     if (!badge) return;
 
     const total = Array.isArray(users) ? users.length : 0;
-    const label = total === 1 ? 'User' : 'Users';
-    badge.textContent = `#${total} ${label}`;
+    badge.textContent = `#${total} Account`;
 }
 
 function renderChart() {
@@ -14826,9 +15518,1035 @@ function initials(name) {
         .toUpperCase();
 }
 
+function getSelectedRole() {
+    const selectedId = state.selectedRoleId;
+    if (!selectedId) {
+        return null;
+    }
+    return roles.find(role => String(role.id) === String(selectedId)) || null;
+}
+
+function setSelectedRole(roleId, options = {}) {
+    const { toggle = true } = options;
+    const normalizedId = typeof roleId === 'string'
+        ? roleId.trim()
+        : roleId != null
+            ? String(roleId).trim()
+            : '';
+    const nextId = normalizedId ? normalizedId : null;
+    const hasMatch = nextId && state.selectedRoleId && String(state.selectedRoleId) === String(nextId);
+
+    if (toggle && hasMatch) {
+        state.selectedRoleId = null;
+    } else {
+        state.selectedRoleId = nextId;
+    }
+
+    renderRolesTable(state.currentRolePage);
+}
+
+function updateRoleControls() {
+    const editBtn = document.getElementById('roleEditBtn');
+    const activateBtn = document.getElementById('roleActivateBtn');
+    const deactivateBtn = document.getElementById('roleDeactivateBtn');
+    const deleteBtn = document.getElementById('roleDeleteBtn');
+    const selectedRole = getSelectedRole();
+    const hasSelection = Boolean(selectedRole);
+
+    if (editBtn) {
+        const label = hasSelection ? 'Modify selected role' : 'Select a role to modify';
+        editBtn.disabled = !hasSelection;
+        editBtn.setAttribute('aria-label', label);
+        editBtn.title = label;
+    }
+
+    if (deleteBtn) {
+        const label = hasSelection ? 'Delete selected role' : 'Select a role to delete';
+        deleteBtn.disabled = !hasSelection;
+        deleteBtn.setAttribute('aria-label', label);
+        deleteBtn.title = label;
+    }
+
+    const normalizedStatus = hasSelection && typeof selectedRole.status === 'string'
+        ? selectedRole.status.trim().toLowerCase()
+        : '';
+    const isInactive = normalizedStatus === 'inactive';
+    const isActive = hasSelection && !isInactive;
+
+    if (activateBtn) {
+        const canActivate = hasSelection && isInactive;
+        activateBtn.disabled = !canActivate;
+        const label = canActivate ? 'Activate selected role' : hasSelection ? 'Role already active' : 'Select a role to activate';
+        activateBtn.setAttribute('aria-label', label);
+        activateBtn.title = label;
+    }
+
+    if (deactivateBtn) {
+        const canDeactivate = hasSelection && isActive;
+        deactivateBtn.disabled = !canDeactivate;
+        const label = canDeactivate ? 'Deactivate selected role' : hasSelection ? 'Role already inactive' : 'Select a role to deactivate';
+        deactivateBtn.setAttribute('aria-label', label);
+        deactivateBtn.title = label;
+    }
+}
+
+function ensureRoleFiltersState() {
+    if (!state.roleFilters || typeof state.roleFilters !== 'object') {
+        state.roleFilters = {
+            status: 'all',
+            created: 'all',
+            assignment: 'all',
+            module: 'all'
+        };
+    }
+
+    const filters = state.roleFilters;
+    if (typeof filters.status !== 'string') filters.status = 'all';
+    if (typeof filters.created !== 'string') filters.created = 'all';
+    if (typeof filters.assignment !== 'string') filters.assignment = 'all';
+    if (typeof filters.module !== 'string') filters.module = 'all';
+    return filters;
+}
+
+function renderRoleFilters() {
+    const filters = ensureRoleFiltersState();
+
+    const statusSelect = document.getElementById('roleStatusFilter');
+    if (statusSelect) {
+        const allowedStatuses = new Set(['all', 'active', 'inactive']);
+        const desiredStatus = typeof filters.status === 'string' ? filters.status.trim().toLowerCase() : 'all';
+        const appliedStatus = allowedStatuses.has(desiredStatus) ? desiredStatus : 'all';
+        if (statusSelect.value !== appliedStatus) {
+            statusSelect.value = appliedStatus;
+        }
+        filters.status = appliedStatus;
+    }
+
+    const createdSelect = document.getElementById('roleCreatedFilter');
+    if (createdSelect) {
+        const allowedCreated = new Set(['all', 'last-7', 'last-30', 'last-90', 'older-90']);
+        const desiredCreated = typeof filters.created === 'string' ? filters.created : 'all';
+        const appliedCreated = allowedCreated.has(desiredCreated) ? desiredCreated : 'all';
+        if (createdSelect.value !== appliedCreated) {
+            createdSelect.value = appliedCreated;
+        }
+        filters.created = appliedCreated;
+    }
+
+    const assignmentSelect = document.getElementById('roleAssignmentFilter');
+    if (assignmentSelect) {
+        const assignmentOptions = [
+            { value: 'all', label: 'All' },
+            { value: 'with-users', label: 'With Members' },
+            { value: 'without-users', label: 'Without Members' }
+        ];
+        assignmentSelect.innerHTML = assignmentOptions
+            .map(option => `<option value="${escapeAttribute(option.value)}">${escapeHtml(option.label)}</option>`)
+            .join('');
+        const desiredAssignment = typeof filters.assignment === 'string' ? filters.assignment : 'all';
+        const availableAssignments = new Set(assignmentOptions.map(option => option.value));
+        const appliedAssignment = availableAssignments.has(desiredAssignment) ? desiredAssignment : 'all';
+        if (assignmentSelect.value !== appliedAssignment) {
+            assignmentSelect.value = appliedAssignment;
+        }
+        filters.assignment = appliedAssignment;
+    }
+
+    const moduleSelect = document.getElementById('roleModuleFilter');
+    if (moduleSelect) {
+        const moduleOptions = buildRoleModuleFilterOptions();
+        moduleSelect.innerHTML = moduleOptions
+            .map(option => `<option value="${escapeAttribute(option.value)}">${escapeHtml(option.label)}</option>`)
+            .join('');
+        const desiredModule = typeof filters.module === 'string' ? filters.module : 'all';
+        const availableModules = new Set(moduleOptions.map(option => option.value));
+        const appliedModule = availableModules.has(desiredModule) ? desiredModule : 'all';
+        if (moduleSelect.value !== appliedModule) {
+            moduleSelect.value = appliedModule;
+        }
+        filters.module = appliedModule;
+    }
+}
+
+function getRoleCreatedTimestamp(role) {
+    if (!role || typeof role !== 'object') {
+        return null;
+    }
+    const candidates = [role.createdAt, role.created, role.creationDate, role.createdOn, role.createdTime, role.dateCreated];
+    for (const candidate of candidates) {
+        if (!candidate) {
+            continue;
+        }
+        const parsed = Date.parse(candidate);
+        if (Number.isFinite(parsed)) {
+            return parsed;
+        }
+    }
+    return null;
+}
+
+function roleMatchesCreatedFilter(role, filterValue) {
+    if (!filterValue || filterValue === 'all') {
+        return true;
+    }
+
+    const timestamp = getRoleCreatedTimestamp(role);
+    if (!timestamp) {
+        return filterValue === 'older-90';
+    }
+
+    const now = Date.now();
+    const dayMs = 24 * 60 * 60 * 1000;
+    const diffDays = Math.max(0, (now - timestamp) / dayMs);
+
+    switch (filterValue) {
+        case 'last-7':
+            return diffDays <= 7;
+        case 'last-30':
+            return diffDays <= 30;
+        case 'last-90':
+            return diffDays <= 90;
+        case 'older-90':
+            return diffDays > 90;
+        default:
+            return true;
+    }
+}
+
+function collectRolePermissionSections() {
+    const sections = new Map();
+    let hasPermissionlessRole = false;
+    const dataset = Array.isArray(roles) ? roles : [];
+
+    dataset.forEach(role => {
+        if (!role || typeof role !== 'object') {
+            return;
+        }
+        const permissions = Array.isArray(role.permissions) ? role.permissions : [];
+        if (!permissions.length) {
+            hasPermissionlessRole = true;
+            return;
+        }
+        permissions.forEach(permission => {
+            if (!permission || typeof permission !== 'object') {
+                return;
+            }
+            const keyCandidates = [
+                permission.sectionId,
+                permission.sectionKey,
+                permission.section,
+                permission.sectionLabel,
+                permission.moduleId,
+                permission.moduleKey,
+                permission.module,
+                permission.moduleLabel
+            ];
+            let normalizedKey = '';
+            for (const candidate of keyCandidates) {
+                const normalized = normalizeRoleLookupValue(candidate);
+                if (normalized) {
+                    normalizedKey = normalized;
+                    break;
+                }
+            }
+            if (!normalizedKey) {
+                return;
+            }
+
+            const labelCandidates = [
+                typeof permission.sectionLabel === 'string' ? permission.sectionLabel.trim() : '',
+                typeof permission.section === 'string' ? permission.section.trim() : '',
+                typeof permission.moduleLabel === 'string' ? permission.moduleLabel.trim() : '',
+                typeof permission.module === 'string' ? permission.module.trim() : '',
+                typeof permission.sectionId === 'string' ? permission.sectionId.trim() : '',
+                typeof permission.moduleId === 'string' ? permission.moduleId.trim() : ''
+            ];
+
+            let displayLabel = labelCandidates.find(label => label) || '';
+            if (!displayLabel) {
+                displayLabel = formatRoleFilterLabelFromKey(normalizedKey);
+            }
+            if (!sections.has(normalizedKey)) {
+                sections.set(normalizedKey, displayLabel);
+            }
+        });
+    });
+
+    return { sections, hasPermissionlessRole };
+}
+
+function buildRoleModuleFilterOptions() {
+    const { sections, hasPermissionlessRole } = collectRolePermissionSections();
+    const base = [{ value: 'all', label: 'All' }];
+    const sectionOptions = Array.from(sections.entries())
+        .map(([value, label]) => ({ value, label }))
+        .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }));
+    const result = base.concat(sectionOptions);
+    if (hasPermissionlessRole) {
+        result.push({ value: 'none', label: 'No Permissions Assigned' });
+    }
+    return result;
+}
+
+function extractRolePermissionSectionKeys(role) {
+    const keys = new Set();
+    if (!role || typeof role !== 'object') {
+        return keys;
+    }
+    const permissions = Array.isArray(role.permissions) ? role.permissions : [];
+    permissions.forEach(permission => {
+        if (!permission || typeof permission !== 'object') {
+            return;
+        }
+        const candidates = [
+            permission.sectionId,
+            permission.sectionKey,
+            permission.section,
+            permission.sectionLabel,
+            permission.moduleId,
+            permission.moduleKey,
+            permission.module,
+            permission.moduleLabel
+        ];
+        candidates.forEach(candidate => {
+            const normalized = normalizeRoleLookupValue(candidate);
+            if (normalized) {
+                keys.add(normalized);
+            }
+        });
+    });
+    return keys;
+}
+
+function roleMatchesAssignmentFilter(role, filterValue) {
+    if (!filterValue || filterValue === 'all') {
+        return true;
+    }
+    const userCount = getRoleAssignedUsersCount(role);
+    if (filterValue === 'with-users') {
+        return userCount > 0;
+    }
+    if (filterValue === 'without-users') {
+        return userCount === 0;
+    }
+    return true;
+}
+
+function roleMatchesModuleFilter(role, filterValue) {
+    const normalizedFilter = normalizeRoleLookupValue(filterValue);
+    if (!normalizedFilter || normalizedFilter === 'all') {
+        return true;
+    }
+
+    const permissions = Array.isArray(role.permissions) ? role.permissions : [];
+    if (!permissions.length) {
+        return normalizedFilter === 'none';
+    }
+
+    if (normalizedFilter === 'none') {
+        return false;
+    }
+
+    const sectionKeys = extractRolePermissionSectionKeys(role);
+    if (sectionKeys.has(normalizedFilter)) {
+        return true;
+    }
+
+    const sanitizedTarget = normalizedFilter.replace(/[^a-z0-9]/g, '');
+    for (const key of sectionKeys) {
+        if (key.replace(/[^a-z0-9]/g, '') === sanitizedTarget) {
+            return true;
+        }
+    }
+    return false;
+}
+
+function handleRoleFilterChange(key, rawValue) {
+    if (!key) {
+        return;
+    }
+    const filters = ensureRoleFiltersState();
+    let nextValue = typeof rawValue === 'string' ? rawValue.trim() : 'all';
+    if (!nextValue) {
+        nextValue = 'all';
+    }
+    if (key === 'assignment') {
+        nextValue = nextValue.toLowerCase();
+    } else if (key === 'module') {
+        nextValue = normalizeRoleLookupValue(nextValue) || 'all';
+    }
+    if (filters[key] === nextValue) {
+        return;
+    }
+    filters[key] = nextValue;
+    state.currentRolePage = 1;
+    renderRolesTable(1);
+}
+
+function resetRoleFiltersAndSearch() {
+    const filters = ensureRoleFiltersState();
+    const resetKeys = ['status', 'created', 'assignment', 'module'];
+    for (const key of resetKeys) {
+        filters[key] = 'all';
+    }
+
+    state.roleSearchTerm = '';
+    state.currentRolePage = 1;
+
+    const roleSearchInput = document.getElementById('roleSearchInput');
+    if (roleSearchInput && roleSearchInput.value !== '') {
+        roleSearchInput.value = '';
+    }
+
+    renderRolesTable(1);
+}
+
+function ensureUserFiltersState() {
+    if (!state.userFilters || typeof state.userFilters !== 'object') {
+        state.userFilters = {
+            status: 'all',
+            accountType: 'all',
+            department: 'all',
+            role: 'all'
+        };
+    }
+    const filters = state.userFilters;
+    if (typeof filters.status !== 'string') filters.status = 'all';
+    if (typeof filters.accountType !== 'string') filters.accountType = 'all';
+    if (typeof filters.department !== 'string') filters.department = 'all';
+    if (typeof filters.role !== 'string') filters.role = 'all';
+    return filters;
+}
+
+function normalizeUserDepartmentFilterValue(value) {
+    return typeof value === 'string' ? value.trim().toLowerCase() : '';
+}
+
+function normalizeUserRoleFilterValue(value) {
+    const normalized = normalizeRoleLookupValue(value);
+    if (!normalized) {
+        return '';
+    }
+    if (normalized === 'all') {
+        return 'all';
+    }
+    const matchedRole = findRoleByLookup(value);
+    if (matchedRole) {
+        const entry = resolveRoleFilterEntryFromRole(matchedRole);
+        if (entry && entry.key) {
+            return entry.key;
+        }
+    }
+    return normalized;
+}
+
+function findRoleByLookup(value) {
+    const normalized = normalizeRoleLookupValue(value);
+    if (!normalized || !Array.isArray(roles)) {
+        return null;
+    }
+
+    const candidatesToMatch = new Set([normalized]);
+    if (typeof value === 'string') {
+        const parenMatch = value.match(/\(([^)]+)\)/);
+        if (parenMatch && parenMatch[1]) {
+            candidatesToMatch.add(normalizeRoleLookupValue(parenMatch[1]));
+        }
+        const withoutParens = normalizeRoleLookupValue(value.replace(/\([^)]*\)/g, ''));
+        if (withoutParens) {
+            candidatesToMatch.add(withoutParens);
+        }
+    }
+
+    const sanitize = candidate => candidate ? candidate.replace(/[^a-z0-9]/g, '') : '';
+    const sanitizedTargets = new Set();
+    for (const candidate of candidatesToMatch) {
+        const sanitized = sanitize(candidate);
+        if (sanitized) {
+            sanitizedTargets.add(sanitized);
+        }
+    }
+
+    for (const role of roles) {
+        if (!role || typeof role !== 'object') {
+            continue;
+        }
+        const roleCandidates = getRoleLookupCandidates(role);
+        if (!roleCandidates.length) {
+            continue;
+        }
+        if (roleCandidates.some(candidate => candidatesToMatch.has(candidate))) {
+            return role;
+        }
+        const roleSanitized = roleCandidates
+            .map(sanitize)
+            .filter(Boolean);
+        if (roleSanitized.some(candidate => sanitizedTargets.has(candidate))) {
+            return role;
+        }
+    }
+    return null;
+}
+
+function resolveRoleFilterEntryFromRole(role) {
+    if (!role || typeof role !== 'object') {
+        return null;
+    }
+
+    const keyCandidates = getRoleLookupCandidates(role);
+    if (!keyCandidates.length) {
+        return null;
+    }
+    const key = keyCandidates[0];
+
+    const labelCandidates = [
+        typeof role.nameEnglish === 'string' ? role.nameEnglish.trim() : '',
+        typeof role.name === 'string' ? role.name.trim() : '',
+        typeof role.nameArabic === 'string' ? role.nameArabic.trim() : '',
+        typeof role.displayName === 'string' ? role.displayName.trim() : '',
+        typeof role.title === 'string' ? role.title.trim() : '',
+        typeof role.roleName === 'string' ? role.roleName.trim() : ''
+    ].filter(Boolean);
+
+    let baseLabel = labelCandidates[0];
+    if (!baseLabel) {
+        baseLabel = formatRoleFilterLabelFromKey(key);
+    }
+
+    const codeCandidates = [
+        typeof role.roleCode === 'string' ? role.roleCode.trim() : '',
+        typeof role.code === 'string' ? role.code.trim() : '',
+        typeof role.id === 'string' ? role.id.trim() : '',
+        Number.isFinite(role.id) ? String(role.id) : '',
+        typeof role.roleId === 'string' ? role.roleId.trim() : '',
+        Number.isFinite(role.roleId) ? String(role.roleId) : ''
+    ].filter(Boolean);
+
+    const distinctCode = codeCandidates.find(candidate => {
+        const normalizedCandidate = normalizeRoleLookupValue(candidate);
+        return normalizedCandidate && normalizedCandidate !== key;
+    });
+
+    let displayLabel = baseLabel;
+    if (distinctCode) {
+        const baseSanitized = baseLabel.replace(/[\s_-]+/g, '').toLowerCase();
+        const codeSanitized = distinctCode.replace(/[\s_-]+/g, '').toLowerCase();
+        if (baseSanitized && baseSanitized !== codeSanitized && !baseSanitized.includes(codeSanitized)) {
+            displayLabel = `${baseLabel} (${distinctCode})`;
+        }
+    }
+
+    const finalLabel = displayLabel && displayLabel.trim()
+        ? displayLabel.trim()
+        : formatRoleFilterLabelFromKey(key);
+
+    return { key, label: finalLabel };
+}
+
+function buildUserAccountTypeFilterOptions() {
+    const dataset = Array.isArray(users) ? users : [];
+    const accountTypes = new Map();
+
+    dataset.forEach(user => {
+        const accountType = resolveUserAccountType(user);
+        if (typeof accountType !== 'string') {
+            return;
+        }
+        const trimmed = accountType.trim();
+        if (!trimmed || accountTypes.has(trimmed)) {
+            return;
+        }
+        const label = mapAccountTypeLabel(trimmed) || trimmed;
+        accountTypes.set(trimmed, {
+            value: trimmed,
+            label
+        });
+    });
+
+    const base = [{ value: 'all', label: 'All' }];
+    const sorted = Array.from(accountTypes.values()).sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }));
+    return base.concat(sorted);
+}
+
+function buildUserDepartmentFilterOptions() {
+    const dataset = Array.isArray(users) ? users : [];
+    const departments = new Map();
+
+    dataset.forEach(user => {
+        if (!user || typeof user !== 'object') {
+            return;
+        }
+        const rawDepartment = typeof user.department === 'string' ? user.department.trim() : '';
+        if (!rawDepartment) {
+            return;
+        }
+        const normalized = normalizeUserDepartmentFilterValue(rawDepartment);
+        if (!normalized || departments.has(normalized)) {
+            return;
+        }
+        departments.set(normalized, {
+            value: normalized,
+            label: rawDepartment
+        });
+    });
+
+    const base = [{ value: 'all', label: 'All' }];
+    const sorted = Array.from(departments.values()).sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }));
+    return base.concat(sorted);
+}
+
+function buildUserRoleFilterOptions() {
+    const optionMap = new Map();
+
+    const addEntry = entry => {
+        if (!entry || !entry.key) {
+            return;
+        }
+        const normalizedKey = normalizeRoleLookupValue(entry.key);
+        if (!normalizedKey || normalizedKey === 'all') {
+            return;
+        }
+        const displayLabel = typeof entry.label === 'string' && entry.label.trim()
+            ? entry.label.trim()
+            : formatRoleFilterLabelFromKey(normalizedKey);
+        if (!optionMap.has(normalizedKey)) {
+            optionMap.set(normalizedKey, {
+                value: normalizedKey,
+                label: displayLabel
+            });
+        }
+    };
+
+    const roleDataset = Array.isArray(roles) ? roles : [];
+    roleDataset.forEach(role => {
+        addEntry(resolveRoleFilterEntryFromRole(role));
+    });
+
+    const userDataset = Array.isArray(users) ? users : [];
+    userDataset.forEach(user => {
+        const accountTypeLabel = mapAccountTypeLabel(resolveUserAccountType(user));
+        const normalizedAccountLabel = normalizeRoleLookupValue(accountTypeLabel);
+
+        const keys = extractUserRoleFilterKeys(user);
+        keys.forEach(key => {
+            if (!key || key === 'all') {
+                return;
+            }
+            let fallbackLabel = typeof user.role === 'string' ? user.role : '';
+            if (normalizedAccountLabel && normalizeRoleLookupValue(fallbackLabel) === normalizedAccountLabel) {
+                fallbackLabel = '';
+            }
+
+            if (!fallbackLabel && user.assignedRole && typeof user.assignedRole === 'object') {
+                const assignedName = typeof user.assignedRole.nameEnglish === 'string' && user.assignedRole.nameEnglish.trim()
+                    ? user.assignedRole.nameEnglish.trim()
+                    : typeof user.assignedRole.name === 'string' && user.assignedRole.name.trim()
+                        ? user.assignedRole.name.trim()
+                        : typeof user.assignedRole.nameArabic === 'string' && user.assignedRole.nameArabic.trim()
+                            ? user.assignedRole.nameArabic.trim()
+                            : '';
+                if (assignedName) {
+                    fallbackLabel = assignedName;
+                }
+            }
+
+            addEntry({ key, label: fallbackLabel });
+        });
+    });
+
+    const base = [{ value: 'all', label: 'All' }];
+    const sorted = Array.from(optionMap.values()).sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }));
+    return base.concat(sorted);
+}
+
+function extractUserRoleFilterKeys(user) {
+    if (!user || typeof user !== 'object') {
+        return [];
+    }
+    const keys = new Set();
+    const pushKey = value => {
+        const normalized = normalizeUserRoleFilterValue(value);
+        if (normalized) {
+            keys.add(normalized);
+        }
+    };
+
+    let canonicalRoleKey = '';
+    const matchedRole = findRoleByLookup(user.role) || findRoleByLookup(user.roleId);
+    if (matchedRole) {
+        const entry = resolveRoleFilterEntryFromRole(matchedRole);
+        if (entry) {
+            pushKey(entry.key);
+            canonicalRoleKey = entry.key;
+        }
+    }
+
+    if (!canonicalRoleKey && (typeof user.roleId === 'string' || Number.isFinite(user.roleId))) {
+        const normalizedRoleId = normalizeUserRoleFilterValue(user.roleId);
+        if (normalizedRoleId && normalizedRoleId !== 'all') {
+            keys.add(normalizedRoleId);
+            canonicalRoleKey = normalizedRoleId;
+        }
+    }
+
+    const addRawIfNeeded = value => {
+        if (!value) {
+            return;
+        }
+        const normalizedRaw = normalizeRoleLookupValue(value);
+        if (!normalizedRaw || normalizedRaw === 'all') {
+            return;
+        }
+        if (canonicalRoleKey) {
+            const canonicalNormalized = normalizeRoleLookupValue(canonicalRoleKey);
+            const canonicalSanitized = canonicalNormalized.replace(/[\s_-]+/g, '');
+            const rawSanitized = normalizedRaw.replace(/[\s_-]+/g, '');
+            if (normalizedRaw === canonicalNormalized || rawSanitized === canonicalSanitized) {
+                return;
+            }
+        }
+        pushKey(value);
+    };
+
+    if (!canonicalRoleKey && typeof user.role === 'string') {
+        addRawIfNeeded(user.role);
+    }
+
+    const summaryRole = extractRoleLabelFromSummary(user.permissionSummary);
+    if (!canonicalRoleKey && summaryRole) {
+        addRawIfNeeded(summaryRole);
+    }
+
+    if (user.assignedRole && typeof user.assignedRole === 'object') {
+        const assigned = user.assignedRole;
+        pushKey(assigned.id);
+        pushKey(assigned.name);
+        pushKey(assigned.nameEnglish);
+        pushKey(assigned.nameArabic);
+    }
+
+    return Array.from(keys);
+}
+
+function renderUserFilters() {
+    const filters = ensureUserFiltersState();
+
+    const statusSelect = document.getElementById('userStatusFilter');
+    if (statusSelect) {
+        const statusOptions = [
+            { value: 'all', label: 'All' },
+            { value: 'active', label: 'Active' },
+            { value: 'pending', label: 'Pending' },
+            { value: 'inactive', label: 'Inactive' }
+        ];
+        statusSelect.innerHTML = statusOptions
+            .map(option => `<option value="${escapeAttribute(option.value)}">${escapeHtml(option.label)}</option>`)
+            .join('');
+        const desiredStatus = typeof filters.status === 'string' ? filters.status.trim().toLowerCase() : 'all';
+        const availableStatuses = new Set(statusOptions.map(option => option.value));
+        const appliedStatus = availableStatuses.has(desiredStatus) ? desiredStatus : 'all';
+        if (statusSelect.value !== appliedStatus) {
+            statusSelect.value = appliedStatus;
+        }
+        filters.status = appliedStatus;
+    }
+
+    const accountTypeSelect = document.getElementById('userAccountTypeFilter');
+    if (accountTypeSelect) {
+        const accountTypeOptions = buildUserAccountTypeFilterOptions();
+        accountTypeSelect.innerHTML = accountTypeOptions
+            .map(option => `<option value="${escapeAttribute(option.value)}">${escapeHtml(option.label)}</option>`)
+            .join('');
+        const desiredAccountType = typeof filters.accountType === 'string' ? filters.accountType : 'all';
+        const availableAccountTypes = new Set(accountTypeOptions.map(option => option.value));
+        const appliedAccountType = availableAccountTypes.has(desiredAccountType) ? desiredAccountType : 'all';
+        if (accountTypeSelect.value !== appliedAccountType) {
+            accountTypeSelect.value = appliedAccountType;
+        }
+        filters.accountType = appliedAccountType;
+    }
+
+    const departmentSelect = document.getElementById('userDepartmentFilter');
+    if (departmentSelect) {
+        const departmentOptions = buildUserDepartmentFilterOptions();
+        departmentSelect.innerHTML = departmentOptions
+            .map(option => `<option value="${escapeAttribute(option.value)}">${escapeHtml(option.label)}</option>`)
+            .join('');
+        const desiredDepartment = typeof filters.department === 'string' ? filters.department : 'all';
+        const availableDepartments = new Set(departmentOptions.map(option => option.value));
+        const appliedDepartment = availableDepartments.has(desiredDepartment) ? desiredDepartment : 'all';
+        if (departmentSelect.value !== appliedDepartment) {
+            departmentSelect.value = appliedDepartment;
+        }
+        filters.department = appliedDepartment;
+    }
+
+    const roleSelect = document.getElementById('userRoleFilter');
+    if (roleSelect) {
+        const roleOptions = buildUserRoleFilterOptions();
+        roleSelect.innerHTML = roleOptions
+            .map(option => `<option value="${escapeAttribute(option.value)}">${escapeHtml(option.label)}</option>`)
+            .join('');
+        const desiredRole = typeof filters.role === 'string' ? filters.role : 'all';
+        const availableRoles = new Set(roleOptions.map(option => option.value));
+        const appliedRole = availableRoles.has(desiredRole) ? desiredRole : 'all';
+        if (roleSelect.value !== appliedRole) {
+            roleSelect.value = appliedRole;
+        }
+        filters.role = appliedRole;
+    }
+}
+
+function handleUserFilterChange(key, rawValue) {
+    if (!key) {
+        return;
+    }
+    const filters = ensureUserFiltersState();
+    let nextValue = typeof rawValue === 'string' ? rawValue.trim() : 'all';
+    if (!nextValue) {
+        nextValue = 'all';
+    }
+    if (key === 'status') {
+        nextValue = nextValue.toLowerCase();
+    } else if (key === 'department') {
+        nextValue = normalizeUserDepartmentFilterValue(nextValue);
+    } else if (key === 'role') {
+        nextValue = normalizeUserRoleFilterValue(nextValue);
+        if (!nextValue) {
+            nextValue = 'all';
+        }
+    }
+    if (filters[key] === nextValue) {
+        return;
+    }
+    filters[key] = nextValue;
+    state.currentUserPage = 1;
+    renderUsersTable(state.userSearchTerm, 1);
+}
+
+function resetUserFiltersAndSearch() {
+    const filters = ensureUserFiltersState();
+    const resetKeys = ['status', 'accountType', 'department', 'role'];
+    resetKeys.forEach(key => {
+        filters[key] = 'all';
+    });
+
+    state.userSearchTerm = '';
+    state.currentUserPage = 1;
+    state.selectedUserId = null;
+
+    const userSearchInput = document.getElementById('userSearch');
+    if (userSearchInput && userSearchInput.value !== '') {
+        userSearchInput.value = '';
+    }
+
+    renderUsersTable('', 1);
+}
+
+function getSelectedUser() {
+    const selectedId = state.selectedUserId;
+    if (!selectedId) {
+        return null;
+    }
+    const lookup = String(selectedId);
+    return users.find(user => String(user.id) === lookup) || null;
+}
+
+function setSelectedUser(userId, options = {}) {
+    const { toggle = true } = options;
+    let normalizedId = '';
+    if (typeof userId === 'string') {
+        normalizedId = userId.trim();
+    } else if (Number.isFinite(userId)) {
+        normalizedId = String(userId);
+    } else if (userId && typeof userId === 'object' && Number.isFinite(userId.id)) {
+        normalizedId = String(userId.id);
+    }
+
+    const nextId = normalizedId ? normalizedId : null;
+    const isSameSelection = nextId && state.selectedUserId && String(state.selectedUserId) === nextId;
+
+    if (toggle && isSameSelection) {
+        state.selectedUserId = null;
+    } else {
+        state.selectedUserId = nextId;
+    }
+
+    renderUsersTable(state.userSearchTerm, state.currentUserPage);
+}
+
+function updateUserControls() {
+    const editBtn = document.getElementById('userEditBtn');
+    const inviteBtn = document.getElementById('userInviteLinkBtn');
+    const resendBtn = document.getElementById('userResendInviteBtn');
+    const activateBtn = document.getElementById('userActivateBtn');
+    const deactivateBtn = document.getElementById('userDeactivateBtn');
+    const deleteBtn = document.getElementById('userDeleteBtn');
+
+    const selectedUser = getSelectedUser();
+    const hasSelection = Boolean(selectedUser);
+    const statusValue = selectedUser && typeof selectedUser.status === 'string'
+        ? selectedUser.status.trim().toLowerCase()
+        : '';
+    const isPending = statusValue === 'pending';
+    const isActive = statusValue === 'active';
+    const isCurrentSessionUser = Boolean(
+        selectedUser &&
+        state.activeSession &&
+        state.activeSession.user &&
+        state.activeSession.user.id === selectedUser.id
+    );
+
+    if (editBtn) {
+        const label = hasSelection ? 'Modify selected user' : 'Select a user to modify';
+        editBtn.disabled = !hasSelection;
+        editBtn.setAttribute('aria-label', label);
+        editBtn.title = label;
+    }
+
+    if (inviteBtn) {
+        const label = hasSelection
+            ? (isPending ? 'Copy invitation link for selected user' : 'Invitation link is only available for pending users')
+            : 'Select a pending user to copy the invitation link';
+        inviteBtn.disabled = !(hasSelection && isPending);
+        inviteBtn.setAttribute('aria-label', label);
+        inviteBtn.title = label;
+    }
+
+    if (resendBtn) {
+        const label = hasSelection
+            ? (isPending ? 'Resend invitation email to selected user' : 'Resend invitation is only available for pending users')
+            : 'Select a pending user to resend the invitation email';
+        resendBtn.disabled = !(hasSelection && isPending);
+        resendBtn.setAttribute('aria-label', label);
+        resendBtn.title = label;
+    }
+
+    if (activateBtn) {
+        const canActivate = hasSelection && !isPending && !isActive;
+        activateBtn.disabled = !canActivate;
+        let label;
+        if (!hasSelection) {
+            label = 'Select a user to activate';
+        } else if (isPending) {
+            label = 'Status change unavailable for pending users';
+        } else if (isActive) {
+            label = 'User already active';
+        } else {
+            label = 'Activate selected user';
+        }
+        activateBtn.setAttribute('aria-label', label);
+        activateBtn.title = label;
+    }
+
+    if (deactivateBtn) {
+        const canDeactivate = hasSelection && !isPending && isActive;
+        deactivateBtn.disabled = !canDeactivate;
+        let label;
+        if (!hasSelection) {
+            label = 'Select a user to deactivate';
+        } else if (isPending) {
+            label = 'Status change unavailable for pending users';
+        } else if (!isActive) {
+            label = 'User already inactive';
+        } else {
+            label = 'Deactivate selected user';
+        }
+        deactivateBtn.setAttribute('aria-label', label);
+        deactivateBtn.title = label;
+    }
+
+    if (deleteBtn) {
+        const label = hasSelection
+            ? (isCurrentSessionUser ? 'You cannot delete the account that is currently signed in' : 'Delete selected user')
+            : 'Select a user to delete';
+        deleteBtn.disabled = !(hasSelection && !isCurrentSessionUser);
+        deleteBtn.setAttribute('aria-label', label);
+        deleteBtn.title = label;
+    }
+}
+
+function getSelectedSpecification() {
+    const selectedId = state.selectedSpecificationId;
+    if (!selectedId) {
+        return null;
+    }
+    const lookup = String(selectedId);
+    return Array.isArray(specifications)
+        ? specifications.find(entry => entry && String(entry.id) === lookup) || null
+        : null;
+}
+
+function setSelectedSpecification(specId, options = {}) {
+    const { toggle = true } = options;
+    let normalizedId = '';
+    if (typeof specId === 'string') {
+        normalizedId = specId.trim();
+    } else if (specId && typeof specId === 'object' && specId.id) {
+        normalizedId = String(specId.id);
+    }
+
+    const nextId = normalizedId || null;
+    const isSame = nextId && state.selectedSpecificationId && String(state.selectedSpecificationId) === nextId;
+
+    if (toggle && isSame) {
+        state.selectedSpecificationId = null;
+    } else {
+        state.selectedSpecificationId = nextId;
+    }
+
+    renderSpecificationList();
+}
+
+function updateSpecificationControls() {
+    const editBtn = document.getElementById('specificationEditBtn');
+    const activateBtn = document.getElementById('specificationActivateBtn');
+    const deactivateBtn = document.getElementById('specificationDeactivateBtn');
+
+    const selectedSpecification = getSelectedSpecification();
+    const hasSelection = Boolean(selectedSpecification);
+    const normalizedStatus = selectedSpecification && typeof selectedSpecification.status === 'string'
+        ? selectedSpecification.status.trim().toLowerCase()
+        : 'active';
+    const isActive = normalizedStatus === 'active';
+
+    if (editBtn) {
+        const label = hasSelection ? 'Modify selected specification' : 'Select a specification to modify';
+        editBtn.disabled = !hasSelection;
+        editBtn.setAttribute('aria-label', label);
+        editBtn.title = label;
+    }
+
+    if (activateBtn) {
+        const canActivate = hasSelection && !isActive;
+        activateBtn.disabled = !canActivate;
+        const label = !hasSelection
+            ? 'Select a specification to activate'
+            : isActive
+                ? 'Specification already active'
+                : 'Activate selected specification';
+        activateBtn.setAttribute('aria-label', label);
+        activateBtn.title = label;
+    }
+
+    if (deactivateBtn) {
+        const canDeactivate = hasSelection && isActive;
+        deactivateBtn.disabled = !canDeactivate;
+        const label = !hasSelection
+            ? 'Select a specification to deactivate'
+            : !isActive
+                ? 'Specification already inactive'
+                : 'Deactivate selected specification';
+        deactivateBtn.setAttribute('aria-label', label);
+        deactivateBtn.title = label;
+    }
+}
+
 function renderRolesTable(page = state.currentRolePage) {
     const tbody = document.getElementById('rolesTableBody');
     if (!tbody) return;
+
+    renderRoleFilters();
 
     const roleSearchInput = document.getElementById('roleSearchInput');
     if (roleSearchInput) {
@@ -14838,13 +16556,54 @@ function renderRolesTable(page = state.currentRolePage) {
         }
     }
 
+    const filters = ensureRoleFiltersState();
     const searchTerm = (state.roleSearchTerm || '').toLowerCase();
-    const filteredRoles = searchTerm
-        ? roles.filter(role => {
-            const haystack = `${role.name || role.nameEnglish || ''} ${role.nameArabic || ''} ${role.description || ''}`.toLowerCase();
-            return haystack.includes(searchTerm);
-        })
-        : roles;
+    const filteredRoles = (roles || [])
+        .filter(role => {
+            if (!role) {
+                return false;
+            }
+            if (searchTerm) {
+                const haystack = `${role.name || role.nameEnglish || ''} ${role.nameArabic || ''} ${role.description || ''}`.toLowerCase();
+                if (!haystack.includes(searchTerm)) {
+                    return false;
+                }
+            }
+
+            const statusValue = typeof filters.status === 'string' ? filters.status : 'all';
+            if (statusValue !== 'all') {
+                const roleStatus = typeof role.status === 'string' ? role.status.trim().toLowerCase() : '';
+                if (roleStatus !== statusValue) {
+                    return false;
+                }
+            }
+            const assignmentValue = typeof filters.assignment === 'string' ? filters.assignment : 'all';
+            if (!roleMatchesAssignmentFilter(role, assignmentValue)) {
+                return false;
+            }
+
+            const moduleValue = typeof filters.module === 'string' ? filters.module : 'all';
+            if (!roleMatchesModuleFilter(role, moduleValue)) {
+                return false;
+            }
+            if (!roleMatchesCreatedFilter(role, filters.created)) {
+                return false;
+            }
+
+            return true;
+        });
+
+    if (state.selectedRoleId) {
+        const selectedId = String(state.selectedRoleId);
+        const stillExists = roles.some(role => String(role.id) === selectedId);
+        const visibleInFiltered = stillExists
+            ? filteredRoles.some(role => String(role.id) === selectedId)
+            : false;
+        if (!stillExists || !visibleInFiltered) {
+            state.selectedRoleId = null;
+        }
+    }
+    const selectedRoleId = state.selectedRoleId ? String(state.selectedRoleId) : null;
 
     const totalPages = Math.max(1, Math.ceil(filteredRoles.length / state.rolesPerPage));
     state.currentRolePage = Math.min(Math.max(page, 1), totalPages);
@@ -14853,8 +16612,8 @@ function renderRolesTable(page = state.currentRolePage) {
 
     if (!visibleRoles.length) {
         tbody.innerHTML = state.roleSearchTerm
-            ? '<tr><td colspan="9">There is no Data Available</td></tr>'
-            : '<tr><td colspan="9">There is no Data Available</td></tr>';
+            ? '<tr><td colspan="8">There is no Data Available</td></tr>'
+            : '<tr><td colspan="8">There is no Data Available</td></tr>';
     } else {
         let index = (state.currentRolePage - 1) * state.rolesPerPage + 1;
         tbody.innerHTML = visibleRoles.map(role => {
@@ -14869,8 +16628,10 @@ function renderRolesTable(page = state.currentRolePage) {
             const creatorInfo = resolveRoleCreator(role);
             const creatorNameMarkup = creatorInfo.label ? `<div class="role-meta">${escapeHtml(creatorInfo.label)}</div>` : '';
             const creatorEmailMarkup = creatorInfo.email ? `<div class="role-meta">${escapeHtml(creatorInfo.email)}</div>` : '';
+            const isSelected = selectedRoleId && String(role.id) === selectedRoleId;
+            const rowClassAttr = isSelected ? ' class="role-row selected"' : ' class="role-row"';
             return `
-            <tr>
+            <tr${rowClassAttr} data-role-id="${escapeAttribute(role.id)}" aria-selected="${isSelected ? 'true' : 'false'}">
                 <td>${index++}</td>
                 <td>${role.id || ''}</td>
                 <td>
@@ -14883,17 +16644,17 @@ function renderRolesTable(page = state.currentRolePage) {
                     <div class="role-description-text"${descriptionTitleAttr}>${rawDescription}</div>
                 </td>
                 <td>
-                    <div class="role-users-cell">
-                        <span class="role-user-count">${escapeHtml(userCountLabel)}</span>
-                        <button class="action-btn view" data-action="view-users" data-role="${escapeAttribute(role.id)}" title="${escapeAttribute('View users assigned to this role')}">
+                    <div class="permission-cell">
+                        <span class="permission-count">${permissionCount} ${permissionCount === 1 ? 'app' : 'apps'}</span>
+                        <button class="action-btn view" data-action="view" data-role="${escapeAttribute(role.id)}" title="View permissions">
                             <i class="fas fa-eye"></i>
                         </button>
                     </div>
                 </td>
                 <td>
-                    <div class="permission-cell">
-                        <span class="permission-count">${permissionCount} ${permissionCount === 1 ? 'app' : 'apps'}</span>
-                        <button class="action-btn view" data-action="view" data-role="${escapeAttribute(role.id)}" title="View permissions">
+                    <div class="role-users-cell">
+                        <span class="role-user-count">${escapeHtml(userCountLabel)}</span>
+                        <button class="action-btn view" data-action="view-users" data-role="${escapeAttribute(role.id)}" title="${escapeAttribute('View users assigned to this role')}">
                             <i class="fas fa-eye"></i>
                         </button>
                     </div>
@@ -14908,23 +16669,13 @@ function renderRolesTable(page = state.currentRolePage) {
                         ${creatorEmailMarkup}
                     </div>
                 </td>
-                <td>
-                    <div class="action-group">
-                        <button class="action-btn edit" data-action="edit" data-role="${role.id}"><i class="fas fa-pen"></i></button>
-                        <button class="action-btn ${role.status === 'active' ? 'deactivate' : 'activate'}" data-action="toggle" data-role="${role.id}">
-                            <i class="fas ${role.status === 'active' ? 'fa-power-off' : 'fa-rotate-right'}"></i>
-                        </button>
-                        <button class="action-btn delete" data-action="delete" data-role="${role.id}" title="Delete role">
-                            <i class="fas fa-trash"></i>
-                        </button>
-                    </div>
-                </td>
             </tr>
         `;
         }).join('');
     }
     renderRolesPagination(totalPages, filteredRoles.length);
     refreshRoleDetailPanel();
+    updateRoleControls();
 }
 
 function renderRolesPagination(totalPages, totalItems) {
@@ -14979,6 +16730,38 @@ function renderUsersPagination(totalPages, totalItems) {
     }
 
     container.appendChild(createButton('Next', state.currentUserPage + 1, state.currentUserPage === totalPages));
+}
+
+function renderSpecificationsPagination(totalPages, totalItems) {
+    const container = document.getElementById('specificationsPagination');
+    if (!container) return;
+    container.innerHTML = '';
+
+    if (totalPages <= 1 || totalItems <= state.specificationsPerPage) return;
+
+    const createButton = (label, page, disabled = false, active = false) => {
+        const button = document.createElement('button');
+        button.textContent = label;
+        if (disabled) {
+            button.disabled = true;
+        }
+        if (active) {
+            button.classList.add('active');
+        }
+        button.addEventListener('click', () => {
+            if (button.disabled) return;
+            renderSpecificationList(page);
+        });
+        return button;
+    };
+
+    container.appendChild(createButton('Prev', state.currentSpecificationPage - 1, state.currentSpecificationPage === 1));
+
+    for (let index = 1; index <= totalPages; index += 1) {
+        container.appendChild(createButton(String(index), index, false, index === state.currentSpecificationPage));
+    }
+
+    container.appendChild(createButton('Next', state.currentSpecificationPage + 1, state.currentSpecificationPage === totalPages));
 }
 
 function handleRoleSearch() {
@@ -15693,9 +17476,33 @@ function setVerificationBanner(status, message) {
     }
 }
 
-const DEFAULT_AVATAR_PLACEHOLDER = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
+const DEFAULT_AVATAR_SVG_TEMPLATES = {
+    male: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="16" fill="#1e293b"/><circle cx="32" cy="24" r="14" fill="#60a5fa"/><path d="M16 52c4-12 28-12 32 0v8H16z" fill="#60a5fa"/></svg>`,
+    female: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="16" fill="#312e81"/><circle cx="32" cy="24" r="14" fill="#f472b6"/><path d="M16 52c4-12 28-12 32 0v8H16z" fill="#f472b6"/></svg>`,
+    neutral: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="16" fill="#0f172a"/><circle cx="32" cy="24" r="14" fill="#94a3b8"/><path d="M16 52c4-12 28-12 32 0v8H16z" fill="#94a3b8"/></svg>`
+};
 
-function getUserAvatarUrl() {
+const defaultAvatarCache = Object.create(null);
+
+function buildDefaultAvatar(kind = 'neutral') {
+    const normalized = kind === 'male' ? 'male' : kind === 'female' ? 'female' : 'neutral';
+    if (!defaultAvatarCache[normalized]) {
+        const template = DEFAULT_AVATAR_SVG_TEMPLATES[normalized] || DEFAULT_AVATAR_SVG_TEMPLATES.neutral;
+        defaultAvatarCache[normalized] = `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(template)}`;
+    }
+    return defaultAvatarCache[normalized];
+}
+
+const DEFAULT_AVATAR_PLACEHOLDER = buildDefaultAvatar('neutral');
+
+function getUserAvatarUrl(gender) {
+    const normalized = typeof gender === 'string' ? gender.trim().toLowerCase() : '';
+    if (normalized === 'male') {
+        return buildDefaultAvatar('male');
+    }
+    if (normalized === 'female') {
+        return buildDefaultAvatar('female');
+    }
     return DEFAULT_AVATAR_PLACEHOLDER;
 }
 
@@ -15723,10 +17530,13 @@ function updateUserInfoSummary(account) {
     const createdValue = account && account.created ? account.created : '—';
     const rawPhotoDataUrl = account && typeof account.photoDataUrl === 'string' ? account.photoDataUrl.trim() : '';
     const rawPhotoUrl = account && typeof account.photoUrl === 'string' ? account.photoUrl.trim() : '';
-    const avatarSrc = rawPhotoDataUrl || rawPhotoUrl || getUserAvatarUrl();
-    const avatarAlt = avatarSrc === DEFAULT_AVATAR_PLACEHOLDER
-        ? 'No profile photo available'
-        : `${nameValue !== '—' ? nameValue : 'User'} profile photo`;
+    const hasProvidedPhoto = Boolean(rawPhotoDataUrl || rawPhotoUrl);
+    const avatarSrc = hasProvidedPhoto
+        ? (rawPhotoDataUrl || rawPhotoUrl)
+        : getUserAvatarUrl(account && account.gender);
+    const avatarAlt = hasProvidedPhoto
+        ? `${nameValue !== '—' ? nameValue : 'User'} profile photo`
+        : 'No profile photo available';
 
     if (nameEl) nameEl.textContent = nameValue;
     if (emailEl) emailEl.textContent = emailValue;
@@ -17334,12 +19144,12 @@ function hasUserCompletedRegistration(user) {
     return Boolean(user.invitation && user.invitation.completedAt);
 }
 
-function updateCompletedRegistrationPhotoPreview(photoDataUrl, photoFileName, emailFallback) {
+function updateCompletedRegistrationPhotoPreview(photoDataUrl, photoFileName, emailFallback, gender = '') {
     const preview = document.getElementById('userPhotoPreview');
     const filenameEl = document.getElementById('userPhotoFilename');
     const resolvedEmail = typeof emailFallback === 'string' ? emailFallback : '';
     const trimmedPhoto = typeof photoDataUrl === 'string' ? photoDataUrl.trim() : '';
-    const resolvedPreview = trimmedPhoto || getUserAvatarUrl();
+    const resolvedPreview = trimmedPhoto || getUserAvatarUrl(gender);
     const hasPhoto = Boolean(trimmedPhoto);
 
     if (preview) {
@@ -17403,7 +19213,12 @@ function populateCompletedRegistrationSection(options = {}) {
         statusEl.textContent = statusLabel;
     }
 
-    updateCompletedRegistrationPhotoPreview(visible ? photoDataUrl : '', visible ? photoFileName : '', email);
+    updateCompletedRegistrationPhotoPreview(
+        visible ? photoDataUrl : '',
+        visible ? photoFileName : '',
+        email,
+        visible ? gender : ''
+    );
 
     const photoInput = document.getElementById('userPhotoInput');
     if (photoInput && !visible) {
@@ -17439,7 +19254,7 @@ async function handleAdminPhotoUpload(event) {
         draft.photoFileName = file.name || 'profile-photo';
         state.userDraft = draft;
         const email = draft.email || '';
-        updateCompletedRegistrationPhotoPreview(dataUrl, draft.photoFileName, email);
+    updateCompletedRegistrationPhotoPreview(dataUrl, draft.photoFileName, email, draft.gender);
     } catch (error) {
         console.error('Admin photo upload failed', error);
         showNotification('error', 'We could not read the selected photo. Please try again.');
@@ -17606,7 +19421,12 @@ function collectUserFormStepData(step) {
         }
 
         const fallbackEmail = draft.email || '';
-        updateCompletedRegistrationPhotoPreview(draft.photoDataUrl || '', draft.photoFileName || '', fallbackEmail);
+        updateCompletedRegistrationPhotoPreview(
+            draft.photoDataUrl || '',
+            draft.photoFileName || '',
+            fallbackEmail,
+            draft.gender || ''
+        );
 
         state.userDraft = draft;
         updateUserFormProgressState();
@@ -17689,6 +19509,8 @@ function showUserForm(mode, userId = null) {
     const nextBtnLabel = document.getElementById('userInfoNextBtnLabel');
     const usersHeaderSearch = document.querySelector('#users-app2 .users-header .search-box');
     const usersHeaderActions = document.querySelector('#users-app2 .users-header .users-actions');
+    const userFiltersContainer = document.getElementById('userFiltersContainer');
+    const userBulkActions = document.getElementById('userBulkActions');
 
     if (!formPage || !listView || !form || !emailInput || !departmentInput || !employeeIdInput || !roleSelect || !superAdminToggle || !expirationInput || !submitBtn) {
         return;
@@ -17862,6 +19684,8 @@ function showUserForm(mode, userId = null) {
     setUsersModuleTitle(state.editingUserId ? 'Edit User Account' : 'Add New User');
     usersHeaderSearch?.classList.add('hidden');
     usersHeaderActions?.classList.add('hidden');
+    userFiltersContainer?.classList.add('hidden');
+    userBulkActions?.classList.add('hidden');
 
     listView.classList.add('hidden');
     formPage.classList.remove('hidden');
@@ -17889,6 +19713,8 @@ function hideUserForm() {
     const photoInput = document.getElementById('userPhotoInput');
     const usersHeaderSearch = document.querySelector('#users-app2 .users-header .search-box');
     const usersHeaderActions = document.querySelector('#users-app2 .users-header .users-actions');
+    const userFiltersContainer = document.getElementById('userFiltersContainer');
+    const userBulkActions = document.getElementById('userBulkActions');
 
     if (form) {
         form.reset();
@@ -17928,6 +19754,8 @@ function hideUserForm() {
 
     usersHeaderSearch?.classList.remove('hidden');
     usersHeaderActions?.classList.remove('hidden');
+    userFiltersContainer?.classList.remove('hidden');
+    userBulkActions?.classList.remove('hidden');
 
     setUsersModuleTitle('User Accounts');
 }
@@ -18713,6 +20541,42 @@ function normalizeRoleLookupValue(value) {
     return String(value).trim().toLowerCase();
 }
 
+function formatRoleFilterLabelFromKey(key, fallback = '') {
+    const source = typeof fallback === 'string' && fallback.trim()
+        ? fallback.trim()
+        : typeof key === 'string'
+            ? key.trim()
+            : '';
+    if (!source) {
+        return 'Unnamed Role';
+    }
+    return source
+        .replace(/[_-]+/g, ' ')
+        .split(/\s+/)
+        .map(part => part ? part.charAt(0).toUpperCase() + part.slice(1) : '')
+        .join(' ');
+}
+
+function getRoleLookupCandidates(role) {
+    if (!role || typeof role !== 'object') {
+        return [];
+    }
+    const candidates = [
+        role.id,
+        role.roleId,
+        role.code,
+        role.roleCode,
+        role.slug,
+        role.key,
+        role.name,
+        role.nameEnglish,
+        role.nameArabic
+    ];
+    return candidates
+        .map(normalizeRoleLookupValue)
+        .filter(Boolean);
+}
+
 function getUsersAssignedToRole(role) {
     if (!role) {
         return [];
@@ -18814,7 +20678,11 @@ function updateRoleCodeInlineFeedback() {
     if (issue === 'pattern') {
         message = 'The role code must be unique and contain only letters, numbers, hyphens, or underscores.';
     } else if (issue === 'duplicate') {
-        message = 'The role code is already registered.';
+        errorEl.textContent = '';
+        errorEl.classList.add('hidden');
+        errorEl.style.color = '';
+        input.setAttribute('aria-invalid', 'true');
+        return;
     }
 
     if (message) {
@@ -19152,10 +21020,6 @@ async function toggleUserStatus(userId) {
         renderStats();
         showNotification('success', 'User Account Activated Successfully');
     }
-}
-
-async function handleUserToggle(userId) {
-    await toggleUserStatus(userId);
 }
 
 function deactivateUserInvitationLink(user) {
@@ -19584,7 +21448,7 @@ function renderProductAdsFilterOptions() {
         const statuses = Array.from(new Set((productAds || []).map(ad => (ad.status || '').trim()).filter(Boolean)))
             .map(status => status.toLowerCase())
             .sort();
-        const options = ['<option value="all">All statuses</option>']
+    const options = ['<option value="all">All</option>']
             .concat(statuses.map(status => `<option value="${escapeAttribute(status)}">${escapeHtml(getProductAdStatusLabel(status))}</option>`));
         statusSelect.innerHTML = options.join('');
         statusSelect.value = statuses.includes(current) ? current : 'all';
@@ -19656,23 +21520,6 @@ function renderProductAdsTable(page = state.currentProductAdsPage) {
             const createdLabel = formatDateForDisplay(ad.createdAt, { includeTime: true }) || '—';
             const updatedLabel = formatDateForDisplay(ad.lastEditedAt, { includeTime: true }) || '—';
             const viewCount = Number.isFinite(ad.views) ? ad.views.toLocaleString('en-US') : '0';
-            const actions = [];
-            actions.push(`<button type="button" class="action-btn info" data-action="history" data-ad-id="${escapeAttribute(ad.id)}" title="View history"><i class="fas fa-clock-rotate-left"></i></button>`);
-            if ((ad.status || '').toLowerCase() !== 'approved') {
-                actions.push(`<button type="button" class="action-btn approve" data-action="approve" data-ad-id="${escapeAttribute(ad.id)}" title="Approve"><i class="fas fa-circle-check"></i></button>`);
-            }
-            if ((ad.status || '').toLowerCase() !== 'rejected') {
-                actions.push(`<button type="button" class="action-btn reject" data-action="reject" data-ad-id="${escapeAttribute(ad.id)}" title="Reject"><i class="fas fa-circle-xmark"></i></button>`);
-            }
-            if ((ad.status || '').toLowerCase() !== 'suspended') {
-                actions.push(`<button type="button" class="action-btn suspend" data-action="suspend" data-ad-id="${escapeAttribute(ad.id)}" title="Suspend"><i class="fas fa-ban"></i></button>`);
-            }
-            if (['rejected', 'suspended', 'expired'].includes((ad.status || '').toLowerCase())) {
-                actions.push(`<button type="button" class="action-btn restore" data-action="reinstate" data-ad-id="${escapeAttribute(ad.id)}" title="Reinstate"><i class="fas fa-rotate-left"></i></button>`);
-            }
-            actions.push(`<button type="button" class="action-btn edit" data-action="edit" data-ad-id="${escapeAttribute(ad.id)}" title="Edit"><i class="fas fa-pen"></i></button>`);
-            actions.push(`<button type="button" class="action-btn delete" data-action="delete" data-ad-id="${escapeAttribute(ad.id)}" title="Delete"><i class="fas fa-trash"></i></button>`);
-
             const flags = ad.flags || {};
             const flagLabels = [];
             if (flags.autoPosting) {
@@ -19684,9 +21531,26 @@ function renderProductAdsTable(page = state.currentProductAdsPage) {
             if (flags.blacklisted) {
                 flagLabels.push('<span class="helper-chip danger">Blacklisted</span>');
             }
+            const normalizedStatus = typeof ad.status === 'string' ? ad.status.trim().toLowerCase() : '';
+            const safeId = escapeAttribute(ad.id || '');
+            const actions = [];
+            actions.push(`<button type="button" class="action-btn view" data-action="history" data-ad-id="${safeId}" title="View moderation history"><i class="fas fa-clock-rotate-left"></i></button>`);
+            actions.push(`<button type="button" class="action-btn edit" data-action="edit" data-ad-id="${safeId}" title="Edit listing"><i class="fas fa-pen"></i></button>`);
+            if (normalizedStatus !== 'approved') {
+                actions.push(`<button type="button" class="action-btn approve" data-action="approve" data-ad-id="${safeId}" title="Approve listing"><i class="fas fa-circle-check"></i></button>`);
+            }
+            if (normalizedStatus !== 'rejected') {
+                actions.push(`<button type="button" class="action-btn reject" data-action="reject" data-ad-id="${safeId}" title="Reject listing"><i class="fas fa-circle-xmark"></i></button>`);
+            }
+            if (['suspended', 'rejected', 'expired'].includes(normalizedStatus)) {
+                actions.push(`<button type="button" class="action-btn reinstate" data-action="reinstate" data-ad-id="${safeId}" title="Reinstate listing"><i class="fas fa-arrow-rotate-left"></i></button>`);
+            } else {
+                actions.push(`<button type="button" class="action-btn suspend" data-action="suspend" data-ad-id="${safeId}" title="Suspend listing"><i class="fas fa-ban"></i></button>`);
+            }
+            actions.push(`<button type="button" class="action-btn delete" data-action="delete" data-ad-id="${safeId}" title="Delete listing"><i class="fas fa-trash"></i></button>`);
 
             return `
-                <tr data-ad-id="${escapeAttribute(ad.id)}">
+                <tr data-ad-id="${safeId}">
                     <td>${index++}</td>
                     <td>
                         <div class="table-cell-title">${escapeHtml(ad.title || 'Untitled Listing')}</div>
@@ -20092,6 +21956,7 @@ function renderProductAdAutomationLists() {
     const trustedCountEl = document.getElementById('productAdsTrustedCount');
     const reviewCountEl = document.getElementById('productAdsReviewCount');
     const blacklistCountEl = document.getElementById('productAdsBlacklistCount');
+    const automationNavCountEl = document.getElementById('onrufAutomationCountLabel');
 
     const trustedEntries = productAdAutomation && Array.isArray(productAdAutomation.trusted) ? productAdAutomation.trusted : [];
     const manualEntries = productAdAutomation && Array.isArray(productAdAutomation.manualReview) ? productAdAutomation.manualReview : [];
@@ -20131,6 +21996,10 @@ function renderProductAdAutomationLists() {
     if (trustedCountEl) trustedCountEl.textContent = `${trustedEntries.length} auto-post`;
     if (reviewCountEl) reviewCountEl.textContent = `${manualEntries.length} monitored`;
     if (blacklistCountEl) blacklistCountEl.textContent = `${blacklistEntries.length} blocked`;
+    if (automationNavCountEl) {
+        const totalEntries = trustedEntries.length + manualEntries.length + blacklistEntries.length;
+        automationNavCountEl.textContent = `#${totalEntries} Entries`;
+    }
 }
 
 function openProductAdAutomationPrompt(listType) {
@@ -20396,7 +22265,10 @@ function getFilteredIndividualAccounts() {
     return (individualAccounts || [])
         .filter(account => {
             if (!account) return false;
-            const haystack = `${account.fullName || ''} ${account.email || ''} ${account.mobile || ''} ${account.id || ''}`.toLowerCase();
+            const associationHaystack = Array.isArray(account.businessAssociations)
+                ? account.businessAssociations.map(assoc => `${assoc.companyName || ''} ${assoc.businessId || ''}`).join(' ')
+                : '';
+            const haystack = `${account.fullName || ''} ${account.email || ''} ${account.mobile || ''} ${account.id || ''} ${associationHaystack}`.toLowerCase();
             if (searchTerm && !haystack.includes(searchTerm)) return false;
             if (statusFilter !== 'all') {
                 const statusValue = typeof account.status === 'string' ? account.status.trim().toLowerCase() : '';
@@ -20438,29 +22310,25 @@ function renderIndividualAccountsTable(page = state.currentIndividualAccountsPag
     const visible = filtered.slice(startIndex, startIndex + perPage);
 
     if (!visible.length) {
-        tbody.innerHTML = '<tr><td colspan="8">No individual accounts match the current filters.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9">No individual accounts match the current filters.</td></tr>';
     } else {
         let index = startIndex + 1;
         tbody.innerHTML = visible.map(account => {
             const statusLabel = getIndividualAccountStatusLabel(account.status);
             const statusClass = getIndividualAccountStatusClass(account.status);
-            const subscriptions = Array.isArray(account.subscriptions) ? account.subscriptions : [];
-            const subscriptionLabel = subscriptions.length ? subscriptions.map(sub => `${sub.name || 'Subscription'} (${sub.status || 'active'})`).join(', ') : '—';
             const adsMeta = `${Number.isFinite(account.adsCount) ? account.adsCount : 0} / pending ${Number.isFinite(account.pendingAds) ? account.pendingAds : 0}`;
             const balanceLabel = formatCurrency(account.balance || 0);
-            const actions = [];
-            actions.push(`<button type="button" class="action-btn info" data-action="view" data-account-id="${escapeAttribute(account.id)}" title="View details"><i class="fas fa-eye"></i></button>`);
-            actions.push(`<button type="button" class="action-btn edit" data-action="edit" data-account-id="${escapeAttribute(account.id)}" title="Edit account"><i class="fas fa-pen"></i></button>`);
-            if ((account.status || '').toLowerCase() !== 'active') {
-                actions.push(`<button type="button" class="action-btn activate" data-action="activate" data-account-id="${escapeAttribute(account.id)}" title="Activate"><i class="fas fa-circle-check"></i></button>`);
-            }
-            if ((account.status || '').toLowerCase() !== 'frozen') {
-                actions.push(`<button type="button" class="action-btn freeze" data-action="freeze" data-account-id="${escapeAttribute(account.id)}" title="Freeze"><i class="fas fa-snowflake"></i></button>`);
-            }
-            actions.push(`<button type="button" class="action-btn delete" data-action="delete" data-account-id="${escapeAttribute(account.id)}" title="Delete"><i class="fas fa-trash"></i></button>`);
+            const createdLabel = formatDateForDisplay(account.createdAt, { includeTime: false }) || '—';
+            const lastActiveLabel = formatDateForDisplay(account.lastActiveAt, { includeTime: true }) || '—';
+            const businessAssociations = Array.isArray(account.businessAssociations) ? account.businessAssociations : [];
+            const businessCountLabel = businessAssociations.length ? `${businessAssociations.length} linked` : 'No links';
+            const businessTrigger = businessAssociations.length
+                ? `<button type="button" class="linked-business-trigger" data-action="view-businesses" data-account-id="${escapeAttribute(account.id)}" title="Review linked business accounts"><i class="fas fa-eye"></i><span>Review</span></button>`
+                : '<div class="table-cell-meta">—</div>';
+            const isSelected = state.activeIndividualAccountId === account.id;
 
             return `
-                <tr data-account-id="${escapeAttribute(account.id)}">
+                <tr data-account-id="${escapeAttribute(account.id)}"${isSelected ? ' class="selected" aria-selected="true"' : ' aria-selected="false"'}>
                     <td>${index++}</td>
                     <td>
                         <div class="table-cell-title">${escapeHtml(account.fullName || account.email || account.id || 'Account')}</div>
@@ -20474,15 +22342,32 @@ function renderIndividualAccountsTable(page = state.currentIndividualAccountsPag
                     <td><span class="${statusClass}">${escapeHtml(statusLabel)}</span></td>
                     <td>${escapeHtml(balanceLabel)}</td>
                     <td>${escapeHtml(adsMeta)}</td>
-                    <td>${escapeHtml(subscriptionLabel)}</td>
                     <td>
-                        <div class="action-group">
-                            ${actions.join('')}
-                        </div>
+                        <div class="table-cell-title">${escapeHtml(createdLabel)}</div>
+                    </td>
+                    <td>
+                        <div class="table-cell-title">${escapeHtml(businessCountLabel)}</div>
+                        ${businessTrigger}
+                    </td>
+                    <td>
+                        <div class="table-cell-title">${escapeHtml(lastActiveLabel)}</div>
                     </td>
                 </tr>
             `;
         }).join('');
+    }
+
+    const activeAccount = (individualAccounts || []).find(entry => entry && entry.id === state.activeIndividualAccountId) || null;
+    renderIndividualAccountsToolbar(activeAccount);
+
+    if (!activeAccount && state.activeIndividualAccountId) {
+        state.activeIndividualAccountId = null;
+        renderIndividualAccountDetail(null);
+    }
+
+    if (state.individualBusinessOverlayAccountId) {
+        const activeBusinessAccount = (individualAccounts || []).find(entry => entry && entry.id === state.individualBusinessOverlayAccountId);
+        renderIndividualAccountBusinessOverlay(activeBusinessAccount || null);
     }
 
     renderIndividualAccountsPagination(totalPages, filtered.length);
@@ -20578,7 +22463,81 @@ function renderIndividualAccountQuickActions(account) {
     }
 }
 
-function renderIndividualAccountDetail(account) {
+function renderIndividualAccountsToolbar(account) {
+    const toolbar = document.getElementById('individualAccountsToolbar');
+    if (!toolbar) return;
+
+    const viewBtn = document.getElementById('individualAccountsActionViewBtn');
+    const editBtn = document.getElementById('individualAccountsActionEditBtn');
+    const businessBtn = document.getElementById('individualAccountsActionBusinessBtn');
+    const activateBtn = document.getElementById('individualAccountsActionActivateBtn');
+    const freezeBtn = document.getElementById('individualAccountsActionFreezeBtn');
+    const deleteBtn = document.getElementById('individualAccountsActionDeleteBtn');
+
+    const setDisabled = (button, disabled) => {
+        if (button) {
+            button.disabled = !!disabled;
+        }
+    };
+
+    const setLabel = (button, label) => {
+        if (!button) return;
+        const textSpan = button.querySelector('span');
+        if (textSpan) {
+            textSpan.textContent = label;
+        }
+    };
+
+    if (!account) {
+        [viewBtn, editBtn, businessBtn, activateBtn, freezeBtn, deleteBtn].forEach(button => setDisabled(button, true));
+        setLabel(activateBtn, 'Activate');
+        setLabel(freezeBtn, 'Freeze');
+        return;
+    }
+
+    setDisabled(viewBtn, false);
+    setDisabled(editBtn, false);
+    setDisabled(deleteBtn, false);
+
+    if (businessBtn) {
+        const hasBusinessLinks = Array.isArray(account.businessAssociations) && account.businessAssociations.length > 0;
+        setDisabled(businessBtn, !hasBusinessLinks);
+    }
+
+    if (activateBtn) {
+        const status = (account.status || '').toLowerCase();
+        if (status === 'active') {
+            setDisabled(activateBtn, true);
+            setLabel(activateBtn, 'Active');
+        } else if (status === 'frozen') {
+            setDisabled(activateBtn, false);
+            setLabel(activateBtn, 'Unfreeze');
+        } else {
+            setDisabled(activateBtn, false);
+            setLabel(activateBtn, 'Activate');
+        }
+    }
+
+    if (freezeBtn) {
+        const status = (account.status || '').toLowerCase();
+        setDisabled(freezeBtn, status === 'frozen');
+        setLabel(freezeBtn, 'Freeze');
+    }
+}
+
+function selectIndividualAccount(accountId) {
+    const previousAccountId = state.activeIndividualAccountId;
+    const account = (individualAccounts || []).find(entry => entry && entry.id === accountId) || null;
+    state.activeIndividualAccountId = account ? account.id : null;
+    renderIndividualAccountsTable(state.currentIndividualAccountsPage);
+    if (previousAccountId !== state.activeIndividualAccountId || !account) {
+        renderIndividualAccountDetail(null);
+    }
+    return account;
+}
+
+function renderIndividualAccountDetail(account, { forceOpen = false } = {}) {
+    const overlay = document.getElementById('individualAccountDetailOverlay');
     const titleEl = document.getElementById('individualAccountDetailTitle');
     const subtitleEl = document.getElementById('individualAccountDetailSubtitle');
     const body = document.getElementById('individualAccountDetailBody');
@@ -20591,6 +22550,9 @@ function renderIndividualAccountDetail(account) {
         }
         body.innerHTML = '<p class="empty-state">Account insights, financial history, and support tooling will appear here.</p>';
         renderIndividualAccountQuickActions(null);
+        if (overlay) {
+            overlay.classList.add('hidden');
+        }
         return;
     }
 
@@ -20603,6 +22565,10 @@ function renderIndividualAccountDetail(account) {
     const financialHistory = Array.isArray(account.financialHistory) ? account.financialHistory : [];
     const supportRequests = Array.isArray(account.supportRequests) ? account.supportRequests : [];
     const permissions = account.permissions || {};
+    const businessAssociations = Array.isArray(account.businessAssociations) ? account.businessAssociations : [];
+    const businessSummary = businessAssociations.length
+        ? businessAssociations.map(assoc => assoc.companyName || assoc.businessId || 'Business Account').join(', ')
+        : null;
 
     const subscriptionMarkup = subscriptions.length
         ? subscriptions.map(sub => `<li><strong>${escapeHtml(sub.name || 'Subscription')}</strong> — ${escapeHtml(sub.status || 'active')} ${sub.renewsAt ? `· Renews ${escapeHtml(formatDateForDisplay(sub.renewsAt) || '')}` : ''}</li>`).join('')
@@ -20638,6 +22604,7 @@ function renderIndividualAccountDetail(account) {
                 <div><dt>Created</dt><dd>${escapeHtml(formatDateForDisplay(account.createdAt, { includeTime: true }) || '—')}</dd></div>
                 <div><dt>Last Active</dt><dd>${escapeHtml(formatDateForDisplay(account.lastActiveAt, { includeTime: true }) || '—')}</dd></div>
                 <div><dt>Balance</dt><dd>${escapeHtml(formatCurrency(account.balance || 0))}</dd></div>
+                <div><dt>Business Accounts</dt><dd>${businessSummary ? escapeHtml(businessSummary) : 'Not linked'}</dd></div>
             </div>
         </section>
         <section class="detail-section">
@@ -20668,12 +22635,28 @@ function renderIndividualAccountDetail(account) {
     `;
 
     renderIndividualAccountQuickActions(account);
+    if (overlay) {
+        if (forceOpen || !overlay.classList.contains('hidden')) {
+            overlay.classList.remove('hidden');
+        }
+    }
+    renderIndividualAccountsToolbar(account);
+    if (state.individualBusinessOverlayAccountId === account.id) {
+        renderIndividualAccountBusinessOverlay(account);
+    }
 }
 
-function openIndividualAccountDetail(accountId) {
-    const account = (individualAccounts || []).find(entry => entry && entry.id === accountId);
-    state.activeIndividualAccountId = account ? account.id : null;
-    renderIndividualAccountDetail(account || null);
+function openIndividualAccountDetail(accountId, { forceOpen = true } = {}) {
+    const account = selectIndividualAccount(accountId);
+    if (!account) {
+        showNotification('warning', 'Unable to locate the selected account.');
+        return;
+    }
+    renderIndividualAccountDetail(account, { forceOpen });
+}
+
+function closeIndividualAccountDetailOverlay() {
+    renderIndividualAccountDetail(null);
 }
 
 function updateIndividualAccountStatus(account, status, note) {
@@ -20700,6 +22683,9 @@ function removeIndividualAccount(accountId) {
         state.activeIndividualAccountId = null;
         renderIndividualAccountDetail(null);
     }
+    if (state.individualBusinessOverlayAccountId === accountId) {
+        closeIndividualAccountBusinessOverlay();
+    }
     renderIndividualAccountSupportRequests();
     showNotification('success', 'Individual account deleted.');
 }
@@ -20725,21 +22711,60 @@ function handleIndividualAccountQuickAction(event) {
     }
 }
 
+function handleIndividualAccountsToolbarClick(event) {
+    const button = event.target.closest('button[data-action]');
+    if (!button || button.disabled) return;
+    const action = button.dataset.action;
+    if (!action) return;
+
+    const account = (individualAccounts || []).find(entry => entry && entry.id === state.activeIndividualAccountId);
+    if (!account) {
+        showNotification('warning', 'Select an individual account first.');
+        return;
+    }
+
+    if (action === 'view') {
+        renderIndividualAccountDetail(account, { forceOpen: true });
+    } else if (action === 'edit') {
+        openIndividualAccountEditOverlay(account.id);
+    } else if (action === 'view-businesses') {
+        if (!Array.isArray(account.businessAssociations) || !account.businessAssociations.length) {
+            showNotification('info', 'This account has no linked business accounts.');
+            return;
+        }
+        renderIndividualAccountDetail(account, { forceOpen: true });
+        openIndividualAccountBusinessOverlay(account.id);
+    } else if (action === 'activate') {
+        updateIndividualAccountStatus(account, 'active', `${resolveProductAdModeratorLabel()} reactivated the account.`);
+        showNotification('success', 'Account activated.');
+    } else if (action === 'freeze') {
+        updateIndividualAccountStatus(account, 'frozen', `${resolveProductAdModeratorLabel()} froze the account.`);
+        showNotification('warning', 'Account frozen pending review.');
+    } else if (action === 'delete') {
+        if (window.confirm('Delete this individual account?')) {
+            removeIndividualAccount(account.id);
+        }
+    }
+}
+
 function handleIndividualAccountsTableClick(event) {
     const button = event.target.closest('button[data-action]');
     if (button) {
         const action = button.dataset.action;
         const accountId = button.dataset.accountId;
         if (!accountId) return;
-        const account = (individualAccounts || []).find(entry => entry && entry.id === accountId);
+        const account = selectIndividualAccount(accountId);
         if (!account) {
             showNotification('warning', 'Unable to locate the selected account.');
             return;
         }
         if (action === 'view') {
-            openIndividualAccountDetail(accountId);
+            renderIndividualAccountDetail(account, { forceOpen: true });
         } else if (action === 'edit') {
-            openIndividualAccountEditOverlay(accountId);
+            openIndividualAccountEditOverlay(account.id);
+        } else if (action === 'view-businesses') {
+            renderIndividualAccountDetail(account, { forceOpen: true });
+            openIndividualAccountBusinessOverlay(account.id);
         } else if (action === 'activate') {
             updateIndividualAccountStatus(account, 'active', `${resolveProductAdModeratorLabel()} reactivated the account.`);
             showNotification('success', 'Account activated.');
@@ -20748,7 +22773,7 @@ function handleIndividualAccountsTableClick(event) {
             showNotification('warning', 'Account frozen pending review.');
         } else if (action === 'delete') {
             if (window.confirm('Delete this individual account?')) {
-                removeIndividualAccount(accountId);
+                removeIndividualAccount(account.id);
             }
         }
         return;
@@ -20757,7 +22782,7 @@ function handleIndividualAccountsTableClick(event) {
     const row = event.target.closest('tr[data-account-id]');
     if (row) {
         const accountId = row.dataset.accountId;
-        openIndividualAccountDetail(accountId);
+        selectIndividualAccount(accountId);
     }
 }
 
@@ -20880,7 +22905,7 @@ function exportIndividualAccounts() {
         showNotification('warning', 'There are no individual accounts to export.');
         return;
     }
-    const headers = ['ID', 'Full Name', 'Email', 'Mobile', 'City', 'Status', 'Balance', 'Ads Count', 'Pending Ads', 'Created At', 'Last Active'];
+    const headers = ['ID', 'Full Name', 'Email', 'Mobile', 'City', 'Status', 'Balance', 'Ads Count', 'Pending Ads', 'Created At', 'Last Active', 'Linked Business Accounts'];
     const rows = individualAccounts.map(account => [
         account.id || '',
         account.fullName || '',
@@ -20892,11 +22917,102 @@ function exportIndividualAccounts() {
         account.adsCount || 0,
         account.pendingAds || 0,
         formatDateForDisplay(account.createdAt, { includeTime: true }) || '',
-        formatDateForDisplay(account.lastActiveAt, { includeTime: true }) || ''
+        formatDateForDisplay(account.lastActiveAt, { includeTime: true }) || '',
+        Array.isArray(account.businessAssociations) && account.businessAssociations.length
+            ? account.businessAssociations.map(assoc => assoc.companyName || assoc.businessId || '').filter(Boolean).join('; ')
+            : ''
     ]);
     const csv = buildCsvContent([headers, ...rows]);
     triggerFileDownload(new Blob([csv], { type: 'text/csv;charset=utf-8;' }), 'individual-accounts.csv');
     showNotification('success', 'Individual accounts exported successfully.');
+}
+
+function renderIndividualAccountBusinessOverlay(account) {
+    const content = document.getElementById('individualAccountBusinessContent');
+    const title = document.getElementById('individualAccountBusinessTitle');
+    const subtitle = document.getElementById('individualAccountBusinessSubtitle');
+    if (!content) return;
+
+    if (!account) {
+        if (title) {
+            title.textContent = 'Linked Business Accounts';
+        }
+        if (subtitle) {
+            subtitle.textContent = 'Review associated business accounts for this individual.';
+        }
+        content.innerHTML = '<p class="empty-state">No business associations detected for this account.</p>';
+        return;
+    }
+
+    const associations = Array.isArray(account.businessAssociations) ? account.businessAssociations : [];
+    if (title) {
+        title.textContent = account.fullName || account.email || account.id || 'Linked Business Accounts';
+    }
+    if (subtitle) {
+        subtitle.textContent = associations.length
+            ? `Linked to ${associations.length} business ${associations.length === 1 ? 'account' : 'accounts'}.`
+            : 'No business accounts are linked to this individual.';
+    }
+
+    if (!associations.length) {
+        content.innerHTML = '<p class="empty-state">No business associations detected for this account.</p>';
+        return;
+    }
+
+    const listMarkup = associations.map(association => {
+        const business = (businessAccounts || []).find(entry => entry && entry.id === association.businessId);
+        const companyName = association.companyName || (business && business.companyName) || association.businessId || 'Business Account';
+        const relationLabel = association.relationship || 'Linked account';
+        const linkedAtLabel = association.linkedAt ? formatDateForDisplay(association.linkedAt, { includeTime: true }) : null;
+        const normalizedStatus = business && typeof business.status === 'string' ? business.status.trim().toLowerCase() : '';
+        let statusChipClass = 'neutral';
+        if (normalizedStatus === 'active') {
+            statusChipClass = 'success';
+        } else if (normalizedStatus === 'pending' || normalizedStatus === 'docs-requested') {
+            statusChipClass = 'warning';
+        } else if (normalizedStatus === 'suspended' || normalizedStatus === 'cancelled' || normalizedStatus === 'rejected') {
+            statusChipClass = 'danger';
+        }
+        const statusLabel = business ? getBusinessAccountStatusLabel(business.status) : 'Not available';
+
+        return `
+            <li>
+                <div class="business-association-row">
+                    <div>
+                        <strong>${escapeHtml(companyName)}</strong>
+                        <div class="helper-text">Business ID: ${escapeHtml(association.businessId || '—')}</div>
+                    </div>
+                    <span class="helper-chip ${statusChipClass}">${escapeHtml(statusLabel)}</span>
+                </div>
+                <div class="helper-text">Relationship: ${escapeHtml(relationLabel)}</div>
+                ${linkedAtLabel ? `<div class="helper-text">Linked ${escapeHtml(linkedAtLabel)}</div>` : ''}
+            </li>
+        `;
+    }).join('');
+
+    content.innerHTML = `<ul class="detail-list business-associations-list">${listMarkup}</ul>`;
+}
+
+function openIndividualAccountBusinessOverlay(accountId) {
+    const overlay = document.getElementById('individualAccountBusinessOverlay');
+    if (!overlay) return;
+    const account = (individualAccounts || []).find(entry => entry && entry.id === accountId);
+    if (!account) {
+        showNotification('warning', 'Unable to locate linked business accounts.');
+        renderIndividualAccountBusinessOverlay(null);
+        return;
+    }
+    state.individualBusinessOverlayAccountId = account.id;
+    renderIndividualAccountBusinessOverlay(account);
+    overlay.classList.remove('hidden');
+}
+
+function closeIndividualAccountBusinessOverlay() {
+    const overlay = document.getElementById('individualAccountBusinessOverlay');
+    if (overlay) {
+        overlay.classList.add('hidden');
+    }
+    state.individualBusinessOverlayAccountId = null;
 }
 
 function updateIndividualAccountsImportStatus(message, type = 'info') {
@@ -22880,6 +24996,7 @@ function parseCsv(text) {
 function renderUsersTable(searchTerm = state.userSearchTerm, page = state.currentUserPage) {
     const tbody = document.getElementById('usersTableBody');
     if (!tbody) return;
+
     const rawTerm = typeof searchTerm === 'string' ? searchTerm : '';
     const trimmedTerm = rawTerm.trim();
     const normalizedTerm = trimmedTerm.toLowerCase();
@@ -22888,6 +25005,7 @@ function renderUsersTable(searchTerm = state.userSearchTerm, page = state.curren
     if (state.userSearchTerm !== trimmedTerm) {
         targetPage = 1;
     }
+
     state.userSearchTerm = trimmedTerm;
 
     const searchInput = document.getElementById('userSearch');
@@ -22895,13 +25013,56 @@ function renderUsersTable(searchTerm = state.userSearchTerm, page = state.curren
         searchInput.value = trimmedTerm;
     }
 
-    const filtered = normalizedTerm
-        ? users.filter(user => {
+    const filters = ensureUserFiltersState();
+    renderUserFilters();
+
+    const dataset = Array.isArray(users) ? users.slice() : [];
+    let filtered = dataset;
+
+    if (normalizedTerm) {
+        filtered = filtered.filter(user => {
             const displayName = resolveUserDisplayName(user);
-            const haystack = `${displayName} ${user.email || ''} ${user.role || ''} ${user.status || ''} ${user.phone || ''} ${user.department || ''}`.toLowerCase();
+            const haystack = `${displayName} ${user.email || ''} ${user.role || ''} ${user.status || ''} ${user.phone || ''} ${user.department || ''} ${user.employeeId || ''}`.toLowerCase();
             return haystack.includes(normalizedTerm);
-        })
-        : users;
+        });
+    }
+
+    const statusFilter = typeof filters.status === 'string' ? filters.status : 'all';
+    if (statusFilter !== 'all') {
+        filtered = filtered.filter(user => {
+            const statusValue = typeof user.status === 'string' ? user.status.trim().toLowerCase() : 'active';
+            return statusValue === statusFilter;
+        });
+    }
+
+    const accountTypeFilter = typeof filters.accountType === 'string' ? filters.accountType : 'all';
+    if (accountTypeFilter !== 'all') {
+        filtered = filtered.filter(user => resolveUserAccountType(user) === accountTypeFilter);
+    }
+
+    const departmentFilter = typeof filters.department === 'string' ? filters.department : 'all';
+    if (departmentFilter !== 'all') {
+        filtered = filtered.filter(user => normalizeUserDepartmentFilterValue(user && user.department) === departmentFilter);
+    }
+
+    const roleFilter = typeof filters.role === 'string' ? filters.role : 'all';
+    if (roleFilter !== 'all') {
+        filtered = filtered.filter(user => {
+            const keys = extractUserRoleFilterKeys(user);
+            return keys.includes(roleFilter);
+        });
+    }
+
+    if (state.selectedUserId) {
+        const selectedId = String(state.selectedUserId);
+        const stillExists = users.some(user => String(user.id) === selectedId);
+        const visibleInFiltered = stillExists && filtered.some(user => String(user.id) === selectedId);
+        if (!stillExists || !visibleInFiltered) {
+            state.selectedUserId = null;
+        }
+    }
+
+    const selectedUserId = state.selectedUserId ? String(state.selectedUserId) : null;
 
     const totalPages = Math.max(1, Math.ceil(filtered.length / state.usersPerPage));
     state.currentUserPage = Math.min(Math.max(targetPage, 1), totalPages);
@@ -22909,113 +25070,121 @@ function renderUsersTable(searchTerm = state.userSearchTerm, page = state.curren
     const visibleUsers = filtered.slice(startIndex, startIndex + state.usersPerPage);
 
     if (!visibleUsers.length) {
-        tbody.innerHTML = '<tr><td colspan="9">There is no Data Available</td></tr>';
-    } else {
-        let index = startIndex + 1;
-        tbody.innerHTML = visibleUsers.map(user => {
-            const displayName = resolveUserDisplayName(user);
-            const rawStatus = (user.status || 'Active').toLowerCase();
-            const isActive = rawStatus === 'active';
-            const isPending = rawStatus === 'pending';
-            const displayStatus = isPending ? 'Pending' : isActive ? 'Active' : 'Inactive';
-            const statusClass = isPending ? 'pending' : isActive ? 'active' : 'inactive';
-            const accountType = resolveUserAccountType(user);
-            const accountTypeLabel = mapAccountTypeLabel(accountType);
-            const accountTypeClass = mapAccountTypeClass(accountType);
-            const isSuperAdminAccount = accountType === 'system-administrator';
-            const accountTypeTag = isSuperAdminAccount
-                ? `<span class="account-type-tag ${accountTypeClass}">${accountTypeLabel}</span>`
-                : '';
-            const roleSummaryLabel = extractRoleLabelFromSummary(user.permissionSummary);
-            const rawRoleValue = typeof user.role === 'string' ? user.role.trim() : '';
-            const disabledMatch = rawRoleValue.match(/^(.*)\(Disabled\)\s*$/i);
-            const strippedRoleValue = disabledMatch && disabledMatch[1] ? disabledMatch[1].trim() : rawRoleValue;
-            const resolvedRoleValue = strippedRoleValue || roleSummaryLabel;
-            const displayRole = isSuperAdminAccount ? '—' : (resolvedRoleValue || '—');
-            const expirationLabel = user.expiresOn ? formatDateForDisplay(user.expiresOn, { includeTime: true }) : '—';
-            const invitation = user.invitation || {};
-            const registrationCompleted = Boolean(invitation.completedAt || invitation.verifiedAt);
-            const photoUrl = user.photoDataUrl && user.photoDataUrl.trim() ? user.photoDataUrl.trim() : '';
-            const phoneDisplay = (!isPending || registrationCompleted)
-                ? (user.phone && String(user.phone).trim() ? String(user.phone).trim() : '—')
-                : '—';
-            const employeeIdDisplay = user.employeeId && String(user.employeeId).trim() ? String(user.employeeId).trim() : '—';
-            const isCurrentSessionUser = Boolean(state.activeSession && state.activeSession.user && state.activeSession.user.id === user.id);
-            const deleteTooltip = isCurrentSessionUser
-                ? 'You cannot delete the account that is currently signed in.'
-                : isSuperAdminAccount
-                    ? 'Delete Super Admin account'
-                    : 'Delete user';
-            const creatorInfo = resolveUserCreator(user);
-            const creatorMarkup = creatorInfo.email
-                ? `<div class="creator-cell"><div class="creator-name">${escapeHtml(creatorInfo.label)}</div><div class="user-meta">${escapeHtml(creatorInfo.email)}</div></div>`
-                : `<div class="creator-cell"><div class="creator-name">${escapeHtml(creatorInfo.label)}</div></div>`;
-            const createdSource = user.createdAt || user.created;
-            const createdLabel = formatUserCreatedLabel(createdSource);
-            const createdDisplay = createdLabel ? escapeHtml(createdLabel) : '—';
-            const createdDetailsMarkup = `<div class="created-cell"><div class="created-date">${createdDisplay}</div>${creatorMarkup}</div>`;
-            const fallbackInitialMatch = typeof displayName === 'string' ? displayName.match(/[A-Za-z0-9]/) : null;
-            const fallbackInitial = fallbackInitialMatch ? fallbackInitialMatch[0].toUpperCase() : '';
-            const lastEventLabel = formatUserActivityLabel(user.lastEvent || user.lastAction || '');
-            const lastEventMarkup = lastEventLabel ? `<div class="user-meta user-activity">${escapeHtml(lastEventLabel)}</div>` : '';
-            const actionButtons = [];
-
-            actionButtons.push(`<button class="action-btn edit" onclick="showUserForm('edit', ${user.id})" title="Edit user"><i class="fas fa-pen"></i></button>`);
-
-            if (isPending) {
-                actionButtons.push(`<button class="action-btn invitation-link" onclick="showUserInvitationLink(${user.id})" title="Show invitation link"><i class="fas fa-envelope-open-text"></i></button>`);
-                actionButtons.push(`<button class="action-btn resend-invite" onclick="(async () => await resendUserInvitation(${user.id}))()" title="Resend invitation email"><i class="fas fa-paper-plane"></i></button>`);
-            } else {
-                actionButtons.push(`<button class="action-btn ${isActive ? 'deactivate' : 'activate'}" onclick="(async () => await handleUserToggle(${user.id}))()" title="${isActive ? 'Deactivate user' : 'Activate user'}"><i class="fas ${isActive ? 'fa-power-off' : 'fa-rotate-right'}"></i></button>`);
-            }
-
-            const deleteAction = (!isCurrentSessionUser)
-                ? `<button class="action-btn delete" onclick="(async () => await handleUserDelete(${user.id}))()" title="${escapeAttribute(deleteTooltip)}"><i class="fas fa-trash"></i></button>`
-                : `<button class="action-btn delete disabled" type="button" disabled title="${escapeAttribute(deleteTooltip)}"><i class="fas fa-trash"></i></button>`;
-
-            actionButtons.push(deleteAction);
-
-            return `
-                <tr>
-                    <td>${index++}</td>
-                    <td>
-                        <div class="user-cell">
-                            <div class="user-avatar" aria-hidden="true">
-                                ${photoUrl
-                                    ? `<img src="${escapeAttribute(photoUrl)}" alt="${escapeAttribute(displayName)}" class="user-avatar-img">`
-                                    : fallbackInitial
-                                        ? `<span class="user-avatar-fallback">${escapeHtml(fallbackInitial)}</span>`
-                                        : '<span class="user-avatar-fallback" aria-hidden="true"></span>'}
-                            </div>
-                            <div class="user-cell-details">
-                                <div class="user-name-row">
-                                    <span class="user-name">${displayName}</span>
-                                    ${accountTypeTag}
-                                </div>
-                                <div class="user-meta user-email">${user.email}</div>
-                                <div class="user-meta user-phone">${phoneDisplay}</div>
-                                <div class="user-meta user-employee-id">Code: ${employeeIdDisplay}</div>
-                                ${lastEventMarkup}
-                            </div>
-                        </div>
-                    </td>
-                    <td>${displayRole}</td>
-                    <td>${user.department || '—'}</td>
-                    <td><span class="status-badge status-${statusClass}">${displayStatus}</span></td>
-                    <td>${user.lastLogin}</td>
-                    <td>${createdDetailsMarkup}</td>
-                    <td>${expirationLabel}</td>
-                    <td>
-                        <div class="action-group">
-                            ${actionButtons.join('\n')}
-                        </div>
-                    </td>
-                </tr>
-            `;
-        }).join('');
+        tbody.innerHTML = '<tr><td colspan="8">There is no Data Available</td></tr>';
+        renderUsersPagination(totalPages, filtered.length);
+        updateUserControls();
+        return;
     }
 
+    let ordinal = startIndex + 1;
+    tbody.innerHTML = visibleUsers.map(user => {
+        const displayName = resolveUserDisplayName(user);
+        const rawStatus = typeof user.status === 'string' ? user.status.trim().toLowerCase() : 'active';
+        const isPending = rawStatus === 'pending';
+        const isActive = rawStatus === 'active';
+        const displayStatus = isPending ? 'Pending' : isActive ? 'Active' : 'Inactive';
+        const statusClass = isPending ? 'pending' : isActive ? 'active' : 'inactive';
+
+        const accountType = resolveUserAccountType(user);
+        const accountTypeLabel = mapAccountTypeLabel(accountType);
+        const accountTypeClass = mapAccountTypeClass(accountType);
+        const isSuperAdminAccount = accountType === 'system-administrator';
+        const accountTypeTag = isSuperAdminAccount && accountTypeLabel
+            ? `<span class="account-type-tag ${accountTypeClass}">${escapeHtml(accountTypeLabel)}</span>`
+            : '';
+
+        const roleSummaryLabel = extractRoleLabelFromSummary(user.permissionSummary);
+        const rawRoleValue = typeof user.role === 'string' ? user.role.trim() : '';
+        const disabledMatch = rawRoleValue.match(/^(.*)\(Disabled\)\s*$/i);
+        const resolvedRoleValue = disabledMatch && disabledMatch[1] ? disabledMatch[1].trim() : rawRoleValue;
+        const displayRole = isSuperAdminAccount ? '—' : (resolvedRoleValue || roleSummaryLabel || '—');
+
+        const invitation = user.invitation || {};
+        const registrationCompleted = Boolean(invitation.completedAt || invitation.verifiedAt);
+        const phoneDisplay = (!isPending || registrationCompleted)
+            ? (user.phone && String(user.phone).trim() ? String(user.phone).trim() : '—')
+            : '—';
+        const employeeIdDisplay = user.employeeId && String(user.employeeId).trim() ? String(user.employeeId).trim() : '—';
+
+        const normalizedGender = typeof user.gender === 'string' ? user.gender.trim().toLowerCase() : '';
+        const defaultAvatarKind = normalizedGender === 'male' ? 'male' : normalizedGender === 'female' ? 'female' : 'neutral';
+        const photoUrl = user.photoDataUrl && user.photoDataUrl.trim() ? user.photoDataUrl.trim() : '';
+        const avatarUrl = photoUrl || getUserAvatarUrl(defaultAvatarKind);
+        const avatarAlt = photoUrl
+            ? `${displayName} profile photo`
+            : defaultAvatarKind === 'male'
+                ? 'Default male profile avatar'
+                : defaultAvatarKind === 'female'
+                    ? 'Default female profile avatar'
+                    : 'Default profile avatar';
+        const avatarMarkup = `<img src="${escapeAttribute(avatarUrl)}" alt="${escapeAttribute(avatarAlt)}" class="user-avatar-img">`;
+
+        const lastEventLabel = formatUserActivityLabel(user.lastEvent || user.lastAction || '');
+        const lastEventMarkup = lastEventLabel ? `<div class="user-meta user-activity">${escapeHtml(lastEventLabel)}</div>` : '';
+
+        const creatorInfo = resolveUserCreator(user);
+        const creatorNameMarkup = creatorInfo && creatorInfo.label
+            ? `<div class="creator-name">${escapeHtml(creatorInfo.label)}</div>`
+            : '';
+        const creatorEmailMarkup = creatorInfo && creatorInfo.email
+            ? `<div class="user-meta">${escapeHtml(creatorInfo.email)}</div>`
+            : '';
+        const creatorMarkup = creatorNameMarkup || creatorEmailMarkup
+            ? `<div class="creator-cell">${creatorNameMarkup}${creatorEmailMarkup}</div>`
+            : '<div class="creator-cell"><div class="creator-name">—</div></div>';
+
+        const createdSource = user.createdAt || user.created;
+        const createdLabel = formatUserCreatedLabel(createdSource);
+        const createdDisplay = createdLabel ? escapeHtml(createdLabel) : '—';
+        const createdDetailsMarkup = `<div class="created-cell"><div class="created-date">${createdDisplay}</div>${creatorMarkup}</div>`;
+
+        const expirationLabel = user.expiresOn
+            ? formatDateForDisplay(user.expiresOn, { includeTime: true })
+            : '';
+        const expirationMarkup = expirationLabel ? escapeHtml(expirationLabel) : '—';
+
+        const lastLoginValue = user.lastLogin && String(user.lastLogin).trim()
+            ? String(user.lastLogin).trim()
+            : '';
+        const lastLoginMarkup = lastLoginValue ? escapeHtml(lastLoginValue) : '—';
+
+        const isSelected = selectedUserId && String(user.id) === selectedUserId;
+        const rowClassAttr = isSelected ? ' class="selected"' : '';
+        const ariaSelected = isSelected ? 'true' : 'false';
+        const escapedUserId = escapeAttribute(String(user.id));
+
+        return `
+            <tr data-user-id="${escapedUserId}" aria-selected="${ariaSelected}"${rowClassAttr}>
+                <td>${ordinal++}</td>
+                <td>
+                    <div class="user-cell">
+                        <div class="user-avatar" aria-hidden="true">
+                            ${avatarMarkup}
+                        </div>
+                        <div class="user-cell-details">
+                            <div class="user-name-row">
+                                <span class="user-name">${escapeHtml(displayName)}</span>
+                                ${accountTypeTag}
+                            </div>
+                            <div class="user-meta user-email">${escapeHtml(user.email || '—')}</div>
+                            <div class="user-meta user-phone">${escapeHtml(phoneDisplay)}</div>
+                            <div class="user-meta user-employee-id">Code: ${escapeHtml(employeeIdDisplay)}</div>
+                            ${lastEventMarkup}
+                        </div>
+                    </div>
+                </td>
+                <td>${escapeHtml(displayRole)}</td>
+                <td>${escapeHtml(user.department || '—')}</td>
+                <td><span class="status-badge status-${statusClass}">${displayStatus}</span></td>
+                <td>${lastLoginMarkup}</td>
+                <td>${createdDetailsMarkup}</td>
+                <td>${expirationMarkup}</td>
+            </tr>
+        `;
+    }).join('');
+
     renderUsersPagination(totalPages, filtered.length);
+    updateUserControls();
 }
 
 function exportUsers() {
@@ -23090,10 +25259,6 @@ function toggleSidebar() {
 
 function saveSettings() {
     alert('Settings saved successfully. Updates will apply within the next sync cycle.');
-}
-
-function openSupport() {
-    alert('Support will connect you with the OnRuf help desk.');
 }
 
 function manageIntegration(key) {

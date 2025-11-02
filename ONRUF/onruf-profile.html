@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ONRUF Account Profile</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" integrity="sha512-1ycn6IcaQQ40/MKBW2W4Rhis/DbILU74C1vSrLJxCq57o941Ym01SwNsOMqvEBFlcgUa6r0zE1x4rOzT9kZf3g==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <link rel="stylesheet" href="assets/css/onruf-profile.css" />
+</head>
+<body>
+    <header class="profile-header">
+        <div class="profile-header__brand">
+            <span class="brand-mark">ON</span>
+            <span class="brand-text">RUF</span>
+        </div>
+        <nav class="profile-header__actions" aria-label="Profile actions">
+            <a class="profile-header__link" href="onruf-platform.html">Back to marketplace</a>
+            <button type="button" class="profile-header__signout" id="profileTopSignOutBtn">
+                <i class="fas fa-right-from-bracket" aria-hidden="true"></i>
+                <span>Sign Out</span>
+            </button>
+        </nav>
+    </header>
+
+    <main class="profile-main" id="profileMain" hidden>
+        <section class="profile-grid">
+            <aside class="profile-summary" id="profileSummaryCard">
+                <div class="profile-avatar" id="profileAvatar" aria-hidden="true">A</div>
+                <h1 class="profile-name" id="profileName">Your Name</h1>
+                <p class="profile-meta" id="profileMemberSince">Member since —</p>
+                <p class="profile-meta" id="profileMembershipNumber">Membership #—</p>
+                <div class="profile-rating">
+                    <i class="fas fa-star" aria-hidden="true"></i>
+                    <span id="profileRatingValue">0.0</span>
+                </div>
+                <div class="profile-stats">
+                    <div class="profile-stat">
+                        <span class="profile-stat__value" id="profilePointsValue">0</span>
+                        <span class="profile-stat__label">My points</span>
+                    </div>
+                    <div class="profile-stat">
+                        <span class="profile-stat__value" id="profileWalletValue">0 SAR</span>
+                        <span class="profile-stat__label">My wallet</span>
+                    </div>
+                    <div class="profile-stat">
+                        <span class="profile-stat__value" id="profileFollowersValue">0</span>
+                        <span class="profile-stat__label">Followers</span>
+                    </div>
+                </div>
+                <button type="button" class="profile-summary__signout" id="profileCardSignOutBtn">Sign out</button>
+            </aside>
+
+            <section class="profile-content">
+                <article class="profile-card profile-card--shortcuts">
+                    <h2 class="profile-card__title">Sale</h2>
+                    <ul class="profile-list" id="profileSaleList" aria-label="Sale shortcuts"></ul>
+                    <h2 class="profile-card__title profile-card__title--secondary">Purchase</h2>
+                    <ul class="profile-list" id="profilePurchaseList" aria-label="Purchase shortcuts"></ul>
+                </article>
+
+                <article class="profile-card">
+                    <h2 class="profile-card__title">Settings</h2>
+                    <ul class="profile-list" id="profileSettingsList" aria-label="Account settings"></ul>
+                </article>
+
+                <article class="profile-card profile-card--two-column">
+                    <h2 class="profile-card__title">Account overview</h2>
+                    <dl class="profile-data" id="profileDetailsList"></dl>
+                </article>
+            </section>
+        </section>
+    </main>
+
+    <section class="profile-empty" id="profileEmptyState" hidden>
+        <div class="profile-empty__card">
+            <h2>We could not load your account.</h2>
+            <p>Log in again so we can pull your profile information.</p>
+            <div class="profile-empty__actions">
+                <a class="profile-empty__link" href="onruf-login.html">Go to login</a>
+                <a class="profile-empty__link" href="onruf-platform.html">Return to marketplace</a>
+            </div>
+        </div>
+    </section>
+
+    <div class="profile-toast" id="profileToast" role="status" aria-live="polite"></div>
+    <script src="assets/js/onruf-profile.js"></script>
+</body>
+</html>
