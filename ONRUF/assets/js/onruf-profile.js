@@ -48,8 +48,8 @@
         elements.saleList = document.getElementById('profileSaleList');
         elements.purchaseList = document.getElementById('profilePurchaseList');
         elements.settingsList = document.getElementById('profileSettingsList');
-        elements.detailsList = document.getElementById('profileDetailsList');
         elements.toast = document.getElementById('profileToast');
+        elements.pointsStat = document.getElementById('profilePointsStat');
         elements.signOutButtons = [
             document.getElementById('profileTopSignOutBtn'),
             document.getElementById('profileCardSignOutBtn')
@@ -122,7 +122,6 @@
         renderSummary(profile);
         renderShortcuts(profile);
         renderSettings(profile);
-        renderDetails(profile);
         if (elements.main) {
             elements.main.hidden = false;
         }
@@ -139,7 +138,11 @@
         profile.points = resolveNumber(account.points, 0, 0);
         profile.wallet = resolveNumber(account.balance, 0, 2);
     profile.followers = resolveNumber(account.followers, Math.max(account.adsCount || 0, 0) * 2, 0);
-        profile.avatarUrl = account.avatarUrl || signup.profile?.avatarUrl || null;
+        profile.avatarUrl = account.avatarUrl
+            || signup.profile?.avatarUrl
+            || signup.profile?.photoDataUrl
+            || state.session.avatarUrl
+            || null;
         profile.city = account.city || signup.profile?.city || '';
         profile.email = state.session.email || account.email || signup.email || '';
         profile.mobile = account.mobile || signup.profile?.phone || signup.profile?.mobile || '';
@@ -214,7 +217,7 @@
 
     function renderSettings(profile) {
         const settingsItems = [
-            { icon: 'fa-pen', label: 'Edit profile' },
+            { icon: 'fa-pen', label: 'Edit profile', action: 'edit-profile' },
             { icon: 'fa-credit-card', label: 'Payment cards' },
             { icon: 'fa-location-dot', label: 'Saved addresses' },
             { icon: 'fa-circle-question', label: 'Help' },
@@ -222,37 +225,38 @@
         ];
         if (elements.settingsList) {
             elements.settingsList.innerHTML = buildShortcutMarkup(settingsItems);
+            bindSettingsActions();
         }
-    }
-
-    function renderDetails(profile) {
-        if (!elements.detailsList) {
-            return;
-        }
-        const detailPairs = [
-            ['Full name', profile.name],
-            ['Email', profile.email || '—'],
-            ['Mobile', profile.mobile || '—'],
-            ['City', profile.city || '—'],
-            ['Status', titleCase(profile.status)],
-            ['Member since', formatDate(profile.memberSince)],
-            ['Last active', formatRelativeDate(profile.lastActiveAt) || 'Today'],
-            ['Wallet balance', `${profile.wallet.toLocaleString('en-US', { maximumFractionDigits: 0 })} SAR`]
-        ];
-        elements.detailsList.innerHTML = detailPairs.map(([label, value]) => {
-            return `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value || '—')}</dd></div>`;
-        }).join('');
     }
 
     function buildShortcutMarkup(items) {
         return items.map(item => {
-            return `<li class="profile-list__item"><i class="fas ${item.icon}" aria-hidden="true"></i><span>${escapeHtml(item.label)}</span>${item.pill ? `<span class="profile-list__pill">${escapeHtml(item.pill)}</span>` : ''}<i class="fas fa-chevron-right" aria-hidden="true"></i></li>`;
+            const actionAttr = item.action ? ` data-action="${item.action}"` : '';
+            return `<li class="profile-list__item"${actionAttr}><i class="fas ${item.icon}" aria-hidden="true"></i><span>${escapeHtml(item.label)}</span>${item.pill ? `<span class="profile-list__pill">${escapeHtml(item.pill)}</span>` : ''}<i class="fas fa-chevron-right" aria-hidden="true"></i></li>`;
         }).join('');
     }
 
     function bindInteractions() {
         elements.signOutButtons.forEach(button => {
             button.addEventListener('click', handleSignOut);
+        });
+        if (elements.pointsStat) {
+            elements.pointsStat.addEventListener('click', handlePointsClick);
+        }
+    }
+
+    function bindSettingsActions() {
+        if (!elements.settingsList) {
+            return;
+        }
+        const items = elements.settingsList.querySelectorAll('[data-action]');
+        items.forEach(item => {
+            const action = item.getAttribute('data-action');
+            if (action === 'edit-profile') {
+                item.addEventListener('click', () => {
+                    window.location.href = 'onruf-profile-edit.html';
+                });
+            }
         });
     }
 
@@ -266,6 +270,10 @@
         setTimeout(() => {
             window.location.href = 'onruf-login.html';
         }, 800);
+    }
+
+    function handlePointsClick() {
+        window.location.href = 'onruf-my-points.html';
     }
 
     function showToast(message) {

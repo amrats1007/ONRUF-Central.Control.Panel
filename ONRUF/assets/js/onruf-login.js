@@ -7,99 +7,9 @@
     const REMEMBER_KEY = 'onruf_individual_login_remember_v1';
     const REMEMBER_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
-    const DEFAULT_INDIVIDUAL_ACCOUNTS = [
-        {
-            id: 'IND-2001',
-            fullName: 'Sara Al-Qahtani',
-            email: 'sara.alqahtani@example.com',
-            mobile: '+966512345678',
-            city: 'Riyadh',
-            status: 'active',
-            balance: 2450.75,
-            adsCount: 11,
-            pendingAds: 2,
-            createdAt: '2025-04-18T07:50:00.000Z',
-            lastActiveAt: '2025-10-26T16:30:00.000Z',
-            permissions: { autoPosting: true, manualReview: false },
-            subscriptions: [
-                { name: 'Featured Ads Boost', status: 'active', renewsAt: '2025-12-01T00:00:00.000Z' }
-            ],
-            financialHistory: [
-                { id: 'txn-2001-1', label: 'Wallet Top-up', amount: 1200, type: 'credit', timestamp: '2025-09-01T09:20:00.000Z' },
-                { id: 'txn-2001-2', label: 'Ad Publishing Fee', amount: -150, type: 'debit', timestamp: '2025-09-10T12:00:00.000Z' }
-            ],
-            supportRequests: [],
-            notes: 'Prefers SMS notifications.'
-        },
-        {
-            id: 'IND-2078',
-            fullName: 'Hassan Al-Mutairi',
-            email: 'hassan.mutairi@example.com',
-            mobile: '+966598887766',
-            city: 'Jeddah',
-            status: 'frozen',
-            balance: 520,
-            adsCount: 4,
-            pendingAds: 0,
-            createdAt: '2025-05-11T10:05:00.000Z',
-            lastActiveAt: '2025-09-30T21:15:00.000Z',
-            permissions: { autoPosting: false, manualReview: true },
-            subscriptions: [
-                { name: 'Auto Renew Ads', status: 'paused', renewsAt: '2025-11-15T00:00:00.000Z' }
-            ],
-            financialHistory: [
-                { id: 'txn-2078-1', label: 'Manual Adjustment', amount: -80, type: 'debit', timestamp: '2025-09-28T08:45:00.000Z' }
-            ],
-            supportRequests: [
-                { id: 'support-2078-1', reason: 'Fraud review', expiresAt: '2025-11-01T00:00:00.000Z', requestedAt: '2025-10-02T12:10:00.000Z', status: 'pending' }
-            ],
-            notes: 'Account frozen pending identity confirmation.'
-        },
-        {
-            id: 'IND-2110',
-            fullName: 'Maya Al-Salem',
-            email: 'maya.alsalem@example.com',
-            mobile: '+966533112244',
-            city: 'Dammam',
-            status: 'pending',
-            balance: 0,
-            adsCount: 0,
-            pendingAds: 1,
-            createdAt: '2025-10-10T13:25:00.000Z',
-            lastActiveAt: '2025-10-10T13:25:00.000Z',
-            permissions: { autoPosting: false, manualReview: true },
-            subscriptions: [],
-            financialHistory: [],
-            supportRequests: [],
-            notes: 'Awaiting OTP verification.'
-        }
-    ];
+    const DEFAULT_INDIVIDUAL_ACCOUNTS = [];
 
-    const DEFAULT_SIGNUP_RECORDS = [
-        {
-            accountId: 'IND-2001',
-            userName: 'Sara Al-Qahtani',
-            email: 'sara.alqahtani@example.com',
-            phone: '+966512345678',
-            invitationCode: null,
-            passwordHash: 'UGFzc3dvcmRAMTIz',
-            submittedAt: '2025-10-20T09:00:00.000Z',
-            profile: {
-                firstName: 'Sara',
-                lastName: 'Al-Qahtani',
-                dateOfBirth: '1994-07-08',
-                gender: 'Female',
-                country: 'Saudi Arabia',
-                region: 'Riyadh Province',
-                city: 'Riyadh',
-                district: 'Olaya',
-                street: 'King Fahd Road',
-                zip: '11564',
-                photoDataUrl: null
-            },
-            lastLoginAt: null
-        }
-    ];
+    const DEFAULT_SIGNUP_RECORDS = [];
 
     const elements = {};
 
@@ -278,9 +188,8 @@
         }
         const nowIso = new Date().toISOString();
         account.lastActiveAt = nowIso;
-        if (account.status === 'pending') {
-            account.status = 'active';
-        }
+        const normalizedStatus = typeof account.status === 'string' ? account.status.trim().toLowerCase() : '';
+        account.status = normalizedStatus === 'inactive' ? 'inactive' : 'active';
         saveIndividualAccounts(accounts);
     }
 
@@ -369,6 +278,7 @@
         if (!account || typeof account !== 'object') {
             return null;
         }
+
         const fallbackId = `IND-${String(index + 1).padStart(4, '0')}`;
         const id = typeof account.id === 'string' && account.id.trim() ? account.id.trim() : fallbackId;
         const fullName = typeof account.fullName === 'string' && account.fullName.trim() ? account.fullName.trim() : `Account ${index + 1}`;
@@ -376,19 +286,48 @@
         const email = normalizeEmail(emailRaw) || emailRaw.toLowerCase();
         const mobile = typeof account.mobile === 'string' && account.mobile.trim() ? account.mobile.trim() : '';
         const city = typeof account.city === 'string' && account.city.trim() ? account.city.trim() : 'Riyadh';
-        const statusCandidate = typeof account.status === 'string' && account.status.trim() ? account.status.trim().toLowerCase() : 'pending';
-        const allowedStatuses = new Set(['active', 'frozen', 'pending', 'deleted', 'suspended']);
-        const status = allowedStatuses.has(statusCandidate) ? statusCandidate : 'pending';
+        const rawStatus = typeof account.status === 'string' && account.status.trim()
+            ? account.status.trim().toLowerCase()
+            : 'active';
+        const activeStatuses = new Set(['active', 'activated', 'approved', 'verified', 'pending']);
+        const inactiveStatuses = new Set(['inactive', 'frozen', 'deleted', 'suspended', 'blocked', 'disabled', 'deactivated']);
+        const status = inactiveStatuses.has(rawStatus)
+            ? 'inactive'
+            : activeStatuses.has(rawStatus)
+                ? 'active'
+                : rawStatus
+                    ? 'inactive'
+                    : 'active';
         const balance = Number.isFinite(account.balance) ? Number(account.balance) : 0;
         const adsCount = Number.isFinite(account.adsCount) ? Math.max(0, Math.floor(account.adsCount)) : 0;
         const pendingAds = Number.isFinite(account.pendingAds) ? Math.max(0, Math.floor(account.pendingAds)) : 0;
-        const createdAt = normalizeIsoTimestamp(account.createdAt, new Date().toISOString());
-        const lastActiveAt = normalizeIsoTimestamp(account.lastActiveAt, createdAt);
+        const rawCreatedAt = account.createdAt;
+        const createdAt = normalizeIsoTimestamp(rawCreatedAt, new Date().toISOString());
+        const rawLastActiveAt = account.lastActiveAt;
+        let lastActiveAt = normalizeIsoTimestamp(rawLastActiveAt, null);
+        const hasExplicitLastActive = Object.prototype.hasOwnProperty.call(account, 'lastActiveAt');
+        const creationTime = createdAt ? Date.parse(createdAt) : NaN;
+        const lastActiveTime = lastActiveAt ? Date.parse(lastActiveAt) : NaN;
+        const matchesCreation = hasExplicitLastActive
+            && typeof rawLastActiveAt === 'string'
+            && typeof rawCreatedAt === 'string'
+            && rawLastActiveAt.trim()
+            && rawCreatedAt.trim()
+            && rawLastActiveAt.trim() === rawCreatedAt.trim();
+        const timestampsNearlyEqual = !Number.isNaN(creationTime)
+            && !Number.isNaN(lastActiveTime)
+            && Math.abs(lastActiveTime - creationTime) <= 1000;
+        if (matchesCreation && timestampsNearlyEqual) {
+            // Ignore creation-time defaults so "Last Login" stays empty until a real session occurs.
+            lastActiveAt = null;
+        }
+
         const permissionsSource = account.permissions && typeof account.permissions === 'object' ? account.permissions : {};
         const permissions = {
             autoPosting: Boolean(permissionsSource.autoPosting),
             manualReview: Boolean(permissionsSource.manualReview)
         };
+
         const subscriptions = Array.isArray(account.subscriptions)
             ? account.subscriptions.map(subscription => ({
                 name: typeof subscription.name === 'string' && subscription.name.trim() ? subscription.name.trim() : 'Subscription',
@@ -396,6 +335,7 @@
                 renewsAt: normalizeIsoTimestamp(subscription.renewsAt, null)
             }))
             : [];
+
         const financialHistory = Array.isArray(account.financialHistory)
             ? account.financialHistory.map((entry, entryIndex) => {
                 if (!entry || typeof entry !== 'object') {
@@ -411,6 +351,7 @@
                 return { id: idValue, label, amount, type, timestamp, note };
             }).filter(Boolean)
             : [];
+
         const supportRequests = Array.isArray(account.supportRequests)
             ? account.supportRequests.map((entry, entryIndex) => {
                 if (!entry || typeof entry !== 'object') {
@@ -424,8 +365,23 @@
                 return { id: requestId, reason, requestedAt, expiresAt, status: statusLabel };
             }).filter(Boolean)
             : [];
+
         const notes = typeof account.notes === 'string' ? account.notes.trim() : '';
-        return {
+
+        const invitationCode = typeof account.invitationCode === 'string'
+            ? account.invitationCode.trim()
+            : '';
+        const invitationObject = account.invitation && typeof account.invitation === 'object'
+            ? {
+                ...account.invitation,
+                code: typeof account.invitation.code === 'string' ? account.invitation.code.trim() : account.invitation.code || '',
+                token: typeof account.invitation.token === 'string' ? account.invitation.token.trim() : account.invitation.token || ''
+            }
+            : null;
+        const invitationDerived = invitationObject && (invitationObject.code || invitationObject.token || '');
+
+        const normalized = {
+            ...account,
             id,
             fullName,
             email,
@@ -441,8 +397,12 @@
             subscriptions,
             financialHistory,
             supportRequests,
-            notes
+            notes,
+            invitation: invitationObject,
+            invitationCode: invitationCode || (typeof invitationDerived === 'string' ? invitationDerived.trim() : '')
         };
+
+        return normalized;
     }
 
     function normalizeIsoTimestamp(value, fallback) {

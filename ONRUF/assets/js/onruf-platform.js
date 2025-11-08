@@ -560,7 +560,24 @@ function updateUserMenuView(session) {
         emailEl.textContent = emailText;
     }
     if (avatarEl) {
-        avatarEl.textContent = initials || 'U';
+        const avatarUrl = account?.avatarUrl
+            || signupRecord?.profile?.avatarUrl
+            || signupRecord?.profile?.photoDataUrl
+            || session.avatarUrl
+            || '';
+        if (avatarUrl) {
+            avatarEl.style.backgroundImage = `url("${avatarUrl}")`;
+            avatarEl.style.backgroundSize = 'cover';
+            avatarEl.style.backgroundPosition = 'center';
+            avatarEl.style.backgroundRepeat = 'no-repeat';
+            avatarEl.textContent = '';
+        } else {
+            avatarEl.style.backgroundImage = '';
+            avatarEl.style.backgroundSize = '';
+            avatarEl.style.backgroundPosition = '';
+            avatarEl.style.backgroundRepeat = '';
+            avatarEl.textContent = initials || 'U';
+        }
     }
 
     closeUserMenu();
@@ -714,7 +731,7 @@ function renderBusinessAccountsSection(session) {
         return;
     }
 
-    const accounts = session ? getBusinessAccountsForEmail(session.email) : [];
+    const accounts = session ? getBusinessAccountsForSession(session) : [];
     state.businessAccounts = accounts;
     list.innerHTML = '';
 
@@ -757,22 +774,59 @@ function renderBusinessAccountsSection(session) {
     });
 }
 
-function getBusinessAccountsForEmail(email) {
-    const normalizedEmail = normalizeEmail(email);
-    if (!normalizedEmail) {
+function getBusinessAccountsForSession(session) {
+    if (!session) {
         return [];
     }
+
     const dataset = loadDataset(BUSINESS_ACCOUNTS_KEY);
     if (!dataset.length) {
         return [];
     }
-    const filtered = dataset.filter(entry => normalizeEmail(entry?.email) === normalizedEmail);
-    filtered.sort((a, b) => {
+
+    const normalizedEmail = normalizeEmail(session.email);
+    const accountMatches = new Map();
+
+    if (normalizedEmail) {
+        dataset.forEach(entry => {
+            if (normalizeEmail(entry?.email) === normalizedEmail && entry?.id) {
+                accountMatches.set(entry.id, entry);
+            }
+        });
+    }
+
+    const individualAccount = findAccountBySession(session);
+    if (individualAccount) {
+        const associations = Array.isArray(individualAccount.businessAssociations)
+            ? individualAccount.businessAssociations
+            : [];
+        associations.forEach(association => {
+            const candidateId = typeof association === 'string'
+                ? association.trim()
+                : typeof association?.businessId === 'string'
+                    ? association.businessId.trim()
+                    : typeof association?.businessAccountId === 'string'
+                        ? association.businessAccountId.trim()
+                        : typeof association?.id === 'string'
+                            ? association.id.trim()
+                            : '';
+            if (!candidateId) {
+                return;
+            }
+            const match = dataset.find(entry => entry?.id === candidateId);
+            if (match && match.id) {
+                accountMatches.set(match.id, match);
+            }
+        });
+    }
+
+    const results = Array.from(accountMatches.values());
+    results.sort((a, b) => {
         const aStamp = getBusinessAccountSortValue(a);
         const bStamp = getBusinessAccountSortValue(b);
         return bStamp - aStamp;
     });
-    return filtered;
+    return results;
 }
 
 function mapBusinessAccountStatus(status) {

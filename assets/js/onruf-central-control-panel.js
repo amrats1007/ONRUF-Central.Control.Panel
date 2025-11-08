@@ -129,7 +129,14 @@ function buildCategoryModalHierarchy(items) {
     const resolveLabel = entry => (entry && (entry.nameEnglish || entry.name || entry.nameArabic || entry.id || '')) || '';
 
     const sortNodes = list => {
-        list.sort((a, b) => resolveLabel(a.entry).localeCompare(resolveLabel(b.entry), undefined, { sensitivity: 'base' }));
+        if (!Array.isArray(list) || !list.length) {
+            return;
+        }
+        list.sort((a, b) => {
+            const aLabel = resolveLabel(a.entry).toLowerCase();
+            const bLabel = resolveLabel(b.entry).toLowerCase();
+            return aLabel.localeCompare(bLabel);
+        });
         list.forEach(child => {
             if (Array.isArray(child.children) && child.children.length) {
                 sortNodes(child.children);
@@ -2158,6 +2165,12 @@ const state = {
     activeIndividualAccountId: null,
     editingIndividualAccountId: null,
     individualBusinessOverlayAccountId: null,
+    individualBusinessOverlayReturnFocus: null,
+    individualMarketplaceOverlayAccountId: null,
+    individualMarketplaceOverlayReturnFocus: null,
+    individualLogOverlayAccountId: null,
+    individualPublishingOverlayContext: null,
+    individualPublishingOverlayReturnFocus: null,
     currentBusinessAccountsPage: 1,
     businessAccountsPerPage: 10,
     businessAccountsFilters: {
@@ -2219,6 +2232,12 @@ const CATEGORY_AD_FEE_TYPE_LABELS = new Map([
     ['fixed', 'Fixed Price'],
     ['percentage', 'Percentage of Sales']
 ]);
+
+const PUBLISHING_LIST_LABELS = {
+    trusted: 'Trusted Accounts',
+    manualReview: 'Manual Review',
+    blacklist: 'Blacklist'
+};
 
 const CATEGORY_EXPORT_COLUMNS = [
     { id: 'index', label: '#', value: (_, index) => String(index + 1) },
@@ -2811,147 +2830,9 @@ const defaultProductAdAutomation = {
     ]
 };
 
-const defaultIndividualAccounts = [
-    {
-        id: 'IND-2001',
-        fullName: 'Sara Al-Qahtani',
-        email: 'sara.alqahtani@example.com',
-        mobile: '+966512345678',
-        city: 'Riyadh',
-        status: 'active',
-        balance: 2450.75,
-        adsCount: 11,
-        pendingAds: 2,
-        createdAt: '2025-04-18T07:50:00.000Z',
-        lastActiveAt: '2025-10-26T16:30:00.000Z',
-        permissions: { autoPosting: true, manualReview: false },
-        subscriptions: [
-            { name: 'Featured Ads Boost', status: 'active', renewsAt: '2025-12-01T00:00:00.000Z' }
-        ],
-        financialHistory: [
-            { id: 'txn-2001-1', label: 'Wallet Top-up', amount: 1200, type: 'credit', timestamp: '2025-09-01T09:20:00.000Z' },
-            { id: 'txn-2001-2', label: 'Ad Publishing Fee', amount: -150, type: 'debit', timestamp: '2025-09-10T12:00:00.000Z' }
-        ],
-        supportRequests: [],
-        notes: 'Prefers SMS notifications.',
-        businessAssociations: [
-            { businessId: 'BUS-3210', companyName: 'Gulf Auto Hub', relationship: 'Fleet buyer', linkedAt: '2025-07-03T10:15:00.000Z' },
-            { businessId: 'BUS-3144', companyName: 'Najd Hospitality Group', relationship: 'Corporate leasing partner', linkedAt: '2025-08-22T09:30:00.000Z' }
-        ]
-    },
-    {
-        id: 'IND-2078',
-        fullName: 'Hassan Al-Mutairi',
-        email: 'hassan.mutairi@example.com',
-        mobile: '+966598887766',
-        city: 'Jeddah',
-        status: 'frozen',
-        balance: 520,
-        adsCount: 4,
-        pendingAds: 0,
-        createdAt: '2025-05-11T10:05:00.000Z',
-        lastActiveAt: '2025-09-30T21:15:00.000Z',
-        permissions: { autoPosting: false, manualReview: true },
-        subscriptions: [
-            { name: 'Auto Renew Ads', status: 'paused', renewsAt: '2025-11-15T00:00:00.000Z' }
-        ],
-        financialHistory: [
-            { id: 'txn-2078-1', label: 'Manual Adjustment', amount: -80, type: 'debit', timestamp: '2025-09-28T08:45:00.000Z' }
-        ],
-        supportRequests: [
-            { id: 'support-2078-1', reason: 'Fraud review', expiresAt: '2025-11-01T00:00:00.000Z', requestedAt: '2025-10-02T12:10:00.000Z', status: 'pending' }
-        ],
-        notes: 'Account frozen pending identity confirmation.',
-        businessAssociations: [
-            { businessId: 'BUS-3101', companyName: 'Al-Majd Trading Co.', relationship: 'Affiliate seller', linkedAt: '2025-07-19T11:20:00.000Z' }
-        ]
-    },
-    {
-        id: 'IND-2110',
-        fullName: 'Maya Al-Salem',
-        email: 'maya.alsalem@example.com',
-        mobile: '+966533112244',
-        city: 'Dammam',
-        status: 'pending',
-        balance: 0,
-        adsCount: 0,
-        pendingAds: 1,
-        createdAt: '2025-10-10T13:25:00.000Z',
-        lastActiveAt: '2025-10-10T13:25:00.000Z',
-        permissions: { autoPosting: false, manualReview: true },
-        subscriptions: [],
-        financialHistory: [],
-        supportRequests: [],
-        notes: 'Awaiting OTP verification.',
-        businessAssociations: []
-    }
-];
+const defaultIndividualAccounts = [];
 
-const defaultBusinessAccounts = [
-    {
-        id: 'BUS-3101',
-        companyName: 'Al-Majd Trading Co.',
-        contactName: 'Khalid Al-Majd',
-        email: 'operations@almajdsales.com',
-        phone: '+966512008887',
-        city: 'Jeddah',
-        status: 'pending',
-        submittedAt: '2025-09-22T10:00:00.000Z',
-        approvedAt: null,
-        packageId: 'PKG-ELITE',
-        requestedDocuments: ['Commercial Registration Certificate', 'VAT Certificate'],
-        invoices: [],
-        autoRenew: true,
-        financialStatus: 'awaiting-payment',
-        history: [
-            { id: 'evt-bus3101-1', action: 'request-submitted', timestamp: '2025-09-22T10:00:00.000Z', actor: 'Al-Majd Trading Co.', context: 'New business account application received.' }
-        ]
-    },
-    {
-        id: 'BUS-3144',
-        companyName: 'Najd Hospitality Group',
-        contactName: 'Laila Al-Omari',
-        email: 'partnerships@najdhospitality.com',
-        phone: '+966555670021',
-        city: 'Riyadh',
-        status: 'docs-requested',
-        submittedAt: '2025-09-08T09:40:00.000Z',
-        approvedAt: null,
-        packageId: 'PKG-GROWTH',
-        requestedDocuments: ['Updated Food Safety Permit'],
-        invoices: [
-            { id: 'INV-9011', amount: 6400, dueDate: '2025-10-05T00:00:00.000Z', status: 'pending' }
-        ],
-        autoRenew: false,
-        financialStatus: 'pending-docs',
-        history: [
-            { id: 'evt-bus3144-1', action: 'request-submitted', timestamp: '2025-09-08T09:40:00.000Z', actor: 'Najd Hospitality Group', context: 'Initial application submitted.' },
-            { id: 'evt-bus3144-2', action: 'docs-requested', timestamp: '2025-09-15T15:20:00.000Z', actor: 'Business Ops', context: 'Additional food safety permit requested.' }
-        ]
-    },
-    {
-        id: 'BUS-3210',
-        companyName: 'Gulf Auto Hub',
-        contactName: 'Mishaal Al-Harthi',
-        email: 'sales@gulfautohub.com',
-        phone: '+966566443322',
-        city: 'Dammam',
-        status: 'active',
-        submittedAt: '2025-06-11T11:25:00.000Z',
-        approvedAt: '2025-06-12T08:10:00.000Z',
-        packageId: 'PKG-ELITE',
-        requestedDocuments: [],
-        invoices: [
-            { id: 'INV-8802', amount: 8999, dueDate: '2025-10-01T00:00:00.000Z', status: 'paid' }
-        ],
-        autoRenew: true,
-        financialStatus: 'settled',
-        history: [
-            { id: 'evt-bus3210-1', action: 'approved', timestamp: '2025-06-12T08:10:00.000Z', actor: 'Business Ops', context: 'Business account approved.' },
-            { id: 'evt-bus3210-2', action: 'package-renewed', timestamp: '2025-09-01T09:00:00.000Z', actor: 'System', context: 'Auto-renewal processed successfully.' }
-        ]
-    }
-];
+const defaultBusinessAccounts = [];
 
 const defaultBusinessPackages = [
     {
@@ -3177,6 +3058,7 @@ let specifications = [];
 let productAds = [];
 let productAdAutomation = { trusted: [], manualReview: [], blacklist: [] };
 let individualAccounts = [];
+let individualSignupRecords = [];
 let businessAccounts = [];
 let businessPackages = [];
 let businessSubscribers = [];
@@ -3279,12 +3161,13 @@ const SESSION_STORAGE_KEY = 'onruf_active_session_v1';
 const PRODUCT_ADS_STORAGE_KEY = 'onruf_product_ads_v1';
 const PRODUCT_AD_AUTOMATION_STORAGE_KEY = 'onruf_product_ads_automation_v1';
 const INDIVIDUAL_ACCOUNTS_STORAGE_KEY = 'onruf_individual_accounts_v1';
+const INDIVIDUAL_SIGNUP_RECORDS_STORAGE_KEY = 'onruf_individual_signup_records_v1';
 const BUSINESS_ACCOUNTS_STORAGE_KEY = 'onruf_business_accounts_v1';
 const BUSINESS_PACKAGES_STORAGE_KEY = 'onruf_business_packages_v1';
 const BUSINESS_SUBSCRIBERS_STORAGE_KEY = 'onruf_business_subscribers_v1';
 const FINANCE_TRANSACTIONS_STORAGE_KEY = 'onruf_finance_transactions_v1';
 const FINANCE_AUDIT_STORAGE_KEY = 'onruf_finance_audit_v1';
-const DATA_RESET_VERSION = '20251102-individual-business-links';
+const DATA_RESET_VERSION = '20251107-business-address';
 const DATA_RESET_KEY = 'onruf_data_reset_version';
 const CATEGORY_RESET_VERSION = '20251021-delete-all-categories';
 const CATEGORY_RESET_KEY = 'onruf_category_reset_version';
@@ -5213,6 +5096,22 @@ function normalizeIsoTimestamp(value, fallback = null) {
     return fallback;
 }
 
+function calculateAgeFromDate(value) {
+    if (!value) return null;
+    const parsed = Date.parse(value);
+    if (Number.isNaN(parsed)) return null;
+    const reference = new Date();
+    const birthDate = new Date(parsed);
+    if (Number.isNaN(birthDate.getTime())) return null;
+    let age = reference.getFullYear() - birthDate.getFullYear();
+    const hasBirthdayOccurred = reference.getMonth() > birthDate.getMonth()
+        || (reference.getMonth() === birthDate.getMonth() && reference.getDate() >= birthDate.getDate());
+    if (!hasBirthdayOccurred) {
+        age -= 1;
+    }
+    return age >= 0 && Number.isFinite(age) ? age : null;
+}
+
 function normalizeProductAdHistoryEntry(entry, fallbackAction = 'updated', defaultTimestamp = null, sequence = 0) {
     if (!entry || typeof entry !== 'object') {
         return null;
@@ -5340,6 +5239,102 @@ function saveProductAdAutomationToStorage() {
     }
 }
 
+function formatIndividualAccountLogAction(action) {
+    const normalized = typeof action === 'string' ? action.trim().toLowerCase() : '';
+    switch (normalized) {
+        case 'account-created':
+            return 'Account created';
+        case 'status-change':
+            return 'Status updated';
+        case 'status-activated':
+            return 'Account activated';
+        case 'status-deactivated':
+            return 'Account suspended';
+        case 'transaction':
+        case 'transaction-credit':
+        case 'transaction-debit':
+            return 'Wallet transaction';
+        case 'support-request':
+            return 'Support request logged';
+        case 'business-link':
+            return 'Business account linked';
+        case 'points-awarded':
+            return 'Points adjusted';
+        case 'subscription-update':
+            return 'Subscription updated';
+        case 'note-added':
+            return 'Note added';
+        default:
+            if (!normalized) {
+                return 'Account update';
+            }
+            return normalized
+                .split(/[-_\s]+/)
+                .filter(Boolean)
+                .map(segment => segment.charAt(0).toUpperCase() + segment.slice(1))
+                .join(' ');
+    }
+}
+
+function getIndividualAccountLogIcon(action) {
+    const normalized = typeof action === 'string' ? action.trim().toLowerCase() : '';
+    switch (normalized) {
+        case 'account-created':
+            return { icon: 'fas fa-user-plus', tone: 'status-success' };
+        case 'status-change':
+        case 'status-activated':
+            return { icon: 'fas fa-toggle-on', tone: 'status-success' };
+        case 'status-deactivated':
+            return { icon: 'fas fa-ban', tone: 'status-danger' };
+        case 'transaction':
+        case 'transaction-credit':
+        case 'transaction-debit':
+            return { icon: 'fas fa-money-check-dollar', tone: 'status-info' };
+        case 'support-request':
+            return { icon: 'fas fa-life-ring', tone: 'status-warning' };
+        case 'business-link':
+            return { icon: 'fas fa-briefcase', tone: 'status-info' };
+        case 'points-awarded':
+            return { icon: 'fas fa-star', tone: 'status-success' };
+        case 'subscription-update':
+            return { icon: 'fas fa-repeat', tone: 'status-info' };
+        case 'note-added':
+            return { icon: 'fas fa-note-sticky', tone: 'status-info' };
+        default:
+            return { icon: 'fas fa-note-sticky', tone: '' };
+    }
+}
+
+function normalizeIndividualAccountLogEntry(entry, index = 0, fallbackAction = 'update') {
+    if (!entry || typeof entry !== 'object') {
+        return null;
+    }
+    const sequence = Number.isFinite(index) ? Number(index) : 0;
+    const id = typeof entry.id === 'string' && entry.id.trim() ? entry.id.trim() : `ind-log-${Date.now()}-${sequence}`;
+    const actionRaw = typeof entry.action === 'string' && entry.action.trim() ? entry.action.trim() : fallbackAction;
+    const action = actionRaw.toLowerCase();
+    const labelRaw = typeof entry.label === 'string' && entry.label.trim() ? entry.label.trim() : '';
+    const label = labelRaw || formatIndividualAccountLogAction(action);
+    const context = typeof entry.context === 'string' ? entry.context.trim() : '';
+    const actor = typeof entry.actor === 'string' && entry.actor.trim() ? entry.actor.trim() : '';
+    const channel = typeof entry.channel === 'string' && entry.channel.trim() ? entry.channel.trim() : '';
+    const status = typeof entry.status === 'string' && entry.status.trim() ? entry.status.trim() : '';
+    const timestamp = normalizeIsoTimestamp(entry.timestamp, null);
+    const iconMeta = getIndividualAccountLogIcon(action);
+    return {
+        id,
+        action,
+        label,
+        context,
+        actor,
+        channel,
+        status,
+        timestamp,
+        icon: iconMeta.icon,
+        tone: iconMeta.tone || ''
+    };
+}
+
 function normalizeIndividualAccountPayload(account, index = 0) {
     if (!account || typeof account !== 'object') {
         return null;
@@ -5351,19 +5346,178 @@ function normalizeIndividualAccountPayload(account, index = 0) {
     const email = normalizeEmail(emailRaw) || emailRaw.toLowerCase();
     const mobile = typeof account.mobile === 'string' && account.mobile.trim() ? account.mobile.trim() : '';
     const city = typeof account.city === 'string' && account.city.trim() ? account.city.trim() : 'Riyadh';
-    const statusCandidate = typeof account.status === 'string' && account.status.trim() ? account.status.trim().toLowerCase() : 'pending';
-    const allowedStatuses = new Set(['active', 'frozen', 'pending', 'deleted', 'suspended']);
-    const status = allowedStatuses.has(statusCandidate) ? statusCandidate : 'pending';
+    const rawStatus = typeof account.status === 'string' && account.status.trim()
+        ? account.status.trim().toLowerCase()
+        : 'active';
+    const activeStatuses = new Set(['active', 'activated', 'approved', 'verified', 'pending']);
+    const inactiveStatuses = new Set(['inactive', 'frozen', 'deleted', 'suspended', 'blocked', 'disabled', 'deactivated']);
+    const status = inactiveStatuses.has(rawStatus)
+        ? 'inactive'
+        : activeStatuses.has(rawStatus)
+            ? 'active'
+            : rawStatus
+                ? 'inactive'
+                : 'active';
     const balance = Number.isFinite(account.balance) ? Number(account.balance) : 0;
     const adsCount = Number.isFinite(account.adsCount) ? Math.max(0, Math.floor(account.adsCount)) : 0;
     const pendingAds = Number.isFinite(account.pendingAds) ? Math.max(0, Math.floor(account.pendingAds)) : 0;
-    const createdAt = normalizeIsoTimestamp(account.createdAt, new Date().toISOString());
-    const lastActiveAt = normalizeIsoTimestamp(account.lastActiveAt, createdAt);
+    const rawCreatedAt = account.createdAt;
+    const createdAt = normalizeIsoTimestamp(rawCreatedAt, new Date().toISOString());
+    const rawLastActiveAt = account.lastActiveAt;
+    let lastActiveAt = normalizeIsoTimestamp(rawLastActiveAt, null);
+    const hasExplicitLastActive = Object.prototype.hasOwnProperty.call(account, 'lastActiveAt');
+    const creationTime = createdAt ? Date.parse(createdAt) : NaN;
+    const lastActiveTime = lastActiveAt ? Date.parse(lastActiveAt) : NaN;
+    const matchesCreation = hasExplicitLastActive
+        && typeof rawLastActiveAt === 'string'
+        && typeof rawCreatedAt === 'string'
+        && rawLastActiveAt.trim()
+        && rawCreatedAt.trim()
+        && rawLastActiveAt.trim() === rawCreatedAt.trim();
+    const timestampsNearlyEqual = !Number.isNaN(creationTime)
+        && !Number.isNaN(lastActiveTime)
+        && Math.abs(lastActiveTime - creationTime) <= 1000;
+    if (matchesCreation && timestampsNearlyEqual) {
+        // Ignore creation-time defaults so "Last Login" stays empty until a real session occurs.
+        lastActiveAt = null;
+    }
     const permissionsSource = account.permissions && typeof account.permissions === 'object' ? account.permissions : {};
     const permissions = {
         autoPosting: Boolean(permissionsSource.autoPosting),
         manualReview: Boolean(permissionsSource.manualReview)
     };
+    const nameParts = fullName.split(/\s+/).filter(Boolean);
+    const fallbackFirstName = nameParts[0] || '';
+    const fallbackLastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : '';
+    const firstName = typeof account.firstName === 'string' && account.firstName.trim() ? account.firstName.trim() : fallbackFirstName;
+    const lastName = typeof account.lastName === 'string' && account.lastName.trim() ? account.lastName.trim() : fallbackLastName;
+    const photoDataUrl = typeof account.photoDataUrl === 'string' && account.photoDataUrl.trim() ? account.photoDataUrl.trim() : '';
+    const photoFileName = typeof account.photoFileName === 'string' && account.photoFileName.trim() ? account.photoFileName.trim() : '';
+    const profilePicture = typeof account.profilePicture === 'string' && account.profilePicture.trim()
+        ? account.profilePicture.trim()
+        : photoDataUrl
+            ? photoDataUrl
+            : typeof account.avatar === 'string' && account.avatar.trim()
+                ? account.avatar.trim()
+                : '';
+    const gender = typeof account.gender === 'string' && account.gender.trim() ? account.gender.trim() : '';
+    const dateOfBirth = normalizeIsoTimestamp(account.dateOfBirth, null);
+    const username = typeof account.username === 'string' && account.username.trim()
+        ? account.username.trim()
+        : typeof account.userName === 'string' && account.userName.trim()
+            ? account.userName.trim()
+            : '';
+    const addressSource = account.address && typeof account.address === 'object' ? account.address : {};
+    const address = {
+        country: typeof addressSource.country === 'string' && addressSource.country.trim() ? addressSource.country.trim() : '',
+        region: typeof addressSource.region === 'string' && addressSource.region.trim() ? addressSource.region.trim() : '',
+        city: typeof addressSource.city === 'string' && addressSource.city.trim() ? addressSource.city.trim() : city,
+        district: typeof addressSource.district === 'string' && addressSource.district.trim() ? addressSource.district.trim() : '',
+        streetNumber: typeof addressSource.streetNumber === 'string' && addressSource.streetNumber.trim()
+            ? addressSource.streetNumber.trim()
+            : typeof addressSource.streetNo === 'string' && addressSource.streetNo.trim()
+                ? addressSource.streetNo.trim()
+                : '',
+        streetName: typeof addressSource.streetName === 'string' && addressSource.streetName.trim() ? addressSource.streetName.trim() : '',
+        zipCode: typeof addressSource.zipCode === 'string' && addressSource.zipCode.trim()
+            ? addressSource.zipCode.trim()
+            : typeof addressSource.postalCode === 'string' && addressSource.postalCode.trim()
+                ? addressSource.postalCode.trim()
+                : ''
+    };
+    const invitationSource = account.invitation && typeof account.invitation === 'object' ? account.invitation : null;
+    const invitation = invitationSource ? {
+        id: typeof invitationSource.id === 'string' && invitationSource.id.trim() ? invitationSource.id.trim() : '',
+        code: typeof invitationSource.code === 'string' && invitationSource.code.trim() ? invitationSource.code.trim() : '',
+        token: typeof invitationSource.token === 'string' && invitationSource.token.trim() ? invitationSource.token.trim() : '',
+        ownerId: typeof invitationSource.ownerId === 'string' && invitationSource.ownerId.trim() ? invitationSource.ownerId.trim() : '',
+        sentAt: normalizeIsoTimestamp(invitationSource.sentAt, null),
+        expiresAt: normalizeIsoTimestamp(invitationSource.expiresAt, null),
+        redeemedAt: normalizeIsoTimestamp(invitationSource.redeemedAt, null)
+    } : null;
+    const invitationCode = typeof account.invitationCode === 'string' && account.invitationCode.trim()
+        ? account.invitationCode.trim()
+        : invitation
+            ? invitation.code || invitation.token || ''
+            : '';
+    const invitationOwnerSource = account.invitationOwner && typeof account.invitationOwner === 'object' ? account.invitationOwner : null;
+    const invitationOwner = invitationOwnerSource ? {
+        id: typeof invitationOwnerSource.id === 'string' && invitationOwnerSource.id.trim() ? invitationOwnerSource.id.trim() : '',
+        firstName: typeof invitationOwnerSource.firstName === 'string' && invitationOwnerSource.firstName.trim() ? invitationOwnerSource.firstName.trim() : '',
+        lastName: typeof invitationOwnerSource.lastName === 'string' && invitationOwnerSource.lastName.trim() ? invitationOwnerSource.lastName.trim() : '',
+        email: typeof invitationOwnerSource.email === 'string' && invitationOwnerSource.email.trim()
+            ? (normalizeEmail(invitationOwnerSource.email) || invitationOwnerSource.email.trim())
+            : '',
+        businessAccounts: Array.isArray(invitationOwnerSource.businessAccounts)
+            ? invitationOwnerSource.businessAccounts
+                .map(entry => (typeof entry === 'string' && entry.trim() ? entry.trim() : null))
+                .filter(Boolean)
+            : []
+    } : null;
+    const marketplaceActivitySource = account.marketplaceActivity && typeof account.marketplaceActivity === 'object' ? account.marketplaceActivity : {};
+    const cloneCollection = collection => (Array.isArray(collection) ? collection : [])
+        .map(entry => (entry && typeof entry === 'object' ? { ...entry } : null))
+        .filter(Boolean);
+    const marketplaceActivity = {
+        purchases: cloneCollection(marketplaceActivitySource.purchases),
+        sales: cloneCollection(marketplaceActivitySource.sales),
+        productAds: cloneCollection(marketplaceActivitySource.productAds),
+        followUps: cloneCollection(marketplaceActivitySource.followUps),
+        sellerRatings: cloneCollection(marketplaceActivitySource.sellerRatings),
+        buyerRatings: cloneCollection(marketplaceActivitySource.buyerRatings),
+        savedAddresses: cloneCollection(marketplaceActivitySource.savedAddresses)
+    };
+    const balanceBreakdown = Array.isArray(account.balanceBreakdown)
+        ? account.balanceBreakdown.map((entry, entryIndex) => {
+            if (!entry || typeof entry !== 'object') return null;
+            const label = typeof entry.label === 'string' && entry.label.trim() ? entry.label.trim() : `Balance line ${entryIndex + 1}`;
+            const amount = Number(entry.amount) || 0;
+            const type = typeof entry.type === 'string' && entry.type.trim() ? entry.type.trim() : '';
+            return { label, amount, type };
+        }).filter(Boolean)
+        : [];
+    const pointsBalanceRaw = Number(account.pointsBalance);
+    const pointsBalance = Number.isFinite(pointsBalanceRaw) ? pointsBalanceRaw : 0;
+    const pointsHistory = Array.isArray(account.pointsHistory)
+        ? account.pointsHistory.map((entry, entryIndex) => {
+            if (!entry || typeof entry !== 'object') return null;
+            const idValue = typeof entry.id === 'string' && entry.id.trim() ? entry.id.trim() : `points-${index + 1}-${entryIndex + 1}`;
+            const label = typeof entry.label === 'string' && entry.label.trim() ? entry.label.trim() : 'Points activity';
+            const delta = Number(entry.delta) || 0;
+            const balanceAfterValue = Number(entry.balanceAfter);
+            const timestamp = normalizeIsoTimestamp(entry.timestamp, null);
+            const note = typeof entry.note === 'string' ? entry.note.trim() : '';
+            return {
+                id: idValue,
+                label,
+                delta,
+                balanceAfter: Number.isFinite(balanceAfterValue) ? balanceAfterValue : null,
+                timestamp,
+                note
+            };
+        }).filter(Boolean)
+        : [];
+    const paymentCards = Array.isArray(account.paymentCards)
+        ? account.paymentCards.map((card, cardIndex) => {
+            if (!card || typeof card !== 'object') return null;
+            const brand = typeof card.brand === 'string' && card.brand.trim() ? card.brand.trim() : 'Card';
+            const last4 = typeof card.last4 === 'string' && card.last4.trim() ? card.last4.trim() : '';
+            const expiryMonth = typeof card.expiryMonth === 'string' && card.expiryMonth.trim()
+                ? card.expiryMonth.trim()
+                : Number.isFinite(card.expiryMonth)
+                    ? String(card.expiryMonth).padStart(2, '0')
+                    : '';
+            const expiryYear = typeof card.expiryYear === 'string' && card.expiryYear.trim()
+                ? card.expiryYear.trim()
+                : Number.isFinite(card.expiryYear)
+                    ? String(card.expiryYear)
+                    : '';
+            const holderName = typeof card.holderName === 'string' && card.holderName.trim() ? card.holderName.trim() : '';
+            const statusLabel = typeof card.status === 'string' && card.status.trim() ? card.status.trim() : '';
+            const addedAt = normalizeIsoTimestamp(card.addedAt, null);
+            return { brand, last4, expiryMonth, expiryYear, holderName, status: statusLabel, addedAt };
+        }).filter(Boolean)
+        : [];
     const subscriptions = Array.isArray(account.subscriptions)
         ? account.subscriptions.map(subscription => ({
             name: typeof subscription.name === 'string' && subscription.name.trim() ? subscription.name.trim() : 'Subscription',
@@ -5417,29 +5571,86 @@ function normalizeIndividualAccountPayload(account, index = 0) {
             const companyName = typeof entry.companyName === 'string' && entry.companyName.trim() ? entry.companyName.trim() : '';
             const relationship = typeof entry.relationship === 'string' && entry.relationship.trim() ? entry.relationship.trim() : 'Linked account';
             const linkedAt = normalizeIsoTimestamp(entry.linkedAt, null);
-            return { businessId, companyName, relationship, linkedAt };
+            const businessAccountId = typeof entry.businessAccountId === 'string' && entry.businessAccountId.trim()
+                ? entry.businessAccountId.trim()
+                : businessId;
+            const logoSourceRaw = typeof entry.logoDataUrl === 'string' && entry.logoDataUrl.trim()
+                ? entry.logoDataUrl.trim()
+                : '';
+            const logoDataUrl = /^data:image\//i.test(logoSourceRaw) || /^https?:\/\//i.test(logoSourceRaw)
+                ? logoSourceRaw
+                : '';
+            const logoFileName = typeof entry.logoFileName === 'string' && entry.logoFileName.trim()
+                ? entry.logoFileName.trim()
+                : '';
+            return { businessId, businessAccountId, companyName, relationship, linkedAt, logoDataUrl, logoFileName };
         })
+        .filter(Boolean);
+    const activityLogSource = Array.isArray(account.activityLog) ? account.activityLog : [];
+    const activityLog = activityLogSource
+        .map((entry, logIndex) => normalizeIndividualAccountLogEntry(entry, logIndex))
         .filter(Boolean);
     const notes = typeof account.notes === 'string' ? account.notes.trim() : '';
     return {
         id,
         fullName,
+        firstName,
+        lastName,
+        profilePicture,
+    photoDataUrl,
+    photoFileName,
+        gender,
+        dateOfBirth,
         email,
         mobile,
         city,
+        address,
         status,
         balance,
+        balanceBreakdown,
+        pointsBalance,
+        pointsHistory,
+        paymentCards,
         adsCount,
         pendingAds,
         createdAt,
         lastActiveAt,
+        username,
         permissions,
+        marketplaceActivity,
         subscriptions,
         financialHistory,
         supportRequests,
         businessAssociations,
+        activityLog,
+        invitation,
+        invitationCode,
+        invitationOwner,
         notes
     };
+}
+
+function appendIndividualAccountLogEntry(account, entry) {
+    if (!account || typeof account !== 'object') {
+        return;
+    }
+    if (!Array.isArray(account.activityLog)) {
+        account.activityLog = [];
+    }
+    const normalized = normalizeIndividualAccountLogEntry(entry, account.activityLog.length, entry && entry.action);
+    if (!normalized) {
+        return;
+    }
+    const duplicateKey = `${normalized.id}|${normalized.action}|${normalized.timestamp || ''}`;
+    const existing = account.activityLog.find(logEntry => {
+        if (!logEntry) return false;
+        const key = `${logEntry.id || ''}|${logEntry.action || ''}|${logEntry.timestamp || ''}`;
+        return key === duplicateKey;
+    });
+    if (existing) {
+        return;
+    }
+    account.activityLog.unshift(normalized);
 }
 
 function loadIndividualAccountsFromStorage() {
@@ -5454,6 +5665,31 @@ function loadIndividualAccountsFromStorage() {
         console.warn('Unable to load individual accounts:', error);
         return null;
     }
+}
+
+function loadIndividualSignupRecordsFromStorage() {
+    try {
+        const raw = localStorage.getItem(INDIVIDUAL_SIGNUP_RECORDS_STORAGE_KEY);
+        if (!raw) {
+            return [];
+        }
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed : [];
+    } catch (error) {
+        console.warn('Unable to load individual signup records:', error);
+        return [];
+    }
+}
+
+function getSignupRecordForEmail(email) {
+    const normalized = normalizeEmail(email);
+    if (!normalized) {
+        return null;
+    }
+    if (!Array.isArray(individualSignupRecords) || !individualSignupRecords.length) {
+        individualSignupRecords = loadIndividualSignupRecordsFromStorage();
+    }
+    return individualSignupRecords.find(record => normalizeEmail(record?.email) === normalized) || null;
 }
 
 function saveIndividualAccountsToStorage() {
@@ -5516,6 +5752,130 @@ function normalizeBusinessAccountPayload(account, index = 0) {
         : [];
     const autoRenew = Boolean(account.autoRenew);
     const financialStatus = typeof account.financialStatus === 'string' && account.financialStatus.trim() ? account.financialStatus.trim() : 'pending';
+    const registrationNumber = typeof account.registrationNumber === 'string' && account.registrationNumber.trim()
+        ? account.registrationNumber.trim()
+        : account.application && typeof account.application.registrationNumber === 'string' && account.application.registrationNumber.trim()
+            ? account.application.registrationNumber.trim()
+            : '';
+    const detailRegistrationNumber = typeof account.detailRegistrationNumber === 'string' && account.detailRegistrationNumber.trim()
+        ? account.detailRegistrationNumber.trim()
+        : account.application && typeof account.application.detailRegistrationNumber === 'string' && account.application.detailRegistrationNumber.trim()
+            ? account.application.detailRegistrationNumber.trim()
+            : '';
+    const registrationDocumentTypeRaw = typeof account.registrationDocumentType === 'string' && account.registrationDocumentType.trim()
+        ? account.registrationDocumentType.trim()
+        : account.application && typeof account.application.documentType === 'string' && account.application.documentType.trim()
+            ? account.application.documentType.trim()
+            : '';
+    const registrationDocumentType = registrationDocumentTypeRaw ? registrationDocumentTypeRaw.toLowerCase() : '';
+    const expiryDate = account.expiryDate
+        ? normalizeIsoTimestamp(account.expiryDate, null)
+        : account.application && account.application.expiryDate
+            ? normalizeIsoTimestamp(account.application.expiryDate, null)
+            : null;
+    const vatNumber = typeof account.vatNumber === 'string' && account.vatNumber.trim()
+        ? account.vatNumber.trim()
+        : account.application && typeof account.application.vatNumber === 'string' && account.application.vatNumber.trim()
+            ? account.application.vatNumber.trim()
+            : '';
+    const maroofUrl = typeof account.maroofUrl === 'string' && account.maroofUrl.trim()
+        ? account.maroofUrl.trim()
+        : account.application && typeof account.application.maroofUrl === 'string' && account.application.maroofUrl.trim()
+            ? account.application.maroofUrl.trim()
+            : '';
+    const website = typeof account.website === 'string' && account.website.trim()
+        ? account.website.trim()
+        : account.application && typeof account.application.website === 'string' && account.application.website.trim()
+            ? account.application.website.trim()
+            : '';
+    const socialsSource = account.socials && typeof account.socials === 'object'
+        ? account.socials
+        : account.application && typeof account.application.socials === 'object'
+            ? account.application.socials
+            : null;
+    const socialKeys = ['facebook', 'instagram', 'twitter', 'youtube', 'linkedin', 'snapchat', 'tiktok'];
+    const socials = {};
+    if (socialsSource) {
+        socialKeys.forEach(key => {
+            const value = socialsSource[key];
+            if (typeof value === 'string' && value.trim()) {
+                socials[key] = value.trim();
+            }
+        });
+    }
+    const tradeExperience15Years = account.tradeExperience15Years === true
+        || (account.application && account.application.tradeExperience15Years === true);
+    const certificatesSource = Array.isArray(account.certificates)
+        ? account.certificates
+        : account.application && Array.isArray(account.application.uploadedCertificates)
+            ? account.application.uploadedCertificates
+            : Array.isArray(account.requestedDocuments)
+                ? account.requestedDocuments
+                : [];
+    const certificates = certificatesSource
+        .map(entry => {
+            if (!entry) return null;
+            if (typeof entry === 'string') {
+                const trimmed = entry.trim();
+                if (!trimmed) return null;
+                const match = trimmed.match(/^certificate:\s*(.+)$/i);
+                return match ? match[1].trim() : trimmed;
+            }
+            if (entry && typeof entry.name === 'string' && entry.name.trim()) {
+                return entry.name.trim();
+            }
+            return null;
+        })
+        .filter((value, index, array) => value && !array.slice(0, index).includes(value));
+    const addressSource = account.address && typeof account.address === 'object'
+        ? account.address
+        : account.application && typeof account.application.address === 'object'
+            ? account.application.address
+            : null;
+    const extractAddressField = (key, fallback = '') => {
+        if (!addressSource || typeof addressSource !== 'object') {
+            return fallback;
+        }
+        const value = addressSource[key];
+        if (typeof value === 'string' && value.trim()) {
+            return value.trim();
+        }
+        return fallback;
+    };
+    const address = addressSource
+        ? {
+            country: extractAddressField('country'),
+            region: extractAddressField('region'),
+            city: extractAddressField('city', city),
+            district: extractAddressField('district'),
+            street: extractAddressField('street'),
+            streetNumber: extractAddressField('streetNumber'),
+            streetName: extractAddressField('streetName'),
+            zipCode: extractAddressField('zipCode', extractAddressField('postalCode', extractAddressField('zip'))),
+            zip: extractAddressField('zip', extractAddressField('zipCode', extractAddressField('postalCode')))
+        }
+        : {
+            country: '',
+            region: '',
+            city,
+            district: '',
+            street: '',
+            streetNumber: '',
+            streetName: '',
+            zipCode: '',
+            zip: ''
+        };
+    const logoFileName = typeof account.logoFileName === 'string' && account.logoFileName.trim()
+        ? account.logoFileName.trim()
+        : account.application && typeof account.application.logoFileName === 'string' && account.application.logoFileName.trim()
+            ? account.application.logoFileName.trim()
+            : '';
+    const logoDataCandidate = typeof account.logoDataUrl === 'string' && account.logoDataUrl.trim()
+        ? account.logoDataUrl.trim()
+        : account.application && typeof account.application.logoDataUrl === 'string' && account.application.logoDataUrl.trim()
+            ? account.application.logoDataUrl.trim()
+            : '';
+    const logoDataUrl = /^data:image\//i.test(logoDataCandidate) ? logoDataCandidate : '';
     const historySource = Array.isArray(account.history) ? account.history : [];
     const history = historySource
         .map((entry, entryIndex) => normalizeBusinessAccountHistoryEntry(entry, 'updated', entryIndex))
@@ -5539,7 +5899,20 @@ function normalizeBusinessAccountPayload(account, index = 0) {
         invoices,
         autoRenew,
         financialStatus,
-        history
+        history,
+        registrationNumber,
+        detailRegistrationNumber,
+        registrationDocumentType,
+        expiryDate,
+        vatNumber,
+        maroofUrl,
+        website,
+        tradeExperience15Years,
+        socials,
+        certificates,
+        address,
+        logoFileName,
+        logoDataUrl
     };
 }
 
@@ -6419,6 +6792,8 @@ function initializeApp() {
         saveIndividualAccountsToStorage();
     }
 
+    individualSignupRecords = loadIndividualSignupRecordsFromStorage();
+
     const storedBusinessAccounts = loadBusinessAccountsFromStorage();
     if (storedBusinessAccounts && storedBusinessAccounts.length) {
         businessAccounts = storedBusinessAccounts;
@@ -6558,6 +6933,7 @@ function initializeApp() {
     setupUserPromptOverlay();
     setupRoleAlertOverlay();
     setupUserAlertOverlay();
+    setupIndividualPublishingOverlay();
 
     applyRequiredFieldIndicators();
     syncAccountEditLayout();
@@ -7297,6 +7673,19 @@ function setupEventListeners() {
         individualAccountsResetBtn.dataset.bound = 'true';
     }
 
+    const individualAccountsDeleteAllBtn = document.getElementById('individualAccountsDeleteAllBtn');
+    if (individualAccountsDeleteAllBtn && individualAccountsDeleteAllBtn.dataset.bound !== 'true') {
+        individualAccountsDeleteAllBtn.addEventListener('click', event => {
+            event.preventDefault();
+            event.stopPropagation();
+            if (individualAccountsDeleteAllBtn.disabled) {
+                return;
+            }
+            handleIndividualAccountsDeleteAllRequest();
+        });
+        individualAccountsDeleteAllBtn.dataset.bound = 'true';
+    }
+
     const individualAccountsTableBody = document.getElementById('individualAccountsTableBody');
     if (individualAccountsTableBody && individualAccountsTableBody.dataset.bound !== 'true') {
         individualAccountsTableBody.addEventListener('click', handleIndividualAccountsTableClick);
@@ -7311,9 +7700,14 @@ function setupEventListeners() {
 
     const individualAccountDetailOverlay = document.getElementById('individualAccountDetailOverlay');
     const individualAccountDetailCloseBtn = document.getElementById('individualAccountDetailCloseBtn');
+    const individualAccountDetailBody = document.getElementById('individualAccountDetailBody');
     if (individualAccountDetailCloseBtn && individualAccountDetailCloseBtn.dataset.bound !== 'true') {
         individualAccountDetailCloseBtn.addEventListener('click', closeIndividualAccountDetailOverlay);
         individualAccountDetailCloseBtn.dataset.bound = 'true';
+    }
+    if (individualAccountDetailBody && individualAccountDetailBody.dataset.bound !== 'true') {
+        individualAccountDetailBody.addEventListener('click', handleIndividualAccountDetailBodyClick);
+        individualAccountDetailBody.dataset.bound = 'true';
     }
     if (individualAccountDetailOverlay && individualAccountDetailOverlay.dataset.bound !== 'true') {
         individualAccountDetailOverlay.addEventListener('click', event => {
@@ -7322,6 +7716,21 @@ function setupEventListeners() {
             }
         });
         individualAccountDetailOverlay.dataset.bound = 'true';
+    }
+
+    const individualAccountMarketplaceOverlay = document.getElementById('individualAccountMarketplaceOverlay');
+    const individualAccountMarketplaceCloseBtn = document.getElementById('individualAccountMarketplaceCloseBtn');
+    if (individualAccountMarketplaceCloseBtn && individualAccountMarketplaceCloseBtn.dataset.bound !== 'true') {
+        individualAccountMarketplaceCloseBtn.addEventListener('click', closeIndividualAccountMarketplaceOverlay);
+        individualAccountMarketplaceCloseBtn.dataset.bound = 'true';
+    }
+    if (individualAccountMarketplaceOverlay && individualAccountMarketplaceOverlay.dataset.bound !== 'true') {
+        individualAccountMarketplaceOverlay.addEventListener('click', event => {
+            if (event.target === individualAccountMarketplaceOverlay) {
+                closeIndividualAccountMarketplaceOverlay();
+            }
+        });
+        individualAccountMarketplaceOverlay.dataset.bound = 'true';
     }
 
     const individualAccountsToolbar = document.getElementById('individualAccountsToolbar');
@@ -7385,6 +7794,12 @@ function setupEventListeners() {
         businessAccountsResetBtn.dataset.bound = 'true';
     }
 
+    const businessAccountsActionToolbar = document.getElementById('businessAccountsActionToolbar');
+    if (businessAccountsActionToolbar && businessAccountsActionToolbar.dataset.bound !== 'true') {
+        businessAccountsActionToolbar.addEventListener('click', handleBusinessAccountsToolbarClick);
+        businessAccountsActionToolbar.dataset.bound = 'true';
+    }
+
     const businessAccountsTableBody = document.getElementById('businessAccountsTableBody');
     if (businessAccountsTableBody && businessAccountsTableBody.dataset.bound !== 'true') {
         businessAccountsTableBody.addEventListener('click', handleBusinessAccountsTableClick);
@@ -7437,17 +7852,6 @@ function setupEventListeners() {
     if (exportBusinessAccountsBtn && exportBusinessAccountsBtn.dataset.bound !== 'true') {
         exportBusinessAccountsBtn.addEventListener('click', exportBusinessAccounts);
         exportBusinessAccountsBtn.dataset.bound = 'true';
-    }
-
-    const openBusinessAccountsImportBtn = document.getElementById('openBusinessAccountsImportBtn');
-    const businessAccountsImportInput = document.getElementById('businessAccountsImportInput');
-    if (openBusinessAccountsImportBtn && businessAccountsImportInput && openBusinessAccountsImportBtn.dataset.bound !== 'true') {
-        openBusinessAccountsImportBtn.addEventListener('click', () => businessAccountsImportInput.click());
-        openBusinessAccountsImportBtn.dataset.bound = 'true';
-    }
-    if (businessAccountsImportInput && businessAccountsImportInput.dataset.bound !== 'true') {
-        businessAccountsImportInput.addEventListener('change', handleBusinessAccountsImportInputChange);
-        businessAccountsImportInput.dataset.bound = 'true';
     }
 
     const cancelRoleFormBtn = document.getElementById('cancelRoleFormBtn');
@@ -7869,6 +8273,20 @@ function setupEventListeners() {
         });
         individualAccountBusinessOverlay.dataset.bound = 'true';
     }
+    const individualAccountLogOverlay = document.getElementById('individualAccountLogOverlay');
+    const individualAccountLogCloseBtn = document.getElementById('individualAccountLogCloseBtn');
+    if (individualAccountLogCloseBtn && individualAccountLogCloseBtn.dataset.bound !== 'true') {
+        individualAccountLogCloseBtn.addEventListener('click', closeIndividualAccountLogOverlay);
+        individualAccountLogCloseBtn.dataset.bound = 'true';
+    }
+    if (individualAccountLogOverlay && individualAccountLogOverlay.dataset.bound !== 'true') {
+        individualAccountLogOverlay.addEventListener('click', event => {
+            if (event.target === individualAccountLogOverlay) {
+                closeIndividualAccountLogOverlay();
+            }
+        });
+        individualAccountLogOverlay.dataset.bound = 'true';
+    }
     const businessAccountDecisionOverlay = document.getElementById('businessAccountDecisionOverlay');
     if (businessAccountDecisionOverlay && businessAccountDecisionOverlay.dataset.bound !== 'true') {
         businessAccountDecisionOverlay.addEventListener('click', event => {
@@ -7892,6 +8310,10 @@ function setupEventListeners() {
         }
         if (specificationDetailOverlay && !specificationDetailOverlay.classList.contains('hidden')) {
             hideSpecificationSubSpecifications();
+            return;
+        }
+        if (individualAccountLogOverlay && !individualAccountLogOverlay.classList.contains('hidden')) {
+            closeIndividualAccountLogOverlay();
             return;
         }
         if (individualAccountDetailOverlay && !individualAccountDetailOverlay.classList.contains('hidden')) {
@@ -9654,10 +10076,17 @@ function formatCategoryStatusLabel(status) {
     if (status === null || status === undefined) {
         return '';
     }
+
+    const label = getCategoryStatusLabel(status);
+    if (typeof label === 'string' && label.trim()) {
+        return label.trim();
+    }
+
     const normalized = String(status).trim();
     if (!normalized) {
         return '';
     }
+
     return normalized
         .split(/[\s_-]+/)
         .filter(Boolean)
@@ -11095,6 +11524,109 @@ function setCategoryExplorerCollapsed(collapsed) {
 function getCategoryDisplayName(category) {
     if (!category) return 'Category';
     return category.nameEnglish || category.nameArabic || category.categoryCode || 'Category';
+}
+
+function buildCategoryDisplayPath(targetCategory, fallbackList) {
+    if (!targetCategory) {
+        return '';
+    }
+
+    if (!(categoryLookupById instanceof Map) || !categoryLookupById.size) {
+        rebuildCategoryCaches();
+    }
+
+    const pool = Array.isArray(fallbackList) ? fallbackList : (Array.isArray(categories) ? categories : []);
+
+    const resolveCandidate = candidate => {
+        if (!candidate) {
+            return null;
+        }
+        const resolved = resolveCategoryByIdentifier(candidate);
+        if (resolved) {
+            return resolved;
+        }
+        const normalized = String(candidate).trim().toLowerCase();
+        if (!normalized) {
+            return null;
+        }
+
+        if (categoryLookupById instanceof Map && categoryLookupById.size) {
+            for (const [id, entry] of categoryLookupById.entries()) {
+                if (typeof id === 'string' && id.trim().toLowerCase() === normalized) {
+                    return entry;
+                }
+            }
+        }
+
+        return pool.find(entry => {
+            if (!entry || typeof entry !== 'object') {
+                return false;
+            }
+            return [
+                entry.id,
+                entry.categoryCode,
+                entry.nameEnglish,
+                entry.nameArabic
+            ].some(value => typeof value === 'string' && value.trim().toLowerCase() === normalized);
+        }) || null;
+    };
+
+    const origin = typeof targetCategory === 'string'
+        ? resolveCandidate(targetCategory)
+        : targetCategory;
+
+    if (!origin || typeof origin !== 'object') {
+        return '';
+    }
+
+    const segments = [];
+    const visited = new Set();
+    let current = origin;
+
+    while (current && typeof current === 'object') {
+        const currentId = typeof current.id === 'string' ? current.id.trim() : '';
+        if (currentId) {
+            if (visited.has(currentId)) {
+                break;
+            }
+            visited.add(currentId);
+        }
+
+        segments.unshift(getCategoryDisplayName(current));
+
+        const parentId = getCategoryParentId(current);
+        if (!parentId || parentId === CATEGORY_TREE_ROOT_ID) {
+            break;
+        }
+
+        const parentCandidates = [
+            parentId,
+            typeof current.parentCategoryCode === 'string' ? current.parentCategoryCode : '',
+            typeof current.parent === 'string' ? current.parent : '',
+            typeof current.parentCategory === 'string' ? current.parentCategory : '',
+            typeof current.parentCategoryLabel === 'string' ? current.parentCategoryLabel : ''
+        ];
+
+        let parentInstance = null;
+        for (const candidate of parentCandidates) {
+            parentInstance = resolveCandidate(candidate);
+            if (parentInstance) {
+                break;
+            }
+        }
+
+        if (!parentInstance) {
+            const fallbackLabel = parentCandidates.find(value => value && String(value).trim());
+            if (fallbackLabel) {
+                segments.unshift(String(fallbackLabel).trim());
+            }
+            break;
+        }
+
+        current = parentInstance;
+    }
+
+    return segments.join(' › ');
 }
 
 function resolveCategoryParentLabel(category) {
@@ -17436,14 +17968,16 @@ function lookupPlatformAccount(email) {
         return null;
     }
 
-    const fallbackStatus = (existingUser.status || 'Active').toLowerCase();
+    const fallbackStatus = (existingUser.status || 'active').toLowerCase();
+    const inactiveStatuses = new Set(['inactive', 'suspended', 'frozen', 'deleted', 'disabled', 'blocked', 'deactivated']);
+    const status = inactiveStatuses.has(fallbackStatus) ? 'inactive' : 'active';
 
     return {
         email: existingUser.email,
         name: existingUser.name,
         phone: typeof existingUser.phone === 'string' ? existingUser.phone : '',
         department: existingUser.department || '',
-        status: ['inactive', 'suspended'].includes(fallbackStatus) ? 'inactive' : fallbackStatus === 'pending' ? 'pending' : 'active'
+        status
     };
 }
 
@@ -17694,7 +18228,7 @@ async function handleUserEmailVerification() {
         updateUserFormProgressState();
     } else if (account.status !== 'active') {
         state.userVerification = { status: account.status, email: normalizedEmail, account };
-        const statusLabel = account.status === 'pending' ? 'pending activation' : 'inactive';
+        const statusLabel = getIndividualAccountStatusLabel(account.status).toLowerCase();
         setVerificationBanner('error', `The linked Onrev platform account is ${statusLabel}. Complete activation on the Onrev platform before proceeding.`);
         showNotification('error', `The Onrev platform account for ${account.email} is ${statusLabel}. Activate it before adding the user to the control panel.`, 6500);
         updateUserFormProgressState();
@@ -22028,7 +22562,10 @@ function openProductAdAutomationPrompt(listType) {
     });
 }
 
-function addProductAdAutomationEntry(listType, payload) {
+function addProductAdAutomationEntry(listType, payload, options = {}) {
+    const successMessage = options && typeof options === 'object' && typeof options.successMessage === 'string'
+        ? options.successMessage
+        : null;
     if (!productAdAutomation || typeof productAdAutomation !== 'object') {
         productAdAutomation = { trusted: [], manualReview: [], blacklist: [] };
     }
@@ -22064,7 +22601,7 @@ function addProductAdAutomationEntry(listType, payload) {
     targetList.push(normalized);
     saveProductAdAutomationToStorage();
     renderProductAdAutomationLists();
-    showNotification('success', 'Automation list updated.');
+    showNotification('success', successMessage || 'Automation list updated.');
 }
 
 function removeProductAdAutomationEntry(listType, entryId) {
@@ -22213,28 +22750,22 @@ async function handleProductAdsImportInputChange(event) {
 // --- Individual Accounts Module ---
 const INDIVIDUAL_ACCOUNT_STATUS_LABELS = new Map([
     ['active', 'Active'],
-    ['frozen', 'Frozen'],
-    ['pending', 'Pending'],
-    ['deleted', 'Deleted'],
-    ['suspended', 'Suspended']
+    ['inactive', 'Inactive']
 ]);
 
 const INDIVIDUAL_ACCOUNT_STATUS_CLASSES = new Map([
     ['active', 'status-badge status-active'],
-    ['frozen', 'status-badge status-warning'],
-    ['pending', 'status-badge status-pending'],
-    ['deleted', 'status-badge status-inactive'],
-    ['suspended', 'status-badge status-danger']
+    ['inactive', 'status-badge status-inactive']
 ]);
 
 function getIndividualAccountStatusLabel(status) {
     const normalized = typeof status === 'string' ? status.trim().toLowerCase() : '';
-    return INDIVIDUAL_ACCOUNT_STATUS_LABELS.get(normalized) || (normalized ? normalized.charAt(0).toUpperCase() + normalized.slice(1) : 'Pending');
+    return INDIVIDUAL_ACCOUNT_STATUS_LABELS.get(normalized) || 'Inactive';
 }
 
 function getIndividualAccountStatusClass(status) {
     const normalized = typeof status === 'string' ? status.trim().toLowerCase() : '';
-    return INDIVIDUAL_ACCOUNT_STATUS_CLASSES.get(normalized) || 'status-badge status-pending';
+    return INDIVIDUAL_ACCOUNT_STATUS_CLASSES.get(normalized) || 'status-badge status-inactive';
 }
 
 function renderIndividualAccountsFilters() {
@@ -22259,7 +22790,25 @@ function renderIndividualAccountsFilters() {
 function getFilteredIndividualAccounts() {
     const filters = state.individualAccountsFilters || {};
     const searchTerm = typeof filters.search === 'string' ? filters.search.trim().toLowerCase() : '';
-    const statusFilter = typeof filters.status === 'string' ? filters.status.trim().toLowerCase() : 'all';
+    const rawStatusFilter = typeof filters.status === 'string' ? filters.status.trim().toLowerCase() : 'all';
+    const legacyStatusMap = {
+        pending: 'active',
+        frozen: 'inactive',
+        suspended: 'inactive',
+        deleted: 'inactive',
+        blocked: 'inactive',
+        disabled: 'inactive',
+        deactivated: 'inactive'
+    };
+    const statusFilterCandidate = legacyStatusMap[rawStatusFilter] || rawStatusFilter;
+    const statusFilter = ['all', 'active', 'inactive'].includes(statusFilterCandidate)
+        ? statusFilterCandidate
+        : statusFilterCandidate
+            ? 'inactive'
+            : 'all';
+    if (filters.status !== statusFilter) {
+        filters.status = statusFilter;
+    }
     const cityFilter = typeof filters.city === 'string' ? filters.city.trim().toLowerCase() : 'all';
 
     return (individualAccounts || [])
@@ -22290,7 +22839,7 @@ function getFilteredIndividualAccounts() {
 function updateIndividualAccountsCount(count) {
     const label = document.getElementById('individualAccountsCountLabel');
     if (label) {
-        label.textContent = `#${count} Users`;
+        label.textContent = `#${count} Account`;
     }
 }
 
@@ -22310,25 +22859,42 @@ function renderIndividualAccountsTable(page = state.currentIndividualAccountsPag
     const visible = filtered.slice(startIndex, startIndex + perPage);
 
     if (!visible.length) {
-        tbody.innerHTML = '<tr><td colspan="9">No individual accounts match the current filters.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8">No individual accounts match the current filters.</td></tr>';
     } else {
         let index = startIndex + 1;
         tbody.innerHTML = visible.map(account => {
             const statusLabel = getIndividualAccountStatusLabel(account.status);
             const statusClass = getIndividualAccountStatusClass(account.status);
-            const adsMeta = `${Number.isFinite(account.adsCount) ? account.adsCount : 0} / pending ${Number.isFinite(account.pendingAds) ? account.pendingAds : 0}`;
-            const balanceLabel = formatCurrency(account.balance || 0);
-            const createdLabel = formatDateForDisplay(account.createdAt, { includeTime: false }) || '—';
+            const createdLabel = formatDateForDisplay(account.createdAt, { includeTime: true }) || '—';
             const lastActiveLabel = formatDateForDisplay(account.lastActiveAt, { includeTime: true }) || '—';
             const businessAssociations = Array.isArray(account.businessAssociations) ? account.businessAssociations : [];
-            const businessCountLabel = businessAssociations.length ? `${businessAssociations.length} linked` : 'No links';
-            const businessTrigger = businessAssociations.length
-                ? `<button type="button" class="linked-business-trigger" data-action="view-businesses" data-account-id="${escapeAttribute(account.id)}" title="Review linked business accounts"><i class="fas fa-eye"></i><span>Review</span></button>`
+            const businessCount = businessAssociations.length;
+            const businessLabel = businessCount ? `${businessCount} Account${businessCount === 1 ? '' : 's'}` : '—';
+            const businessColumn = businessCount
+                ? `<button type="button" class="linked-business-trigger" data-action="view-businesses" data-account-id="${escapeAttribute(account.id)}" title="Review linked business accounts"><i class="fas fa-eye"></i><span>${escapeHtml(businessLabel)}</span></button>`
+                : '<div class="table-cell-meta">—</div>';
+            const automationIdentifier = resolveIndividualAccountAutomationIdentifier(account);
+            const publishingListEntry = automationIdentifier ? findAutomationListEntryForAccount(automationIdentifier) : null;
+            const publishingListType = publishingListEntry && publishingListEntry.listType ? publishingListEntry.listType : '';
+            const publishingListLabel = publishingListType && PUBLISHING_LIST_LABELS[publishingListType]
+                ? PUBLISHING_LIST_LABELS[publishingListType]
+                : '';
+            const publishingListNotes = publishingListEntry && publishingListEntry.entry && typeof publishingListEntry.entry.notes === 'string'
+                ? publishingListEntry.entry.notes.trim()
+                : '';
+            const publishingColumn = publishingListLabel
+                ? `<div class="table-cell-title">${escapeHtml(publishingListLabel)}</div>${publishingListNotes ? `<div class="table-cell-meta">${escapeHtml(publishingListNotes)}</div>` : ''}`
                 : '<div class="table-cell-meta">—</div>';
             const isSelected = state.activeIndividualAccountId === account.id;
+            const rowAttributes = [
+                `data-account-id="${escapeAttribute(account.id)}"`,
+                automationIdentifier ? `data-automation-account="${escapeAttribute(automationIdentifier)}"` : '',
+                publishingListType ? `data-publishing-list="${escapeAttribute(publishingListType)}"` : '',
+                isSelected ? 'class="selected" aria-selected="true"' : 'aria-selected="false"'
+            ].filter(Boolean).join(' ');
 
             return `
-                <tr data-account-id="${escapeAttribute(account.id)}"${isSelected ? ' class="selected" aria-selected="true"' : ' aria-selected="false"'}>
+                <tr ${rowAttributes}>
                     <td>${index++}</td>
                     <td>
                         <div class="table-cell-title">${escapeHtml(account.fullName || account.email || account.id || 'Account')}</div>
@@ -22340,18 +22906,16 @@ function renderIndividualAccountsTable(page = state.currentIndividualAccountsPag
                         <div class="table-cell-meta">${escapeHtml(account.city || '—')}</div>
                     </td>
                     <td><span class="${statusClass}">${escapeHtml(statusLabel)}</span></td>
-                    <td>${escapeHtml(balanceLabel)}</td>
-                    <td>${escapeHtml(adsMeta)}</td>
                     <td>
                         <div class="table-cell-title">${escapeHtml(createdLabel)}</div>
                     </td>
                     <td>
-                        <div class="table-cell-title">${escapeHtml(businessCountLabel)}</div>
-                        ${businessTrigger}
-                    </td>
-                    <td>
                         <div class="table-cell-title">${escapeHtml(lastActiveLabel)}</div>
                     </td>
+                    <td>
+                        ${businessColumn}
+                    </td>
+                    <td>${publishingColumn}</td>
                 </tr>
             `;
         }).join('');
@@ -22370,33 +22934,79 @@ function renderIndividualAccountsTable(page = state.currentIndividualAccountsPag
         renderIndividualAccountBusinessOverlay(activeBusinessAccount || null);
     }
 
+    if (state.individualLogOverlayAccountId) {
+        const logAccount = (individualAccounts || []).find(entry => entry && entry.id === state.individualLogOverlayAccountId) || null;
+        if (logAccount) {
+            renderIndividualAccountLogOverlay(logAccount);
+        } else {
+            closeIndividualAccountLogOverlay();
+        }
+    }
+
+    if (state.individualMarketplaceOverlayAccountId) {
+        const marketplaceAccount = (individualAccounts || []).find(entry => entry && entry.id === state.individualMarketplaceOverlayAccountId) || null;
+        if (marketplaceAccount) {
+            renderIndividualAccountMarketplaceOverlay(marketplaceAccount);
+        } else {
+            closeIndividualAccountMarketplaceOverlay();
+        }
+    }
+
     renderIndividualAccountsPagination(totalPages, filtered.length);
 }
 
 function renderIndividualAccountsPagination(totalPages, totalItems) {
     const container = document.getElementById('individualAccountsPagination');
     if (!container) return;
+    const perPage = state.individualAccountsPerPage || 10;
     container.innerHTML = '';
 
-    if (totalPages <= 1 || totalItems <= state.individualAccountsPerPage) return;
+    if (!totalItems || totalPages <= 1 || totalItems <= perPage) {
+        container.classList.add('hidden');
+        container.classList.remove('has-summary');
+        return;
+    }
+
+    container.classList.remove('hidden');
+    container.classList.add('has-summary');
+
+    const startIndex = (state.currentIndividualAccountsPage - 1) * perPage + 1;
+    const endIndex = Math.min(totalItems, startIndex + perPage - 1);
+
+    const summary = document.createElement('span');
+    summary.className = 'pagination-summary';
+    summary.textContent = `Showing ${Math.max(startIndex, 1)}-${endIndex} of ${totalItems}`;
+    container.appendChild(summary);
+
+    const controls = document.createElement('div');
+    controls.className = 'pagination-controls';
 
     const createButton = (label, page, disabled = false, active = false) => {
         const button = document.createElement('button');
         button.type = 'button';
         button.textContent = label;
-        if (disabled) button.disabled = true;
-        if (active) button.classList.add('active');
+        if (disabled) {
+            button.disabled = true;
+        }
+        if (active) {
+            button.classList.add('active');
+        }
         button.addEventListener('click', () => {
+            if (button.disabled || page === state.currentIndividualAccountsPage) {
+                return;
+            }
             renderIndividualAccountsTable(page);
         });
         return button;
     };
 
-    container.appendChild(createButton('Prev', state.currentIndividualAccountsPage - 1, state.currentIndividualAccountsPage === 1));
+    controls.appendChild(createButton('Prev', state.currentIndividualAccountsPage - 1, state.currentIndividualAccountsPage === 1));
     for (let index = 1; index <= totalPages; index += 1) {
-        container.appendChild(createButton(String(index), index, false, index === state.currentIndividualAccountsPage));
+        controls.appendChild(createButton(String(index), index, false, index === state.currentIndividualAccountsPage));
     }
-    container.appendChild(createButton('Next', state.currentIndividualAccountsPage + 1, state.currentIndividualAccountsPage === totalPages));
+    controls.appendChild(createButton('Next', state.currentIndividualAccountsPage + 1, state.currentIndividualAccountsPage === totalPages));
+
+    container.appendChild(controls);
 }
 
 function handleIndividualAccountsSearch(value) {
@@ -22430,37 +23040,7 @@ function renderIndividualAccountQuickActions(account) {
         quickActions.hidden = true;
         return;
     }
-    quickActions.hidden = false;
-
-    const activateBtn = document.getElementById('individualAccountActivateBtn');
-    const freezeBtn = document.getElementById('individualAccountFreezeBtn');
-    const deleteBtn = document.getElementById('individualAccountDeleteBtn');
-
-    if (activateBtn) {
-        if ((account.status || '').toLowerCase() === 'active') {
-            activateBtn.disabled = true;
-            activateBtn.textContent = 'Active';
-            activateBtn.dataset.action = 'noop';
-        } else if ((account.status || '').toLowerCase() === 'frozen') {
-            activateBtn.disabled = false;
-            activateBtn.textContent = 'Unfreeze';
-            activateBtn.dataset.action = 'activate';
-        } else {
-            activateBtn.disabled = false;
-            activateBtn.textContent = 'Activate';
-            activateBtn.dataset.action = 'activate';
-        }
-    }
-
-    if (freezeBtn) {
-        freezeBtn.disabled = (account.status || '').toLowerCase() === 'frozen';
-        freezeBtn.dataset.action = 'freeze';
-    }
-
-    if (deleteBtn) {
-        deleteBtn.disabled = false;
-        deleteBtn.dataset.action = 'delete';
-    }
+    quickActions.hidden = true;
 }
 
 function renderIndividualAccountsToolbar(account) {
@@ -22468,17 +23048,21 @@ function renderIndividualAccountsToolbar(account) {
     if (!toolbar) return;
 
     const viewBtn = document.getElementById('individualAccountsActionViewBtn');
-    const editBtn = document.getElementById('individualAccountsActionEditBtn');
-    const businessBtn = document.getElementById('individualAccountsActionBusinessBtn');
+    const marketplaceBtn = document.getElementById('individualAccountsActionMarketplaceBtn');
+    const logBtn = document.getElementById('individualAccountsActionLogBtn');
     const activateBtn = document.getElementById('individualAccountsActionActivateBtn');
-    const freezeBtn = document.getElementById('individualAccountsActionFreezeBtn');
-    const deleteBtn = document.getElementById('individualAccountsActionDeleteBtn');
+    const deactivateBtn = document.getElementById('individualAccountsActionDeactivateBtn');
+    const addToBtn = document.getElementById('individualAccountsActionAddToBtn');
+    const deleteAllBtn = document.getElementById('individualAccountsDeleteAllBtn');
 
     const setDisabled = (button, disabled) => {
         if (button) {
             button.disabled = !!disabled;
         }
     };
+
+    const totalAccounts = Array.isArray(individualAccounts) ? individualAccounts.length : 0;
+    setDisabled(deleteAllBtn, totalAccounts === 0);
 
     const setLabel = (button, label) => {
         if (!button) return;
@@ -22489,50 +23073,196 @@ function renderIndividualAccountsToolbar(account) {
     };
 
     if (!account) {
-        [viewBtn, editBtn, businessBtn, activateBtn, freezeBtn, deleteBtn].forEach(button => setDisabled(button, true));
+        [viewBtn, marketplaceBtn, logBtn, activateBtn, deactivateBtn, addToBtn].forEach(button => setDisabled(button, true));
         setLabel(activateBtn, 'Activate');
-        setLabel(freezeBtn, 'Freeze');
+        setLabel(deactivateBtn, 'Deactivate');
+        if (addToBtn) {
+            setLabel(addToBtn, 'Add to');
+            delete addToBtn.dataset.automationAccount;
+            delete addToBtn.dataset.currentList;
+            delete addToBtn.dataset.accountId;
+        }
+        if (marketplaceBtn) {
+            delete marketplaceBtn.dataset.accountId;
+        }
         return;
     }
 
-    setDisabled(viewBtn, false);
-    setDisabled(editBtn, false);
-    setDisabled(deleteBtn, false);
+    const status = (account.status || '').toLowerCase();
+    const isDeleted = status === 'deleted';
+    const isActive = status === 'active';
+    const automationIdentifier = resolveIndividualAccountAutomationIdentifier(account);
 
-    if (businessBtn) {
-        const hasBusinessLinks = Array.isArray(account.businessAssociations) && account.businessAssociations.length > 0;
-        setDisabled(businessBtn, !hasBusinessLinks);
+    setDisabled(viewBtn, false);
+    setDisabled(marketplaceBtn, false);
+    setDisabled(logBtn, false);
+
+    if (marketplaceBtn) {
+        marketplaceBtn.dataset.accountId = account.id || '';
     }
 
     if (activateBtn) {
-        const status = (account.status || '').toLowerCase();
-        if (status === 'active') {
-            setDisabled(activateBtn, true);
-            setLabel(activateBtn, 'Active');
-        } else if (status === 'frozen') {
-            setDisabled(activateBtn, false);
-            setLabel(activateBtn, 'Unfreeze');
-        } else {
-            setDisabled(activateBtn, false);
-            setLabel(activateBtn, 'Activate');
-        }
+        const canActivate = !isDeleted && !isActive;
+        setDisabled(activateBtn, !canActivate);
+        setLabel(activateBtn, 'Activate');
     }
 
-    if (freezeBtn) {
-        const status = (account.status || '').toLowerCase();
-        setDisabled(freezeBtn, status === 'frozen');
-        setLabel(freezeBtn, 'Freeze');
+    if (deactivateBtn) {
+        const canDeactivate = !isDeleted && isActive;
+        setDisabled(deactivateBtn, !canDeactivate);
+        setLabel(deactivateBtn, 'Deactivate');
     }
+
+    if (addToBtn) {
+        const canAddToPublishingList = !isDeleted && !!automationIdentifier;
+        setDisabled(addToBtn, !canAddToPublishingList);
+        const existingAutomationEntry = automationIdentifier ? findAutomationListEntryForAccount(automationIdentifier) : null;
+        setLabel(addToBtn, existingAutomationEntry ? 'Update list' : 'Add to');
+        if (automationIdentifier) {
+            addToBtn.dataset.automationAccount = automationIdentifier;
+        } else {
+            delete addToBtn.dataset.automationAccount;
+        }
+        if (existingAutomationEntry) {
+            addToBtn.dataset.currentList = existingAutomationEntry.listType;
+        } else {
+            delete addToBtn.dataset.currentList;
+        }
+        if (account.id) {
+            addToBtn.dataset.accountId = String(account.id);
+        } else {
+            delete addToBtn.dataset.accountId;
+        }
+    }
+}
+
+function resolveIndividualAccountDisplayName(account) {
+    if (!account || typeof account !== 'object') {
+        return 'Individual Account';
+    }
+    const displayCandidates = [account.fullName, account.firstName && account.lastName ? `${account.firstName} ${account.lastName}` : '', account.contactName, account.email, account.accountId, account.id];
+    for (const candidate of displayCandidates) {
+        if (typeof candidate === 'string' && candidate.trim()) {
+            return candidate.trim();
+        }
+    }
+    return 'Individual Account';
+}
+
+function resolveIndividualAccountAutomationIdentifier(account) {
+    if (!account || typeof account !== 'object') {
+        return '';
+    }
+    const emailCandidates = [account.email, account.contactEmail, account.loginEmail];
+    for (const candidate of emailCandidates) {
+        if (typeof candidate === 'string') {
+            const normalized = normalizeEmail(candidate);
+            if (normalized) {
+                return normalized;
+            }
+        }
+    }
+    const idCandidates = [account.accountId, account.id, account.userId];
+    for (const candidate of idCandidates) {
+        if (candidate === null || candidate === undefined) {
+            continue;
+        }
+        if (typeof candidate === 'string') {
+            const trimmed = candidate.trim();
+            if (trimmed) {
+                return trimmed.toLowerCase();
+            }
+        } else if (typeof candidate === 'number' && Number.isFinite(candidate)) {
+            return String(candidate);
+        }
+        if (typeof candidate === 'object') {
+            const value = typeof candidate.id === 'string' ? candidate.id.trim() : Number.isFinite(candidate.id) ? String(candidate.id) : '';
+            if (value) {
+                return value.toLowerCase();
+            }
+        }
+    }
+    return '';
+}
+
+function findAutomationListEntryForAccount(identifier) {
+    if (!identifier) {
+        return null;
+    }
+    if (!productAdAutomation || typeof productAdAutomation !== 'object') {
+        return null;
+    }
+    const collections = {
+        trusted: Array.isArray(productAdAutomation.trusted) ? productAdAutomation.trusted : [],
+        manualReview: Array.isArray(productAdAutomation.manualReview) ? productAdAutomation.manualReview : [],
+        blacklist: Array.isArray(productAdAutomation.blacklist) ? productAdAutomation.blacklist : []
+    };
+    for (const [listType, entries] of Object.entries(collections)) {
+        const entry = entries.find(item => item && item.account === identifier);
+        if (entry) {
+            return { listType, entry };
+        }
+    }
+    return null;
 }
 
 function selectIndividualAccount(accountId) {
     const previousAccountId = state.activeIndividualAccountId;
-    const account = (individualAccounts || []).find(entry => entry && entry.id === accountId) || null;
-    state.activeIndividualAccountId = account ? account.id : null;
+    const isTogglingOff = previousAccountId && previousAccountId === accountId;
+    let account = null;
+
+    const publishingOverlay = document.getElementById('individualPublishingOverlay');
+    if (publishingOverlay && !publishingOverlay.classList.contains('hidden')) {
+        closeIndividualAccountPublishingListOverlay();
+    }
+
+    if (isTogglingOff) {
+        state.activeIndividualAccountId = null;
+    } else {
+        account = (individualAccounts || []).find(entry => entry && entry.id === accountId) || null;
+        state.activeIndividualAccountId = account ? account.id : null;
+    }
+
     renderIndividualAccountsTable(state.currentIndividualAccountsPage);
-    if (previousAccountId !== state.activeIndividualAccountId || !account) {
+
+    if (!state.activeIndividualAccountId) {
+        if (state.individualLogOverlayAccountId) {
+            closeIndividualAccountLogOverlay();
+        }
+        if (state.individualBusinessOverlayAccountId) {
+            closeIndividualAccountBusinessOverlay();
+        }
+        renderIndividualAccountDetail(null);
+        closeIndividualAccountPublishingListOverlay();
+        return null;
+    }
+
+    if (!account) {
+        account = (individualAccounts || []).find(entry => entry && entry.id === state.activeIndividualAccountId) || null;
+    }
+
+    if (state.individualLogOverlayAccountId) {
+        state.individualLogOverlayAccountId = account ? account.id : null;
+        if (account) {
+            renderIndividualAccountLogOverlay(account);
+        } else {
+            closeIndividualAccountLogOverlay();
+        }
+    }
+
+    if (state.individualMarketplaceOverlayAccountId) {
+        if (account) {
+            state.individualMarketplaceOverlayAccountId = account.id;
+            renderIndividualAccountMarketplaceOverlay(account);
+        } else {
+            closeIndividualAccountMarketplaceOverlay();
+        }
+    }
+
+    if (previousAccountId !== state.activeIndividualAccountId) {
         renderIndividualAccountDetail(null);
     }
+
     return account;
 }
 
@@ -22556,81 +23286,814 @@ function renderIndividualAccountDetail(account, { forceOpen = false } = {}) {
         return;
     }
 
-    titleEl.textContent = account.fullName || account.email || account.id || 'Individual Account';
-    if (subtitleEl) {
-        subtitleEl.textContent = `${getIndividualAccountStatusLabel(account.status)} · ${account.city || 'Unknown City'}`;
-    }
+    const signupRecord = getSignupRecordForEmail(account.email);
+    const signupProfile = signupRecord && typeof signupRecord.profile === 'object' ? signupRecord.profile : {};
 
-    const subscriptions = Array.isArray(account.subscriptions) ? account.subscriptions : [];
+    const displayName = account.fullName
+        || signupProfile.fullName
+        || signupRecord?.userName
+        || account.email
+        || account.id
+        || 'Individual Account';
+    titleEl.textContent = displayName;
+    const permissions = account.permissions || {};
     const financialHistory = Array.isArray(account.financialHistory) ? account.financialHistory : [];
     const supportRequests = Array.isArray(account.supportRequests) ? account.supportRequests : [];
-    const permissions = account.permissions || {};
-    const businessAssociations = Array.isArray(account.businessAssociations) ? account.businessAssociations : [];
-    const businessSummary = businessAssociations.length
-        ? businessAssociations.map(assoc => assoc.companyName || assoc.businessId || 'Business Account').join(', ')
-        : null;
+    const balanceBreakdown = Array.isArray(account.balanceBreakdown) ? account.balanceBreakdown : [];
+    const pointsHistory = Array.isArray(account.pointsHistory) ? account.pointsHistory : [];
+    const paymentCards = Array.isArray(account.paymentCards) ? account.paymentCards : [];
+    const marketplaceActivity = account.marketplaceActivity && typeof account.marketplaceActivity === 'object' ? account.marketplaceActivity : {};
+    const savedAddresses = Array.isArray(account.savedAddresses)
+        ? account.savedAddresses
+        : Array.isArray(marketplaceActivity.savedAddresses) ? marketplaceActivity.savedAddresses : [];
+    const sellerRatingsSource = Array.isArray(account.sellerRatings)
+        ? account.sellerRatings
+        : Array.isArray(marketplaceActivity.sellerRatings) ? marketplaceActivity.sellerRatings : [];
+    const buyerRatingsSource = Array.isArray(account.buyerRatings)
+        ? account.buyerRatings
+        : Array.isArray(marketplaceActivity.buyerRatings) ? marketplaceActivity.buyerRatings : [];
 
-    const subscriptionMarkup = subscriptions.length
-        ? subscriptions.map(sub => `<li><strong>${escapeHtml(sub.name || 'Subscription')}</strong> — ${escapeHtml(sub.status || 'active')} ${sub.renewsAt ? `· Renews ${escapeHtml(formatDateForDisplay(sub.renewsAt) || '')}` : ''}</li>`).join('')
-        : '<li class="empty-state">No active subscriptions.</li>';
+    const nameSource = (account.fullName || signupProfile.fullName || signupRecord?.userName || '').trim();
+    const nameParts = nameSource.split(/\s+/).filter(Boolean);
+    const fallbackFirstName = nameParts[0] || '';
+    const fallbackLastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : '';
+    const firstName = account.firstName || signupProfile.firstName || fallbackFirstName;
+    const lastName = account.lastName || signupProfile.lastName || fallbackLastName;
 
-    const financialMarkup = financialHistory.length
-        ? financialHistory
-            .sort((a, b) => Date.parse(b.timestamp || '') - Date.parse(a.timestamp || ''))
+    const addressSource = account.address && typeof account.address === 'object' ? account.address : {};
+    const mergedAddress = {
+        country: addressSource.country || signupProfile.country || '',
+        region: addressSource.region || signupProfile.region || '',
+        city: addressSource.city || signupProfile.city || account.city || '',
+        district: addressSource.district || signupProfile.district || '',
+        streetNumber: addressSource.streetNumber || signupProfile.streetNumber || '',
+        streetName: addressSource.streetName || addressSource.street || signupProfile.street || '',
+        zipCode: addressSource.zipCode || signupProfile.zip || signupProfile.postalCode || ''
+    };
+    const joinCommaParts = parts => parts
+        .map(value => {
+            if (value === null || value === undefined) return '';
+            if (typeof value === 'number') {
+                return Number.isFinite(value) ? String(value) : '';
+            }
+            const trimmed = String(value).trim();
+            return trimmed;
+        })
+        .filter(Boolean)
+        .join(', ');
+    const joinSpaceParts = parts => parts
+        .map(value => {
+            if (value === null || value === undefined) return '';
+            const trimmed = String(value).trim();
+            return trimmed;
+        })
+        .filter(Boolean)
+        .join(' ');
+
+    const addressPrimary = joinCommaParts([mergedAddress.country, mergedAddress.region, mergedAddress.city]);
+    const streetLine = joinSpaceParts([mergedAddress.streetNumber, mergedAddress.streetName]);
+    const addressSecondary = joinCommaParts([mergedAddress.district, streetLine, mergedAddress.zipCode]);
+
+    const getInitials = value => {
+        const source = typeof value === 'string' ? value : String(value || '');
+        const parts = source.trim().split(/\s+/).filter(Boolean);
+        if (!parts.length) {
+            const trimmed = source.trim();
+            return trimmed ? trimmed.slice(0, 2).toUpperCase() : 'NA';
+        }
+        if (parts.length === 1) {
+            return parts[0].slice(0, 2).toUpperCase();
+        }
+        const firstInitial = (parts[0][0] || '').toUpperCase();
+        const lastInitial = (parts[parts.length - 1][0] || '').toUpperCase();
+        const initials = `${firstInitial}${lastInitial}`.trim();
+        return initials || parts[0].slice(0, 2).toUpperCase() || 'NA';
+    };
+
+    const formatKeyLabel = key => key
+        .replace(/[_-]+/g, ' ')
+        .replace(/([a-z])([A-Z])/g, '$1 $2')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .replace(/^./, char => char.toUpperCase());
+
+    const renderGenericActivityItem = entry => {
+        if (!entry || typeof entry !== 'object') {
+            return '<li><div><strong>Activity</strong></div></li>';
+        }
+        const title = entry.title || entry.label || entry.name || entry.reference || entry.id || 'Activity';
+        const detailLines = [];
+        const typeValue = entry.type || entry.category;
+        if (typeValue) {
+            detailLines.push(`<div class="helper-text">Type: ${escapeHtml(String(typeValue))}</div>`);
+        }
+        const descriptionValue = entry.details || entry.description || entry.note || entry.summary;
+        if (descriptionValue) {
+            detailLines.push(`<div class="helper-text">${escapeHtml(String(descriptionValue))}</div>`);
+        }
+        if (Number.isFinite(Number(entry.amount))) {
+            detailLines.push(`<div class="helper-text">Amount: ${escapeHtml(formatCurrency(Number(entry.amount)))}</div>`);
+        }
+        if (Number.isFinite(Number(entry.quantity)) && Number(entry.quantity) !== 0) {
+            detailLines.push(`<div class="helper-text">Quantity: ${escapeHtml(String(entry.quantity))}</div>`);
+        }
+        const ratingValue = entry.rating ?? entry.score;
+        if (ratingValue !== undefined && ratingValue !== null && ratingValue !== '') {
+            detailLines.push(`<div class="helper-text">Rating: ${escapeHtml(String(ratingValue))}</div>`);
+        }
+        const statusValue = entry.status || entry.state;
+        if (statusValue) {
+            detailLines.push(`<div class="helper-text">Status: ${escapeHtml(String(statusValue))}</div>`);
+        }
+        const timestampValue = entry.timestamp || entry.date || entry.performedAt || entry.updatedAt || entry.createdAt;
+        if (timestampValue) {
+            const tsLabel = formatDateForDisplay(timestampValue, { includeTime: true }) || timestampValue;
+            detailLines.push(`<div class="helper-text">Recorded ${escapeHtml(String(tsLabel))}</div>`);
+        }
+        const metaSource = entry.metadata || entry.meta;
+        if (metaSource && typeof metaSource === 'object') {
+            const metaEntries = Object.entries(metaSource)
+                .filter(([, value]) => value !== null && value !== undefined && value !== '')
+                .map(([key, value]) => `${formatKeyLabel(key)}: ${String(value)}`);
+            if (metaEntries.length) {
+                detailLines.push(`<div class="helper-text">${escapeHtml(metaEntries.join(' | '))}</div>`);
+            }
+        }
+        return `<li><div><strong>${escapeHtml(String(title))}</strong></div>${detailLines.join('')}</li>`;
+    };
+
+    const renderSavedAddressItem = entry => {
+        if (!entry || typeof entry !== 'object') {
+            return renderGenericActivityItem(entry);
+        }
+        const title = entry.label || entry.nickname || entry.id || 'Saved address';
+        const primaryParts = joinCommaParts([entry.country, entry.region, entry.city]);
+        const savedStreet = joinSpaceParts([entry.streetNumber, entry.streetName]);
+        const secondaryParts = joinCommaParts([entry.district, savedStreet, entry.zipCode || entry.postalCode]);
+        const detailLines = [];
+        if (primaryParts) {
+            detailLines.push(`<div class="helper-text">${escapeHtml(primaryParts)}</div>`);
+        }
+        if (secondaryParts) {
+            detailLines.push(`<div class="helper-text">${escapeHtml(secondaryParts)}</div>`);
+        }
+        if (entry.notes) {
+            detailLines.push(`<div class="helper-text">${escapeHtml(String(entry.notes))}</div>`);
+        }
+        const timestampValue = entry.updatedAt || entry.createdAt;
+        if (timestampValue) {
+            const tsLabel = formatDateForDisplay(timestampValue, { includeTime: true }) || timestampValue;
+            detailLines.push(`<div class="helper-text">Updated ${escapeHtml(String(tsLabel))}</div>`);
+        }
+        return `<li><div><strong>${escapeHtml(String(title))}</strong></div>${detailLines.join('')}</li>`;
+    };
+
+    const renderPaymentCardItem = card => {
+        if (!card) {
+            return '<li><div><strong>Payment card</strong></div></li>';
+        }
+        if (typeof card !== 'object') {
+            const value = parseNumericAmount(card);
+            if (value !== null) {
+                return `<li><div><strong>Payment card</strong></div><div class="helper-text">Value: ${escapeHtml(String(value))}</div></li>`;
+            }
+            return `<li><div><strong>${escapeHtml(String(card))}</strong></div></li>`;
+        }
+        const brandCandidate = typeof card.brand === 'string' && card.brand.trim() ? card.brand.trim() : '';
+        const brandLabel = brandCandidate ? formatKeyLabel(brandCandidate) : 'Card';
+        const lastFourRaw = typeof card.last4 === 'string' && card.last4.trim()
+            ? card.last4.trim().slice(-4)
+            : Number.isFinite(card.last4)
+                ? String(card.last4).slice(-4)
+                : '';
+        const maskedDigits = lastFourRaw ? `•••• ${lastFourRaw}` : '';
+        const titleParts = [brandLabel, maskedDigits].filter(Boolean);
+
+        const expiryMonthRaw = card.expiryMonth;
+        const expiryYearRaw = card.expiryYear;
+        const normalizeMonth = value => {
+            if (Number.isFinite(value)) {
+                return String(value).padStart(2, '0');
+            }
+            if (typeof value === 'string') {
+                const trimmed = value.trim();
+                if (!trimmed) return '';
+                const digits = trimmed.replace(/[^0-9]/g, '');
+                if (!digits) return '';
+                return digits.padStart(2, '0').slice(-2);
+            }
+            return '';
+        };
+        const normalizeYear = value => {
+            if (Number.isFinite(value)) {
+                const text = String(Math.trunc(value));
+                return text.length === 2 ? text : text.padStart(4, '0');
+            }
+            if (typeof value === 'string') {
+                const trimmed = value.trim();
+                if (!trimmed) return '';
+                const digits = trimmed.replace(/[^0-9]/g, '');
+                if (!digits) return '';
+                if (digits.length === 2) {
+                    return digits;
+                }
+                return digits.padStart(4, '0').slice(-4);
+            }
+            return '';
+        };
+        const expiryMonth = normalizeMonth(expiryMonthRaw);
+        const expiryYear = normalizeYear(expiryYearRaw);
+        const expiryLabel = expiryMonth || expiryYear ? `${expiryMonth || '??'} / ${expiryYear || '??'}` : '';
+
+        const holderCandidate = typeof card.holderName === 'string' && card.holderName.trim()
+            ? card.holderName.trim()
+            : typeof card.name === 'string' && card.name.trim()
+                ? card.name.trim()
+                : '';
+        const statusCandidate = typeof card.status === 'string' && card.status.trim()
+            ? card.status.trim()
+            : typeof card.state === 'string' && card.state.trim()
+                ? card.state.trim()
+                : '';
+        const addedAt = card.addedAt || card.createdAt || card.updatedAt || null;
+        const isDefault = card.isDefault === true
+            || (typeof card.isDefault === 'string' && card.isDefault.trim().toLowerCase() === 'true');
+
+        const details = [];
+        if (holderCandidate) {
+            details.push(`<div class="helper-text">Holder: ${escapeHtml(holderCandidate)}</div>`);
+        }
+        if (expiryLabel) {
+            details.push(`<div class="helper-text">Expires ${escapeHtml(expiryLabel)}</div>`);
+        }
+        if (statusCandidate) {
+            details.push(`<div class="helper-text">Status: ${escapeHtml(formatKeyLabel(statusCandidate))}</div>`);
+        }
+        if (addedAt) {
+            const addedLabel = formatDateForDisplay(addedAt, { includeTime: true }) || addedAt;
+            details.push(`<div class="helper-text">Added ${escapeHtml(String(addedLabel))}</div>`);
+        }
+        if (isDefault) {
+            details.push('<div class="helper-text">Primary card</div>');
+        }
+
+        const title = titleParts.length ? titleParts.join(' • ') : 'Payment card';
+        return `<li><div><strong>${escapeHtml(title)}</strong></div>${details.join('')}</li>`;
+    };
+
+    const computeRatingSummary = (entries, fallbackCandidates = []) => {
+        const collection = Array.isArray(entries) ? entries : [];
+        let sum = 0;
+        let count = 0;
+
+        const pushRating = (ratingValue, weight = 1) => {
+            const parsedRating = parseNumericAmount(ratingValue);
+            const parsedWeight = parseNumericAmount(weight);
+            if (parsedRating === null) return;
+            const normalizedWeight = parsedWeight !== null && parsedWeight > 0 ? parsedWeight : 1;
+            sum += parsedRating * normalizedWeight;
+            count += normalizedWeight;
+        };
+
+        collection.forEach(entry => {
+            if (entry === null || entry === undefined) {
+                return;
+            }
+            if (typeof entry === 'number' || typeof entry === 'string') {
+                pushRating(entry);
+                return;
+            }
+            if (typeof entry !== 'object') {
+                return;
+            }
+            const ratingCandidates = [
+                entry.rating,
+                entry.score,
+                entry.value,
+                entry.average,
+                entry.stars,
+                entry.result
+            ];
+            let rating = null;
+            for (const candidate of ratingCandidates) {
+                const parsedCandidate = parseNumericAmount(candidate);
+                if (parsedCandidate !== null) {
+                    rating = parsedCandidate;
+                    break;
+                }
+            }
+            if (rating === null && typeof entry === 'object') {
+                const nested = entry.rating && typeof entry.rating === 'object' ? parseNumericAmount(entry.rating.value) : null;
+                if (nested !== null) {
+                    rating = nested;
+                }
+            }
+            if (rating === null) {
+                return;
+            }
+            const weightCandidates = [
+                entry.count,
+                entry.votes,
+                entry.reviews,
+                entry.total,
+                entry.numberOfRatings,
+                entry.quantity
+            ];
+            let weight = null;
+            for (const candidate of weightCandidates) {
+                const parsedWeight = parseNumericAmount(candidate);
+                if (parsedWeight !== null && parsedWeight > 0) {
+                    weight = parsedWeight;
+                    break;
+                }
+            }
+            pushRating(rating, weight || 1);
+        });
+
+        if (count > 0) {
+            return { average: sum / count, count };
+        }
+
+        for (const fallback of fallbackCandidates) {
+            const parsed = parseNumericAmount(fallback);
+            if (parsed !== null) {
+                return { average: parsed, count: 0 };
+            }
+        }
+
+        return { average: null, count: 0 };
+    };
+
+    const formatRatingSummary = summary => {
+        if (!summary || summary.average === null) {
+            return 'Not rated';
+        }
+        const average = summary.average;
+        const rounded = Number.isFinite(average) ? Math.round(average * 10) / 10 : null;
+        if (rounded === null) {
+            return 'Not rated';
+        }
+        const averageLabel = Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
+        if (summary.count && summary.count > 0) {
+            const countLabel = `${summary.count} rating${summary.count === 1 ? '' : 's'}`;
+            return `${averageLabel} (${countLabel})`;
+        }
+        return averageLabel;
+    };
+
+    const formatRatingScore = summary => {
+        if (!summary || summary.average === null || !Number.isFinite(summary.average)) {
+            return '—';
+        }
+        const normalized = Math.round(summary.average * 10) / 10;
+        if (!Number.isFinite(normalized)) {
+            return '—';
+        }
+        return Number.isInteger(normalized) ? String(normalized) : normalized.toFixed(1);
+    };
+
+    const resolveRatingFaceDescriptor = score => {
+        if (!Number.isFinite(score)) {
+            return { emoji: '&#128528;', descriptor: 'No ratings yet' };
+        }
+        if (score >= 4.5) {
+            return { emoji: '&#128513;', descriptor: 'Excellent' };
+        }
+        if (score >= 4) {
+            return { emoji: '&#128522;', descriptor: 'Great' };
+        }
+        if (score >= 3) {
+            return { emoji: '&#128528;', descriptor: 'Okay' };
+        }
+        if (score >= 2) {
+            return { emoji: '&#128533;', descriptor: 'Poor' };
+        }
+        return { emoji: '&#128545;', descriptor: 'Very poor' };
+    };
+
+    const buildRatingFaceMarkup = (score, labelPrefix) => {
+        const { emoji, descriptor } = resolveRatingFaceDescriptor(score);
+        const ariaLabel = labelPrefix
+            ? `${labelPrefix} ${descriptor.toLowerCase()}`.trim()
+            : descriptor;
+        return `<span class="rating-face" role="img" aria-label="${escapeAttribute(ariaLabel || descriptor)}">${emoji}</span>`;
+    };
+
+    const parseNumericAmount = value => {
+        if (typeof value === 'number') {
+            return Number.isFinite(value) ? value : null;
+        }
+        if (typeof value === 'string') {
+            const trimmed = value.trim();
+            if (!trimmed) return null;
+            const numeric = Number(trimmed);
+            return Number.isFinite(numeric) ? numeric : null;
+        }
+        return null;
+    };
+
+    const resolveBalanceAmount = (entries, predicate) => {
+        if (!Array.isArray(entries)) return null;
+        const match = entries.find(entry => {
+            if (!entry) return false;
+            const label = typeof entry.label === 'string' ? entry.label.toLowerCase() : '';
+            const type = typeof entry.type === 'string' ? entry.type.toLowerCase() : '';
+            return predicate(label, type);
+        });
+        return match ? parseNumericAmount(match.amount) : null;
+    };
+
+    let availableBalanceAmount = resolveBalanceAmount(balanceBreakdown, (label, type) => label.includes('available') || type === 'available');
+    let pendingBalanceAmount = resolveBalanceAmount(balanceBreakdown, (label, type) => label.includes('pending') || type === 'pending');
+
+    const availableFallbackCandidates = [account.availableBalance, account.availableFunds, account.available, account.balanceAvailable];
+    for (const candidate of availableFallbackCandidates) {
+        if (availableBalanceAmount !== null) break;
+        const parsed = parseNumericAmount(candidate);
+        if (parsed !== null) {
+            availableBalanceAmount = parsed;
+        }
+    }
+    if (availableBalanceAmount === null) {
+        const parsed = parseNumericAmount(account.balance);
+        if (parsed !== null) {
+            availableBalanceAmount = parsed;
+        }
+    }
+
+    const pendingFallbackCandidates = [account.pendingBalance, account.pendingFunds, account.pendingPayouts, account.pending];
+    for (const candidate of pendingFallbackCandidates) {
+        if (pendingBalanceAmount !== null) break;
+        const parsed = parseNumericAmount(candidate);
+        if (parsed !== null) {
+            pendingBalanceAmount = parsed;
+        }
+    }
+
+    const walletAvailableLabel = availableBalanceAmount !== null ? formatCurrency(availableBalanceAmount) : '—';
+    const walletPendingLabel = pendingBalanceAmount !== null ? formatCurrency(pendingBalanceAmount) : '—';
+
+    const renderFinancialTransactionItem = entry => {
+        if (!entry || typeof entry !== 'object') {
+            return '<li><div><strong>Transaction</strong></div></li>';
+        }
+        const label = entry.label || 'Transaction';
+        const typeLabel = entry.type ? `<div class="helper-text">Type: ${escapeHtml(String(entry.type))}</div>` : '';
+        const amountLabel = formatCurrency(entry.amount || 0);
+        const timestampLabel = formatDateForDisplay(entry.timestamp, { includeTime: true }) || 'Unknown date';
+        const noteLine = entry.note ? `<div class="helper-text">${escapeHtml(entry.note)}</div>` : '';
+        return `<li><div><strong>${escapeHtml(label)}</strong></div>${typeLabel}<div>${escapeHtml(amountLabel)}</div><div class="helper-text">Recorded ${escapeHtml(timestampLabel)}</div>${noteLine}</li>`;
+    };
+
+    const sortedFinancialHistory = financialHistory
+        .slice()
+        .sort((a, b) => Date.parse(b?.timestamp || '') - Date.parse(a?.timestamp || ''));
+    const walletRecentTransactions = sortedFinancialHistory.slice(0, 3);
+    const walletRemainingTransactions = sortedFinancialHistory.slice(3);
+    const walletRecentMarkup = walletRecentTransactions.length
+        ? `<ul class="detail-list">${walletRecentTransactions.map(renderFinancialTransactionItem).join('')}</ul>`
+        : '<p class="helper-text">No financial transactions recorded.</p>';
+    const walletMoreButtonMarkup = walletRemainingTransactions.length
+        ? `<div class="detail-subsection detail-more-actions"><button type="button" class="btn btn-outline" data-action="show-more-wallet" data-target-id="individualWalletTransactionsAll">More</button></div>`
+        : '';
+    const walletTransactionsRemainingMarkup = walletRemainingTransactions.length
+        ? `<div class="detail-subsection hidden" id="individualWalletTransactionsAll"><h5>Earlier Transactions</h5><ul class="detail-list">${walletRemainingTransactions.map(renderFinancialTransactionItem).join('')}</ul></div>`
+        : '';
+
+    const followUpsSource = account.followUps && typeof account.followUps === 'object'
+        ? account.followUps
+        : (marketplaceActivity.followUps && typeof marketplaceActivity.followUps === 'object' ? marketplaceActivity.followUps : {});
+    const favoriteCategoriesRaw = Array.isArray(account.favoriteCategories)
+        ? account.favoriteCategories
+        : Array.isArray(followUpsSource.favoriteCategories) ? followUpsSource.favoriteCategories : [];
+    const favoriteSellersRaw = Array.isArray(account.favoriteSellers)
+        ? account.favoriteSellers
+        : Array.isArray(followUpsSource.favoriteSellers) ? followUpsSource.favoriteSellers : [];
+    const favoriteSearchesRaw = Array.isArray(account.favoriteSearches)
+        ? account.favoriteSearches
+        : Array.isArray(followUpsSource.favoriteSearches) ? followUpsSource.favoriteSearches : [];
+
+    const normalizeFavoriteLabel = entry => {
+        if (entry === null || entry === undefined) {
+            return '';
+        }
+        if (typeof entry === 'string' || typeof entry === 'number') {
+            const value = String(entry).trim();
+            return value;
+        }
+        if (typeof entry === 'object') {
+            const candidates = [
+                entry.label,
+                entry.name,
+                entry.title,
+                entry.category,
+                entry.categoryName,
+                entry.section,
+                entry.seller,
+                entry.sellerName,
+                entry.storeName,
+                entry.search,
+                entry.query,
+                entry.value,
+                entry.id
+            ];
+            for (const candidate of candidates) {
+                if (typeof candidate === 'string' && candidate.trim()) {
+                    return candidate.trim();
+                }
+            }
+        }
+        try {
+            const serialized = JSON.stringify(entry);
+            return typeof serialized === 'string' ? serialized : '';
+        } catch (error) {
+            return '';
+        }
+    };
+
+    const renderFavoriteDetails = entry => {
+        if (!entry || typeof entry !== 'object') {
+            return '';
+        }
+        const details = [];
+        if (entry.notes) {
+            details.push(`<div class="helper-text">${escapeHtml(String(entry.notes))}</div>`);
+        }
+        const lastVisited = entry.lastVisitedAt || entry.updatedAt || entry.savedAt || entry.createdAt;
+        if (lastVisited) {
+            const stamp = formatDateForDisplay(lastVisited, { includeTime: true }) || lastVisited;
+            details.push(`<div class="helper-text">Last visited ${escapeHtml(String(stamp))}</div>`);
+        }
+        const meta = entry.metadata || entry.meta;
+        if (meta && typeof meta === 'object') {
+            const metaEntries = Object.entries(meta)
+                .filter(([, value]) => value !== null && value !== undefined && value !== '')
+                .slice(0, 3)
+                .map(([key, value]) => `${formatKeyLabel(key)}: ${String(value)}`);
+            if (metaEntries.length) {
+                details.push(`<div class="helper-text">${escapeHtml(metaEntries.join(' | '))}</div>`);
+            }
+        }
+        return details.join('');
+    };
+
+    const renderFavoriteCollection = (entries, emptyMessage) => {
+        const source = Array.isArray(entries) ? entries.filter(entry => entry !== null && entry !== undefined) : [];
+        const items = source
             .map(entry => {
-                const amountLabel = formatCurrency(entry.amount || 0);
-                const timestampLabel = formatDateForDisplay(entry.timestamp, { includeTime: true }) || 'Unknown date';
-                return `<li><div><strong>${escapeHtml(entry.label || 'Transaction')}</strong> · ${escapeHtml(entry.type || '')}</div><div class="helper-text">${escapeHtml(timestampLabel)}</div><div>${escapeHtml(amountLabel)}</div>${entry.note ? `<div class="helper-text">${escapeHtml(entry.note)}</div>` : ''}</li>`;
-            }).join('')
-        : '<li class="empty-state">No financial history recorded.</li>';
+                const label = normalizeFavoriteLabel(entry);
+                if (!label) {
+                    return null;
+                }
+                const detailsMarkup = renderFavoriteDetails(entry);
+                return `<li><div><strong>${escapeHtml(label)}</strong></div>${detailsMarkup}</li>`;
+            })
+            .filter(Boolean);
+        if (!items.length) {
+            return `<p class="helper-text">${escapeHtml(emptyMessage)}</p>`;
+        }
+        return `<ul class="detail-list">${items.join('')}</ul>`;
+    };
 
-    const supportMarkup = supportRequests.length
-        ? supportRequests
+    const favoriteCategoriesMarkup = renderFavoriteCollection(favoriteCategoriesRaw, 'No favorite categories saved.');
+    const favoriteSellersMarkup = renderFavoriteCollection(favoriteSellersRaw, 'No favorite sellers saved.');
+    const favoriteSearchesMarkup = renderFavoriteCollection(favoriteSearchesRaw, 'No favorite searches saved.');
+
+    const renderPointsHistoryEntry = entry => {
+        if (!entry || typeof entry !== 'object') {
+            return '<li><div><strong>Points activity</strong></div></li>';
+        }
+        const label = entry.label || 'Points activity';
+        const deltaValue = Number(entry.delta) || 0;
+        const deltaLabel = Number.isFinite(deltaValue)
+            ? (deltaValue > 0 ? `+${deltaValue.toLocaleString('en-US')}` : deltaValue.toLocaleString('en-US'))
+            : '0';
+        const balanceAfterLabel = Number.isFinite(entry.balanceAfter) ? entry.balanceAfter.toLocaleString('en-US') : null;
+        const timestampLabel = entry.timestamp ? formatDateForDisplay(entry.timestamp, { includeTime: true }) : null;
+        const noteLine = entry.note ? `<div class="helper-text">${escapeHtml(entry.note)}</div>` : '';
+        return `<li><div><strong>${escapeHtml(label)}</strong></div><div class="helper-text">Delta: ${escapeHtml(deltaLabel)}</div>${balanceAfterLabel ? `<div class="helper-text">Balance: ${escapeHtml(balanceAfterLabel)}</div>` : ''}${timestampLabel ? `<div class="helper-text">Recorded ${escapeHtml(timestampLabel)}</div>` : ''}${noteLine}</li>`;
+    };
+
+    const sortedPointsHistory = pointsHistory
+        .slice()
+        .sort((a, b) => Date.parse(b?.timestamp || '') - Date.parse(a?.timestamp || ''));
+    const recentPointsEntries = sortedPointsHistory.slice(0, 3);
+    const remainingPointsEntries = sortedPointsHistory.slice(3);
+    const pointsRecentMarkup = recentPointsEntries.length
+        ? `<ul class="detail-list">${recentPointsEntries.map(renderPointsHistoryEntry).join('')}</ul>`
+        : '<p class="helper-text">No points activity recorded.</p>';
+    const pointsMoreButtonMarkup = remainingPointsEntries.length
+        ? `<div class="detail-subsection detail-more-actions"><button type="button" class="btn btn-outline" data-action="show-more-points" data-target-id="individualPointsHistoryAll">More</button></div>`
+        : '';
+    const pointsHistoryRemainingMarkup = remainingPointsEntries.length
+        ? `<div class="detail-subsection hidden" id="individualPointsHistoryAll"><h5>Earlier Transactions</h5><ul class="detail-list">${remainingPointsEntries.map(renderPointsHistoryEntry).join('')}</ul></div>`
+        : '';
+
+    const paymentCardItems = paymentCards.map(renderPaymentCardItem).filter(Boolean);
+    const paymentCardsMarkup = paymentCardItems.length
+        ? `<ul class="detail-list">${paymentCardItems.join('')}</ul>`
+        : '<p class="helper-text">No payment cards on file.</p>';
+    const savedAddressItems = savedAddresses.map(renderSavedAddressItem).filter(Boolean);
+    const savedAddressesMarkup = savedAddressItems.length
+        ? `<ul class="detail-list">${savedAddressItems.join('')}</ul>`
+        : '<p class="helper-text">No saved addresses found.</p>';
+
+    const sellerRatingSummary = computeRatingSummary(sellerRatingsSource, [
+        account.sellerRating,
+        account.sellerScore,
+        account.averageSellerRating,
+        marketplaceActivity.sellerRating,
+        marketplaceActivity.sellerScore,
+        marketplaceActivity.averageSellerRating
+    ]);
+    const buyerRatingSummary = computeRatingSummary(buyerRatingsSource, [
+        account.buyerRating,
+        account.buyerScore,
+        account.averageBuyerRating,
+        marketplaceActivity.buyerRating,
+        marketplaceActivity.buyerScore,
+        marketplaceActivity.averageBuyerRating
+    ]);
+    const sellerRatingScoreLabel = formatRatingScore(sellerRatingSummary);
+    const buyerRatingScoreLabel = formatRatingScore(buyerRatingSummary);
+    const sellerRatingTooltip = formatRatingSummary(sellerRatingSummary);
+    const buyerRatingTooltip = formatRatingSummary(buyerRatingSummary);
+    const sellerRatingFaceMarkup = buildRatingFaceMarkup(
+        Number.isFinite(sellerRatingSummary.average) ? sellerRatingSummary.average : null,
+        'Seller rating'
+    );
+    const buyerRatingFaceMarkup = buildRatingFaceMarkup(
+        Number.isFinite(buyerRatingSummary.average) ? buyerRatingSummary.average : null,
+        'Buyer rating'
+    );
+    const sellerRatingCountMarkup = sellerRatingSummary.count && sellerRatingSummary.count > 0
+        ? `<div class="helper-text">${escapeHtml(`${sellerRatingSummary.count} rating${sellerRatingSummary.count === 1 ? '' : 's'}`)}</div>`
+        : (!Number.isFinite(sellerRatingSummary.average)
+            ? '<div class="helper-text">No ratings yet</div>'
+            : '');
+    const buyerRatingCountMarkup = buyerRatingSummary.count && buyerRatingSummary.count > 0
+        ? `<div class="helper-text">${escapeHtml(`${buyerRatingSummary.count} rating${buyerRatingSummary.count === 1 ? '' : 's'}`)}</div>`
+        : (!Number.isFinite(buyerRatingSummary.average)
+            ? '<div class="helper-text">No ratings yet</div>'
+            : '');
+
+    const supportRequestsMarkup = supportRequests.length
+        ? `<ul class="detail-list">${supportRequests
+            .slice()
             .sort((a, b) => Date.parse(b.requestedAt || '') - Date.parse(a.requestedAt || ''))
             .map(request => {
                 const requested = formatDateForDisplay(request.requestedAt, { includeTime: true }) || 'Unknown date';
                 const expires = request.expiresAt ? formatDateForDisplay(request.expiresAt, { includeTime: true }) : null;
-                return `<li><strong>${escapeHtml(request.reason || 'Support access')}</strong><div class="helper-text">Requested ${escapeHtml(requested)}</div>${expires ? `<div class="helper-text">Expires ${escapeHtml(expires)}</div>` : ''}<div class="helper-chip ${request.status === 'approved' ? 'success' : request.status === 'pending' ? 'warning' : 'neutral'}">${escapeHtml((request.status || '').toUpperCase())}</div></li>`;
-            }).join('')
-        : '<li class="empty-state">No support access has been requested yet.</li>';
+                const normalizedStatus = (request.status || '').toLowerCase();
+                const statusClass = normalizedStatus === 'approved' ? 'success' : normalizedStatus === 'pending' ? 'warning' : 'neutral';
+                return `<li><div><strong>${escapeHtml(request.reason || 'Support access')}</strong></div><div class="helper-text">Requested ${escapeHtml(requested)}</div>${expires ? `<div class="helper-text">Expires ${escapeHtml(expires)}</div>` : ''}<span class="helper-chip ${statusClass}">${escapeHtml((request.status || '').toUpperCase())}</span></li>`;
+            }).join('')}</ul>`
+        : '<p class="helper-text">No support requests recorded.</p>';
+
+    const profilePicture = account.profilePicture
+        || signupProfile.avatarUrl
+        || signupProfile.photoDataUrl
+        || signupProfile.profilePhoto
+        || '';
+    const avatarAlt = `${displayName} profile picture`;
+    const avatarMarkup = profilePicture
+        ? `<img src="${escapeAttribute(profilePicture)}" alt="${escapeAttribute(avatarAlt)}">`
+        : `<span>${escapeHtml(getInitials(displayName))}</span>`;
+
+    const genderRaw = account.gender || signupProfile.gender || '';
+    const genderLabel = genderRaw ? formatKeyLabel(genderRaw) : '—';
+    const phoneNumber = account.mobile || signupProfile.phone || signupProfile.mobile || signupRecord?.phone || '';
+
+    const dateOfBirthValue = account.dateOfBirth || signupProfile.dateOfBirth || null;
+    const dateOfBirthLabel = dateOfBirthValue ? (formatDateForDisplay(dateOfBirthValue, { includeTime: false }) || '—') : '—';
+    const ageValue = calculateAgeFromDate(dateOfBirthValue);
+    const ageLabel = ageValue !== null ? `${ageValue} ${ageValue === 1 ? 'year' : 'years'}` : '—';
+
+    const memberSinceSource = account.createdAt || signupRecord?.submittedAt || signupRecord?.createdAt;
+    const memberSinceLabel = formatDateForDisplay(memberSinceSource, { includeTime: true }) || '—';
+    const lastLoginSource = account.lastActiveAt || signupRecord?.lastLoginAt;
+    const lastLoginLabel = formatDateForDisplay(lastLoginSource, { includeTime: true }) || '—';
+    const accountUsername = account.username || account.userName || signupRecord?.userName || signupProfile.userName || '';
+    const invitationCode = account.invitationCode || (account.invitation && (account.invitation.code || account.invitation.token)) || '';
+    const pointsBalanceValue = Number.isFinite(account.pointsBalance) ? account.pointsBalance : 0;
+    const pointsBalanceLabel = Number.isFinite(pointsBalanceValue) ? pointsBalanceValue.toLocaleString('en-US') : '0';
+
+    if (subtitleEl) {
+        const statusDisplay = getIndividualAccountStatusLabel(account.status) || 'Inactive';
+        subtitleEl.textContent = statusDisplay;
+    }
 
     body.innerHTML = `
         <section class="detail-section">
-            <h4>Profile &amp; Contact</h4>
-            <div class="detail-grid">
-                <div><dt>Email</dt><dd>${escapeHtml(account.email || '—')}</dd></div>
-                <div><dt>Mobile</dt><dd>${escapeHtml(account.mobile || '—')}</dd></div>
-                <div><dt>City</dt><dd>${escapeHtml(account.city || '—')}</dd></div>
-                <div><dt>Created</dt><dd>${escapeHtml(formatDateForDisplay(account.createdAt, { includeTime: true }) || '—')}</dd></div>
-                <div><dt>Last Active</dt><dd>${escapeHtml(formatDateForDisplay(account.lastActiveAt, { includeTime: true }) || '—')}</dd></div>
-                <div><dt>Balance</dt><dd>${escapeHtml(formatCurrency(account.balance || 0))}</dd></div>
-                <div><dt>Business Accounts</dt><dd>${businessSummary ? escapeHtml(businessSummary) : 'Not linked'}</dd></div>
+            <h4>User Info</h4>
+            <div class="account-profile-row">
+                <div class="account-avatar-card">
+                    <div class="account-avatar" aria-label="${escapeAttribute(avatarAlt)}">
+                        ${avatarMarkup}
+                    </div>
+                </div>
+                <div class="detail-grid">
+                    <div><dt>First Name</dt><dd>${firstName ? escapeHtml(firstName) : '—'}</dd></div>
+                    <div><dt>Last Name</dt><dd>${lastName ? escapeHtml(lastName) : '—'}</dd></div>
+                    <div><dt>Gender</dt><dd>${genderLabel !== '—' ? escapeHtml(genderLabel) : '—'}</dd></div>
+                    <div><dt>Phone Number</dt><dd>${phoneNumber ? escapeHtml(phoneNumber) : '—'}</dd></div>
+                    <div><dt>Date of Birth</dt><dd>${dateOfBirthLabel !== '—' ? escapeHtml(dateOfBirthLabel) : '—'}</dd></div>
+                    <div><dt>Age</dt><dd>${ageLabel !== '—' ? escapeHtml(ageLabel) : '—'}</dd></div>
+                    <div class="detail-grid-full">
+                        <dt>Address</dt>
+                        <dd>${addressPrimary ? escapeHtml(addressPrimary) : '—'}</dd>
+                        ${addressSecondary ? `<div class="helper-text">${escapeHtml(addressSecondary)}</div>` : ''}
+                    </div>
+                </div>
             </div>
         </section>
         <section class="detail-section">
-            <h4>Marketplace Activity</h4>
+            <h4>Account Info</h4>
             <div class="detail-grid">
-                <div><dt>Total Ads</dt><dd>${Number.isFinite(account.adsCount) ? account.adsCount : 0}</dd></div>
-                <div><dt>Pending Ads</dt><dd>${Number.isFinite(account.pendingAds) ? account.pendingAds : 0}</dd></div>
-                <div><dt>Auto Posting</dt><dd>${permissions.autoPosting ? 'Enabled' : 'Disabled'}</dd></div>
-                <div><dt>Manual Review</dt><dd>${permissions.manualReview ? 'Required' : 'Not required'}</dd></div>
+                <div><dt>ID</dt><dd>${account.id ? escapeHtml(account.id) : '—'}</dd></div>
+                <div><dt>User Name</dt><dd>${accountUsername ? escapeHtml(accountUsername) : '—'}</dd></div>
+                <div><dt>E-Mail</dt><dd>${account.email ? escapeHtml(account.email) : '—'}</dd></div>
+                <div><dt>Member since</dt><dd>${memberSinceLabel !== '—' ? escapeHtml(memberSinceLabel) : '—'}</dd></div>
+                <div><dt>Last Login</dt><dd>${lastLoginLabel !== '—' ? escapeHtml(lastLoginLabel) : '—'}</dd></div>
             </div>
         </section>
         <section class="detail-section">
-            <h4>Subscriptions</h4>
-            <ul class="detail-list">${subscriptionMarkup}</ul>
+            <h4>Rating</h4>
+            <div class="detail-grid">
+                <div>
+                    <dt>Seller</dt>
+                    <dd>
+                        <div class="rating-display" title="${escapeAttribute(sellerRatingTooltip)}">
+                            <span class="rating-score">${escapeHtml(sellerRatingScoreLabel)}</span>
+                            ${sellerRatingFaceMarkup}
+                        </div>
+                        ${sellerRatingCountMarkup}
+                    </dd>
+                </div>
+                <div>
+                    <dt>Buyer</dt>
+                    <dd>
+                        <div class="rating-display" title="${escapeAttribute(buyerRatingTooltip)}">
+                            <span class="rating-score">${escapeHtml(buyerRatingScoreLabel)}</span>
+                            ${buyerRatingFaceMarkup}
+                        </div>
+                        ${buyerRatingCountMarkup}
+                    </dd>
+                </div>
+            </div>
         </section>
         <section class="detail-section">
-            <h4>Financial History</h4>
-            <ul class="detail-list">${financialMarkup}</ul>
+            <h4>My Wallet</h4>
+            <div class="detail-grid">
+                <div><dt>Available Balance</dt><dd>${escapeHtml(walletAvailableLabel)}</dd></div>
+                <div><dt>Pending Balance</dt><dd>${escapeHtml(walletPendingLabel)}</dd></div>
+            </div>
+            <div class="detail-subsection">
+                <h5>Recent Transactions</h5>
+                ${walletRecentMarkup}
+            </div>
+            ${walletMoreButtonMarkup}
+            ${walletTransactionsRemainingMarkup}
+        </section>
+        <section class="detail-section">
+            <h4>Payment Cards</h4>
+            ${paymentCardsMarkup}
+        </section>
+        <section class="detail-section">
+            <h4>Saved Addresses</h4>
+            ${savedAddressesMarkup}
+        </section>
+        <section class="detail-section">
+            <h4>My Points</h4>
+            <div class="detail-grid">
+                <div><dt>Current Balance</dt><dd>${escapeHtml(pointsBalanceLabel)}</dd></div>
+                <div><dt>Invitation Code</dt><dd>${invitationCode ? escapeHtml(invitationCode) : '—'}</dd></div>
+            </div>
+            <div class="detail-subsection">
+                <h5>Recent Transactions</h5>
+                ${pointsRecentMarkup}
+            </div>
+            ${pointsMoreButtonMarkup}
+            ${pointsHistoryRemainingMarkup}
+        </section>
+        <section class="detail-section">
+            <h4>Follow-ups</h4>
+            <div class="detail-subsection">
+                <h5>Favorite Categories</h5>
+                ${favoriteCategoriesMarkup}
+            </div>
+            <div class="detail-subsection">
+                <h5>Favorite Sellers</h5>
+                ${favoriteSellersMarkup}
+            </div>
+            <div class="detail-subsection">
+                <h5>Favorite Searches</h5>
+                ${favoriteSearchesMarkup}
+            </div>
         </section>
         <section class="detail-section">
             <h4>Support Requests</h4>
-            <ul class="detail-list">${supportMarkup}</ul>
-        </section>
-        <section class="detail-section">
-            <h4>Notes</h4>
-            <p>${account.notes ? escapeHtml(account.notes) : '<span class="helper-text">No internal notes recorded.</span>'}</p>
+            ${supportRequestsMarkup}
         </section>
     `;
 
@@ -22643,6 +24106,9 @@ function renderIndividualAccountDetail(account, { forceOpen = false } = {}) {
     renderIndividualAccountsToolbar(account);
     if (state.individualBusinessOverlayAccountId === account.id) {
         renderIndividualAccountBusinessOverlay(account);
+    }
+    if (state.individualLogOverlayAccountId === account.id) {
+        renderIndividualAccountLogOverlay(account);
     }
 }
 
@@ -22665,10 +24131,26 @@ function updateIndividualAccountStatus(account, status, note) {
     if (note) {
         account.notes = account.notes ? `${account.notes}\n${note}` : note;
     }
+    const statusLabel = getIndividualAccountStatusLabel(status);
+    const timestamp = new Date().toISOString();
+    appendIndividualAccountLogEntry(account, {
+        action: status === 'active' ? 'status-activated' : status === 'inactive' ? 'status-deactivated' : 'status-change',
+        label: `Status updated to ${statusLabel}`,
+        context: note || '',
+        actor: resolveProductAdModeratorLabel(),
+        status: statusLabel,
+        timestamp
+    });
     saveIndividualAccountsToStorage();
     renderIndividualAccountsTable(state.currentIndividualAccountsPage);
     if (state.activeIndividualAccountId === account.id) {
         renderIndividualAccountDetail(account);
+    }
+    if (state.individualLogOverlayAccountId === account.id) {
+        renderIndividualAccountLogOverlay(account);
+    }
+    if (state.individualMarketplaceOverlayAccountId === account.id) {
+        renderIndividualAccountMarketplaceOverlay(account);
     }
     renderIndividualAccountSupportRequests();
 }
@@ -22686,8 +24168,91 @@ function removeIndividualAccount(accountId) {
     if (state.individualBusinessOverlayAccountId === accountId) {
         closeIndividualAccountBusinessOverlay();
     }
+    if (state.individualLogOverlayAccountId === accountId) {
+        closeIndividualAccountLogOverlay();
+    }
+    if (state.individualMarketplaceOverlayAccountId === accountId) {
+        closeIndividualAccountMarketplaceOverlay();
+        renderIndividualAccountMarketplaceOverlay(null);
+    }
     renderIndividualAccountSupportRequests();
     showNotification('success', 'Individual account deleted.');
+}
+
+async function handleIndividualAccountsDeleteAllRequest() {
+    const totalAccounts = Array.isArray(individualAccounts) ? individualAccounts.length : 0;
+    if (!totalAccounts) {
+        showNotification('info', 'No individual accounts available to delete.');
+        return;
+    }
+
+    const confirmationMessage = `Delete all ${totalAccounts} individual account${totalAccounts === 1 ? '' : 's'}? This action cannot be undone.`;
+    const confirmOverlay = document.getElementById('userConfirmOverlay');
+    const overlayAvailable = confirmOverlay && confirmOverlay.offsetParent !== null;
+
+    const confirmed = overlayAvailable
+        ? await showUserConfirm(confirmationMessage, 'Delete All', 'Cancel')
+        : window.confirm(confirmationMessage);
+
+    if (!confirmed) {
+        return;
+    }
+
+    deleteAllIndividualAccounts({ refresh: true });
+    showNotification('success', 'All individual accounts deleted.');
+}
+
+function deleteAllIndividualAccounts({ refresh = true } = {}) {
+    individualAccounts = [];
+    try {
+        localStorage.removeItem(INDIVIDUAL_ACCOUNTS_STORAGE_KEY);
+    } catch (error) {
+        console.warn('Unable to clear stored individual accounts:', error);
+    }
+    saveIndividualAccountsToStorage();
+
+    state.activeIndividualAccountId = null;
+    state.individualBusinessOverlayAccountId = null;
+    state.individualLogOverlayAccountId = null;
+    state.editingIndividualAccountId = null;
+    state.currentIndividualAccountsPage = 1;
+    state.individualAccountsFilters = {
+        search: '',
+        status: 'all',
+        city: 'all'
+    };
+
+    const searchInput = document.getElementById('individualAccountsSearchInput');
+    if (searchInput) {
+        searchInput.value = '';
+    }
+    const statusFilter = document.getElementById('individualAccountsStatusFilter');
+    if (statusFilter) {
+        statusFilter.value = 'all';
+    }
+    const cityFilter = document.getElementById('individualAccountsCityFilter');
+    if (cityFilter) {
+        cityFilter.value = 'all';
+    }
+
+    closeIndividualAccountDetailOverlay();
+    closeIndividualAccountBusinessOverlay();
+    renderIndividualAccountBusinessOverlay(null);
+    closeIndividualAccountLogOverlay();
+    renderIndividualAccountLogOverlay(null);
+    closeIndividualAccountMarketplaceOverlay();
+    renderIndividualAccountMarketplaceOverlay(null);
+    closeIndividualAccountPublishingListOverlay();
+
+    if (refresh) {
+        renderIndividualAccountsTable(1);
+    } else {
+        renderIndividualAccountsToolbar(null);
+        renderIndividualAccountDetail(null);
+        updateIndividualAccountsCount(0);
+    }
+
+    renderIndividualAccountSupportRequests();
 }
 
 function handleIndividualAccountQuickAction(event) {
@@ -22701,13 +24266,40 @@ function handleIndividualAccountQuickAction(event) {
     if (action === 'activate') {
         updateIndividualAccountStatus(account, 'active', `${resolveProductAdModeratorLabel()} reactivated the account.`);
         showNotification('success', 'Account activated.');
-    } else if (action === 'freeze') {
-        updateIndividualAccountStatus(account, 'frozen', `${resolveProductAdModeratorLabel()} froze the account.`);
-        showNotification('warning', 'Account frozen pending review.');
+    } else if (action === 'deactivate' || action === 'freeze') {
+        updateIndividualAccountStatus(account, 'inactive', `${resolveProductAdModeratorLabel()} marked the account as inactive.`);
+        showNotification('warning', 'Account marked as inactive.');
     } else if (action === 'delete') {
         if (window.confirm('Delete this individual account? This action cannot be undone.')) {
             removeIndividualAccount(account.id);
         }
+    }
+}
+
+function handleIndividualAccountDetailBodyClick(event) {
+    const button = event.target.closest('button[data-action]');
+    if (!button) return;
+    const action = button.dataset.action;
+    if (action !== 'show-more-points' && action !== 'show-more-wallet') {
+        return;
+    }
+
+    event.preventDefault();
+    const targetId = button.dataset.targetId || button.dataset.target || '';
+    const target = targetId ? document.getElementById(targetId) : null;
+    if (target) {
+        target.classList.remove('hidden');
+        try {
+            target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        } catch (error) {
+            target.scrollIntoView();
+        }
+    }
+    const wrapper = button.closest('.detail-subsection');
+    if (wrapper) {
+        wrapper.remove();
+    } else {
+        button.remove();
     }
 }
 
@@ -22717,34 +24309,998 @@ function handleIndividualAccountsToolbarClick(event) {
     const action = button.dataset.action;
     if (!action) return;
 
-    const account = (individualAccounts || []).find(entry => entry && entry.id === state.activeIndividualAccountId);
+    if (action === 'delete-all') {
+        handleIndividualAccountsDeleteAllRequest();
+        return;
+    }
+
+    const allIndividualAccounts = Array.isArray(individualAccounts) ? individualAccounts : [];
+    const findAccountById = accountId => {
+        if (accountId === null || accountId === undefined) {
+            return null;
+        }
+        const normalizedId = String(accountId).trim();
+        if (!normalizedId) {
+            return null;
+        }
+        return allIndividualAccounts.find(entry => entry && String(entry.id).trim() === normalizedId) || null;
+    };
+
+    let account = findAccountById(state.activeIndividualAccountId);
+    if (!account) {
+        account = findAccountById(button.dataset.accountId);
+    }
+    if (!account && button.dataset.automationAccount) {
+        const identifier = button.dataset.automationAccount.trim().toLowerCase();
+        if (identifier) {
+            account = allIndividualAccounts.find(entry => {
+                if (!entry) return false;
+                return resolveIndividualAccountAutomationIdentifier(entry) === identifier;
+            }) || null;
+        }
+    }
     if (!account) {
         showNotification('warning', 'Select an individual account first.');
         return;
     }
 
+    state.activeIndividualAccountId = account.id;
+
     if (action === 'view') {
         renderIndividualAccountDetail(account, { forceOpen: true });
-    } else if (action === 'edit') {
-        openIndividualAccountEditOverlay(account.id);
-    } else if (action === 'view-businesses') {
-        if (!Array.isArray(account.businessAssociations) || !account.businessAssociations.length) {
-            showNotification('info', 'This account has no linked business accounts.');
-            return;
-        }
-        renderIndividualAccountDetail(account, { forceOpen: true });
-        openIndividualAccountBusinessOverlay(account.id);
+    } else if (action === 'view-marketplace') {
+        openIndividualAccountMarketplaceOverlay(account.id);
+    } else if (action === 'view-log') {
+        openIndividualAccountLogOverlay(account.id);
     } else if (action === 'activate') {
         updateIndividualAccountStatus(account, 'active', `${resolveProductAdModeratorLabel()} reactivated the account.`);
         showNotification('success', 'Account activated.');
-    } else if (action === 'freeze') {
-        updateIndividualAccountStatus(account, 'frozen', `${resolveProductAdModeratorLabel()} froze the account.`);
-        showNotification('warning', 'Account frozen pending review.');
-    } else if (action === 'delete') {
-        if (window.confirm('Delete this individual account?')) {
-            removeIndividualAccount(account.id);
+    } else if (action === 'deactivate' || action === 'freeze') {
+        updateIndividualAccountStatus(account, 'inactive', `${resolveProductAdModeratorLabel()} marked the account as inactive.`);
+        showNotification('warning', 'Account marked as inactive.');
+    } else if (action === 'add-to') {
+        openIndividualAccountPublishingListOverlay(account);
+    }
+}
+
+function renderIndividualAccountMarketplaceOverlay(account) {
+    const overlay = document.getElementById('individualAccountMarketplaceOverlay');
+    const titleEl = document.getElementById('individualAccountMarketplaceTitle');
+    const subtitleEl = document.getElementById('individualAccountMarketplaceSubtitle');
+    const contentEl = document.getElementById('individualAccountMarketplaceContent');
+    if (!titleEl || !contentEl) return;
+
+    if (!account) {
+        titleEl.textContent = 'Marketplace Activity';
+        if (subtitleEl) {
+            subtitleEl.textContent = 'Select an account to surface marketplace orders, listings, and saved items.';
+        }
+        contentEl.innerHTML = '<p class="empty-state">Select an account from the directory to review marketplace activity.</p>';
+        return;
+    }
+
+    const displayName = resolveIndividualAccountDisplayName(account);
+    const activity = account.marketplaceActivity && typeof account.marketplaceActivity === 'object' ? account.marketplaceActivity : {};
+    const purchases = Array.isArray(activity.purchases) ? activity.purchases.slice() : [];
+    const sales = Array.isArray(activity.sales) ? activity.sales.slice() : [];
+    const productAds = Array.isArray(activity.productAds) ? activity.productAds.slice() : [];
+    const savedAddresses = Array.isArray(activity.savedAddresses)
+        ? activity.savedAddresses.slice()
+        : Array.isArray(account.savedAddresses) ? account.savedAddresses.slice() : [];
+
+    const followUpsSource = account.followUps && typeof account.followUps === 'object'
+        ? account.followUps
+        : (activity.followUps && typeof activity.followUps === 'object' ? activity.followUps : {});
+    const favoriteCategories = Array.isArray(account.favoriteCategories)
+        ? account.favoriteCategories.slice()
+        : Array.isArray(followUpsSource.favoriteCategories) ? followUpsSource.favoriteCategories.slice() : [];
+    const favoriteSellers = Array.isArray(account.favoriteSellers)
+        ? account.favoriteSellers.slice()
+        : Array.isArray(followUpsSource.favoriteSellers) ? followUpsSource.favoriteSellers.slice() : [];
+    const favoriteSearches = Array.isArray(account.favoriteSearches)
+        ? account.favoriteSearches.slice()
+        : Array.isArray(followUpsSource.favoriteSearches) ? followUpsSource.favoriteSearches.slice() : [];
+
+    const sellerRatingsSource = Array.isArray(account.sellerRatings)
+        ? account.sellerRatings
+        : Array.isArray(activity.sellerRatings) ? activity.sellerRatings : [];
+    const buyerRatingsSource = Array.isArray(account.buyerRatings)
+        ? account.buyerRatings
+        : Array.isArray(activity.buyerRatings) ? activity.buyerRatings : [];
+
+    const parseNumericAmount = value => {
+        if (typeof value === 'number') {
+            return Number.isFinite(value) ? value : null;
+        }
+        if (typeof value === 'string') {
+            const trimmed = value.trim();
+            if (!trimmed) {
+                return null;
+            }
+            const numeric = Number(trimmed.replace(/[^0-9.+-]/g, ''));
+            return Number.isFinite(numeric) ? numeric : null;
+        }
+        return null;
+    };
+
+    const extractAmount = entry => {
+        if (!entry || typeof entry !== 'object') {
+            return null;
+        }
+        const candidates = [
+            entry.amount,
+            entry.total,
+            entry.totalAmount,
+            entry.totalPrice,
+            entry.price,
+            entry.orderTotal,
+            entry.transactionAmount,
+            entry.value,
+            entry.gross,
+            entry.net
+        ];
+        for (const candidate of candidates) {
+            const parsed = parseNumericAmount(candidate);
+            if (parsed !== null) {
+                return parsed;
+            }
+        }
+        return null;
+    };
+
+    const sumAmounts = entries => entries.reduce((total, entry) => {
+        const amount = extractAmount(entry);
+        return total + (amount !== null ? amount : 0);
+    }, 0);
+
+    const getTimestampMeta = entry => {
+        if (!entry || typeof entry !== 'object') {
+            return null;
+        }
+        const candidates = [
+            entry.timestamp,
+            entry.updatedAt,
+            entry.completedAt,
+            entry.orderedAt,
+            entry.submittedAt,
+            entry.createdAt,
+            entry.date,
+            entry.recordedAt,
+            entry.publishedAt,
+            entry.reviewedAt
+        ];
+        for (const candidate of candidates) {
+            if (candidate === null || candidate === undefined || candidate === '') {
+                continue;
+            }
+            if (typeof candidate === 'number' && Number.isFinite(candidate)) {
+                const iso = new Date(candidate).toISOString();
+                const label = formatDateForDisplay(iso, { includeTime: true }) || new Date(candidate).toLocaleString('en-US');
+                return { label, sortValue: candidate };
+            }
+            if (typeof candidate === 'string') {
+                const trimmed = candidate.trim();
+                if (!trimmed) continue;
+                const parsed = Date.parse(trimmed);
+                if (Number.isNaN(parsed)) continue;
+                const label = formatDateForDisplay(trimmed, { includeTime: true }) || new Date(parsed).toLocaleString('en-US');
+                return { label, sortValue: parsed };
+            }
+        }
+        return null;
+    };
+
+    const sortByTimestampDesc = entries => entries
+        .slice()
+        .sort((a, b) => {
+            const metaB = getTimestampMeta(b);
+            const metaA = getTimestampMeta(a);
+            const valueB = metaB ? metaB.sortValue : 0;
+            const valueA = metaA ? metaA.sortValue : 0;
+            return valueB - valueA;
+        });
+
+    const renderMarketplaceEntry = entry => {
+        if (!entry || typeof entry !== 'object') {
+            return '<li><div><strong>Marketplace item</strong></div></li>';
+        }
+        const titleCandidates = [
+            entry.title,
+            entry.productTitle,
+            entry.productName,
+            entry.listingTitle,
+            entry.name,
+            entry.label,
+            entry.reference,
+            entry.orderId,
+            entry.id
+        ];
+        let title = '';
+        for (const candidate of titleCandidates) {
+            if (typeof candidate === 'string' && candidate.trim()) {
+                title = candidate.trim();
+                break;
+            }
+        }
+        if (!title) {
+            title = 'Marketplace item';
+        }
+        const detailLines = [];
+        const amount = extractAmount(entry);
+        if (amount !== null) {
+            detailLines.push(`<div class="helper-text">Amount: ${escapeHtml(formatCurrency(amount))}</div>`);
+        }
+        const quantityCandidate = parseNumericAmount(entry.quantity ?? entry.qty ?? entry.units ?? entry.count);
+        if (quantityCandidate !== null && quantityCandidate !== 0) {
+            detailLines.push(`<div class="helper-text">Quantity: ${escapeHtml(String(quantityCandidate))}</div>`);
+        }
+        const statusCandidate = entry.status || entry.state;
+        if (statusCandidate) {
+            detailLines.push(`<div class="helper-text">Status: ${escapeHtml(String(statusCandidate))}</div>`);
+        }
+        const counterpartCandidate = entry.counterparty || entry.seller || entry.buyer || entry.customer || entry.vendor;
+        if (counterpartCandidate) {
+            detailLines.push(`<div class="helper-text">Counterparty: ${escapeHtml(String(counterpartCandidate))}</div>`);
+        }
+        const channelCandidate = entry.channel || entry.paymentMethod || entry.method || entry.deliveryMethod;
+        if (channelCandidate) {
+            detailLines.push(`<div class="helper-text">Channel: ${escapeHtml(String(channelCandidate))}</div>`);
+        }
+        const categoryCandidate = entry.category || entry.categoryName || entry.section;
+        if (categoryCandidate) {
+            detailLines.push(`<div class="helper-text">Category: ${escapeHtml(String(categoryCandidate))}</div>`);
+        }
+        const locationCandidate = entry.city || entry.region || entry.location;
+        if (locationCandidate) {
+            detailLines.push(`<div class="helper-text">Location: ${escapeHtml(String(locationCandidate))}</div>`);
+        }
+        const timestampMeta = getTimestampMeta(entry);
+        if (timestampMeta && timestampMeta.label) {
+            detailLines.push(`<div class="helper-text">Updated ${escapeHtml(timestampMeta.label)}</div>`);
+        }
+        const noteCandidate = entry.note || entry.notes || entry.description || entry.summary;
+        if (noteCandidate) {
+            detailLines.push(`<div class="helper-text">${escapeHtml(String(noteCandidate))}</div>`);
+        }
+        return `<li><div><strong>${escapeHtml(title)}</strong></div>${detailLines.join('')}</li>`;
+    };
+
+    const joinCommaParts = parts => parts
+        .map(value => {
+            if (value === null || value === undefined) return '';
+            if (typeof value === 'number') {
+                return Number.isFinite(value) ? String(value) : '';
+            }
+            const trimmed = String(value).trim();
+            return trimmed;
+        })
+        .filter(Boolean)
+        .join(', ');
+
+    const joinSpaceParts = parts => parts
+        .map(value => {
+            if (value === null || value === undefined) return '';
+            const trimmed = String(value).trim();
+            return trimmed;
+        })
+        .filter(Boolean)
+        .join(' ');
+
+    const renderSavedAddressItem = entry => {
+        if (!entry || typeof entry !== 'object') {
+            return '<li><div><strong>Saved address</strong></div></li>';
+        }
+        const title = entry.label || entry.nickname || entry.name || entry.id || 'Saved address';
+        const primaryParts = joinCommaParts([entry.country, entry.region, entry.city]);
+        const streetLine = joinSpaceParts([entry.streetNumber, entry.streetName]);
+        const secondaryParts = joinCommaParts([entry.district, streetLine, entry.zipCode || entry.postalCode]);
+        const detailLines = [];
+        if (primaryParts) {
+            detailLines.push(`<div class="helper-text">${escapeHtml(primaryParts)}</div>`);
+        }
+        if (secondaryParts) {
+            detailLines.push(`<div class="helper-text">${escapeHtml(secondaryParts)}</div>`);
+        }
+        if (entry.notes) {
+            detailLines.push(`<div class="helper-text">${escapeHtml(String(entry.notes))}</div>`);
+        }
+        const timestamp = entry.updatedAt || entry.createdAt;
+        if (timestamp) {
+            const label = formatDateForDisplay(timestamp, { includeTime: true }) || timestamp;
+            detailLines.push(`<div class="helper-text">Updated ${escapeHtml(String(label))}</div>`);
+        }
+        return `<li><div><strong>${escapeHtml(String(title))}</strong></div>${detailLines.join('')}</li>`;
+    };
+
+    const normalizeFavoriteLabel = entry => {
+        if (entry === null || entry === undefined) {
+            return '';
+        }
+        if (typeof entry === 'string' || typeof entry === 'number') {
+            const value = String(entry).trim();
+            return value;
+        }
+        if (typeof entry === 'object') {
+            const candidates = [
+                entry.label,
+                entry.name,
+                entry.title,
+                entry.category,
+                entry.categoryName,
+                entry.section,
+                entry.seller,
+                entry.sellerName,
+                entry.storeName,
+                entry.search,
+                entry.query,
+                entry.value,
+                entry.id
+            ];
+            for (const candidate of candidates) {
+                if (typeof candidate === 'string' && candidate.trim()) {
+                    return candidate.trim();
+                }
+            }
+        }
+        try {
+            const serialized = JSON.stringify(entry);
+            return typeof serialized === 'string' ? serialized : '';
+        } catch (error) {
+            return '';
+        }
+    };
+
+    const renderFavoriteDetails = entry => {
+        if (!entry || typeof entry !== 'object') {
+            return '';
+        }
+        const details = [];
+        if (entry.notes) {
+            details.push(`<div class="helper-text">${escapeHtml(String(entry.notes))}</div>`);
+        }
+        const lastVisited = entry.lastVisitedAt || entry.updatedAt || entry.savedAt || entry.createdAt;
+        if (lastVisited) {
+            const stamp = formatDateForDisplay(lastVisited, { includeTime: true }) || lastVisited;
+            details.push(`<div class="helper-text">Last visited ${escapeHtml(String(stamp))}</div>`);
+        }
+        const meta = entry.metadata || entry.meta;
+        if (meta && typeof meta === 'object') {
+            const metaEntries = Object.entries(meta)
+                .filter(([, value]) => value !== null && value !== undefined && value !== '')
+                .slice(0, 3)
+                .map(([key, value]) => `${key.replace(/[_-]+/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2')}: ${String(value)}`);
+            if (metaEntries.length) {
+                details.push(`<div class="helper-text">${escapeHtml(metaEntries.join(' | '))}</div>`);
+            }
+        }
+        return details.join('');
+    };
+
+    const renderFavoriteCollection = (entries, emptyMessage) => {
+        const source = Array.isArray(entries) ? entries.filter(entry => entry !== null && entry !== undefined) : [];
+        const items = source
+            .map(entry => {
+                const label = normalizeFavoriteLabel(entry);
+                if (!label) {
+                    return null;
+                }
+                const detailsMarkup = renderFavoriteDetails(entry);
+                return `<li><div><strong>${escapeHtml(label)}</strong></div>${detailsMarkup}</li>`;
+            })
+            .filter(Boolean);
+        if (!items.length) {
+            return `<p class="helper-text">${escapeHtml(emptyMessage)}</p>`;
+        }
+        return `<ul class="detail-list">${items.join('')}</ul>`;
+    };
+
+    const computeRatingSummary = entries => {
+        const collection = Array.isArray(entries) ? entries : [];
+        let sum = 0;
+        let weight = 0;
+        collection.forEach(entry => {
+            if (entry === null || entry === undefined) {
+                return;
+            }
+            if (typeof entry === 'number' || typeof entry === 'string') {
+                const parsed = parseNumericAmount(entry);
+                if (parsed !== null) {
+                    sum += parsed;
+                    weight += 1;
+                }
+                return;
+            }
+            if (typeof entry !== 'object') {
+                return;
+            }
+            const ratingCandidates = [
+                entry.rating,
+                entry.score,
+                entry.value,
+                entry.average,
+                entry.stars,
+                entry.result
+            ];
+            let rating = null;
+            for (const candidate of ratingCandidates) {
+                const parsed = parseNumericAmount(candidate);
+                if (parsed !== null) {
+                    rating = parsed;
+                    break;
+                }
+            }
+            if (rating === null) {
+                return;
+            }
+            const weightCandidates = [
+                entry.count,
+                entry.votes,
+                entry.reviews,
+                entry.weight,
+                entry.total,
+                entry.numberOfRatings,
+                entry.quantity
+            ];
+            let ratingWeight = null;
+            for (const candidate of weightCandidates) {
+                const parsedWeight = parseNumericAmount(candidate);
+                if (parsedWeight !== null && parsedWeight > 0) {
+                    ratingWeight = parsedWeight;
+                    break;
+                }
+            }
+            const normalizedWeight = ratingWeight !== null ? ratingWeight : 1;
+            sum += rating * normalizedWeight;
+            weight += normalizedWeight;
+        });
+        if (!weight) {
+            return { average: null, count: 0 };
+        }
+        return { average: sum / weight, count: weight };
+    };
+
+    const enrichRatingSummary = (summary, fallbackCandidates) => {
+        if (summary.average !== null) {
+            return summary;
+        }
+        for (const candidate of fallbackCandidates) {
+            const parsed = parseNumericAmount(candidate);
+            if (parsed !== null) {
+                return { average: parsed, count: summary.count };
+            }
+        }
+        return summary;
+    };
+
+    const formatRatingScore = summary => {
+        if (!summary || summary.average === null || !Number.isFinite(summary.average)) {
+            return '—';
+        }
+        const rounded = Math.round(summary.average * 10) / 10;
+        return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
+    };
+
+    const formatRatingSummary = summary => {
+        if (!summary || summary.average === null || !Number.isFinite(summary.average)) {
+            return 'Not rated';
+        }
+        const average = Math.round(summary.average * 10) / 10;
+        const averageLabel = Number.isInteger(average) ? String(average) : average.toFixed(1);
+        if (summary.count && summary.count > 0) {
+            return `${averageLabel} (${summary.count} rating${summary.count === 1 ? '' : 's'})`;
+        }
+        return averageLabel;
+    };
+
+    const resolveRatingFaceDescriptor = score => {
+        if (!Number.isFinite(score)) {
+            return { emoji: '&#128528;', descriptor: 'No ratings yet' };
+        }
+        if (score >= 4.5) {
+            return { emoji: '&#128513;', descriptor: 'Excellent' };
+        }
+        if (score >= 4) {
+            return { emoji: '&#128522;', descriptor: 'Great' };
+        }
+        if (score >= 3) {
+            return { emoji: '&#128528;', descriptor: 'Okay' };
+        }
+        if (score >= 2) {
+            return { emoji: '&#128533;', descriptor: 'Poor' };
+        }
+        return { emoji: '&#128545;', descriptor: 'Very poor' };
+    };
+
+    const buildRatingFaceMarkup = (score, labelPrefix) => {
+        const { emoji, descriptor } = resolveRatingFaceDescriptor(score);
+        const ariaLabel = labelPrefix
+            ? `${labelPrefix} ${descriptor.toLowerCase()}`.trim()
+            : descriptor;
+        return `<span class="rating-face" role="img" aria-label="${escapeAttribute(ariaLabel || descriptor)}">${emoji}</span>`;
+    };
+
+    const sellerSummary = enrichRatingSummary(
+        computeRatingSummary(sellerRatingsSource),
+        [account.sellerRating, account.sellerScore, account.averageSellerRating, activity.sellerRating, activity.sellerScore, activity.averageSellerRating]
+    );
+    const buyerSummary = enrichRatingSummary(
+        computeRatingSummary(buyerRatingsSource),
+        [account.buyerRating, account.buyerScore, account.averageBuyerRating, activity.buyerRating, activity.buyerScore, activity.averageBuyerRating]
+    );
+
+    const purchaseVolume = sumAmounts(purchases);
+    const salesVolume = sumAmounts(sales);
+    const combinedActivity = sortByTimestampDesc([...purchases, ...sales, ...productAds]);
+    const latestActivityMeta = combinedActivity.length ? getTimestampMeta(combinedActivity[0]) : null;
+
+    const renderSummaryMetric = (label, value) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`;
+
+    titleEl.textContent = 'Marketplace Activity';
+    if (subtitleEl) {
+        subtitleEl.textContent = `Recent marketplace movements for ${displayName}.`;
+    }
+
+    const summaryMetrics = [
+        renderSummaryMetric('Completed Purchases', purchases.length ? purchases.length.toLocaleString('en-US') : '0'),
+        renderSummaryMetric('Purchase Volume', purchaseVolume ? formatCurrency(purchaseVolume) : (purchaseVolume === 0 ? formatCurrency(0) : '—')),
+        renderSummaryMetric('Sales Orders', sales.length ? sales.length.toLocaleString('en-US') : '0'),
+        renderSummaryMetric('Sales Volume', salesVolume ? formatCurrency(salesVolume) : (salesVolume === 0 ? formatCurrency(0) : '—')),
+        renderSummaryMetric('Product Ads', productAds.length ? productAds.length.toLocaleString('en-US') : '0'),
+        renderSummaryMetric('Latest Activity', latestActivityMeta && latestActivityMeta.label ? latestActivityMeta.label : '—')
+    ];
+
+    const savedAddressesMarkup = savedAddresses.length
+        ? `<ul class="detail-list">${savedAddresses.map(renderSavedAddressItem).join('')}</ul>`
+        : '<p class="helper-text">No saved addresses found.</p>';
+
+    const purchasesMarkup = purchases.length
+        ? `<ul class="detail-list">${sortByTimestampDesc(purchases).slice(0, 10).map(renderMarketplaceEntry).join('')}</ul>`
+        : '<p class="helper-text">No purchases recorded.</p>';
+
+    const salesMarkup = sales.length
+        ? `<ul class="detail-list">${sortByTimestampDesc(sales).slice(0, 10).map(renderMarketplaceEntry).join('')}</ul>`
+        : '<p class="helper-text">No sales activity recorded.</p>';
+
+    const productAdsMarkup = productAds.length
+        ? `<ul class="detail-list">${sortByTimestampDesc(productAds).slice(0, 10).map(renderMarketplaceEntry).join('')}</ul>`
+        : '<p class="helper-text">No product ad activity recorded.</p>';
+
+    const favoriteCategoriesMarkup = renderFavoriteCollection(favoriteCategories, 'No favorite categories saved.');
+    const favoriteSellersMarkup = renderFavoriteCollection(favoriteSellers, 'No favorite sellers saved.');
+    const favoriteSearchesMarkup = renderFavoriteCollection(favoriteSearches, 'No favorite searches saved.');
+
+    const sellerRatingFaceMarkup = buildRatingFaceMarkup(Number.isFinite(sellerSummary.average) ? sellerSummary.average : null, 'Seller rating');
+    const buyerRatingFaceMarkup = buildRatingFaceMarkup(Number.isFinite(buyerSummary.average) ? buyerSummary.average : null, 'Buyer rating');
+    const sellerRatingCountMarkup = sellerSummary.count && sellerSummary.count > 0
+        ? `<div class="helper-text">${escapeHtml(`${sellerSummary.count} rating${sellerSummary.count === 1 ? '' : 's'}`)}</div>`
+        : (!Number.isFinite(sellerSummary.average)
+            ? '<div class="helper-text">No ratings yet</div>'
+            : '');
+    const buyerRatingCountMarkup = buyerSummary.count && buyerSummary.count > 0
+        ? `<div class="helper-text">${escapeHtml(`${buyerSummary.count} rating${buyerSummary.count === 1 ? '' : 's'}`)}</div>`
+        : (!Number.isFinite(buyerSummary.average)
+            ? '<div class="helper-text">No ratings yet</div>'
+            : '');
+
+    contentEl.innerHTML = `
+        <section class="detail-section">
+            <h4>Marketplace Overview</h4>
+            <div class="detail-grid">
+                ${summaryMetrics.join('')}
+            </div>
+        </section>
+        <section class="detail-section">
+            <h4>Recent Purchases</h4>
+            ${purchasesMarkup}
+        </section>
+        <section class="detail-section">
+            <h4>Recent Sales</h4>
+            ${salesMarkup}
+        </section>
+        <section class="detail-section">
+            <h4>Product Ads</h4>
+            ${productAdsMarkup}
+        </section>
+        <section class="detail-section">
+            <h4>Saved Addresses</h4>
+            ${savedAddressesMarkup}
+        </section>
+        <section class="detail-section">
+            <h4>Favorites</h4>
+            <div class="detail-subsection">
+                <h5>Favorite Categories</h5>
+                ${favoriteCategoriesMarkup}
+            </div>
+            <div class="detail-subsection">
+                <h5>Favorite Sellers</h5>
+                ${favoriteSellersMarkup}
+            </div>
+            <div class="detail-subsection">
+                <h5>Favorite Searches</h5>
+                ${favoriteSearchesMarkup}
+            </div>
+        </section>
+        <section class="detail-section">
+            <h4>Marketplace Ratings</h4>
+            <div class="detail-grid">
+                <div>
+                    <dt>Seller</dt>
+                    <dd>
+                        <div class="rating-display" title="${escapeAttribute(formatRatingSummary(sellerSummary))}">
+                            <span class="rating-score">${escapeHtml(formatRatingScore(sellerSummary))}</span>
+                            ${sellerRatingFaceMarkup}
+                        </div>
+                        ${sellerRatingCountMarkup}
+                    </dd>
+                </div>
+                <div>
+                    <dt>Buyer</dt>
+                    <dd>
+                        <div class="rating-display" title="${escapeAttribute(formatRatingSummary(buyerSummary))}">
+                            <span class="rating-score">${escapeHtml(formatRatingScore(buyerSummary))}</span>
+                            ${buyerRatingFaceMarkup}
+                        </div>
+                        ${buyerRatingCountMarkup}
+                    </dd>
+                </div>
+            </div>
+        </section>
+    `;
+
+    if (overlay) {
+        overlay.setAttribute('aria-hidden', overlay.classList.contains('hidden') ? 'true' : 'false');
+    }
+}
+
+function openIndividualAccountMarketplaceOverlay(accountId) {
+    const overlay = document.getElementById('individualAccountMarketplaceOverlay');
+    if (!overlay) return;
+    const account = (individualAccounts || []).find(entry => entry && entry.id === accountId);
+    if (!account) {
+        showNotification('warning', 'Unable to locate marketplace details for the selected account.');
+        state.individualMarketplaceOverlayAccountId = null;
+        renderIndividualAccountMarketplaceOverlay(null);
+        return;
+    }
+
+    state.individualMarketplaceOverlayAccountId = account.id;
+    state.individualMarketplaceOverlayReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+
+    renderIndividualAccountMarketplaceOverlay(account);
+
+    overlay.classList.remove('hidden');
+    overlay.setAttribute('aria-hidden', 'false');
+
+    const modal = overlay.querySelector('.role-detail-modal');
+    if (modal) {
+        if (!modal.hasAttribute('tabindex')) {
+            modal.setAttribute('tabindex', '-1');
+        }
+        const focusTarget = modal;
+        const focusFn = () => {
+            try {
+                focusTarget.focus({ preventScroll: true });
+            } catch (error) {
+                focusTarget.focus();
+            }
+        };
+        if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+            window.requestAnimationFrame(focusFn);
+        } else {
+            setTimeout(focusFn, 0);
         }
     }
+}
+
+function closeIndividualAccountMarketplaceOverlay() {
+    const overlay = document.getElementById('individualAccountMarketplaceOverlay');
+    if (overlay) {
+        overlay.classList.add('hidden');
+        overlay.setAttribute('aria-hidden', 'true');
+    }
+
+    state.individualMarketplaceOverlayAccountId = null;
+
+    const returnFocus = state.individualMarketplaceOverlayReturnFocus;
+    state.individualMarketplaceOverlayReturnFocus = null;
+    if (returnFocus instanceof HTMLElement && document.contains(returnFocus)) {
+        const restoreFn = () => {
+            try {
+                returnFocus.focus({ preventScroll: true });
+            } catch (error) {
+                returnFocus.focus();
+            }
+        };
+        if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+            window.requestAnimationFrame(restoreFn);
+        } else {
+            setTimeout(restoreFn, 0);
+        }
+    }
+}
+
+function openIndividualAccountPublishingListOverlay(account) {
+    if (!account || typeof account !== 'object') {
+        showNotification('warning', 'Unable to locate the selected account.');
+        return;
+    }
+
+    const identifier = resolveIndividualAccountAutomationIdentifier(account);
+    if (!identifier) {
+        showNotification('warning', 'This account is missing an identifier for publishing lists.');
+        return;
+    }
+
+    if (!productAdAutomation || typeof productAdAutomation !== 'object') {
+        productAdAutomation = { trusted: [], manualReview: [], blacklist: [] };
+    }
+
+    const overlay = document.getElementById('individualPublishingOverlay');
+    const nameEl = document.getElementById('individualPublishingAccountLabel');
+    const identifierEl = document.getElementById('individualPublishingAccountIdentifier');
+    const statusEl = document.getElementById('individualPublishingStatus');
+    const listSelect = document.getElementById('individualPublishingListSelect');
+    const notesInput = document.getElementById('individualPublishingNotesInput');
+    
+    if (!overlay) {
+        showNotification('warning', 'Publishing overlay unavailable.');
+        return;
+    }
+    
+    if (overlay.dataset.bound !== 'true') {
+        setupIndividualPublishingOverlay();
+    }
+    
+    if (!nameEl || !identifierEl || !listSelect || !notesInput || !statusEl) {
+        showNotification('warning', 'Publishing overlay unavailable.');
+        return;
+    }
+
+    const existingEntryDetails = findAutomationListEntryForAccount(identifier);
+    const displayName = resolveIndividualAccountDisplayName(account);
+    const defaultNotes = existingEntryDetails && existingEntryDetails.entry ? existingEntryDetails.entry.notes || '' : (typeof account.notes === 'string' ? account.notes.trim() : '');
+    nameEl.textContent = displayName;
+    identifierEl.textContent = identifier;
+
+    if (existingEntryDetails && existingEntryDetails.listType && PUBLISHING_LIST_LABELS[existingEntryDetails.listType]) {
+        statusEl.textContent = `Currently in the ${PUBLISHING_LIST_LABELS[existingEntryDetails.listType]} list.`;
+        statusEl.classList.remove('hidden');
+    } else {
+        statusEl.textContent = '';
+        statusEl.classList.add('hidden');
+    }
+
+    listSelect.value = existingEntryDetails && existingEntryDetails.listType ? existingEntryDetails.listType : 'trusted';
+    notesInput.value = defaultNotes;
+    setIndividualPublishingFormError('');
+
+    state.individualPublishingOverlayContext = {
+        accountId: account.id,
+        identifier
+    };
+    state.individualPublishingOverlayReturnFocus = document.activeElement && document.activeElement.focus ? document.activeElement : null;
+
+    overlay.classList.remove('hidden');
+    setTimeout(() => {
+        listSelect.focus();
+    }, 0);
+}
+
+function setIndividualPublishingFormError(message) {
+    const errorEl = document.getElementById('individualPublishingFormError');
+    const listSelect = document.getElementById('individualPublishingListSelect');
+    if (!errorEl) return;
+    const text = typeof message === 'string' ? message.trim() : '';
+    errorEl.textContent = text;
+    if (text) {
+        errorEl.classList.remove('hidden');
+        if (listSelect) {
+            listSelect.setAttribute('aria-invalid', 'true');
+        }
+    } else {
+        errorEl.classList.add('hidden');
+        if (listSelect) {
+            listSelect.removeAttribute('aria-invalid');
+        }
+    }
+}
+
+function closeIndividualAccountPublishingListOverlay() {
+    const overlay = document.getElementById('individualPublishingOverlay');
+    if (!overlay) return;
+    const form = document.getElementById('individualPublishingForm');
+    const statusEl = document.getElementById('individualPublishingStatus');
+    const identifierEl = document.getElementById('individualPublishingAccountIdentifier');
+    const nameEl = document.getElementById('individualPublishingAccountLabel');
+    if (form) {
+        form.reset();
+    }
+    const notesInput = document.getElementById('individualPublishingNotesInput');
+    if (notesInput) {
+        notesInput.value = '';
+    }
+    if (statusEl) {
+        statusEl.textContent = '';
+        statusEl.classList.add('hidden');
+    }
+    if (identifierEl) {
+        identifierEl.textContent = '';
+    }
+    if (nameEl) {
+        nameEl.textContent = 'Individual Account';
+    }
+    setIndividualPublishingFormError('');
+    overlay.classList.add('hidden');
+
+    const returnFocus = state.individualPublishingOverlayReturnFocus;
+    state.individualPublishingOverlayContext = null;
+    state.individualPublishingOverlayReturnFocus = null;
+
+    if (returnFocus && typeof returnFocus.focus === 'function') {
+        returnFocus.focus();
+    }
+}
+
+async function handleIndividualPublishingFormSubmit(event) {
+    event.preventDefault();
+
+    const listSelect = document.getElementById('individualPublishingListSelect');
+    const notesInput = document.getElementById('individualPublishingNotesInput');
+    if (!listSelect || !notesInput) {
+        closeIndividualAccountPublishingListOverlay();
+        return;
+    }
+
+    setIndividualPublishingFormError('');
+
+    const listType = listSelect.value;
+    if (!listType) {
+        setIndividualPublishingFormError('Select a publishing list.');
+        listSelect.focus();
+        return;
+    }
+
+    const context = state.individualPublishingOverlayContext;
+    if (!context || !context.accountId) {
+        showNotification('warning', 'No individual account selected.');
+        closeIndividualAccountPublishingListOverlay();
+        return;
+    }
+
+    const account = (individualAccounts || []).find(entry => entry && entry.id === context.accountId);
+    if (!account) {
+        showNotification('warning', 'Unable to locate the selected account.');
+        closeIndividualAccountPublishingListOverlay();
+        return;
+    }
+
+    const identifier = resolveIndividualAccountAutomationIdentifier(account);
+    if (!identifier) {
+        showNotification('warning', 'This account is missing an identifier for publishing lists.');
+        closeIndividualAccountPublishingListOverlay();
+        return;
+    }
+
+    if (!productAdAutomation || typeof productAdAutomation !== 'object') {
+        productAdAutomation = { trusted: [], manualReview: [], blacklist: [] };
+    }
+
+    const existingEntryDetails = findAutomationListEntryForAccount(identifier);
+    let movedFromList = null;
+
+    if (existingEntryDetails && existingEntryDetails.listType !== listType) {
+        const existingLabel = PUBLISHING_LIST_LABELS[existingEntryDetails.listType] || 'current';
+        const targetLabel = PUBLISHING_LIST_LABELS[listType] || 'selected';
+        const confirmed = await showUserConfirm(`Move this account from ${existingLabel} to ${targetLabel}?`, 'Move', 'Cancel');
+        if (!confirmed) {
+            return;
+        }
+        const originList = Array.isArray(productAdAutomation[existingEntryDetails.listType]) ? productAdAutomation[existingEntryDetails.listType] : null;
+        if (originList) {
+            const index = originList.findIndex(entry => entry && entry.account === identifier);
+            if (index !== -1) {
+                originList.splice(index, 1);
+            }
+        }
+        movedFromList = existingEntryDetails.listType;
+        saveProductAdAutomationToStorage();
+    }
+
+    const refreshedEntryDetails = findAutomationListEntryForAccount(identifier);
+    const notes = notesInput.value.trim();
+
+    if (refreshedEntryDetails && refreshedEntryDetails.listType === listType) {
+        refreshedEntryDetails.entry.notes = notes;
+        refreshedEntryDetails.entry.label = resolveIndividualAccountDisplayName(account);
+        saveProductAdAutomationToStorage();
+        renderProductAdAutomationLists();
+        const updatedLabel = PUBLISHING_LIST_LABELS[listType] || 'publishing list';
+        showNotification('success', `Publishing notes updated for ${updatedLabel}.`);
+    } else {
+        const targetList = Array.isArray(productAdAutomation[listType]) ? productAdAutomation[listType] : null;
+        if (!targetList) {
+            showNotification('warning', 'Unable to update publishing list.');
+            return;
+        }
+
+        const targetLabel = PUBLISHING_LIST_LABELS[listType] || 'publishing list';
+
+        if (targetList.some(entry => entry && entry.account === identifier)) {
+            showNotification('warning', `Account already exists in the ${targetLabel} list.`);
+            return;
+        }
+
+        const successMessage = movedFromList
+            ? `Account moved to the ${targetLabel} list.`
+            : `Account added to the ${targetLabel} list.`;
+
+        addProductAdAutomationEntry(listType, {
+            account: identifier,
+            label: resolveIndividualAccountDisplayName(account),
+            notes
+        }, { successMessage });
+    }
+
+    renderIndividualAccountsToolbar(account);
+    closeIndividualAccountPublishingListOverlay();
+}
+
+function setupIndividualPublishingOverlay() {
+    const overlay = document.getElementById('individualPublishingOverlay');
+    const form = document.getElementById('individualPublishingForm');
+    const cancelBtn = document.getElementById('individualPublishingCancelBtn');
+    const closeBtn = document.getElementById('individualPublishingCloseBtn');
+    if (!overlay || overlay.dataset.bound === 'true') {
+        return;
+    }
+
+    overlay.addEventListener('click', event => {
+        if (event.target === overlay) {
+            closeIndividualAccountPublishingListOverlay();
+        }
+    });
+
+    if (cancelBtn) {
+        cancelBtn.addEventListener('click', () => {
+            closeIndividualAccountPublishingListOverlay();
+        });
+    }
+
+    if (closeBtn) {
+        closeBtn.addEventListener('click', () => {
+            closeIndividualAccountPublishingListOverlay();
+        });
+    }
+
+    if (form) {
+        form.addEventListener('submit', event => {
+            handleIndividualPublishingFormSubmit(event);
+        });
+    }
+
+    document.addEventListener('keydown', event => {
+        if (event.key === 'Escape') {
+            const isVisible = overlay && !overlay.classList.contains('hidden');
+            if (!isVisible) {
+                return;
+            }
+            const confirmOverlay = document.getElementById('userConfirmOverlay');
+            const promptOverlay = document.getElementById('userPromptOverlay');
+            const alertOverlay = document.getElementById('userAlertOverlay');
+            if (confirmOverlay && !confirmOverlay.classList.contains('hidden')) {
+                return;
+            }
+            if (promptOverlay && !promptOverlay.classList.contains('hidden')) {
+                return;
+            }
+            if (alertOverlay && !alertOverlay.classList.contains('hidden')) {
+                return;
+            }
+            closeIndividualAccountPublishingListOverlay();
+        }
+    });
+
+    overlay.dataset.bound = 'true';
 }
 
 function handleIndividualAccountsTableClick(event) {
@@ -22753,6 +25309,30 @@ function handleIndividualAccountsTableClick(event) {
         const action = button.dataset.action;
         const accountId = button.dataset.accountId;
         if (!accountId) return;
+
+        if (action === 'view-businesses') {
+            event.preventDefault();
+            event.stopPropagation();
+
+            let account = (individualAccounts || []).find(entry => entry && entry.id === accountId) || null;
+            if (!account) {
+                showNotification('warning', 'Unable to locate linked business accounts.');
+                return;
+            }
+
+            if (state.activeIndividualAccountId !== account.id) {
+                const selectedAccount = selectIndividualAccount(account.id);
+                if (!selectedAccount) {
+                    showNotification('warning', 'Unable to locate linked business accounts.');
+                    return;
+                }
+                account = selectedAccount;
+            }
+
+            openIndividualAccountBusinessOverlay(account.id);
+            return;
+        }
+
         const account = selectIndividualAccount(accountId);
         if (!account) {
             showNotification('warning', 'Unable to locate the selected account.');
@@ -22760,21 +25340,14 @@ function handleIndividualAccountsTableClick(event) {
         }
         if (action === 'view') {
             renderIndividualAccountDetail(account, { forceOpen: true });
-        } else if (action === 'edit') {
-            openIndividualAccountEditOverlay(account.id);
-        } else if (action === 'view-businesses') {
-            renderIndividualAccountDetail(account, { forceOpen: true });
-            openIndividualAccountBusinessOverlay(account.id);
+        } else if (action === 'view-log') {
+            openIndividualAccountLogOverlay(account.id);
         } else if (action === 'activate') {
             updateIndividualAccountStatus(account, 'active', `${resolveProductAdModeratorLabel()} reactivated the account.`);
             showNotification('success', 'Account activated.');
-        } else if (action === 'freeze') {
-            updateIndividualAccountStatus(account, 'frozen', `${resolveProductAdModeratorLabel()} froze the account.`);
-            showNotification('warning', 'Account frozen pending review.');
-        } else if (action === 'delete') {
-            if (window.confirm('Delete this individual account?')) {
-                removeIndividualAccount(account.id);
-            }
+        } else if (action === 'deactivate' || action === 'freeze') {
+            updateIndividualAccountStatus(account, 'inactive', `${resolveProductAdModeratorLabel()} marked the account as inactive.`);
+            showNotification('warning', 'Account marked as inactive.');
         }
         return;
     }
@@ -22933,6 +25506,38 @@ function renderIndividualAccountBusinessOverlay(account) {
     const subtitle = document.getElementById('individualAccountBusinessSubtitle');
     if (!content) return;
 
+    const formatDocumentTypeLabel = value => {
+        if (!value) {
+            return '—';
+        }
+        const normalized = value.trim().toLowerCase();
+        if (!normalized) {
+            return '—';
+        }
+        if (normalized === 'commercial') {
+            return 'Commercial Registration';
+        }
+        if (normalized === 'freelance') {
+            return 'Freelance License';
+        }
+        const readable = normalized.replace(/[-_]+/g, ' ');
+        return readable.replace(/\b\w/g, character => character.toUpperCase());
+    };
+    const formatExternalLink = raw => {
+        if (typeof raw !== 'string') {
+            return '';
+        }
+        const trimmed = raw.trim();
+        if (!trimmed) {
+            return '';
+        }
+        if (/^[a-z]+:\/\//i.test(trimmed)) {
+            return trimmed;
+        }
+        return `https://${trimmed}`;
+    };
+    const safeText = value => (typeof value === 'string' && value.trim() ? value.trim() : '');
+
     if (!account) {
         if (title) {
             title.textContent = 'Linked Business Accounts';
@@ -22950,7 +25555,7 @@ function renderIndividualAccountBusinessOverlay(account) {
     }
     if (subtitle) {
         subtitle.textContent = associations.length
-            ? `Linked to ${associations.length} business ${associations.length === 1 ? 'account' : 'accounts'}.`
+            ? `${associations.length} Business ${associations.length === 1 ? 'Account' : 'Accounts'}.`
             : 'No business accounts are linked to this individual.';
     }
 
@@ -22959,10 +25564,30 @@ function renderIndividualAccountBusinessOverlay(account) {
         return;
     }
 
-    const listMarkup = associations.map(association => {
-        const business = (businessAccounts || []).find(entry => entry && entry.id === association.businessId);
+    const businessMap = new Map((businessAccounts || [])
+        .filter(entry => entry && entry.id)
+        .map(entry => [entry.id, entry]));
+    const sortedAssociations = associations.slice().sort((a, b) => {
+        const businessA = businessMap.get(a && a.businessId);
+        const businessB = businessMap.get(b && b.businessId);
+        const aTimestamp = Date.parse(a && a.linkedAt ? a.linkedAt : businessA && (businessA.submittedAt || businessA.createdAt || businessA.approvedAt) ? (businessA.submittedAt || businessA.createdAt || businessA.approvedAt) : 0);
+        const bTimestamp = Date.parse(b && b.linkedAt ? b.linkedAt : businessB && (businessB.submittedAt || businessB.createdAt || businessB.approvedAt) ? (businessB.submittedAt || businessB.createdAt || businessB.approvedAt) : 0);
+        return bTimestamp - aTimestamp;
+    });
+
+    const socialDefinitions = [
+        { key: 'facebook', label: 'Facebook' },
+        { key: 'instagram', label: 'Instagram' },
+        { key: 'twitter', label: 'Twitter' },
+        { key: 'youtube', label: 'YouTube' },
+        { key: 'linkedin', label: 'LinkedIn' },
+        { key: 'snapchat', label: 'Snapchat' },
+        { key: 'tiktok', label: 'TikTok' }
+    ];
+
+    const listMarkup = sortedAssociations.map((association, index) => {
+        const business = businessMap.get(association.businessId) || null;
         const companyName = association.companyName || (business && business.companyName) || association.businessId || 'Business Account';
-        const relationLabel = association.relationship || 'Linked account';
         const linkedAtLabel = association.linkedAt ? formatDateForDisplay(association.linkedAt, { includeTime: true }) : null;
         const normalizedStatus = business && typeof business.status === 'string' ? business.status.trim().toLowerCase() : '';
         let statusChipClass = 'neutral';
@@ -22974,23 +25599,391 @@ function renderIndividualAccountBusinessOverlay(account) {
             statusChipClass = 'danger';
         }
         const statusLabel = business ? getBusinessAccountStatusLabel(business.status) : 'Not available';
+        const approvedLabel = business && business.approvedAt ? formatDateForDisplay(business.approvedAt, { includeTime: true }) : null;
+        const rejectionEntry = business && Array.isArray(business.history)
+            ? business.history.find(entry => entry && entry.action === 'rejected')
+            : null;
+        const rejectedLabel = rejectionEntry && rejectionEntry.timestamp
+            ? formatDateForDisplay(rejectionEntry.timestamp, { includeTime: true })
+            : business && business.rejectedAt
+                ? formatDateForDisplay(business.rejectedAt, { includeTime: true })
+                : null;
+        const logoSourceRaw = business && typeof business.logoDataUrl === 'string' && business.logoDataUrl
+            ? business.logoDataUrl
+            : association && typeof association.logoDataUrl === 'string' && association.logoDataUrl
+                ? association.logoDataUrl
+                : '';
+        const logoSource = typeof logoSourceRaw === 'string' ? logoSourceRaw.trim() : '';
+        const hasLogo = /^data:image\//i.test(logoSource) || /^https?:\/\//i.test(logoSource);
+        const logoAltText = `${companyName} logo`;
+        const logoInlineMarkup = hasLogo
+            ? `<div class="business-logo-box business-logo-inline"><img src="${escapeAttribute(logoSource)}" alt="${escapeAttribute(logoAltText)}"></div>`
+            : '';
+        const registrationNumber = business && business.registrationNumber ? business.registrationNumber : '—';
+        const documentTypeLabel = business ? formatDocumentTypeLabel(business.registrationDocumentType || '') : '—';
+        const detailRegistrationNumber = business && business.detailRegistrationNumber ? business.detailRegistrationNumber : '—';
+        const expiryDateLabel = business && business.expiryDate ? formatDateForDisplay(business.expiryDate, { includeTime: false }) || '—' : '—';
+        const vatNumber = business && business.vatNumber ? business.vatNumber : '—';
+        const tradeExperienceLabel = business && typeof business.tradeExperience15Years === 'boolean'
+            ? (business.tradeExperience15Years ? 'Yes' : 'No')
+            : '—';
+        const maroofUrl = business && typeof business.maroofUrl === 'string' && business.maroofUrl.trim() ? business.maroofUrl.trim() : '';
+        const websiteRaw = business && typeof business.website === 'string' && business.website.trim() ? business.website.trim() : '';
+        const websiteHref = websiteRaw ? formatExternalLink(websiteRaw) : '';
+        const websiteDisplay = websiteRaw
+            ? `<a href="${escapeAttribute(websiteHref)}" target="_blank" rel="noopener">${escapeHtml(websiteRaw)}</a>`
+            : '—';
+        const maroofDisplay = maroofUrl
+            ? `<a href="${escapeAttribute(maroofUrl)}" target="_blank" rel="noopener">${escapeHtml(maroofUrl)}</a>`
+            : '—';
+        const socialLinks = [];
+        const appendSocialLinks = source => {
+            if (!source || typeof source !== 'object') {
+                return;
+            }
+            socialDefinitions.forEach(def => {
+                const value = source[def.key];
+                if (typeof value !== 'string') {
+                    return;
+                }
+                const trimmed = value.trim();
+                if (!trimmed) {
+                    return;
+                }
+                const exists = socialLinks.some(link => link.key === def.key && link.display === trimmed);
+                if (exists) {
+                    return;
+                }
+                socialLinks.push({
+                    key: def.key,
+                    label: def.label,
+                    display: trimmed,
+                    href: formatExternalLink(trimmed)
+                });
+            });
+        };
+        if (business && typeof business.socials === 'object') {
+            appendSocialLinks(business.socials);
+        }
+        if (association && typeof association.socials === 'object') {
+            appendSocialLinks(association.socials);
+        }
+        const mediaCount = socialLinks.length;
+        const mediaMarkup = mediaCount
+            ? socialLinks
+                .map(link => `<span class="media-link-entry">${escapeHtml(link.label)}: <a href="${escapeAttribute(link.href)}" target="_blank" rel="noopener">${escapeHtml(link.display)}</a></span>`)
+                .join(', ')
+            : '—';
+        const certificateNames = business && Array.isArray(business.certificates)
+            ? business.certificates.filter(name => typeof name === 'string' && name.trim()).map(name => name.trim())
+            : [];
+        const certificatesDisplay = certificateNames.length
+            ? certificateNames.map(name => escapeHtml(name)).join(', ')
+            : '—';
+        const addressParts = [];
+        if (business && business.address && typeof business.address === 'object') {
+            const addressInfo = business.address;
+            const streetValues = [safeText(addressInfo.streetNumber), safeText(addressInfo.streetName), safeText(addressInfo.street)]
+                .filter(Boolean)
+                .join(' ')
+                .trim();
+            const countryPart = safeText(addressInfo.country);
+            const regionPart = safeText(addressInfo.region);
+            const cityPart = safeText(addressInfo.city) || (business && safeText(business.city));
+            const districtPart = safeText(addressInfo.district);
+            const streetPart = streetValues;
+            const zipPart = safeText(addressInfo.zipCode) || safeText(addressInfo.zip) || safeText(addressInfo.postalCode);
+            const formatted = [countryPart, regionPart, cityPart, districtPart, streetPart, zipPart]
+                .filter(Boolean)
+                .join(', ');
+            if (formatted) {
+                addressParts.push(formatted);
+            }
+        }
+        const fallbackAddress = business && business.city ? business.city : '';
+        if (!addressParts.length && fallbackAddress) {
+            addressParts.push(fallbackAddress);
+        }
+        const addressLabel = addressParts.length ? addressParts.join('; ') : '—';
+
+        const detailGridMarkup = business
+            ? `
+                <div class="detail-grid">
+                    <div><dt>Username</dt><dd>${escapeHtml(business.contactName || '—')}</dd></div>
+                    <div><dt>Email</dt><dd>${escapeHtml(business.email || '—')}</dd></div>
+                    <div><dt>Website</dt><dd>${websiteDisplay}</dd></div>
+                    <div><dt>Business Registration #</dt><dd>${escapeHtml(registrationNumber)}</dd></div>
+                    <div><dt>Registration Document Type</dt><dd>${escapeHtml(documentTypeLabel)}</dd></div>
+                    <div><dt>Detail Registration #</dt><dd>${escapeHtml(detailRegistrationNumber)}</dd></div>
+                    <div><dt>Expiry Date</dt><dd>${escapeHtml(expiryDateLabel || '—')}</dd></div>
+                    <div><dt>VAT Number</dt><dd>${escapeHtml(vatNumber)}</dd></div>
+                    <div><dt>Trade for 15 years</dt><dd>${escapeHtml(tradeExperienceLabel)}</dd></div>
+                    <div><dt>Maroof profile</dt><dd>${maroofDisplay}</dd></div>
+                    <div class="detail-grid-full"><dt>Media</dt><dd>${mediaMarkup}</dd></div>
+                    <div class="detail-grid-full"><dt>Certificates</dt><dd>${certificatesDisplay}</dd></div>
+                    <div class="detail-grid-full"><dt>Address</dt><dd>${escapeHtml(addressLabel)}</dd></div>
+                </div>
+            `
+            : '<div class="helper-text">Business account record not found in the current dataset.</div>';
 
         return `
             <li>
                 <div class="business-association-row">
-                    <div>
+                    ${logoInlineMarkup}
+                    <div class="business-association-summary">
                         <strong>${escapeHtml(companyName)}</strong>
                         <div class="helper-text">Business ID: ${escapeHtml(association.businessId || '—')}</div>
                     </div>
                     <span class="helper-chip ${statusChipClass}">${escapeHtml(statusLabel)}</span>
                 </div>
-                <div class="helper-text">Relationship: ${escapeHtml(relationLabel)}</div>
-                ${linkedAtLabel ? `<div class="helper-text">Linked ${escapeHtml(linkedAtLabel)}</div>` : ''}
+                ${linkedAtLabel ? `<div class="helper-text">Created ${escapeHtml(linkedAtLabel)}</div>` : ''}
+                ${normalizedStatus === 'active' && approvedLabel ? `<div class="helper-text">Approved ${escapeHtml(approvedLabel)}</div>` : ''}
+                ${normalizedStatus === 'rejected' && rejectedLabel ? `<div class="helper-text">Rejected ${escapeHtml(rejectedLabel)}</div>` : ''}
+                ${detailGridMarkup}
             </li>
         `;
     }).join('');
 
     content.innerHTML = `<ul class="detail-list business-associations-list">${listMarkup}</ul>`;
+}
+
+function buildIndividualAccountLogEvents(account) {
+    if (!account || typeof account !== 'object') {
+        return [];
+    }
+    const registry = new Map();
+    const register = (entry, sequence = registry.size) => {
+        if (!entry) return;
+        const normalized = entry && typeof entry.id === 'string' && entry.label
+            ? entry
+            : normalizeIndividualAccountLogEntry(entry, sequence);
+        if (!normalized) return;
+        const key = `${normalized.id || ''}|${normalized.action || ''}|${normalized.timestamp || ''}|${normalized.label || ''}`;
+        if (registry.has(key)) return;
+        registry.set(key, normalized);
+    };
+
+    const baseLog = Array.isArray(account.activityLog) ? account.activityLog : [];
+    baseLog.forEach((entry, index) => register(normalizeIndividualAccountLogEntry(entry, index)));
+
+    if (account.createdAt) {
+        const ownerName = account.invitationOwner && (account.invitationOwner.firstName || account.invitationOwner.lastName)
+            ? `${account.invitationOwner.firstName || ''} ${account.invitationOwner.lastName || ''}`.trim()
+            : '';
+        register({
+            id: `${account.id || 'account'}-created`,
+            action: 'account-created',
+            label: 'Account created',
+            timestamp: account.createdAt,
+            actor: ownerName || 'Registration Service',
+            context: account.city ? `Registered from ${account.city}.` : 'Registration completed.'
+        });
+    }
+
+    if (account.lastActiveAt) {
+        register({
+            id: `${account.id || 'account'}-last-active`,
+            action: 'status-change',
+            label: 'Recent activity detected',
+            timestamp: account.lastActiveAt,
+            actor: account.fullName || account.email || account.id || 'Account',
+            context: account.city ? `Last active from ${account.city}.` : 'Last active session recorded.'
+        });
+    }
+
+    const financialHistory = Array.isArray(account.financialHistory) ? account.financialHistory : [];
+    financialHistory.forEach((txn, index) => {
+        if (!txn || typeof txn !== 'object') return;
+        const amount = Number(txn.amount) || 0;
+        const action = amount >= 0 ? 'transaction-credit' : 'transaction-debit';
+        const amountLabel = formatCurrency(Math.abs(amount));
+        const contextParts = [amount >= 0 ? `Credit ${amountLabel}` : `Debit ${amountLabel}`];
+        if (txn.note) contextParts.push(txn.note);
+        register({
+            id: txn.id ? `${txn.id}-log` : `${account.id || 'account'}-txn-${index}`,
+            action,
+            label: txn.label || 'Wallet transaction',
+            timestamp: txn.timestamp,
+            actor: txn.actor || 'Finance Automation',
+            context: contextParts.join(' · '),
+            channel: txn.type || 'wallet'
+        });
+    });
+
+    const supportRequests = Array.isArray(account.supportRequests) ? account.supportRequests : [];
+    supportRequests.forEach((request, index) => {
+        if (!request || typeof request !== 'object') return;
+        const statusLabel = typeof request.status === 'string' && request.status.trim()
+            ? request.status.trim()
+            : 'pending';
+        register({
+            id: request.id ? `${request.id}-log` : `${account.id || 'account'}-support-${index}`,
+            action: 'support-request',
+            label: request.reason || 'Support access requested',
+            timestamp: request.requestedAt,
+            actor: 'Support Desk',
+            context: request.expiresAt
+                ? `Expires ${formatDateForDisplay(request.expiresAt, { includeTime: true }) || ''}`
+                : 'Awaiting support action',
+            status: statusLabel
+        });
+    });
+
+    const associations = Array.isArray(account.businessAssociations) ? account.businessAssociations : [];
+    associations.forEach((association, index) => {
+        if (!association || typeof association !== 'object') return;
+        register({
+            id: `${association.businessId || `${account.id || 'account'}-business-${index}`}-log`,
+            action: 'business-link',
+            label: association.companyName || 'Business account linked',
+            timestamp: association.linkedAt,
+            actor: association.companyName || 'Business Accounts',
+            context: association.relationship ? `Relationship: ${association.relationship}` : '',
+            channel: 'business-accounts'
+        });
+    });
+
+    const pointsHistory = Array.isArray(account.pointsHistory) ? account.pointsHistory : [];
+    pointsHistory.forEach((entry, index) => {
+        if (!entry || typeof entry !== 'object') return;
+        const delta = Number(entry.delta) || 0;
+        const deltaLabel = delta >= 0 ? `+${delta}` : String(delta);
+        const contextParts = [`Points change ${deltaLabel}`];
+        if (Number.isFinite(entry.balanceAfter)) {
+            contextParts.push(`Balance ${entry.balanceAfter}`);
+        }
+        if (entry.note) {
+            contextParts.push(entry.note);
+        }
+        register({
+            id: entry.id ? `${entry.id}-log` : `${account.id || 'account'}-points-${index}`,
+            action: 'points-awarded',
+            label: entry.label || 'Points adjustment',
+            timestamp: entry.timestamp,
+            actor: entry.actor || 'Loyalty Engine',
+            context: contextParts.join(' · '),
+            channel: 'loyalty'
+        });
+    });
+
+    const subscriptions = Array.isArray(account.subscriptions) ? account.subscriptions : [];
+    subscriptions.forEach((subscription, index) => {
+        if (!subscription || typeof subscription !== 'object') return;
+        register({
+            id: `${account.id || 'account'}-subscription-${index}`,
+            action: 'subscription-update',
+            label: subscription.name || 'Subscription updated',
+            timestamp: subscription.renewsAt,
+            actor: 'Billing Automation',
+            context: subscription.status ? `Status: ${subscription.status}` : '',
+            channel: 'subscription'
+        });
+    });
+
+    const events = Array.from(registry.values());
+    const parseTimestamp = value => {
+        if (!value) return null;
+        const millis = Date.parse(value);
+        return Number.isNaN(millis) ? null : millis;
+    };
+    events.sort((a, b) => {
+        const timeA = parseTimestamp(a.timestamp);
+        const timeB = parseTimestamp(b.timestamp);
+        if (timeA !== null && timeB !== null) {
+            if (timeA === timeB) {
+                return (a.label || '').localeCompare(b.label || '');
+            }
+            return timeB - timeA;
+        }
+        if (timeA !== null) return -1;
+        if (timeB !== null) return 1;
+        return (a.label || '').localeCompare(b.label || '');
+    });
+    return events;
+}
+
+function renderIndividualAccountLogOverlay(account) {
+    const overlay = document.getElementById('individualAccountLogOverlay');
+    const title = document.getElementById('individualAccountLogTitle');
+    const subtitle = document.getElementById('individualAccountLogSubtitle');
+    const content = document.getElementById('individualAccountLogContent');
+    if (!content) return;
+
+    if (!account) {
+        state.individualLogOverlayAccountId = null;
+        if (title) {
+            title.textContent = 'Account Activity Log';
+        }
+        if (subtitle) {
+            subtitle.textContent = 'Timeline of recent updates and automation events.';
+        }
+        content.innerHTML = '<p class="empty-state">Select an individual account to review its activity log.</p>';
+        if (overlay) {
+            overlay.classList.add('hidden');
+        }
+        return;
+    }
+
+    if (title) {
+        title.textContent = account.fullName || account.email || account.id || 'Account Activity Log';
+    }
+    const events = buildIndividualAccountLogEvents(account);
+    if (subtitle) {
+        subtitle.textContent = events.length
+            ? `Showing ${events.length} recent ${events.length === 1 ? 'event' : 'events'}.`
+            : 'No activity has been recorded for this account yet.';
+    }
+
+    if (!events.length) {
+        content.innerHTML = '<p class="empty-state">No activity has been recorded for this account yet.</p>';
+        return;
+    }
+
+    const markup = events.map(event => {
+        const timestampLabel = event.timestamp
+            ? formatDateForDisplay(event.timestamp, { includeTime: true }) || 'Timestamp unavailable'
+            : 'Timestamp unavailable';
+        const metaParts = [];
+        if (event.actor) {
+            metaParts.push(`By ${escapeHtml(event.actor)}`);
+        }
+        const actionLabel = formatIndividualAccountLogAction(event.action);
+        if (actionLabel && actionLabel !== event.label) {
+            metaParts.push(escapeHtml(actionLabel));
+        }
+        const metaMarkup = metaParts.length ? `<div class="activity-log-meta">${metaParts.join(' · ')}</div>` : '';
+        const detailMarkup = event.context ? `<p class="activity-log-detail">${escapeHtml(event.context)}</p>` : '';
+        const chips = [];
+        if (event.channel) {
+            chips.push(`<span class="activity-log-chip">${escapeHtml(event.channel)}</span>`);
+        }
+        if (event.status) {
+            chips.push(`<span class="activity-log-chip">${escapeHtml(event.status)}</span>`);
+        }
+        const chipsMarkup = chips.length ? `<div class="activity-log-chips">${chips.join('')}</div>` : '';
+        const iconTone = event.tone ? ` ${escapeAttribute(event.tone)}` : '';
+        const iconClass = event.icon ? escapeAttribute(event.icon) : 'fas fa-note-sticky';
+        return `
+            <li>
+                <div class="activity-log-row">
+                    <div class="activity-log-icon${iconTone}">
+                        <i class="${iconClass}"></i>
+                    </div>
+                    <div class="activity-log-body">
+                        <div class="activity-log-header">
+                            <strong>${escapeHtml(event.label || 'Account update')}</strong>
+                            <span class="activity-log-timestamp">${escapeHtml(timestampLabel)}</span>
+                        </div>
+                        ${metaMarkup}
+                        ${detailMarkup}
+                        ${chipsMarkup}
+                    </div>
+                </div>
+            </li>
+        `;
+    }).join('');
+
+    content.innerHTML = `<ul class="activity-log-list">${markup}</ul>`;
 }
 
 function openIndividualAccountBusinessOverlay(accountId) {
@@ -22999,20 +25992,88 @@ function openIndividualAccountBusinessOverlay(accountId) {
     const account = (individualAccounts || []).find(entry => entry && entry.id === accountId);
     if (!account) {
         showNotification('warning', 'Unable to locate linked business accounts.');
+        state.individualBusinessOverlayAccountId = null;
+        state.individualBusinessOverlayReturnFocus = null;
         renderIndividualAccountBusinessOverlay(null);
         return;
     }
+
     state.individualBusinessOverlayAccountId = account.id;
+    state.individualBusinessOverlayReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     renderIndividualAccountBusinessOverlay(account);
+
     overlay.classList.remove('hidden');
+    overlay.setAttribute('aria-hidden', 'false');
+
+    const modal = overlay.querySelector('.role-detail-modal');
+    if (modal) {
+        if (!modal.hasAttribute('tabindex')) {
+            modal.setAttribute('tabindex', '-1');
+        }
+        const focusTarget = modal;
+        const focusFn = () => {
+            try {
+                focusTarget.focus({ preventScroll: true });
+            } catch (error) {
+                focusTarget.focus();
+            }
+        };
+        if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+            window.requestAnimationFrame(focusFn);
+        } else {
+            setTimeout(focusFn, 0);
+        }
+    }
 }
 
 function closeIndividualAccountBusinessOverlay() {
     const overlay = document.getElementById('individualAccountBusinessOverlay');
     if (overlay) {
         overlay.classList.add('hidden');
+        overlay.setAttribute('aria-hidden', 'true');
     }
+
     state.individualBusinessOverlayAccountId = null;
+
+    const returnFocus = state.individualBusinessOverlayReturnFocus;
+    state.individualBusinessOverlayReturnFocus = null;
+    if (returnFocus instanceof HTMLElement && document.contains(returnFocus)) {
+        const restoreFn = () => {
+            try {
+                returnFocus.focus({ preventScroll: true });
+            } catch (error) {
+                returnFocus.focus();
+            }
+        };
+        if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+            window.requestAnimationFrame(restoreFn);
+        } else {
+            setTimeout(restoreFn, 0);
+        }
+    }
+}
+
+function openIndividualAccountLogOverlay(accountId) {
+    const overlay = document.getElementById('individualAccountLogOverlay');
+    if (!overlay) return;
+    const account = (individualAccounts || []).find(entry => entry && entry.id === accountId);
+    if (!account) {
+        showNotification('warning', 'Unable to locate the activity log for the selected account.');
+        state.individualLogOverlayAccountId = null;
+        renderIndividualAccountLogOverlay(null);
+        return;
+    }
+    state.individualLogOverlayAccountId = account.id;
+    renderIndividualAccountLogOverlay(account);
+    overlay.classList.remove('hidden');
+}
+
+function closeIndividualAccountLogOverlay() {
+    const overlay = document.getElementById('individualAccountLogOverlay');
+    if (overlay) {
+        overlay.classList.add('hidden');
+    }
+    state.individualLogOverlayAccountId = null;
 }
 
 function updateIndividualAccountsImportStatus(message, type = 'info') {
@@ -23045,7 +26106,7 @@ async function handleIndividualAccountsImport(file) {
                 adsCount: Number.parseInt(row['Ads Count'] || row.adsCount || 0, 10) || 0,
                 pendingAds: Number.parseInt(row['Pending Ads'] || row.pendingAds || 0, 10) || 0,
                 createdAt: row['Created At'] || row.createdAt || new Date().toISOString(),
-                lastActiveAt: row['Last Active'] || row.lastActiveAt || row.lastActive || new Date().toISOString(),
+                lastActiveAt: row['Last Active'] || row.lastActiveAt || row.lastActive || '',
                 notes: row.Notes || row.notes || ''
             };
             const normalized = normalizeIndividualAccountPayload(payload, individualAccounts.length + created.length);
@@ -23203,7 +26264,7 @@ function renderBusinessAccountsTable(page = state.currentBusinessAccountsPage) {
     const visible = filtered.slice(startIndex, startIndex + perPage);
 
     if (!visible.length) {
-        tbody.innerHTML = '<tr><td colspan="8">Business applications will appear here.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7">Business applications will appear here.</td></tr>';
     } else {
         let index = startIndex + 1;
         tbody.innerHTML = visible.map(account => {
@@ -23214,15 +26275,6 @@ function renderBusinessAccountsTable(page = state.currentBusinessAccountsPage) {
             const invoices = Array.isArray(account.invoices) ? account.invoices : [];
             const invoiceSummary = invoices.length ? `${invoices.length} invoice${invoices.length > 1 ? 's' : ''}` : '0 invoices';
             const submittedLabel = formatDateForDisplay(account.submittedAt, { includeTime: true }) || '—';
-            const actions = [];
-            actions.push(`<button type="button" class="action-btn info" data-action="detail" data-account-id="${escapeAttribute(account.id)}" title="View details"><i class="fas fa-eye"></i></button>`);
-            if ((account.status || '').toLowerCase() !== 'active') {
-                actions.push(`<button type="button" class="action-btn approve" data-action="approve" data-account-id="${escapeAttribute(account.id)}" title="Approve"><i class="fas fa-circle-check"></i></button>`);
-            }
-            actions.push(`<button type="button" class="action-btn docs" data-action="request-docs" data-account-id="${escapeAttribute(account.id)}" title="Request documents"><i class="fas fa-file-signature"></i></button>`);
-            if (!['rejected', 'cancelled'].includes((account.status || '').toLowerCase())) {
-                actions.push(`<button type="button" class="action-btn reject" data-action="reject" data-account-id="${escapeAttribute(account.id)}" title="Reject"><i class="fas fa-circle-xmark"></i></button>`);
-            }
 
             return `
                 <tr data-account-id="${escapeAttribute(account.id)}">
@@ -23240,17 +26292,13 @@ function renderBusinessAccountsTable(page = state.currentBusinessAccountsPage) {
                     <td>${escapeHtml(packageLabel)}</td>
                     <td>${escapeHtml(submittedLabel)}</td>
                     <td>${escapeHtml(invoiceSummary)}</td>
-                    <td>
-                        <div class="action-group">
-                            ${actions.join('')}
-                        </div>
-                    </td>
                 </tr>
             `;
         }).join('');
     }
 
     renderBusinessAccountsPagination(totalPages, filtered.length);
+    updateBusinessAccountsActionToolbar();
 }
 
 function renderBusinessAccountsPagination(totalPages, totalItems) {
@@ -23276,6 +26324,36 @@ function renderBusinessAccountsPagination(totalPages, totalItems) {
         container.appendChild(createButton(String(index), index, false, index === state.currentBusinessAccountsPage));
     }
     container.appendChild(createButton('Next', state.currentBusinessAccountsPage + 1, state.currentBusinessAccountsPage === totalPages));
+}
+
+function updateBusinessAccountsActionToolbar() {
+    const toolbar = document.getElementById('businessAccountsActionToolbar');
+    if (!toolbar) return;
+
+    const accountId = state.activeBusinessAccountId;
+    const account = (businessAccounts || []).find(entry => entry && entry.id === accountId) || null;
+    const normalizedStatus = account ? (account.status || '').toLowerCase() : '';
+    const totalAccounts = Array.isArray(businessAccounts) ? businessAccounts.length : 0;
+
+    toolbar.querySelectorAll('button[data-action]').forEach(button => {
+        const action = button.dataset.action;
+        if (action === 'delete-all') {
+            button.disabled = totalAccounts === 0;
+            return;
+        }
+
+        let disabled = !account;
+
+        if (account && action === 'approve' && normalizedStatus === 'active') {
+            disabled = true;
+        }
+
+        if (account && action === 'reject' && ['rejected', 'cancelled'].includes(normalizedStatus)) {
+            disabled = true;
+        }
+
+        button.disabled = disabled;
+    });
 }
 
 function handleBusinessAccountsSearch(value) {
@@ -23370,12 +26448,15 @@ function renderBusinessAccountDetail(account) {
             <ul class="detail-list">${historyMarkup}</ul>
         </section>
     `;
+
+    updateBusinessAccountsActionToolbar();
 }
 
 function openBusinessAccountDetail(accountId) {
     const account = (businessAccounts || []).find(entry => entry && entry.id === accountId);
     state.activeBusinessAccountId = account ? account.id : null;
     renderBusinessAccountDetail(account || null);
+    updateBusinessAccountsActionToolbar();
 }
 
 function closeBusinessAccountDetailDrawer() {
@@ -23384,6 +26465,7 @@ function closeBusinessAccountDetailDrawer() {
     if (drawer) {
         drawer.classList.add('hidden');
     }
+    updateBusinessAccountsActionToolbar();
 }
 
 function openBusinessAccountDecisionOverlay(accountId, action) {
@@ -23480,22 +26562,101 @@ function confirmBusinessAccountDecision() {
 }
 
 function handleBusinessAccountsTableClick(event) {
-    const button = event.target.closest('button[data-action]');
-    if (button) {
-        const action = button.dataset.action;
-        const accountId = button.dataset.accountId;
-        if (!accountId) return;
-        if (action === 'detail') {
-            openBusinessAccountDetail(accountId);
-        } else if (['approve', 'request-docs', 'reject'].includes(action)) {
-            openBusinessAccountDecisionOverlay(accountId, action);
-        }
-        return;
-    }
-
     const row = event.target.closest('tr[data-account-id]');
     if (row) {
         openBusinessAccountDetail(row.dataset.accountId);
+    }
+}
+
+function handleBusinessAccountsToolbarClick(event) {
+    const button = event.target.closest('button[data-action]');
+    if (!button || button.disabled) return;
+
+    const action = button.dataset.action;
+    if (action === 'delete-all') {
+        handleBusinessAccountsDeleteAllRequest();
+        return;
+    }
+
+    const accountId = state.activeBusinessAccountId;
+
+    if (!accountId) {
+        showNotification('warning', 'Select a business account to continue.');
+        return;
+    }
+
+    if (action === 'detail') {
+        openBusinessAccountDetail(accountId);
+        return;
+    }
+
+    if (['approve', 'request-docs', 'reject'].includes(action)) {
+        openBusinessAccountDecisionOverlay(accountId, action);
+    }
+}
+
+async function handleBusinessAccountsDeleteAllRequest() {
+    const totalAccounts = Array.isArray(businessAccounts) ? businessAccounts.length : 0;
+    if (!totalAccounts) {
+        showNotification('info', 'No business accounts available to delete.');
+        return;
+    }
+
+    const confirmationMessage = `Delete all ${totalAccounts} business account${totalAccounts === 1 ? '' : 's'}? This action cannot be undone.`;
+    const confirmOverlay = document.getElementById('userConfirmOverlay');
+    const overlayAvailable = confirmOverlay && confirmOverlay.offsetParent !== null;
+
+    const confirmed = overlayAvailable
+        ? await showUserConfirm(confirmationMessage, 'Delete All', 'Cancel')
+        : window.confirm(confirmationMessage);
+
+    if (!confirmed) {
+        return;
+    }
+
+    deleteAllBusinessAccounts({ refresh: true });
+    showNotification('success', 'All business accounts deleted.');
+}
+
+function deleteAllBusinessAccounts({ refresh = true } = {}) {
+    businessAccounts = [];
+    try {
+        localStorage.removeItem(BUSINESS_ACCOUNTS_STORAGE_KEY);
+    } catch (error) {
+        console.warn('Unable to clear stored business accounts:', error);
+    }
+    saveBusinessAccountsToStorage();
+
+    state.activeBusinessAccountId = null;
+    state.businessDecisionContext = null;
+    state.currentBusinessAccountsPage = 1;
+    state.businessAccountsFilters = {
+        search: '',
+        status: 'all',
+        package: 'all'
+    };
+
+    const searchInput = document.getElementById('businessAccountsSearchInput');
+    if (searchInput) {
+        searchInput.value = '';
+    }
+    const statusFilter = document.getElementById('businessAccountsStatusFilter');
+    if (statusFilter) {
+        statusFilter.value = 'all';
+    }
+    const packageFilter = document.getElementById('businessAccountsPackageFilter');
+    if (packageFilter) {
+        packageFilter.value = 'all';
+    }
+
+    closeBusinessAccountDecisionOverlay();
+    closeBusinessAccountDetailDrawer();
+
+    if (refresh) {
+        renderBusinessAccountsTable(1);
+    } else {
+        updateBusinessAccountsActionToolbar();
+        updateBusinessRequestsCountLabel();
     }
 }
 

@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Edit ONRUF Profile</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" integrity="sha512-1ycn6IcaQQ40/MKBW2W4Rhis/DbILU74C1vSrLJxCq57o941Ym01SwNsOMqvEBFlcgUa6r0zE1x4rOzT9kZf3g==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <link rel="stylesheet" href="assets/css/onruf-profile-edit.css" />
+</head>
+<body>
+    <header class="edit-header">
+        <div class="edit-header__brand">
+            <span class="brand-mark">ON</span>
+            <span class="brand-text">RUF</span>
+        </div>
+        <nav class="edit-header__actions" aria-label="Edit profile actions">
+            <button type="button" class="edit-header__link" id="profileEditBackBtn">
+                <i class="fas fa-chevron-left" aria-hidden="true"></i>
+                <span>Back to profile</span>
+            </button>
+            <button type="button" class="edit-header__signout" id="profileEditSignOutBtn">
+                <i class="fas fa-right-from-bracket" aria-hidden="true"></i>
+                <span>Sign Out</span>
+            </button>
+        </nav>
+    </header>
+
+    <main class="edit-main" id="profileEditMain" hidden>
+        <form class="edit-form" id="profileEditForm">
+            <section class="edit-card">
+                <h1 class="edit-card__title">account settings</h1>
+                <div class="field-grid">
+                    <div class="field-group">
+                        <label class="field-label" for="accountUserName">User Name</label>
+                        <div class="field-inline">
+                            <input type="text" id="accountUserName" name="accountUserName" readonly />
+                            <button type="button" class="reset-btn" data-reset="username">Reset</button>
+                        </div>
+                    </div>
+                    <div class="field-group">
+                        <label class="field-label" for="accountEmail">E-mail</label>
+                        <div class="field-inline">
+                            <input type="email" id="accountEmail" name="accountEmail" readonly />
+                            <button type="button" class="reset-btn" data-reset="email">Reset</button>
+                        </div>
+                    </div>
+                    <div class="field-group">
+                        <label class="field-label" for="accountPhone">Mobile number</label>
+                        <div class="field-inline">
+                            <input type="tel" id="accountPhone" name="accountPhone" readonly />
+                            <button type="button" class="reset-btn" data-reset="phone">Reset</button>
+                        </div>
+                    </div>
+                    <div class="field-group">
+                        <label class="field-label" for="accountPassword">Password</label>
+                        <div class="field-inline">
+                            <input type="password" id="accountPassword" name="accountPassword" value="********" readonly />
+                            <button type="button" class="reset-btn" data-reset="password">Reset</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="edit-card">
+                <h2 class="edit-card__title">My personal settings</h2>
+                <div class="field-grid">
+                    <div class="field-group">
+                        <label class="field-label" for="profileFirstName">First Name</label>
+                        <input type="text" id="profileFirstName" name="profileFirstName" autocomplete="given-name" required />
+                    </div>
+                    <div class="field-group">
+                        <label class="field-label" for="profileLastName">Last Name</label>
+                        <input type="text" id="profileLastName" name="profileLastName" autocomplete="family-name" required />
+                    </div>
+                    <div class="field-group">
+                        <label class="field-label" for="profileDob">Date of birth</label>
+                        <input type="date" id="profileDob" name="profileDob" required />
+                    </div>
+                </div>
+                <fieldset class="choice-group" aria-labelledby="profileGenderLegend">
+                    <legend class="choice-group__label" id="profileGenderLegend">Gender</legend>
+                    <label class="chip">
+                        <input type="radio" name="profileGender" value="female" />
+                        <span>Female</span>
+                    </label>
+                    <label class="chip">
+                        <input type="radio" name="profileGender" value="male" />
+                        <span>Male</span>
+                    </label>
+                </fieldset>
+
+                <fieldset class="choice-list" aria-labelledby="profileVisibilityLegend">
+                    <legend class="choice-group__label" id="profileVisibilityLegend">Show your information to</legend>
+                    <label class="choice-list__item">
+                        <input type="radio" name="profileVisibility" value="everyone" />
+                        <span>everyone</span>
+                    </label>
+                    <label class="choice-list__item">
+                        <input type="radio" name="profileVisibility" value="members" />
+                        <span>members only</span>
+                    </label>
+                    <label class="choice-list__item">
+                        <input type="radio" name="profileVisibility" value="private" />
+                        <span>No one</span>
+                    </label>
+                </fieldset>
+            </section>
+
+            <div class="form-actions">
+                <button type="submit" class="save-btn">Save Edit</button>
+            </div>
+        </form>
+    </main>
+
+    <div class="edit-toast" id="profileEditToast" role="status" aria-live="polite"></div>
+    <script src="assets/js/onruf-profile-edit.js"></script>
+</body>
+</html>

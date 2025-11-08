@@ -652,8 +652,8 @@
                         <button class="sub-app-btn active" data-target="onruf-users-individual" data-label="Individual Accounts Management">
                             <span>Individual Accounts Management</span>
                         </button>
-                        <button class="sub-app-btn" data-target="onruf-users-business" data-label="Business Accounts Operations">
-                            <span>Business Accounts Operations</span>
+                        <button class="sub-app-btn" data-target="onruf-users-business" data-label="Business Accounts Management">
+                            <span>Business Accounts Management</span>
                         </button>
                         <button class="sub-app-btn" data-target="onruf-users-automation" data-label="Automation Policies">
                             <span>Automation Policies</span>
@@ -671,17 +671,14 @@
                                 <div class="detail-controls directory-controls">
                                     <div class="search-box">
                                         <i class="fas fa-search"></i>
-                                        <input type="search" id="individualAccountsSearchInput" placeholder="Search by name, email, mobile, or account ID" />
+                                        <input type="search" id="individualAccountsSearchInput" placeholder="Search by User Name, Email, Phone, or ID" />
                                     </div>
                                     <div class="detail-filters directory-filters">
                                         <label class="filter-control" for="individualAccountsStatusFilter">Status
                                             <select id="individualAccountsStatusFilter">
                                                 <option value="all">All</option>
                                                 <option value="active">Active</option>
-                                                <option value="pending">Pending</option>
-                                                <option value="frozen">Frozen</option>
-                                                <option value="suspended">Suspended</option>
-                                                <option value="deleted">Deleted</option>
+                                                <option value="inactive">Inactive</option>
                                             </select>
                                         </label>
                                         <label class="filter-control" for="individualAccountsCityFilter">City
@@ -689,44 +686,52 @@
                                                 <option value="all">All cities</option>
                                             </select>
                                         </label>
-                                        <button type="button" class="btn btn-outline" id="individualAccountsResetFiltersBtn">
-                                            <i class="fas fa-rotate-left"></i>
-                                            Reset
-                                        </button>
                                     </div>
                                 </div>
                             </div>
                         </div>
 
                         <div class="individual-actions-toolbar" id="individualAccountsToolbar" role="group" aria-label="Individual account actions">
-                            <button type="button" class="btn btn-secondary" id="individualAccountsActionViewBtn" data-action="view" disabled>
-                                <i class="fas fa-eye"></i>
-                                <span>View Details</span>
-                            </button>
-                            <button type="button" class="btn btn-outline" id="individualAccountsActionEditBtn" data-action="edit" disabled>
-                                <i class="fas fa-pen"></i>
-                                <span>Edit Account</span>
-                            </button>
-                            <button type="button" class="btn btn-outline" id="individualAccountsActionBusinessBtn" data-action="view-businesses" disabled>
-                                <i class="fas fa-briefcase"></i>
-                                <span>Business Links</span>
-                            </button>
-                            <button type="button" class="btn btn-secondary" id="individualAccountsActionActivateBtn" data-action="activate" disabled>
-                                <i class="fas fa-circle-check"></i>
-                                <span>Activate</span>
-                            </button>
-                            <button type="button" class="btn btn-outline" id="individualAccountsActionFreezeBtn" data-action="freeze" disabled>
-                                <i class="fas fa-snowflake"></i>
-                                <span>Freeze</span>
-                            </button>
-                            <button type="button" class="btn btn-outline user-action-delete" id="individualAccountsActionDeleteBtn" data-action="delete" disabled>
-                                <i class="fas fa-trash"></i>
-                                <span>Delete</span>
-                            </button>
-                            <button type="button" class="btn btn-outline" id="exportIndividualAccountsBtn">
-                                <i class="fas fa-file-export"></i>
-                                Export
-                            </button>
+                            <div class="individual-actions-group">
+                                <button type="button" class="btn btn-secondary" id="individualAccountsActionViewBtn" data-action="view" disabled>
+                                    <i class="fas fa-eye"></i>
+                                    <span>Account Details</span>
+                                </button>
+                                <button type="button" class="btn btn-secondary" id="individualAccountsActionMarketplaceBtn" data-action="view-marketplace" disabled>
+                                    <i class="fas fa-store"></i>
+                                    <span>Marketplace Activity</span>
+                                </button>
+                                <button type="button" class="btn btn-secondary" id="individualAccountsActionLogBtn" data-action="view-log" disabled>
+                                    <i class="fas fa-clock-rotate-left"></i>
+                                    <span>View Log</span>
+                                </button>
+                                <button type="button" class="btn btn-outline individual-action-btn individual-action-activate" id="individualAccountsActionActivateBtn" data-action="activate" disabled>
+                                    <i class="fas fa-circle-check"></i>
+                                    <span>Activate</span>
+                                </button>
+                                <button type="button" class="btn btn-outline individual-action-btn individual-action-deactivate" id="individualAccountsActionDeactivateBtn" data-action="deactivate" disabled>
+                                    <i class="fas fa-power-off"></i>
+                                    <span>Deactivate</span>
+                                </button>
+                                <button type="button" class="btn btn-outline individual-action-btn individual-action-publish" id="individualAccountsActionAddToBtn" data-action="add-to" disabled>
+                                    <i class="fas fa-list-check"></i>
+                                    <span>Add to</span>
+                                </button>
+                                <button type="button" class="btn btn-outline" id="individualAccountsResetFiltersBtn">
+                                    <i class="fas fa-rotate-left"></i>
+                                    Reset
+                                </button>
+                                <button type="button" class="btn btn-outline" id="individualAccountsDeleteAllBtn" data-action="delete-all" disabled>
+                                    <i class="fas fa-trash"></i>
+                                    Delete All
+                                </button>
+                            </div>
+                            <div class="individual-actions-group individual-actions-group-secondary">
+                                <button type="button" class="btn btn-outline" id="exportIndividualAccountsBtn">
+                                    <i class="fas fa-file-export"></i>
+                                    Export
+                                </button>
+                            </div>
                         </div>
 
                         <div class="onruf-users-grid">
@@ -739,16 +744,15 @@
                                                 <th>User</th>
                                                 <th>Contact</th>
                                                 <th>Status</th>
-                                                <th>Balance</th>
-                                                <th>Ads</th>
                                                 <th>Created</th>
-                                                <th>Business Accounts</th>
                                                 <th>Last Login</th>
+                                                <th>Business Accounts</th>
+                                                <th>Publishing List</th>
                                             </tr>
                                         </thead>
                                         <tbody id="individualAccountsTableBody">
                                             <tr>
-                                                <td colspan="9">Individual marketplace accounts will appear here.</td>
+                                                <td colspan="8">Individual marketplace accounts will appear here.</td>
                                             </tr>
                                         </tbody>
                                     </table>
@@ -768,23 +772,26 @@
                                     </button>
                                 </header>
                                 <div class="role-detail-content individual-account-detail-content">
-                                    <div id="individualAccountQuickActions" class="account-quick-actions" hidden>
-                                        <button type="button" class="btn btn-secondary" id="individualAccountActivateBtn" data-action="activate">
-                                            <i class="fas fa-circle-check"></i>
-                                            Activate
-                                        </button>
-                                        <button type="button" class="btn btn-outline" id="individualAccountFreezeBtn" data-action="freeze">
-                                            <i class="fas fa-snowflake"></i>
-                                            Freeze
-                                        </button>
-                                        <button type="button" class="btn btn-outline" id="individualAccountDeleteBtn" data-action="delete">
-                                            <i class="fas fa-trash"></i>
-                                            Delete
-                                        </button>
-                                    </div>
+                                    <div id="individualAccountQuickActions" class="account-quick-actions" hidden></div>
                                     <div id="individualAccountDetailBody" class="detail-card-body">
                                         <p class="empty-state">Account insights, financial history, and support tooling will appear here.</p>
                                     </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="individualAccountMarketplaceOverlay" class="role-detail-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="individualAccountMarketplaceTitle">
+                            <div class="role-detail-modal" role="document">
+                                <header>
+                                    <div>
+                                        <h3 id="individualAccountMarketplaceTitle">Marketplace Activity</h3>
+                                        <p class="section-subtitle" id="individualAccountMarketplaceSubtitle">Select an account to surface marketplace orders, listings, and saved items.</p>
+                                    </div>
+                                    <button type="button" class="modal-close-btn" id="individualAccountMarketplaceCloseBtn" aria-label="Close marketplace activity panel">
+                                        <i class="fas fa-xmark"></i>
+                                    </button>
+                                </header>
+                                <div id="individualAccountMarketplaceContent" class="role-detail-content">
+                                    <p class="empty-state">Select an account from the directory to review marketplace activity.</p>
                                 </div>
                             </div>
                         </div>
@@ -853,60 +860,90 @@
                                 </div>
                             </div>
                         </div>
+                        <div id="individualAccountLogOverlay" class="role-detail-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="individualAccountLogTitle">
+                            <div class="role-detail-modal" role="document">
+                                <header>
+                                    <div>
+                                        <h3 id="individualAccountLogTitle">Account Activity Log</h3>
+                                        <p class="section-subtitle" id="individualAccountLogSubtitle">Timeline of recent updates and automation events.</p>
+                                    </div>
+                                    <button type="button" class="modal-close-btn" id="individualAccountLogCloseBtn" aria-label="Close account activity log">
+                                        <i class="fas fa-xmark"></i>
+                                    </button>
+                                </header>
+                                <div id="individualAccountLogContent" class="role-detail-content account-log-content">
+                                    <p class="empty-state">Select an individual account to review its activity log.</p>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     <div id="onruf-users-business" class="sub-app">
                         <div class="users-header">
                             <div class="header-stack">
                                 <h2 class="module-title" id="businessMerchantsModuleTitle">
-                                    <span id="businessMerchantsModuleTitleText">Business Merchants</span>
+                                    <span id="businessMerchantsModuleTitleText">Business Accounts</span>
                                     <span class="count-badge" id="businessRequestsCountLabel">#0 Pending</span>
                                 </h2>
-                                <div class="search-box">
-                                    <i class="fas fa-search"></i>
-                                    <input type="search" id="businessAccountsSearchInput" placeholder="Search by company, contact, email, or account ID" />
+                                <div class="detail-controls directory-controls">
+                                    <div class="search-box">
+                                        <i class="fas fa-search"></i>
+                                        <input type="search" id="businessAccountsSearchInput" placeholder="Search by company, contact, email, or account ID" />
+                                    </div>
+                                    <div class="detail-filters directory-filters">
+                                        <label class="filter-control" for="businessAccountsStatusFilter">Status
+                                            <select id="businessAccountsStatusFilter">
+                                                <option value="all">All</option>
+                                                <option value="pending">Pending review</option>
+                                                <option value="docs-requested">Documents requested</option>
+                                                <option value="active">Active</option>
+                                                <option value="suspended">Suspended</option>
+                                                <option value="rejected">Rejected</option>
+                                                <option value="cancelled">Cancelled</option>
+                                            </select>
+                                        </label>
+                                        <label class="filter-control" for="businessAccountsPackageFilter">Package
+                                            <select id="businessAccountsPackageFilter">
+                                                <option value="all">All packages</option>
+                                            </select>
+                                        </label>
+                                    </div>
                                 </div>
-                            </div>
-                            <div class="users-actions">
-                                <button type="button" class="btn btn-outline" id="openBusinessAccountsImportBtn">
-                                    <i class="fas fa-file-import"></i>
-                                    Import
-                                </button>
-                                <input type="file" id="businessAccountsImportInput" accept=".csv,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden />
-                                <button type="button" class="btn btn-outline" id="exportBusinessAccountsBtn">
-                                    <i class="fas fa-file-export"></i>
-                                    Export
-                                </button>
-                                <div class="import-status" id="businessAccountsImportStatus" role="status" aria-live="polite"></div>
                             </div>
                         </div>
 
                         <div class="detail-quick-actions">
-                            <div class="quick-action-group">
-                                <span class="section-subtitle">Approval queue</span>
+                            <div class="quick-action-group" id="businessAccountsActionToolbar" role="group" aria-label="Business account actions">
+                                <button type="button" class="btn btn-secondary btn-compact" data-action="detail" disabled>
+                                    <i class="fas fa-eye"></i>
+                                    View details
+                                </button>
+                                <button type="button" class="btn btn-secondary btn-compact" data-action="approve" disabled>
+                                    <i class="fas fa-circle-check"></i>
+                                    Approve
+                                </button>
+                                <button type="button" class="btn btn-secondary btn-compact" data-action="request-docs" disabled>
+                                    <i class="fas fa-file-signature"></i>
+                                    Request documents
+                                </button>
+                                <button type="button" class="btn btn-secondary btn-compact" data-action="reject" disabled>
+                                    <i class="fas fa-circle-xmark"></i>
+                                    Reject
+                                </button>
                                 <button type="button" class="btn btn-outline" id="businessAccountsResetFiltersBtn">
                                     <i class="fas fa-rotate-left"></i>
                                     Reset Filters
                                 </button>
+                                <button type="button" class="btn btn-outline" id="businessAccountsDeleteAllBtn" data-action="delete-all" disabled>
+                                    <i class="fas fa-trash"></i>
+                                    Delete All
+                                </button>
                             </div>
-                            <div class="detail-filters">
-                                <span class="filter-label" aria-hidden="true">Filter:</span>
-                                <label class="filter-control" for="businessAccountsStatusFilter">Status
-                                    <select id="businessAccountsStatusFilter">
-                                        <option value="all">All</option>
-                                        <option value="pending">Pending review</option>
-                                        <option value="docs-requested">Documents requested</option>
-                                        <option value="active">Active</option>
-                                        <option value="suspended">Suspended</option>
-                                        <option value="rejected">Rejected</option>
-                                        <option value="cancelled">Cancelled</option>
-                                    </select>
-                                </label>
-                                <label class="filter-control" for="businessAccountsPackageFilter">Package
-                                    <select id="businessAccountsPackageFilter">
-                                        <option value="all">All packages</option>
-                                    </select>
-                                </label>
+                            <div class="quick-action-group quick-action-group-secondary">
+                                <button type="button" class="btn btn-outline" id="exportBusinessAccountsBtn">
+                                    <i class="fas fa-file-export"></i>
+                                    Export
+                                </button>
                             </div>
                         </div>
 
@@ -923,12 +960,11 @@
                                                 <th>Package</th>
                                                 <th>Submitted</th>
                                                 <th>Invoices</th>
-                                                <th>Actions</th>
                                             </tr>
                                         </thead>
                                         <tbody id="businessAccountsTableBody">
                                             <tr>
-                                                <td colspan="8">Business onboarding requests will appear here.</td>
+                                                <td colspan="7">Business onboarding requests will appear here.</td>
                                             </tr>
                                         </tbody>
                                     </table>
@@ -1375,13 +1411,13 @@
                                             <i class="fas fa-pen"></i>
                                             Modify
                                         </button>
-                                        <button type="button" class="btn btn-outline" id="categoryBulkArchiveBtn" disabled>
-                                            <i class="fas fa-power-off"></i>
-                                            Deactivate
-                                        </button>
                                         <button type="button" class="btn btn-outline" id="categoryBulkActivateBtn" disabled>
                                             <i class="fas fa-rotate-right"></i>
                                             Activate
+                                        </button>
+                                        <button type="button" class="btn btn-outline" id="categoryBulkArchiveBtn" disabled>
+                                            <i class="fas fa-power-off"></i>
+                                            Deactivate
                                         </button>
                                         <button type="button" class="btn btn-outline" id="categoryResetBtn" title="Reset filters and search">
                                             <i class="fas fa-rotate-left"></i>
@@ -2014,6 +2050,45 @@
 
             </div>
         </main>
+    </div>
+
+    <div id="individualPublishingOverlay" class="confirm-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="individualPublishingOverlayTitle">
+        <div class="confirm-dialog individual-publishing-dialog" role="document">
+            <div class="individual-publishing-header">
+                <div>
+                    <h3 id="individualPublishingOverlayTitle">Add to Publishing List</h3>
+                    <p class="helper-text" id="individualPublishingOverlayDescription">Route this individual account's listings to the appropriate review flow.</p>
+                </div>
+                <button type="button" class="modal-close-btn" id="individualPublishingCloseBtn" aria-label="Close publishing list overlay">
+                    <i class="fas fa-xmark"></i>
+                </button>
+            </div>
+            <div class="individual-publishing-account">
+                <div class="account-name" id="individualPublishingAccountLabel">Individual Account</div>
+                <div class="helper-text" id="individualPublishingAccountIdentifier"></div>
+            </div>
+            <p class="helper-text hidden" id="individualPublishingStatus"></p>
+            <form id="individualPublishingForm" novalidate>
+                <div class="form-group">
+                    <label class="form-label required" for="individualPublishingListSelect">Publishing list</label>
+                    <select class="form-select" id="individualPublishingListSelect" required aria-required="true">
+                        <option value="">Select a list</option>
+                        <option value="trusted">Trusted Accounts</option>
+                        <option value="manualReview">Manual Review</option>
+                        <option value="blacklist">Blacklist</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="individualPublishingNotesInput">Internal notes</label>
+                    <textarea id="individualPublishingNotesInput" class="form-input" rows="3" placeholder="Add internal context (optional)"></textarea>
+                </div>
+                <p class="prompt-error hidden" id="individualPublishingFormError" role="alert"></p>
+                <div class="confirm-actions">
+                    <button type="button" class="btn btn-outline" id="individualPublishingCancelBtn">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="individualPublishingSubmitBtn">Save</button>
+                </div>
+            </form>
+        </div>
     </div>
 
     <script src="assets/js/onruf-central-control-panel.js" defer></script>

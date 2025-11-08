@@ -9,6 +9,8 @@
         }
     };
     const BUSINESS_ACCOUNTS_KEY = 'onruf_business_accounts_v1';
+    const INDIVIDUAL_ACCOUNTS_KEY = 'onruf_individual_accounts_v1';
+    const LOGIN_SESSION_KEY = 'onruf_individual_login_session_v1';
 
     const elements = {};
     let isSubmitting = false;
@@ -93,7 +95,7 @@
         if (!elements.form) {
             return;
         }
-        elements.form.addEventListener('submit', event => {
+        elements.form.addEventListener('submit', async event => {
             event.preventDefault();
             if (isSubmitting) {
                 return;
@@ -103,12 +105,27 @@
                 return;
             }
 
+            let logoDataUrl = null;
+            if (typeof File !== 'undefined' && formData.logoFile instanceof File) {
+                try {
+                    logoDataUrl = await readFileAsDataUrl(formData.logoFile);
+                } catch (error) {
+                    console.warn('Unable to read business logo file', error);
+                    showToast('error', 'Unable to read the business logo. Please try again.');
+                    return;
+                }
+            }
+
+            const sanitizedFormData = { ...formData, logoDataUrl };
+            delete sanitizedFormData.logoFile;
+
             const existingAccounts = loadBusinessAccounts();
             const accountId = generateBusinessAccountId(existingAccounts);
-            const payload = createBusinessAccountPayload(formData, accountId);
+            const payload = createBusinessAccountPayload(sanitizedFormData, accountId);
 
             existingAccounts.push(payload);
             saveBusinessAccounts(existingAccounts);
+            linkBusinessAccountToCurrentIndividual(payload);
 
             isSubmitting = true;
             showToast('success', 'Business registration submitted. Redirecting to ONRUF…', 2600);
@@ -304,9 +321,10 @@
             tiktok: getTrimmedValue(tiktokInput)
         };
         const maroofUrl = getTrimmedValue(maroofInput);
-        const logoFileName = elements.logoInput && elements.logoInput.files && elements.logoInput.files[0]
-            ? elements.logoInput.files[0].name
-            : '';
+        const logoFile = elements.logoInput && elements.logoInput.files && elements.logoInput.files[0]
+            ? elements.logoInput.files[0]
+            : null;
+        const logoFileName = logoFile ? logoFile.name : '';
         const tradeExperience = Boolean(tradeToggle?.checked);
 
         return {
@@ -330,7 +348,8 @@
             documentType,
             certificateNames,
             tradeExperience,
-            logoFileName
+            logoFileName,
+            logoFile
         };
     }
 
@@ -349,6 +368,10 @@
 
     function validateEmail(value) {
         return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value || '');
+    }
+
+    function normalizeEmail(value) {
+        return typeof value === 'string' ? value.trim().toLowerCase() : '';
     }
 
     function loadBusinessAccounts() {
@@ -371,6 +394,159 @@
         } catch (error) {
             console.warn('Unable to persist business accounts dataset', error);
         }
+    }
+
+    function linkBusinessAccountToCurrentIndividual(businessAccount) {
+        if (!businessAccount || typeof businessAccount !== 'object') {
+            return;
+        }
+
+        const session = readActiveIndividualSession();
+        if (!session) {
+            return;
+        }
+
+        const accounts = loadIndividualAccounts();
+        if (!accounts.length) {
+            return;
+        }
+
+        const sessionAccountId = typeof session.accountId === 'string' && session.accountId.trim()
+            ? session.accountId.trim()
+            : '';
+        const sessionEmail = normalizeEmail(session.email);
+
+        let targetAccount = null;
+        if (sessionAccountId) {
+            targetAccount = accounts.find(account => typeof account?.id === 'string' && account.id.trim() === sessionAccountId) || null;
+        }
+        if (!targetAccount && sessionEmail) {
+            targetAccount = accounts.find(account => normalizeEmail(account?.email) === sessionEmail) || null;
+        }
+        if (!targetAccount) {
+            return;
+        }
+
+        const businessId = typeof businessAccount.id === 'string' && businessAccount.id.trim()
+            ? businessAccount.id.trim()
+            : '';
+        if (!businessId) {
+            return;
+        }
+
+        const associationName = businessAccount.companyName || businessAccount.contactName || businessId;
+        const associationLogo = typeof businessAccount.logoDataUrl === 'string' && businessAccount.logoDataUrl.trim()
+            ? businessAccount.logoDataUrl.trim()
+            : null;
+        const associationLogoName = typeof businessAccount.logoFileName === 'string' && businessAccount.logoFileName.trim()
+            ? businessAccount.logoFileName.trim()
+            : '';
+        const nowIso = new Date().toISOString();
+        const existingAssociations = Array.isArray(targetAccount.businessAssociations)
+            ? targetAccount.businessAssociations.slice()
+            : [];
+
+        let associationExists = false;
+        const updatedAssociations = existingAssociations.map(entry => {
+            const candidateId = extractAssociationBusinessId(entry);
+            if (candidateId && candidateId === businessId) {
+                associationExists = true;
+                const base = entry && typeof entry === 'object' ? entry : {};
+                return {
+                    ...base,
+                    businessId,
+                    businessAccountId: base.businessAccountId || businessId,
+                    companyName: associationName,
+                    relationship: base.relationship || 'Owner',
+                    linkedAt: base.linkedAt || nowIso,
+                    logoDataUrl: associationLogo || base.logoDataUrl || null,
+                    logoFileName: associationLogoName || base.logoFileName || ''
+                };
+            }
+            return entry;
+        });
+
+        if (!associationExists) {
+            updatedAssociations.push({
+                businessId,
+                businessAccountId: businessId,
+                companyName: associationName,
+                relationship: 'Owner',
+                linkedAt: nowIso,
+                logoDataUrl: associationLogo,
+                logoFileName: associationLogoName
+            });
+
+            if (!Array.isArray(targetAccount.activityLog)) {
+                targetAccount.activityLog = [];
+            }
+            targetAccount.activityLog.push({
+                id: `biz-link-${businessId}-${Date.now()}`,
+                action: 'business-link',
+                label: 'Business account linked',
+                context: `Linked ${associationName} via marketplace signup.`,
+                actor: 'Marketplace signup',
+                timestamp: nowIso
+            });
+        }
+
+        targetAccount.businessAssociations = updatedAssociations;
+        saveIndividualAccounts(accounts);
+    }
+
+    function loadIndividualAccounts() {
+        try {
+            const raw = localStorage.getItem(INDIVIDUAL_ACCOUNTS_KEY);
+            if (!raw) {
+                return [];
+            }
+            const parsed = JSON.parse(raw);
+            return Array.isArray(parsed) ? parsed : [];
+        } catch (error) {
+            console.warn('Unable to read individual accounts dataset', error);
+            return [];
+        }
+    }
+
+    function saveIndividualAccounts(accounts) {
+        try {
+            localStorage.setItem(INDIVIDUAL_ACCOUNTS_KEY, JSON.stringify(accounts));
+        } catch (error) {
+            console.warn('Unable to persist individual accounts dataset', error);
+        }
+    }
+
+    function readActiveIndividualSession() {
+        try {
+            const raw = sessionStorage.getItem(LOGIN_SESSION_KEY);
+            if (!raw) {
+                return null;
+            }
+            const parsed = JSON.parse(raw);
+            return parsed && typeof parsed === 'object' ? parsed : null;
+        } catch (error) {
+            console.warn('Unable to read individual login session', error);
+            return null;
+        }
+    }
+
+    function extractAssociationBusinessId(entry) {
+        if (!entry) {
+            return '';
+        }
+        if (typeof entry === 'string') {
+            return entry.trim();
+        }
+        if (typeof entry.businessId === 'string' && entry.businessId.trim()) {
+            return entry.businessId.trim();
+        }
+        if (typeof entry.businessAccountId === 'string' && entry.businessAccountId.trim()) {
+            return entry.businessAccountId.trim();
+        }
+        if (typeof entry.id === 'string' && entry.id.trim()) {
+            return entry.id.trim();
+        }
+        return '';
     }
 
     function generateBusinessAccountId(accounts) {
@@ -403,6 +579,22 @@
             context: `Business registration submitted via ONRUF marketplace. CR: ${formData.registrationNumber || 'N/A'}.`
         };
 
+        const logoFileName = typeof formData.logoFileName === 'string' && formData.logoFileName.trim()
+            ? formData.logoFileName.trim()
+            : null;
+        const logoDataUrl = typeof formData.logoDataUrl === 'string' && formData.logoDataUrl.trim().startsWith('data:')
+            ? formData.logoDataUrl.trim()
+            : null;
+        const addressPayload = {
+            country: formData.country || '',
+            region: formData.region || '',
+            city: formData.city || '',
+            district: formData.district || '',
+            street: formData.street || '',
+            zipCode: formData.zip || '',
+            zip: formData.zip || ''
+        };
+
         return {
             id: accountId,
             companyName: formData.companyNameEnglish || formData.companyNameArabic,
@@ -419,6 +611,18 @@
             autoRenew: false,
             financialStatus: 'pending',
             history: [historyEntry],
+            registrationNumber: formData.registrationNumber,
+            detailRegistrationNumber: formData.detailRegNumber,
+            registrationDocumentType: formData.documentType,
+            expiryDate: formData.expiryDate,
+            vatNumber: formData.vatNumber,
+            maroofUrl: formData.maroofUrl,
+            tradeExperience15Years: Boolean(formData.tradeExperience),
+            certificates: formData.certificateNames.slice(),
+            address: addressPayload,
+            socials: { ...(formData.socials || {}) },
+            logoFileName,
+            logoDataUrl,
             application: {
                 companyNameArabic: formData.companyNameArabic,
                 companyNameEnglish: formData.companyNameEnglish,
@@ -433,17 +637,30 @@
                 maroofUrl: formData.maroofUrl,
                 tradeExperience15Years: formData.tradeExperience,
                 uploadedCertificates: formData.certificateNames,
-                logoFileName: formData.logoFileName || null,
-                address: {
-                    country: formData.country,
-                    region: formData.region,
-                    city: formData.city,
-                    district: formData.district,
-                    street: formData.street,
-                    zip: formData.zip
-                }
+                logoFileName,
+                logoDataUrl,
+                address: addressPayload
             }
         };
+    }
+
+    function readFileAsDataUrl(file) {
+        return new Promise((resolve, reject) => {
+            if (!file) {
+                resolve(null);
+                return;
+            }
+            const reader = new FileReader();
+            reader.onload = event => {
+                const result = event?.target?.result;
+                resolve(typeof result === 'string' ? result : null);
+            };
+            reader.onerror = () => {
+                reader.abort();
+                reject(new Error('File reading failed'));
+            };
+            reader.readAsDataURL(file);
+        });
     }
 
     function escapeHtml(value) {

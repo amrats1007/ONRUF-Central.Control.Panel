@@ -67,14 +67,24 @@
                     </div>
                     <div class="input-field">
                         <label class="input-label required" for="basicPhone">Mobile Number</label>
-                        <div class="dual-input">
-                            <div class="phone-code" aria-hidden="true">
-                                <span class="country-flag"></span>
-                                <span>+966</span>
+                        <div class="dual-input phone-input">
+                            <div class="phone-code" id="phoneCodePicker">
+                                <button type="button" class="phone-code-trigger" id="phoneCodeTrigger" aria-haspopup="listbox" aria-expanded="false">
+                                    <span class="country-flag" id="phoneCodeFlag" aria-hidden="true"></span>
+                                    <span class="dial-code" id="phoneCodeValue">+966</span>
+                                    <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
+                                </button>
+                                <div class="phone-code-dropdown" id="phoneCodeDropdown" role="dialog" aria-modal="false">
+                                    <div class="phone-code-search">
+                                        <i class="fa-solid fa-search" aria-hidden="true"></i>
+                                        <input type="search" id="phoneCodeSearch" placeholder="Search country or code" aria-label="Search country or code">
+                                    </div>
+                                    <ul class="phone-code-list" id="phoneCodeList" role="listbox" aria-label="Country dial codes"></ul>
+                                </div>
                             </div>
                             <div class="input-shell">
                                 <i class="fa-solid fa-phone input-icon" aria-hidden="true"></i>
-                                <input type="tel" id="basicPhone" placeholder="11 234 5678" autocomplete="tel" inputmode="numeric" required>
+                                <input type="tel" id="basicPhone" placeholder="11 234 5678" autocomplete="tel" inputmode="tel" required>
                             </div>
                         </div>
                     </div>
@@ -87,7 +97,7 @@
                     </div>
                     <button type="submit" class="primary-btn">Next</button>
                 </form>
-                <p class="form-footnote">Already have an account? <a href="login.html">Login</a></p>
+                <p class="form-footnote">Already have an account? <a href="onruf-login.html">Login</a></p>
             </div>
 
             <div id="signUpStepOtp" class="step-view" aria-labelledby="stepOtpTitle">
@@ -222,7 +232,7 @@
                     <p>Hi <strong id="successName">there</strong>, your account request has been received. We will notify you as soon as the verification process is complete.</p>
                     <div class="success-links">
                         <a href="onruf-platform.html" class="primary-btn" role="button">Explore Marketplace</a>
-                        <a href="login.html" class="secondary-btn" role="button">Go to Control Panel</a>
+                        <a href="onruf-login.html" class="secondary-btn" role="button">Go to Control Panel</a>
                     </div>
                 </div>
             </div>

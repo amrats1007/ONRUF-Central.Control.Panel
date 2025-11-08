@@ -37,7 +37,7 @@
                     <span id="profileRatingValue">0.0</span>
                 </div>
                 <div class="profile-stats">
-                    <div class="profile-stat">
+                    <div class="profile-stat profile-stat--link" id="profilePointsStat">
                         <span class="profile-stat__value" id="profilePointsValue">0</span>
                         <span class="profile-stat__label">My points</span>
                     </div>
@@ -66,24 +66,9 @@
                     <ul class="profile-list" id="profileSettingsList" aria-label="Account settings"></ul>
                 </article>
 
-                <article class="profile-card profile-card--two-column">
-                    <h2 class="profile-card__title">Account overview</h2>
-                    <dl class="profile-data" id="profileDetailsList"></dl>
-                </article>
             </section>
         </section>
     </main>
-
-    <section class="profile-empty" id="profileEmptyState" hidden>
-        <div class="profile-empty__card">
-            <h2>We could not load your account.</h2>
-            <p>Log in again so we can pull your profile information.</p>
-            <div class="profile-empty__actions">
-                <a class="profile-empty__link" href="onruf-login.html">Go to login</a>
-                <a class="profile-empty__link" href="onruf-platform.html">Return to marketplace</a>
-            </div>
-        </div>
-    </section>
 
     <div class="profile-toast" id="profileToast" role="status" aria-live="polite"></div>
     <script src="assets/js/onruf-profile.js"></script>

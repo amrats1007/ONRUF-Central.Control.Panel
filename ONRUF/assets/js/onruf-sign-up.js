@@ -6,73 +6,17 @@
     const OTP_LENGTH = 4;
     const OTP_EXPIRY_MS = 2 * 60 * 1000;
     const PASSWORD_POLICY_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/;
+    const INVITE_REWARD_POINTS = 100;
+    const INVITE_CODE_LENGTH = 8;
 
-    const DEFAULT_INDIVIDUAL_ACCOUNTS = [
-        {
-            id: 'IND-2001',
-            fullName: 'Sara Al-Qahtani',
-            email: 'sara.alqahtani@example.com',
-            mobile: '+966512345678',
-            city: 'Riyadh',
-            status: 'active',
-            balance: 2450.75,
-            adsCount: 11,
-            pendingAds: 2,
-            createdAt: '2025-04-18T07:50:00.000Z',
-            lastActiveAt: '2025-10-26T16:30:00.000Z',
-            permissions: { autoPosting: true, manualReview: false },
-            subscriptions: [
-                { name: 'Featured Ads Boost', status: 'active', renewsAt: '2025-12-01T00:00:00.000Z' }
-            ],
-            financialHistory: [
-                { id: 'txn-2001-1', label: 'Wallet Top-up', amount: 1200, type: 'credit', timestamp: '2025-09-01T09:20:00.000Z' },
-                { id: 'txn-2001-2', label: 'Ad Publishing Fee', amount: -150, type: 'debit', timestamp: '2025-09-10T12:00:00.000Z' }
-            ],
-            supportRequests: [],
-            notes: 'Prefers SMS notifications.'
-        },
-        {
-            id: 'IND-2078',
-            fullName: 'Hassan Al-Mutairi',
-            email: 'hassan.mutairi@example.com',
-            mobile: '+966598887766',
-            city: 'Jeddah',
-            status: 'frozen',
-            balance: 520,
-            adsCount: 4,
-            pendingAds: 0,
-            createdAt: '2025-05-11T10:05:00.000Z',
-            lastActiveAt: '2025-09-30T21:15:00.000Z',
-            permissions: { autoPosting: false, manualReview: true },
-            subscriptions: [
-                { name: 'Auto Renew Ads', status: 'paused', renewsAt: '2025-11-15T00:00:00.000Z' }
-            ],
-            financialHistory: [
-                { id: 'txn-2078-1', label: 'Manual Adjustment', amount: -80, type: 'debit', timestamp: '2025-09-28T08:45:00.000Z' }
-            ],
-            supportRequests: [
-                { id: 'support-2078-1', reason: 'Fraud review', expiresAt: '2025-11-01T00:00:00.000Z', requestedAt: '2025-10-02T12:10:00.000Z', status: 'pending' }
-            ],
-            notes: 'Account frozen pending identity confirmation.'
-        },
-        {
-            id: 'IND-2110',
-            fullName: 'Maya Al-Salem',
-            email: 'maya.alsalem@example.com',
-            mobile: '+966533112244',
-            city: 'Dammam',
-            status: 'pending',
-            balance: 0,
-            adsCount: 0,
-            pendingAds: 1,
-            createdAt: '2025-10-10T13:25:00.000Z',
-            lastActiveAt: '2025-10-10T13:25:00.000Z',
-            permissions: { autoPosting: false, manualReview: true },
-            subscriptions: [],
-            financialHistory: [],
-            supportRequests: [],
-            notes: 'Awaiting OTP verification.'
-        }
+    const DEFAULT_INDIVIDUAL_ACCOUNTS = [];
+
+    const FALLBACK_DIAL_CODES = [
+        { name: 'Saudi Arabia', iso2: 'sa', dialCode: '+966' },
+        { name: 'United Arab Emirates', iso2: 'ae', dialCode: '+971' },
+        { name: 'United States', iso2: 'us', dialCode: '+1' },
+        { name: 'United Kingdom', iso2: 'gb', dialCode: '+44' },
+        { name: 'Egypt', iso2: 'eg', dialCode: '+20' }
     ];
 
     const LOCATION_MATRIX = {
@@ -89,7 +33,14 @@
         otpExpiresAt: null,
         countdownTimer: null,
         basicInfo: null,
-        profilePreview: null
+        profilePreview: null,
+        profileFileName: null,
+        phoneCodeData: [...FALLBACK_DIAL_CODES],
+        phoneCodeSearchTerm: '',
+        selectedCountryIso2: 'sa',
+        selectedCountryName: 'Saudi Arabia',
+        selectedDialCode: '+966',
+        phoneCodeDropdownOpen: false
     };
 
     const elements = {};
@@ -116,6 +67,13 @@
         elements.countrySelect = document.getElementById('profileCountry');
         elements.regionSelect = document.getElementById('profileRegion');
         elements.citySelect = document.getElementById('profileCity');
+    elements.phoneCodeContainer = document.getElementById('phoneCodePicker');
+    elements.phoneCodeTrigger = document.getElementById('phoneCodeTrigger');
+        elements.phoneCodeDropdown = document.getElementById('phoneCodeDropdown');
+        elements.phoneCodeSearch = document.getElementById('phoneCodeSearch');
+        elements.phoneCodeList = document.getElementById('phoneCodeList');
+        elements.phoneCodeValue = document.getElementById('phoneCodeValue');
+        elements.phoneCodeFlag = document.getElementById('phoneCodeFlag');
 
         if (!elements.stepAccount || !elements.basicInfoForm || !elements.toast) {
             return;
@@ -128,6 +86,7 @@
         populateCountryOptions();
         updateRegionOptions();
         updateCityOptions();
+        setupPhoneCodePicker();
 
         showStep(1);
     }
@@ -216,6 +175,280 @@
         });
     }
 
+    function setupPhoneCodePicker() {
+        if (!elements.phoneCodeTrigger || !elements.phoneCodeDropdown || !elements.phoneCodeList) {
+            return;
+        }
+
+        state.phoneCodeData.sort((a, b) => a.name.localeCompare(b.name));
+        renderPhoneCodeList();
+        updatePhoneCodeDisplay(state.selectedCountryIso2, state.selectedDialCode, state.selectedCountryName);
+
+        elements.phoneCodeTrigger.addEventListener('click', event => {
+            event.preventDefault();
+            togglePhoneCodeDropdown();
+        });
+
+        if (elements.phoneCodeSearch) {
+            elements.phoneCodeSearch.addEventListener('input', handlePhoneCodeSearchInput);
+        }
+
+        elements.phoneCodeList.addEventListener('click', handlePhoneCodeListClick);
+        document.addEventListener('click', handlePhoneCodeGlobalClick, { capture: true });
+        document.addEventListener('keydown', handlePhoneCodeKeydown);
+
+        loadPhoneCodeData();
+    }
+
+    function togglePhoneCodeDropdown(force) {
+        if (!elements.phoneCodeDropdown || !elements.phoneCodeTrigger) {
+            return;
+        }
+        const shouldOpen = typeof force === 'boolean' ? force : !state.phoneCodeDropdownOpen;
+        state.phoneCodeDropdownOpen = shouldOpen;
+        elements.phoneCodeDropdown.classList.toggle('open', shouldOpen);
+        elements.phoneCodeTrigger.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
+        if (shouldOpen) {
+            requestAnimationFrame(() => {
+                if (elements.phoneCodeSearch) {
+                    elements.phoneCodeSearch.focus();
+                    elements.phoneCodeSearch.select();
+                }
+            });
+        }
+    }
+
+    function closePhoneCodeDropdown() {
+        if (!state.phoneCodeDropdownOpen) {
+            return;
+        }
+        togglePhoneCodeDropdown(false);
+    }
+
+    function handlePhoneCodeSearchInput(event) {
+        state.phoneCodeSearchTerm = (event.target.value || '').trim().toLowerCase();
+        renderPhoneCodeList();
+    }
+
+    function handlePhoneCodeListClick(event) {
+        const button = event.target.closest('button.phone-code-option');
+        if (!button) {
+            return;
+        }
+        const iso2 = button.getAttribute('data-iso') || '';
+        const dialCode = button.getAttribute('data-dial') || '';
+        const name = button.getAttribute('data-name') || '';
+        if (!dialCode) {
+            return;
+        }
+        selectPhoneCode({ iso2, dialCode, name });
+        closePhoneCodeDropdown();
+        if (elements.basicInfoForm) {
+            const phoneInput = elements.basicInfoForm.querySelector('#basicPhone');
+            phoneInput?.focus();
+        }
+    }
+
+    function handlePhoneCodeGlobalClick(event) {
+        if (!state.phoneCodeDropdownOpen) {
+            return;
+        }
+        if (!elements.phoneCodeContainer) {
+            closePhoneCodeDropdown();
+            return;
+        }
+        if (!elements.phoneCodeContainer.contains(event.target)) {
+            closePhoneCodeDropdown();
+        }
+    }
+
+    function handlePhoneCodeKeydown(event) {
+        if (event.key === 'Escape') {
+            closePhoneCodeDropdown();
+        }
+    }
+
+    function renderPhoneCodeList() {
+        if (!elements.phoneCodeList) {
+            return;
+        }
+        const term = state.phoneCodeSearchTerm;
+        const fragment = document.createDocumentFragment();
+        let matches = state.phoneCodeData;
+        if (term) {
+            matches = state.phoneCodeData.filter(entry => {
+                const haystack = `${entry.name} ${entry.dialCode}`.toLowerCase();
+                return haystack.includes(term);
+            });
+        }
+
+        elements.phoneCodeList.innerHTML = '';
+
+        if (!matches.length) {
+            const emptyItem = document.createElement('li');
+            emptyItem.className = 'phone-code-empty';
+            emptyItem.textContent = 'No matching countries.';
+            elements.phoneCodeList.appendChild(emptyItem);
+            return;
+        }
+
+        matches.forEach(entry => {
+            const listItem = document.createElement('li');
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'phone-code-option';
+            button.dataset.iso = entry.iso2 || '';
+            button.dataset.dial = entry.dialCode;
+            button.dataset.name = entry.name || entry.dialCode;
+            button.setAttribute('role', 'option');
+            const isActive = entry.dialCode === state.selectedDialCode && (!entry.iso2 || entry.iso2 === state.selectedCountryIso2);
+            if (isActive) {
+                button.classList.add('active');
+                button.setAttribute('aria-selected', 'true');
+            } else {
+                button.setAttribute('aria-selected', 'false');
+            }
+
+            const flag = document.createElement('span');
+            flag.className = 'country-flag';
+            const flagUrl = resolveFlagUrl(entry.iso2);
+            if (flagUrl) {
+                flag.style.backgroundImage = `url('${flagUrl}')`;
+            }
+
+            const nameSpan = document.createElement('span');
+            nameSpan.className = 'option-name';
+            nameSpan.textContent = entry.name;
+
+            const dialSpan = document.createElement('span');
+            dialSpan.className = 'option-dial';
+            dialSpan.textContent = entry.dialCode;
+
+            button.appendChild(flag);
+            button.appendChild(nameSpan);
+            button.appendChild(dialSpan);
+            listItem.appendChild(button);
+            fragment.appendChild(listItem);
+        });
+
+        elements.phoneCodeList.appendChild(fragment);
+    }
+
+    function selectPhoneCode(entry) {
+        if (!entry || !entry.dialCode) {
+            return;
+        }
+        state.selectedDialCode = entry.dialCode;
+        state.selectedCountryIso2 = entry.iso2 || state.selectedCountryIso2;
+        state.selectedCountryName = entry.name || state.selectedCountryName;
+        updatePhoneCodeDisplay(state.selectedCountryIso2, state.selectedDialCode, state.selectedCountryName);
+        state.phoneCodeSearchTerm = '';
+        if (elements.phoneCodeSearch) {
+            elements.phoneCodeSearch.value = '';
+        }
+        renderPhoneCodeList();
+    }
+
+    function updatePhoneCodeDisplay(iso2, dialCode, name) {
+        if (elements.phoneCodeValue) {
+            elements.phoneCodeValue.textContent = dialCode || '+966';
+        }
+        if (elements.phoneCodeFlag) {
+            const flagUrl = resolveFlagUrl(iso2);
+            if (flagUrl) {
+                elements.phoneCodeFlag.style.backgroundImage = `url('${flagUrl}')`;
+            } else {
+                elements.phoneCodeFlag.style.backgroundImage = 'none';
+            }
+        }
+        if (elements.phoneCodeTrigger) {
+            const labelName = name || 'Selected country';
+            elements.phoneCodeTrigger.setAttribute('aria-label', `${labelName} ${dialCode || ''}`.trim());
+        }
+    }
+
+    async function loadPhoneCodeData() {
+        try {
+            const response = await fetch('https://restcountries.com/v3.1/all?fields=name,idd,cca2');
+            if (!response.ok) {
+                throw new Error(`Unexpected status ${response.status}`);
+            }
+            const data = await response.json();
+            if (!Array.isArray(data) || !data.length) {
+                return;
+            }
+            const entries = [];
+            data.forEach(item => {
+                const name = item?.name?.common;
+                const iso2 = typeof item?.cca2 === 'string' ? item.cca2.trim().toLowerCase() : '';
+                const root = item?.idd?.root || '';
+                const suffixes = Array.isArray(item?.idd?.suffixes) ? item.idd.suffixes : [];
+                if (!name || !iso2 || !root || !suffixes.length) {
+                    return;
+                }
+                suffixes.forEach(suffix => {
+                    if (typeof suffix !== 'string') {
+                        return;
+                    }
+                    const sanitizedSuffix = suffix.replace(/[^0-9]/g, '');
+                    const dialCode = `${root}${sanitizedSuffix}`.replace(/\s+/g, '');
+                    if (!dialCode) {
+                        return;
+                    }
+                    entries.push({ name, iso2, dialCode: dialCode.startsWith('+') ? dialCode : `+${dialCode}` });
+                });
+            });
+
+            if (!entries.length) {
+                return;
+            }
+
+            const unique = [];
+            const seen = new Set();
+            entries.forEach(entry => {
+                const key = `${entry.name.toLowerCase()}|${entry.dialCode}`;
+                if (seen.has(key)) {
+                    return;
+                }
+                seen.add(key);
+                unique.push(entry);
+            });
+
+            FALLBACK_DIAL_CODES.forEach(entry => {
+                const key = `${entry.name.toLowerCase()}|${entry.dialCode}`;
+                if (!seen.has(key)) {
+                    seen.add(key);
+                    unique.push(entry);
+                }
+            });
+
+            unique.sort((a, b) => a.name.localeCompare(b.name));
+
+            state.phoneCodeData = unique;
+            renderPhoneCodeList();
+
+            const preferred = unique.find(entry => entry.iso2 === state.selectedCountryIso2)
+                || unique.find(entry => entry.dialCode === state.selectedDialCode)
+                || unique[0];
+            if (preferred) {
+                selectPhoneCode(preferred);
+            }
+        } catch (error) {
+            console.warn('Unable to load phone dial codes:', error);
+        }
+    }
+
+    function resolveFlagUrl(iso2) {
+        if (!iso2) {
+            return '';
+        }
+        const normalized = iso2.trim().toLowerCase();
+        if (normalized.length !== 2) {
+            return '';
+        }
+        return `https://flagcdn.com/24x18/${normalized}.png`;
+    }
+
     function populateCountryOptions() {
         if (!elements.countrySelect) {
             return;
@@ -258,22 +491,28 @@
         const file = event.target.files && event.target.files[0] ? event.target.files[0] : null;
         if (!file) {
             elements.uploadPreview.textContent = '';
+            state.profilePreview = null;
+            state.profileFileName = null;
             return;
         }
         if (file.size > 5 * 1024 * 1024) {
             showToast('error', 'Profile photo must be 5 MB or smaller.');
             event.target.value = '';
             elements.uploadPreview.textContent = '';
+            state.profilePreview = null;
+            state.profileFileName = null;
             return;
         }
         const reader = new FileReader();
         reader.onload = () => {
             state.profilePreview = reader.result;
+            state.profileFileName = file.name || '';
             elements.uploadPreview.textContent = `${file.name}`;
         };
         reader.onerror = () => {
             showToast('error', 'Unable to preview the selected photo.');
             state.profilePreview = null;
+            state.profileFileName = null;
             elements.uploadPreview.textContent = '';
         };
         reader.readAsDataURL(file);
@@ -295,8 +534,9 @@
         const password = passwordInput?.value || '';
         const confirmPassword = confirmInput?.value || '';
         const invitationCode = (invitationInput?.value || '').trim();
-        const phoneRaw = (phoneInput?.value || '').trim();
-        const phone = normalizePhone('+966', phoneRaw);
+    const phoneRaw = (phoneInput?.value || '').trim();
+    const dialCode = state.selectedDialCode || '+966';
+    const phone = normalizePhone(dialCode, phoneRaw);
 
         if (!userName) {
             showToast('error', 'Enter your user name to continue.');
@@ -324,7 +564,7 @@
             return;
         }
         if (!phone) {
-            showToast('error', 'Enter a valid Saudi mobile number.');
+            showToast('error', 'Enter a valid mobile number.');
             phoneInput?.focus();
             return;
         }
@@ -339,7 +579,9 @@
             email: email.toLowerCase(),
             password,
             invitationCode: invitationCode || null,
-            phone
+            phone,
+            dialCode,
+            countryIso2: state.selectedCountryIso2
         };
 
         state.generatedOtp = generateOtp();
@@ -410,6 +652,7 @@
         const street = (streetInput?.value || '').trim();
         const zip = (zipInput?.value || '').trim();
         const photoFile = photoInput?.files && photoInput.files[0] ? photoInput.files[0] : null;
+        const photoFileName = state.profileFileName || (photoFile && photoFile.name ? photoFile.name : '');
 
         if (!firstName) {
             showToast('error', 'Enter your first name.');
@@ -451,6 +694,13 @@
             return;
         }
 
+        const fullName = `${firstName} ${lastName}`.trim() || state.basicInfo.userName;
+        const rawReferralCode = typeof state.basicInfo.invitationCode === 'string'
+            ? state.basicInfo.invitationCode.trim()
+            : '';
+        const normalizedReferralCode = isInviteCodeFormatValid(rawReferralCode)
+            ? normalizeInviteCodeValue(rawReferralCode)
+            : '';
         let photoDataUrl = state.profilePreview;
         if (!photoDataUrl && photoFile) {
             try {
@@ -461,10 +711,14 @@
                 return;
             }
         }
+        const sanitizedPhotoDataUrl = typeof photoDataUrl === 'string' ? photoDataUrl.trim() : '';
+        const sanitizedPhotoFileName = typeof photoFileName === 'string' ? photoFileName.trim() : '';
 
         const now = new Date();
         const nowIso = now.toISOString();
-        const accounts = loadIndividualAccounts();
+    const accounts = loadIndividualAccounts();
+    const invitationOwnerMatch = normalizedReferralCode ? findInvitationOwnerEntry(normalizedReferralCode, accounts) : null;
+    const invitationOwner = invitationOwnerMatch ? invitationOwnerMatch.account : null;
         const newId = createNextAccountId(accounts);
         const notes = `Self-registration submitted on ${now.toLocaleDateString()} (${country}, ${city}).`;
 
@@ -476,26 +730,77 @@
             status: 'pending'
         };
 
+        const accountAddress = {
+            country,
+            region,
+            city: city || 'Riyadh',
+            district,
+            streetName: street,
+            street,
+            zipCode: zip
+        };
+
         const normalizedAccount = normalizeIndividualAccountPayload({
             id: newId,
-            fullName: `${firstName} ${lastName}`.trim() || state.basicInfo.userName,
+            fullName,
+            firstName,
+            lastName,
+            gender,
+            dateOfBirth: dob,
+            username: state.basicInfo.userName,
             email: state.basicInfo.email,
             mobile: state.basicInfo.phone,
             city: city || 'Riyadh',
-            status: 'pending',
+            status: 'active',
             balance: 0,
             adsCount: 0,
             pendingAds: 0,
             createdAt: nowIso,
-            lastActiveAt: nowIso,
+            lastActiveAt: null,
             permissions: { autoPosting: false, manualReview: true },
             subscriptions: [],
             financialHistory: [],
             supportRequests: [pendingSupport],
-            notes
+            notes,
+            address: accountAddress,
+            profilePicture: sanitizedPhotoDataUrl,
+            photoDataUrl: sanitizedPhotoDataUrl,
+            photoFileName: sanitizedPhotoFileName
         }, accounts.length);
 
+        const existingInviteCodes = collectExistingInviteCodesFromAccounts(accounts);
+        mergeInviteCodesFromSignupRecords(existingInviteCodes);
+        if (normalizedReferralCode) {
+            existingInviteCodes.add(normalizedReferralCode);
+        }
+        const generatedInviteCode = ensureUniqueInviteCode({
+            existingCodes: existingInviteCodes,
+            seed: `${newId}|${normalizedAccount.email}|${nowIso}`,
+            length: INVITE_CODE_LENGTH
+        });
+
+        normalizedAccount.pointsBalance = 0;
+        normalizedAccount.pointsUpdatedAt = nowIso;
+        normalizedAccount.pointsHistory = [];
+        applyInviteCodeToAccount(normalizedAccount, generatedInviteCode, nowIso);
+
         accounts.push(normalizedAccount);
+        let referralRewardDetails = null;
+        if (invitationOwner && invitationOwner.id !== normalizedAccount.id && normalizedReferralCode) {
+            const canonicalInviteCode = resolveAccountInvitationCode(invitationOwner) || rawReferralCode;
+            referralRewardDetails = awardInvitationOwner({
+                ownerAccount: invitationOwner,
+                invitationCode: canonicalInviteCode,
+                rewardPoints: INVITE_REWARD_POINTS,
+                timestamp: nowIso,
+                newAccountId: normalizedAccount.id,
+                newAccountName: fullName
+            });
+            if (invitationOwnerMatch && Number.isInteger(invitationOwnerMatch.index) && invitationOwnerMatch.index >= 0) {
+                accounts[invitationOwnerMatch.index] = invitationOwner;
+            }
+        }
+        const signupInvitationCode = referralRewardDetails?.invitationCode || rawReferralCode;
         saveIndividualAccounts(accounts);
 
         appendSignupRecord({
@@ -503,10 +808,11 @@
             userName: state.basicInfo.userName,
             email: normalizedAccount.email,
             phone: normalizedAccount.mobile,
-            invitationCode: state.basicInfo.invitationCode,
+            invitationCode: signupInvitationCode,
             passwordHash: hashPassword(state.basicInfo.password),
             submittedAt: nowIso,
             profile: {
+                fullName,
                 firstName,
                 lastName,
                 dateOfBirth: dob,
@@ -517,12 +823,20 @@
                 district,
                 street,
                 zip,
-                photoDataUrl
-            }
+                photoDataUrl: sanitizedPhotoDataUrl,
+                profilePhoto: sanitizedPhotoDataUrl,
+                photoFileName: sanitizedPhotoFileName,
+                inviteCode: isInviteCodeFormatValid(generatedInviteCode) ? generatedInviteCode : null
+            },
+            referralReward: referralRewardDetails ? {
+                invitationCode: referralRewardDetails.invitationCode,
+                points: referralRewardDetails.delta,
+                creditedAccountId: referralRewardDetails.ownerAccountId,
+                creditedAt: referralRewardDetails.timestamp
+            } : null,
+            generatedInviteCode: isInviteCodeFormatValid(generatedInviteCode) ? generatedInviteCode : null
         });
 
-        const fullName = `${firstName} ${lastName}`.trim() || state.basicInfo.userName;
-        
         resetForms();
         
         if (elements.successName) {
@@ -540,6 +854,7 @@
         state.generatedOtp = null;
         state.otpExpiresAt = null;
         state.profilePreview = null;
+        state.profileFileName = null;
         stopOtpCountdown();
         elements.basicInfoForm.reset();
         elements.otpForm?.reset();
@@ -699,6 +1014,419 @@
         }
     }
 
+    function collectExistingInviteCodesFromAccounts(accounts) {
+        const codes = new Set();
+        if (!Array.isArray(accounts)) {
+            return codes;
+        }
+        accounts.forEach(account => {
+            const candidates = getAccountInviteCandidates(account);
+            candidates.forEach(value => {
+                if (!isInviteCodeFormatValid(value)) {
+                    return;
+                }
+                const normalized = normalizeInviteCodeValue(value);
+                if (normalized) {
+                    codes.add(normalized);
+                }
+            });
+        });
+        return codes;
+    }
+
+    function mergeInviteCodesFromSignupRecords(existingCodes) {
+        if (!(existingCodes instanceof Set)) {
+            return;
+        }
+        const records = loadSignupRecords();
+        records.forEach(record => {
+            const candidates = getSignupInviteCandidates(record);
+            candidates.forEach(value => {
+                if (!isInviteCodeFormatValid(value)) {
+                    return;
+                }
+                const normalized = normalizeInviteCodeValue(value);
+                if (normalized) {
+                    existingCodes.add(normalized);
+                }
+            });
+        });
+    }
+
+    function getAccountInviteCandidates(account) {
+        if (!account || typeof account !== 'object') {
+            return [];
+        }
+        const candidates = [];
+        if (typeof account.invitationCode === 'string') {
+            candidates.push(account.invitationCode);
+        }
+        if (account.invitation && typeof account.invitation === 'object') {
+            if (typeof account.invitation.code === 'string') {
+                candidates.push(account.invitation.code);
+            }
+            if (typeof account.invitation.token === 'string') {
+                candidates.push(account.invitation.token);
+            }
+        }
+        if (account.profile && typeof account.profile === 'object') {
+            if (typeof account.profile.inviteCode === 'string') {
+                candidates.push(account.profile.inviteCode);
+            }
+        }
+        if (Array.isArray(account.pointsHistory)) {
+            account.pointsHistory.forEach(entry => {
+                if (entry && typeof entry === 'object' && typeof entry.invitationCode === 'string') {
+                    candidates.push(entry.invitationCode);
+                }
+            });
+        }
+        return candidates;
+    }
+
+    function getSignupInviteCandidates(record) {
+        if (!record || typeof record !== 'object') {
+            return [];
+        }
+        const candidates = [];
+        if (typeof record.invitationCode === 'string') {
+            candidates.push(record.invitationCode);
+        }
+        if (typeof record.generatedInviteCode === 'string') {
+            candidates.push(record.generatedInviteCode);
+        }
+        if (record.invitation && typeof record.invitation === 'object') {
+            if (typeof record.invitation.code === 'string') {
+                candidates.push(record.invitation.code);
+            }
+        }
+        if (record.profile && typeof record.profile === 'object') {
+            if (typeof record.profile.inviteCode === 'string') {
+                candidates.push(record.profile.inviteCode);
+            }
+        }
+        return candidates;
+    }
+
+    function loadSignupRecords() {
+        try {
+            const raw = localStorage.getItem(SIGNUP_RECORDS_KEY);
+            if (!raw) {
+                return [];
+            }
+            const parsed = JSON.parse(raw);
+            return Array.isArray(parsed) ? parsed : [];
+        } catch (error) {
+            console.warn('Unable to load signup records', error);
+            return [];
+        }
+    }
+
+    function ensureUniqueInviteCode({ existingCodes, seed, length }) {
+        const codes = existingCodes instanceof Set ? existingCodes : new Set();
+        const requiredLength = Math.max(length || INVITE_CODE_LENGTH, 6);
+        for (let attempt = 0; attempt < 160; attempt += 1) {
+            const candidate = createInviteCodeCandidate(requiredLength);
+            if (!isInviteCodeFormatValid(candidate)) {
+                continue;
+            }
+            const normalized = candidate.toLowerCase();
+            if (!codes.has(normalized)) {
+                codes.add(normalized);
+                return candidate;
+            }
+        }
+        for (let attempt = 0; attempt < 160; attempt += 1) {
+            const candidate = buildInviteCodeFromSeed(`${seed}|${attempt}`, requiredLength);
+            if (!isInviteCodeFormatValid(candidate)) {
+                continue;
+            }
+            const normalized = candidate.toLowerCase();
+            if (!codes.has(normalized)) {
+                codes.add(normalized);
+                return candidate;
+            }
+        }
+        return buildFallbackInviteCode(requiredLength, codes);
+    }
+
+    function buildFallbackInviteCode(length, existingCodes) {
+        const codes = existingCodes instanceof Set ? existingCodes : new Set();
+        const baseLength = Math.max(length || INVITE_CODE_LENGTH, 6);
+        for (let attempt = 0; attempt < 240; attempt += 1) {
+            const candidate = buildInviteCodeFromSeed(`fallback|${Date.now()}|${Math.random()}|${attempt}`, baseLength);
+            if (!isInviteCodeFormatValid(candidate)) {
+                continue;
+            }
+            const normalized = candidate.toLowerCase();
+            if (!codes.has(normalized)) {
+                codes.add(normalized);
+                return candidate;
+            }
+        }
+        const emergencySeed = `ONRUF${Date.now()}${Math.random()}`.replace(/[^A-Za-z0-9]/g, '');
+        let fallback = `${emergencySeed}Aa0`;
+        if (fallback.length < baseLength) {
+            fallback = `${fallback}${'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'}`;
+        }
+        fallback = fallback.slice(0, baseLength);
+        if (!isInviteCodeFormatValid(fallback)) {
+            fallback = `${fallback}Aa0`.slice(0, baseLength);
+        }
+        codes.add(fallback.toLowerCase());
+        return fallback;
+    }
+
+    function findInvitationOwnerEntry(invitationCode, accounts) {
+        const normalizedCode = normalizeInviteCodeValue(invitationCode);
+        if (!normalizedCode) {
+            return null;
+        }
+        const list = Array.isArray(accounts) ? accounts : [];
+        for (let index = 0; index < list.length; index += 1) {
+            const account = list[index];
+            if (!account || typeof account !== 'object') {
+                continue;
+            }
+            const candidates = getAccountInviteCandidates(account);
+            const hasMatch = candidates.some(candidate => {
+                if (!isInviteCodeFormatValid(candidate)) {
+                    return false;
+                }
+                return normalizeInviteCodeValue(candidate) === normalizedCode;
+            });
+            if (hasMatch) {
+                return { account, index };
+            }
+        }
+
+        const signupRecords = loadSignupRecords();
+        for (const record of signupRecords) {
+            const candidates = getSignupInviteCandidates(record);
+            const recordHasMatch = candidates.some(candidate => {
+                if (!isInviteCodeFormatValid(candidate)) {
+                    return false;
+                }
+                return normalizeInviteCodeValue(candidate) === normalizedCode;
+            });
+            if (!recordHasMatch) {
+                continue;
+            }
+            const matchId = typeof record.accountId === 'string' ? record.accountId.trim() : '';
+            const matchEmail = normalizeEmail(record.email);
+            const indexById = matchId ? list.findIndex(entry => entry && entry.id === matchId) : -1;
+            if (indexById >= 0) {
+                return { account: list[indexById], index: indexById };
+            }
+            if (matchEmail) {
+                const indexByEmail = list.findIndex(entry => normalizeEmail(entry?.email) === matchEmail);
+                if (indexByEmail >= 0) {
+                    return { account: list[indexByEmail], index: indexByEmail };
+                }
+            }
+        }
+
+        return null;
+    }
+
+    function normalizeInviteCodeValue(value) {
+        if (typeof value !== 'string') {
+            return '';
+        }
+        const trimmed = value.trim();
+        if (!trimmed) {
+            return '';
+        }
+        return trimmed.toLowerCase();
+    }
+
+    function applyInviteCodeToAccount(account, inviteCode, issuedAt) {
+        if (!account || typeof account !== 'object') {
+            return;
+        }
+        const normalizedCode = typeof inviteCode === 'string' ? inviteCode.trim() : '';
+        if (!isInviteCodeFormatValid(normalizedCode)) {
+            return;
+        }
+        const issuedAtIso = normalizeIsoTimestamp(issuedAt, new Date().toISOString());
+        account.invitationCode = normalizedCode;
+        const invitationPayload = account.invitation && typeof account.invitation === 'object'
+            ? { ...account.invitation }
+            : {};
+        invitationPayload.code = normalizedCode;
+        invitationPayload.token = invitationPayload.token || normalizedCode;
+        if (issuedAtIso) {
+            invitationPayload.issuedAt = issuedAtIso;
+        }
+        invitationPayload.issuedBy = invitationPayload.issuedBy || 'self-signup';
+        account.invitation = invitationPayload;
+        if (!account.profile || typeof account.profile !== 'object') {
+            account.profile = {};
+        }
+        account.profile.inviteCode = normalizedCode;
+    }
+
+    function resolveAccountInvitationCode(account) {
+        if (!account || typeof account !== 'object') {
+            return '';
+        }
+        const candidates = [];
+        if (typeof account.invitationCode === 'string' && account.invitationCode.trim()) {
+            candidates.push(account.invitationCode.trim());
+        }
+        if (account.invitation && typeof account.invitation === 'object') {
+            if (typeof account.invitation.code === 'string' && account.invitation.code.trim()) {
+                candidates.push(account.invitation.code.trim());
+            }
+            if (typeof account.invitation.token === 'string' && account.invitation.token.trim()) {
+                candidates.push(account.invitation.token.trim());
+            }
+        }
+        return candidates.find(Boolean) || '';
+    }
+
+    function awardInvitationOwner({ ownerAccount, invitationCode, rewardPoints, timestamp, newAccountId, newAccountName }) {
+        if (!ownerAccount || typeof ownerAccount !== 'object') {
+            return null;
+        }
+        const normalizedCode = typeof invitationCode === 'string' ? invitationCode.trim() : '';
+        if (!normalizedCode) {
+            return null;
+        }
+        const rewardValue = Number.isFinite(rewardPoints) ? Number(rewardPoints) : INVITE_REWARD_POINTS;
+        const currentBalance = Number.isFinite(ownerAccount.pointsBalance) ? Number(ownerAccount.pointsBalance) : 0;
+        const updatedBalance = currentBalance + rewardValue;
+
+        ownerAccount.pointsBalance = updatedBalance;
+        ownerAccount.pointsUpdatedAt = timestamp;
+
+        if (!ownerAccount.pointsHistory || !Array.isArray(ownerAccount.pointsHistory)) {
+            ownerAccount.pointsHistory = [];
+        }
+
+        const historyEntry = {
+            id: buildPointsHistoryEntryId(ownerAccount),
+            label: newAccountName ? `Referral reward: ${newAccountName}` : 'Referral reward',
+            delta: rewardValue,
+            timestamp,
+            balanceAfter: updatedBalance,
+            invitationCode: normalizedCode,
+            sourceAccountId: newAccountId
+        };
+
+        ownerAccount.pointsHistory = [historyEntry, ...ownerAccount.pointsHistory].slice(0, 25);
+
+        if (!ownerAccount.invitation || typeof ownerAccount.invitation !== 'object') {
+            ownerAccount.invitation = { code: normalizedCode, token: normalizedCode };
+        } else {
+            if (!ownerAccount.invitation.code) {
+                ownerAccount.invitation.code = normalizedCode;
+            }
+            if (!ownerAccount.invitation.token) {
+                ownerAccount.invitation.token = normalizedCode;
+            }
+        }
+        if (!ownerAccount.invitationCode) {
+            ownerAccount.invitationCode = normalizedCode;
+        }
+
+        return {
+            ownerAccountId: ownerAccount.id,
+            invitationCode: normalizedCode,
+            delta: rewardValue,
+            timestamp,
+            historyEntryId: historyEntry.id
+        };
+    }
+
+    function buildPointsHistoryEntryId(ownerAccount) {
+        const prefix = ownerAccount && typeof ownerAccount.id === 'string' && ownerAccount.id.trim()
+            ? ownerAccount.id.trim()
+            : 'IND';
+        const randomSuffix = Math.random().toString(36).slice(2, 8);
+        return `${prefix}-points-${Date.now()}-${randomSuffix}`;
+    }
+
+    function createInviteCodeCandidate(length) {
+        const uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+        const lowercase = 'abcdefghijklmnopqrstuvwxyz';
+        const digits = '0123456789';
+        const allChars = `${uppercase}${lowercase}${digits}`;
+        const pools = [uppercase, lowercase, digits];
+        const requiredLength = Math.max(length || INVITE_CODE_LENGTH, 6);
+
+        const getRandomIndex = max => {
+            if (max <= 0) {
+                return 0;
+            }
+            if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+                const array = new Uint32Array(1);
+                crypto.getRandomValues(array);
+                return array[0] % max;
+            }
+            return Math.floor(Math.random() * max);
+        };
+
+        const chars = pools.map(pool => pool.charAt(getRandomIndex(pool.length)));
+        while (chars.length < requiredLength) {
+            chars.push(allChars.charAt(getRandomIndex(allChars.length)));
+        }
+        for (let index = chars.length - 1; index > 0; index -= 1) {
+            const swapIndex = getRandomIndex(index + 1);
+            const temp = chars[index];
+            chars[index] = chars[swapIndex];
+            chars[swapIndex] = temp;
+        }
+        return chars.join('').slice(0, requiredLength);
+    }
+
+    function buildInviteCodeFromSeed(seed, length) {
+        const uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+        const lowercase = 'abcdefghijklmnopqrstuvwxyz';
+        const digits = '0123456789';
+        const allChars = `${uppercase}${lowercase}${digits}`;
+        const chars = [];
+        let hash = Math.abs(hashString(seed || '')) || 1;
+
+        const pullChar = (pool, modifier) => {
+            hash = (hash * 1664525 + modifier) >>> 0;
+            return pool.charAt(hash % pool.length);
+        };
+
+        chars.push(pullChar(uppercase, 1013904223));
+        chars.push(pullChar(lowercase, 1103515245));
+        chars.push(pullChar(digits, 12345));
+
+        while (chars.length < length) {
+            hash = (hash * 22695477 + 1) >>> 0;
+            chars.push(allChars.charAt(hash % allChars.length));
+        }
+
+        for (let index = chars.length - 1; index > 0; index -= 1) {
+            hash = (hash * 134775813 + 1) >>> 0;
+            const swapIndex = hash % (index + 1);
+            const temp = chars[index];
+            chars[index] = chars[swapIndex];
+            chars[swapIndex] = temp;
+        }
+
+        return chars.join('').slice(0, length);
+    }
+
+    function isInviteCodeFormatValid(value) {
+        if (typeof value !== 'string') {
+            return false;
+        }
+        const trimmed = value.trim();
+        if (!trimmed) {
+            return false;
+        }
+        if (trimmed.length < 6) {
+            return false;
+        }
+        return /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)[A-Za-z\d]+$/.test(trimmed);
+    }
+
     function createNextAccountId(accounts) {
         const existingIds = new Set(accounts.map(entry => entry && entry.id ? String(entry.id) : ''));
         let highest = 2000;
@@ -726,19 +1454,83 @@
         const email = normalizeEmail(emailRaw) || emailRaw.toLowerCase();
         const mobile = typeof account.mobile === 'string' && account.mobile.trim() ? account.mobile.trim() : '';
         const city = typeof account.city === 'string' && account.city.trim() ? account.city.trim() : 'Riyadh';
-        const statusCandidate = typeof account.status === 'string' && account.status.trim() ? account.status.trim().toLowerCase() : 'pending';
-        const allowedStatuses = new Set(['active', 'frozen', 'pending', 'deleted', 'suspended']);
-        const status = allowedStatuses.has(statusCandidate) ? statusCandidate : 'pending';
+        const rawStatus = typeof account.status === 'string' && account.status.trim()
+            ? account.status.trim().toLowerCase()
+            : 'active';
+    const activeStatuses = new Set(['active', 'activated', 'approved', 'verified', 'pending']);
+    const inactiveStatuses = new Set(['inactive', 'frozen', 'deleted', 'suspended', 'blocked', 'disabled', 'deactivated']);
+        const status = inactiveStatuses.has(rawStatus)
+            ? 'inactive'
+            : activeStatuses.has(rawStatus)
+                ? 'active'
+                : rawStatus
+                    ? 'inactive'
+                    : 'active';
         const balance = Number.isFinite(account.balance) ? Number(account.balance) : 0;
         const adsCount = Number.isFinite(account.adsCount) ? Math.max(0, Math.floor(account.adsCount)) : 0;
         const pendingAds = Number.isFinite(account.pendingAds) ? Math.max(0, Math.floor(account.pendingAds)) : 0;
-        const createdAt = normalizeIsoTimestamp(account.createdAt, new Date().toISOString());
-        const lastActiveAt = normalizeIsoTimestamp(account.lastActiveAt, createdAt);
+        const rawCreatedAt = account.createdAt;
+        const createdAt = normalizeIsoTimestamp(rawCreatedAt, new Date().toISOString());
+        const rawLastActiveAt = account.lastActiveAt;
+        let lastActiveAt = normalizeIsoTimestamp(rawLastActiveAt, null);
+        const hasExplicitLastActive = Object.prototype.hasOwnProperty.call(account, 'lastActiveAt');
+        const creationTime = createdAt ? Date.parse(createdAt) : NaN;
+        const lastActiveTime = lastActiveAt ? Date.parse(lastActiveAt) : NaN;
+        const matchesCreation = hasExplicitLastActive
+            && typeof rawLastActiveAt === 'string'
+            && typeof rawCreatedAt === 'string'
+            && rawLastActiveAt.trim()
+            && rawCreatedAt.trim()
+            && rawLastActiveAt.trim() === rawCreatedAt.trim();
+        const timestampsNearlyEqual = !Number.isNaN(creationTime)
+            && !Number.isNaN(lastActiveTime)
+            && Math.abs(lastActiveTime - creationTime) <= 1000;
+        if (matchesCreation && timestampsNearlyEqual) {
+            // Ignore creation-time defaults so "Last Login" stays empty until a real session occurs.
+            lastActiveAt = null;
+        }
         const permissionsSource = account.permissions && typeof account.permissions === 'object' ? account.permissions : {};
         const permissions = {
             autoPosting: Boolean(permissionsSource.autoPosting),
             manualReview: Boolean(permissionsSource.manualReview)
         };
+        const nameParts = fullName.split(/\s+/).filter(Boolean);
+        const fallbackFirstName = nameParts[0] || '';
+        const fallbackLastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : '';
+        const firstName = typeof account.firstName === 'string' && account.firstName.trim() ? account.firstName.trim() : fallbackFirstName;
+        const lastName = typeof account.lastName === 'string' && account.lastName.trim() ? account.lastName.trim() : fallbackLastName;
+        const gender = typeof account.gender === 'string' && account.gender.trim() ? account.gender.trim() : '';
+        const dateOfBirth = normalizeIsoTimestamp(account.dateOfBirth, null);
+        const username = typeof account.username === 'string' && account.username.trim()
+            ? account.username.trim()
+            : typeof account.userName === 'string' && account.userName.trim()
+                ? account.userName.trim()
+                : '';
+        const addressSource = account.address && typeof account.address === 'object' ? account.address : {};
+        const address = {
+            country: typeof addressSource.country === 'string' && addressSource.country.trim() ? addressSource.country.trim() : '',
+            region: typeof addressSource.region === 'string' && addressSource.region.trim() ? addressSource.region.trim() : '',
+            city: typeof addressSource.city === 'string' && addressSource.city.trim() ? addressSource.city.trim() : city,
+            district: typeof addressSource.district === 'string' && addressSource.district.trim() ? addressSource.district.trim() : '',
+            streetNumber: typeof addressSource.streetNumber === 'string' && addressSource.streetNumber.trim()
+                ? addressSource.streetNumber.trim()
+                : typeof addressSource.streetNo === 'string' && addressSource.streetNo.trim()
+                    ? addressSource.streetNo.trim()
+                    : '',
+            streetName: typeof addressSource.streetName === 'string' && addressSource.streetName.trim() ? addressSource.streetName.trim() : '',
+            zipCode: typeof addressSource.zipCode === 'string' && addressSource.zipCode.trim()
+                ? addressSource.zipCode.trim()
+                : typeof addressSource.postalCode === 'string' && addressSource.postalCode.trim()
+                    ? addressSource.postalCode.trim()
+                    : ''
+        };
+        const photoDataUrl = typeof account.photoDataUrl === 'string' && account.photoDataUrl.trim() ? account.photoDataUrl.trim() : '';
+        const photoFileName = typeof account.photoFileName === 'string' && account.photoFileName.trim() ? account.photoFileName.trim() : '';
+        const profilePicture = typeof account.profilePicture === 'string' && account.profilePicture.trim()
+            ? account.profilePicture.trim()
+            : photoDataUrl
+                ? photoDataUrl
+                : '';
         const subscriptions = Array.isArray(account.subscriptions)
             ? account.subscriptions.map(subscription => ({
                 name: typeof subscription.name === 'string' && subscription.name.trim() ? subscription.name.trim() : 'Subscription',
@@ -774,24 +1566,101 @@
                 return { id: requestId, reason, requestedAt, expiresAt, status: statusLabel };
             }).filter(Boolean)
             : [];
+        const invitationSource = account.invitation && typeof account.invitation === 'object' ? account.invitation : null;
+        const invitationCodeCandidate = typeof account.invitationCode === 'string' && account.invitationCode.trim() ? account.invitationCode.trim() : '';
+        const invitationPayload = {};
+        if (invitationSource) {
+            if (typeof invitationSource.code === 'string' && invitationSource.code.trim()) {
+                invitationPayload.code = invitationSource.code.trim();
+            }
+            if (typeof invitationSource.token === 'string' && invitationSource.token.trim()) {
+                invitationPayload.token = invitationSource.token.trim();
+            }
+            if (invitationSource.issuedAt) {
+                const issuedAt = normalizeIsoTimestamp(invitationSource.issuedAt, null);
+                if (issuedAt) {
+                    invitationPayload.issuedAt = issuedAt;
+                }
+            }
+            if (typeof invitationSource.issuedBy === 'string' && invitationSource.issuedBy.trim()) {
+                invitationPayload.issuedBy = invitationSource.issuedBy.trim();
+            }
+        }
+        if (invitationCodeCandidate && !invitationPayload.code) {
+            invitationPayload.code = invitationCodeCandidate;
+        }
+        if (invitationPayload.code && !invitationPayload.token) {
+            invitationPayload.token = invitationPayload.code;
+        }
+        const invitation = Object.keys(invitationPayload).length ? invitationPayload : null;
+        const invitationCode = invitation?.code || invitation?.token || invitationCodeCandidate || '';
+        const pointsBalanceCandidate = Number.parseFloat(account.pointsBalance);
+        const pointsBalance = Number.isFinite(pointsBalanceCandidate) ? Number(pointsBalanceCandidate) : 0;
+        const pointsUpdatedAt = normalizeIsoTimestamp(account.pointsUpdatedAt, lastActiveAt || createdAt);
+        const pointsHistorySource = Array.isArray(account.pointsHistory) ? account.pointsHistory : [];
+        const pointsHistory = pointsHistorySource.map((entry, entryIndex) => {
+            if (!entry || typeof entry !== 'object') {
+                return null;
+            }
+            const historyId = typeof entry.id === 'string' && entry.id.trim() ? entry.id.trim() : `points-${id}-${entryIndex}`;
+            const label = typeof entry.label === 'string' && entry.label.trim() ? entry.label.trim() : 'Points adjustment';
+            const deltaValue = Number.parseFloat(entry.delta ?? entry.amount ?? 0) || 0;
+            const timestamp = normalizeIsoTimestamp(entry.timestamp || entry.date || entry.recordedAt, pointsUpdatedAt || createdAt);
+            const balanceAfterCandidate = Number.parseFloat(entry.balanceAfter ?? entry.balance);
+            const balanceAfter = Number.isFinite(balanceAfterCandidate) ? balanceAfterCandidate : pointsBalance + deltaValue;
+            const invitationReference = typeof entry.invitationCode === 'string' && entry.invitationCode.trim()
+                ? entry.invitationCode.trim()
+                : invitationCode || '';
+            const sourceAccountId = typeof entry.sourceAccountId === 'string' && entry.sourceAccountId.trim()
+                ? entry.sourceAccountId.trim()
+                : undefined;
+            const sanitized = {
+                id: historyId,
+                label,
+                delta: deltaValue,
+                timestamp,
+                balanceAfter
+            };
+            if (invitationReference) {
+                sanitized.invitationCode = invitationReference;
+            }
+            if (sourceAccountId) {
+                sanitized.sourceAccountId = sourceAccountId;
+            }
+            return sanitized;
+        }).filter(Boolean).slice(0, 50);
         const notes = typeof account.notes === 'string' ? account.notes.trim() : '';
         return {
             id,
             fullName,
+            firstName,
+            lastName,
+            gender,
+            dateOfBirth,
             email,
             mobile,
             city,
+            address,
             status,
             balance,
             adsCount,
             pendingAds,
             createdAt,
             lastActiveAt,
+            username,
             permissions,
             subscriptions,
             financialHistory,
             supportRequests,
-            notes
+            notes,
+            invitationCode: invitationCode || null,
+            invitation,
+            pointsBalance,
+            pointsUpdatedAt,
+            pointsHistory,
+            profilePicture,
+            photoDataUrl,
+            photoFileName
         };
     }
 
@@ -815,6 +1684,13 @@
     }
 
     function normalizePhone(prefix, value) {
+        const rawPrefix = typeof prefix === 'string' ? prefix.trim() : '';
+        const sanitizedPrefixDigits = rawPrefix.replace(/[^0-9+]/g, '');
+        const safePrefix = sanitizedPrefixDigits.startsWith('+')
+            ? sanitizedPrefixDigits
+            : sanitizedPrefixDigits
+                ? `+${sanitizedPrefixDigits.replace(/[^0-9]/g, '')}`
+                : '+';
         const digits = (value || '').replace(/\D/g, '');
         if (!digits) {
             return '';
@@ -823,7 +1699,7 @@
         if (normalized.length < 8) {
             return '';
         }
-        return `${prefix}${normalized}`;
+        return `${safePrefix}${normalized}`;
     }
 
     function validateEmail(value) {
