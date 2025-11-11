@@ -1,173 +1,179 @@
 // --- Category Modal Logic ---
-function getMainCategories(categories) {
-    // Main categories have no parent or parent is empty/null
-    return categories.filter(cat => !cat.parent || cat.parent === '' || cat.parent === null);
-}
-
-function getSubcategories(categories, parentName) {
-    return categories.filter(cat => cat.parent === parentName);
-}
-
-function renderCategoryModalList(categories, parentName, onSelect) {
-    // legacy list drilldown kept for fallback, not used by default
-    const listDiv = document.getElementById('categoryModalList');
-    if (!listDiv) return;
-    listDiv.innerHTML = '';
-    let cats = parentName ? getSubcategories(categories, parentName) : getMainCategories(categories);
-    if (!parentName && cats.length === 0) {
-        cats = categories;
-    }
-    if (!cats.length) {
-        listDiv.innerHTML = '<div style="color:#888;">No subcategories.</div>';
-        return;
-    }
-    cats.forEach(cat => {
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.textContent = cat.nameEnglish || cat.nameArabic || cat.id;
-        btn.className = 'btn btn-outline';
-        btn.style = 'display:block;width:100%;margin-bottom:8px;text-align:left;';
-        btn.onclick = () => onSelect(cat);
-        listDiv.appendChild(btn);
-    });
-}
-
-// --- Modal Tree Rendering ---
-function normalizeCategoryModalKey(entry) {
-    return (entry && (entry.nameEnglish || entry.nameArabic || entry.id) || '').trim();
-}
-
 function buildCategoryModalHierarchy(items) {
-    const canonicalize = value => (typeof value === 'string' ? value.trim().toLowerCase() : '');
-    const nodeRegistry = new Map();
-    const aliasLookup = new Map();
+    const canonicalize = value => {
+        if (value === null || value === undefined) {
+            return '';
+        }
+        return String(value).trim().toLowerCase();
+    };
 
-    const ensureNode = (key, entry = null) => {
-        const inferredKey = key || normalizeCategoryModalKey(entry);
-        const canonicalKey = canonicalize(inferredKey);
-        if (!canonicalKey) {
+    const nodesByKey = new Map();
+
+    const ensureNode = key => {
+        const normalized = canonicalize(key);
+        if (!normalized) {
             return null;
         }
-
-        let node = nodeRegistry.get(canonicalKey);
-        if (!node) {
-            node = { key: canonicalKey, entry: null, children: [], parent: null };
-            nodeRegistry.set(canonicalKey, node);
+        if (!nodesByKey.has(normalized)) {
+            nodesByKey.set(normalized, {
+                key: normalized,
+                entry: null,
+                parent: null,
+                children: []
+            });
         }
-
-        if (entry && !node.entry) {
-            node.entry = entry;
-        }
-
-        if (!node.entry) {
-            const fallback = inferredKey || canonicalKey;
-            node.entry = {
-                id: fallback,
-                nameEnglish: fallback
-            };
-        }
-
-        return node;
+        return nodesByKey.get(normalized);
     };
 
-    const registerAliases = (node, ...aliases) => {
-        aliases.forEach(alias => {
-            const canonicalAlias = canonicalize(alias);
-            if (!canonicalAlias) {
+    const getKey = entry => {
+        if (!entry || typeof entry !== 'object') {
+            return '';
+        }
+        const candidates = [
+            entry.id,
+            entry.categoryId,
+            entry.categoryCode,
+            entry.code,
+            entry.slug
+        ];
+        for (const candidate of candidates) {
+            const canonical = canonicalize(candidate);
+            if (canonical) {
+                return candidate;
+            }
+        }
+        return entry.nameEnglish || entry.name || entry.nameArabic || '';
+    };
+
+    const getParentKey = entry => {
+        if (!entry || typeof entry !== 'object') {
+            return '';
+        }
+        const path = Array.isArray(entry.path) ? entry.path.slice() : [];
+        if (path.length >= 2) {
+            const parentPathKey = path[path.length - 2];
+            if (canonicalize(parentPathKey)) {
+                return parentPathKey;
+            }
+        }
+        const candidates = [
+            entry.parentId,
+            entry.parentCategoryId,
+            entry.parentCategory,
+            entry.parent,
+            entry.parentCode,
+            entry.parentSlug
+        ];
+        for (const candidate of candidates) {
+            if (canonicalize(candidate)) {
+                return candidate;
+            }
+        }
+        return '';
+    };
+
+    const getLabel = entry => {
+        if (!entry || typeof entry !== 'object') {
+            return '';
+        }
+        const labels = [
+            entry.nameEnglish,
+            entry.name,
+            entry.label,
+            entry.title,
+            entry.displayName,
+            entry.nameArabic
+        ];
+        for (const label of labels) {
+            if (typeof label === 'string' && label.trim()) {
+                return label.trim();
+            }
+        }
+        if (typeof entry.categoryCode === 'string') {
+            return entry.categoryCode.trim();
+        }
+        if (typeof entry.id === 'string') {
+            return entry.id.trim();
+        }
+        return '';
+    };
+
+    if (Array.isArray(items)) {
+        items.forEach(entry => {
+            if (!entry || typeof entry !== 'object') {
                 return;
             }
-            if (!aliasLookup.has(canonicalAlias)) {
-                aliasLookup.set(canonicalAlias, node);
+            const key = getKey(entry);
+            if (!key) {
+                return;
+            }
+            const node = ensureNode(key);
+            if (node && !node.entry) {
+                node.entry = entry;
             }
         });
-    };
+    }
 
-    const source = Array.isArray(items) ? items.filter(Boolean) : [];
-
-    source.forEach(entry => {
-        const keySource = normalizeCategoryModalKey(entry) || entry.id || entry.nameEnglish || entry.nameArabic;
-        const node = ensureNode(keySource, entry);
-        if (!node) {
+    nodesByKey.forEach(node => {
+        if (!node.entry) {
             return;
         }
-
-        registerAliases(
-            node,
-            keySource,
-            entry.id,
-            entry.nameEnglish,
-            entry.nameArabic,
-            entry.categoryCode
-        );
-
-        const parentCandidates = [
-            typeof entry.parentCategoryId === 'string' ? entry.parentCategoryId : '',
-            typeof entry.parentCategoryCode === 'string' ? entry.parentCategoryCode : '',
-            typeof entry.parent === 'string' ? entry.parent : '',
-            typeof entry.parentCategory === 'string' ? entry.parentCategory : '',
-            typeof entry.parentCategoryLabel === 'string' ? entry.parentCategoryLabel : ''
-        ];
-
-        const parentKeySource = parentCandidates.find(value => value && String(value).trim());
-        if (parentKeySource) {
-            const parentNode = ensureNode(parentKeySource);
-            if (parentNode) {
-                node.parent = parentNode;
-                if (!parentNode.children.includes(node)) {
-                    parentNode.children.push(node);
-                }
-            }
+        const parentKey = getParentKey(node.entry);
+        if (!parentKey || canonicalize(parentKey) === canonicalize(CATEGORY_TREE_ROOT_ID)) {
+            return;
+        }
+        const parentNode = ensureNode(parentKey);
+        if (!parentNode) {
+            return;
+        }
+        node.parent = parentNode;
+        if (!parentNode.children.includes(node)) {
+            parentNode.children.push(node);
         }
     });
 
-    nodeRegistry.forEach(node => {
-        if (Array.isArray(node.children)) {
-            node.children = node.children.filter((child, index, array) => array.indexOf(child) === index);
+    nodesByKey.forEach(node => {
+        if (node.children.length) {
+            node.children.sort((a, b) => getLabel(a.entry).localeCompare(getLabel(b.entry), 'en', { sensitivity: 'base' }));
         }
     });
-
-    const resolveLabel = entry => (entry && (entry.nameEnglish || entry.name || entry.nameArabic || entry.id || '')) || '';
-
-    const sortNodes = list => {
-        if (!Array.isArray(list) || !list.length) {
-            return;
-        }
-        list.sort((a, b) => {
-            const aLabel = resolveLabel(a.entry).toLowerCase();
-            const bLabel = resolveLabel(b.entry).toLowerCase();
-            return aLabel.localeCompare(bLabel);
-        });
-        list.forEach(child => {
-            if (Array.isArray(child.children) && child.children.length) {
-                sortNodes(child.children);
-            }
-        });
-    };
 
     const roots = [];
-    nodeRegistry.forEach(node => {
+    const seen = new Set();
+
+    nodesByKey.forEach(node => {
         if (!node.parent) {
-            roots.push(node);
+            if (!node.entry) {
+                node.children.forEach(child => {
+                    child.parent = null;
+                    const childKey = child.key || '';
+                    if (!seen.has(childKey)) {
+                        seen.add(childKey);
+                        roots.push(child);
+                    }
+                });
+                return;
+            }
+            const key = node.key || '';
+            if (!seen.has(key)) {
+                seen.add(key);
+                roots.push(node);
+            }
         }
     });
 
-    sortNodes(roots);
+    roots.sort((a, b) => getLabel(a.entry).localeCompare(getLabel(b.entry), 'en', { sensitivity: 'base' }));
 
-    return { roots, aliasLookup };
+    return { roots, nodesByKey, canonicalize };
 }
 
-function renderCategoryModalTree(items, onSelect, options = {}) {
-    const container = document.getElementById('categoryModalList');
-    if (!container) return;
+function renderCategoryModalTree(items, onSelect, { expandedKeys = null, selectedKey = null, disableEntry = null } = {}) {
+    const container = document.getElementById('categoryModalTree');
+    if (!container) {
+        return;
+    }
 
     const canonicalize = value => (typeof value === 'string' ? value.trim().toLowerCase() : '');
-
-    const {
-        expandedKeys = new Set(),
-        selectedKey = null,
-        disableEntry = null
-    } = options;
-
     const expandedSet = expandedKeys instanceof Set
         ? expandedKeys
         : new Set(Array.isArray(expandedKeys) ? expandedKeys.map(canonicalize) : []);
@@ -2171,6 +2177,13 @@ const state = {
     individualLogOverlayAccountId: null,
     individualPublishingOverlayContext: null,
     individualPublishingOverlayReturnFocus: null,
+    individualFavoriteCategoryVisibleCounts: Object.create(null),
+    individualFavoriteSellerVisibleCounts: Object.create(null),
+    individualFavoriteSearchVisibleCounts: Object.create(null),
+    individualWalletVisibleCounts: Object.create(null),
+    individualPointsVisibleCounts: Object.create(null),
+    individualPaymentMethodVisibleCounts: Object.create(null),
+    individualSavedAddressVisibleCounts: Object.create(null),
     currentBusinessAccountsPage: 1,
     businessAccountsPerPage: 10,
     businessAccountsFilters: {
@@ -2180,6 +2193,14 @@ const state = {
     },
     activeBusinessAccountId: null,
     businessDecisionContext: null,
+    businessRequestsFilters: {
+        search: '',
+        period: 'today',
+        startDate: null,
+        endDate: null
+    },
+    businessRequestsSort: 'newest',
+    activeBusinessRequestId: null,
     editingBusinessPackageId: null,
     businessFinancialIntegration: true,
     currentFinanceTransactionsPage: 1,
@@ -2830,9 +2851,314 @@ const defaultProductAdAutomation = {
     ]
 };
 
-const defaultIndividualAccounts = [];
+const defaultIndividualAccounts = [
+    {
+        id: 'IND-5101',
+        fullName: 'Layla Al-Harbi',
+        firstName: 'Layla',
+        lastName: 'Al-Harbi',
+        email: 'layla.alharbi@onrufmail.com',
+        mobile: '+966501234567',
+        city: 'Riyadh',
+        status: 'active',
+        createdAt: '2025-10-22T08:40:00.000Z',
+        lastActiveAt: '2025-11-11T19:25:00.000Z',
+        pointsBalance: 420,
+        favoriteCategories: ['Smart Lighting Kits', 'Luxury Watches'],
+        favoriteSellers: ['Smart Living Solutions', 'Luxury Timepieces Ltd.'],
+        favoriteSearches: ['Eco friendly packaging'],
+        businessAssociations: [
+            {
+                businessId: 'BUS-9001',
+                companyName: 'Najd Culinary Studio',
+                relationship: 'Owner',
+                linkedAt: '2025-11-11T07:15:00.000Z'
+            }
+        ],
+        financialHistory: [
+            {
+                id: 'FH-5101-1',
+                label: 'Wallet top up',
+                amount: 185.75,
+                type: 'credit',
+                timestamp: '2025-11-01T11:42:00.000Z'
+            }
+        ],
+        marketplaceActivity: {
+            followUps: {
+                favoriteCategories: ['Gourmet Ingredients']
+            }
+        }
+    },
+    {
+        id: 'IND-5102',
+        fullName: 'Mazen Al-Otaibi',
+        firstName: 'Mazen',
+        lastName: 'Al-Otaibi',
+        email: 'mazen.otaibi@onrufmail.com',
+        mobile: '+966507778889',
+        city: 'Jeddah',
+        status: 'active',
+        createdAt: '2025-09-18T09:05:00.000Z',
+        lastActiveAt: '2025-11-10T17:05:00.000Z',
+        pointsBalance: 215,
+        favoriteCategories: ['Fitness Trackers', 'Outdoor Furniture Sets'],
+        favoriteSellers: ['Riyadh Fitness Hub'],
+        favoriteSearches: ['Zero sugar snacks'],
+        businessAssociations: [
+            {
+                businessId: 'BUS-9002',
+                companyName: 'Orbit Activewear',
+                relationship: 'Marketing Lead',
+                linkedAt: '2025-11-09T15:25:00.000Z'
+            }
+        ],
+        marketplaceActivity: {
+            followUps: {
+                favoriteSellers: ['Smart Living Solutions']
+            }
+        }
+    },
+    {
+        id: 'IND-5103',
+        fullName: 'Reem Al-Mutairi',
+        firstName: 'Reem',
+        lastName: 'Al-Mutairi',
+        email: 'reem.mutairi@onrufmail.com',
+        mobile: '+966503334455',
+        city: 'Dammam',
+        status: 'active',
+        createdAt: '2025-08-30T13:15:00.000Z',
+        lastActiveAt: '2025-11-11T10:22:00.000Z',
+        pointsBalance: 305,
+        favoriteCategories: ['Business Audiobooks'],
+        favoriteSellers: ['Sunrise Furnishings'],
+        favoriteSearches: ['Shared workspace furniture'],
+        businessAssociations: [
+            {
+                businessId: 'BUS-9003',
+                companyName: 'Harbor Shared Offices',
+                relationship: 'Operations',
+                linkedAt: '2025-11-07T08:40:00.000Z'
+            }
+        ]
+    }
+];
 
-const defaultBusinessAccounts = [];
+const defaultBusinessAccounts = [
+    {
+        id: 'BUS-9001',
+        companyName: 'Najd Culinary Studio',
+        contactName: 'Layla Al-Harbi',
+        email: 'hello@najdculinary.sa',
+        phone: '+966112223344',
+        city: 'Riyadh',
+        submittedAt: '2025-11-12T06:12:00.000Z',
+        status: 'pending',
+        packageId: 'PKG-START',
+        registrationNumber: '1011223344',
+        detailRegistrationNumber: 'CR-2025-4412',
+        registrationDocumentType: 'commercial-registration',
+        expiryDate: '2026-05-01T00:00:00.000Z',
+        vatNumber: '310122334455668',
+        maroofUrl: 'https://maroof.sa/businesses/najdculinary',
+        website: 'https://najdculinary.sa',
+        socials: {
+            instagram: 'https://www.instagram.com/najdculinary',
+            twitter: 'https://www.twitter.com/najdculinary',
+            linkedin: 'https://www.linkedin.com/company/najd-culinary'
+        },
+        tradeExperience15Years: false,
+        certificates: ['Commercial Registration Certificate.pdf'],
+        address: {
+            country: 'Saudi Arabia',
+            region: 'Riyadh Province',
+            city: 'Riyadh',
+            district: 'Al Olaya',
+            street: 'King Fahd Road',
+            streetNumber: '19',
+            zipCode: '11564'
+        },
+        requestedDocuments: ['Upload HACCP certification'],
+        history: [
+            {
+                action: 'request-submitted',
+                timestamp: '2025-11-12T06:12:00.000Z',
+                actor: 'Najd Culinary Studio',
+                context: 'Application submitted via ONRUF CCP.'
+            }
+        ],
+        primaryIndividualId: 'IND-5101',
+        application: {
+            companyNameArabic: 'Sharikat Najd Culinary',
+            companyNameEnglish: 'Najd Culinary Studio',
+            username: 'najd-culinary',
+            registrationNumber: '1011223344',
+            detailRegistrationNumber: 'CR-2025-4412',
+            email: 'hello@najdculinary.sa',
+            website: 'https://najdculinary.sa',
+            socials: {
+                instagram: 'https://www.instagram.com/najdculinary',
+                twitter: 'https://www.twitter.com/najdculinary',
+                linkedin: 'https://www.linkedin.com/company/najd-culinary'
+            },
+            documentType: 'commercial-registration',
+            expiryDate: '2026-05-01T00:00:00.000Z',
+            vatNumber: '310122334455668',
+            maroofUrl: 'https://maroof.sa/businesses/najdculinary',
+            tradeExperience15Years: false,
+            uploadedCertificates: ['Commercial Registration Certificate.pdf'],
+            address: {
+                country: 'Saudi Arabia',
+                region: 'Riyadh Province',
+                city: 'Riyadh',
+                district: 'Al Olaya',
+                street: 'King Fahd Road',
+                streetNumber: '19',
+                zipCode: '11564'
+            },
+            primaryIndividualId: 'IND-5101'
+        }
+    },
+    {
+        id: 'BUS-9002',
+        companyName: 'Orbit Activewear',
+        contactName: 'Mazen Al-Otaibi',
+        email: 'partnerships@orbitactivewear.com',
+        phone: '+966126669900',
+        city: 'Jeddah',
+        submittedAt: '2025-11-11T09:55:00.000Z',
+        status: 'pending',
+        packageId: 'PKG-GROWTH',
+        registrationNumber: '2053342211',
+        detailRegistrationNumber: 'CR-2025-5521',
+        registrationDocumentType: 'commercial-registration',
+        expiryDate: '2027-01-18T00:00:00.000Z',
+        vatNumber: '302233441199665',
+        website: 'https://orbitactivewear.com',
+        socials: {
+            instagram: 'https://www.instagram.com/orbitactivewear',
+            youtube: 'https://www.youtube.com/@orbitactivewear'
+        },
+        tradeExperience15Years: true,
+        certificates: ['ISO9001.pdf', 'Logistics-Compliance.pdf'],
+        address: {
+            country: 'Saudi Arabia',
+            region: 'Makkah Province',
+            city: 'Jeddah',
+            district: 'Al Zahra',
+            street: 'Prince Sultan Road',
+            streetNumber: '221',
+            zipCode: '23434'
+        },
+        requestedDocuments: ['Provide most recent logistics insurance document'],
+        history: [
+            {
+                action: 'request-submitted',
+                timestamp: '2025-11-11T09:55:00.000Z',
+                actor: 'Orbit Activewear',
+                context: 'Request captured from business registration form.'
+            }
+        ],
+        primaryIndividualId: 'IND-5102',
+        application: {
+            companyNameArabic: 'Orbit Activewear',
+            companyNameEnglish: 'Orbit Activewear',
+            username: 'orbit-activewear',
+            registrationNumber: '2053342211',
+            detailRegistrationNumber: 'CR-2025-5521',
+            email: 'partnerships@orbitactivewear.com',
+            website: 'https://orbitactivewear.com',
+            socials: {
+                instagram: 'https://www.instagram.com/orbitactivewear',
+                youtube: 'https://www.youtube.com/@orbitactivewear'
+            },
+            documentType: 'commercial-registration',
+            expiryDate: '2027-01-18T00:00:00.000Z',
+            vatNumber: '302233441199665',
+            uploadedCertificates: ['ISO9001.pdf', 'Logistics-Compliance.pdf'],
+            tradeExperience15Years: true,
+            address: {
+                country: 'Saudi Arabia',
+                region: 'Makkah Province',
+                city: 'Jeddah',
+                district: 'Al Zahra',
+                street: 'Prince Sultan Road',
+                streetNumber: '221',
+                zipCode: '23434'
+            },
+            primaryIndividualId: 'IND-5102'
+        }
+    },
+    {
+        id: 'BUS-9003',
+        companyName: 'Harbor Shared Offices',
+        contactName: 'Reem Al-Mutairi',
+        email: 'team@harboroffices.com',
+        phone: '+966138882211',
+        city: 'Dammam',
+        submittedAt: '2025-11-10T07:32:00.000Z',
+        status: 'pending',
+        packageId: 'PKG-ELITE',
+        registrationNumber: '2039988776',
+        detailRegistrationNumber: 'CR-2025-8834',
+        registrationDocumentType: 'commercial-registration',
+        expiryDate: '2026-09-05T00:00:00.000Z',
+        vatNumber: '311099882233445',
+        website: 'https://harboroffices.com',
+        socials: {
+            linkedin: 'https://www.linkedin.com/company/harbor-offices'
+        },
+        tradeExperience15Years: false,
+        certificates: ['Shared-Office-License.pdf'],
+        address: {
+            country: 'Saudi Arabia',
+            region: 'Eastern Province',
+            city: 'Dammam',
+            district: 'Corniche',
+            street: 'Gulf Road',
+            streetNumber: '77',
+            zipCode: '32211'
+        },
+        requestedDocuments: [],
+        history: [
+            {
+                action: 'request-submitted',
+                timestamp: '2025-11-10T07:32:00.000Z',
+                actor: 'Harbor Shared Offices',
+                context: 'Business request filed during onboarding drive.'
+            }
+        ],
+        primaryIndividualId: 'IND-5103',
+        application: {
+            companyNameArabic: 'Harbor Shared Offices',
+            companyNameEnglish: 'Harbor Shared Offices',
+            username: 'harbor-offices',
+            registrationNumber: '2039988776',
+            detailRegistrationNumber: 'CR-2025-8834',
+            email: 'team@harboroffices.com',
+            website: 'https://harboroffices.com',
+            socials: {
+                linkedin: 'https://www.linkedin.com/company/harbor-offices'
+            },
+            documentType: 'commercial-registration',
+            expiryDate: '2026-09-05T00:00:00.000Z',
+            vatNumber: '311099882233445',
+            uploadedCertificates: ['Shared-Office-License.pdf'],
+            tradeExperience15Years: false,
+            address: {
+                country: 'Saudi Arabia',
+                region: 'Eastern Province',
+                city: 'Dammam',
+                district: 'Corniche',
+                street: 'Gulf Road',
+                streetNumber: '77',
+                zipCode: '32211'
+            },
+            primaryIndividualId: 'IND-5103'
+        }
+    }
+];
 
 const defaultBusinessPackages = [
     {
@@ -3167,7 +3493,7 @@ const BUSINESS_PACKAGES_STORAGE_KEY = 'onruf_business_packages_v1';
 const BUSINESS_SUBSCRIBERS_STORAGE_KEY = 'onruf_business_subscribers_v1';
 const FINANCE_TRANSACTIONS_STORAGE_KEY = 'onruf_finance_transactions_v1';
 const FINANCE_AUDIT_STORAGE_KEY = 'onruf_finance_audit_v1';
-const DATA_RESET_VERSION = '20251107-business-address';
+const DATA_RESET_VERSION = '20251110-follow-ups-v6';
 const DATA_RESET_KEY = 'onruf_data_reset_version';
 const CATEGORY_RESET_VERSION = '20251021-delete-all-categories';
 const CATEGORY_RESET_KEY = 'onruf_category_reset_version';
@@ -5335,6 +5661,1324 @@ function normalizeIndividualAccountLogEntry(entry, index = 0, fallbackAction = '
     };
 }
 
+const INDIVIDUAL_RATING_REVIEWERS = [
+    'Aisha Alharbi',
+    'Khalid Faris',
+    'Dana Almutairi',
+    'Mazen Rahman',
+    'Noura Kareem',
+    'Salman Tareq',
+    'Lina Bahri',
+    'Yasmin Hadid',
+    'Fahad Alameer',
+    'Omar Nassar',
+    'Rana Jaber',
+    'Hussain Latif'
+];
+
+const INDIVIDUAL_RATING_COMMENTS = {
+    positive: [
+        'Smooth handoff and quick replies.',
+        'Listing was spotless and ready on time.',
+        'Outstanding communication from start to finish.',
+        'Very professional experience throughout.',
+        'Would gladly trade again with the same member.'
+    ],
+    neutral: [
+        'Item matched the description and photos.',
+        'Everything went as expected with no surprises.',
+        'Communication was clear and straightforward.',
+        'Pickup required some coordination but worked out.',
+        'Overall a standard marketplace interaction.'
+    ],
+    negative: [
+        'Response time was slower than expected.',
+        'Needed a reminder to finalize the exchange.',
+        'Listing packaging could have been better.',
+        'Schedule shifted a couple of times before delivery.',
+        'Experience was acceptable but could improve on timing.'
+    ]
+};
+
+const INDIVIDUAL_POINTS_WELCOME_NOTES = [
+    'Launch bonus for joining the ONRUF marketplace.',
+    'Welcome aboard—starter points credited to your account.',
+    'Profile completed successfully; enjoy these bonus points.'
+];
+
+const INDIVIDUAL_POINTS_REFERRAL_NOTES = [
+    'Referral bonus: {name} joined using invite code {code}.',
+    '{name} activated their account with your invitation code {code}.',
+    'Invite code {code} was redeemed—referral points unlocked.'
+];
+
+const INDIVIDUAL_POINTS_WALLET_NOTES = [
+    'Converted SAR {amount} from MyWallet into reward points.',
+    'Exchanged wallet credits for {points} extra points.',
+    'Convert {amount} Riyal to {points} Point'
+];
+
+const INDIVIDUAL_POINTS_PURCHASE_NOTES = [
+    'Redeemed {points} points on order #{orderId}.',
+    'Applied reward points at checkout for order #{orderId}.',
+    'Used points to complete a marketplace purchase (order #{orderId}).'
+];
+
+const INDIVIDUAL_WALLET_CARD_BRANDS = ['Mada', 'Visa', 'Mastercard'];
+const INDIVIDUAL_WALLET_BANKS = [
+    'Riyad Bank',
+    'Al Rajhi Bank',
+    'Banque Saudi Fransi',
+    'Saudi National Bank',
+    'Alinma Bank'
+];
+
+const INDIVIDUAL_WALLET_NOTES = {
+    topUp: [
+        'Top-up processed via {brand} card ending in {last4}.',
+        'Wallet credited through {brand} card ****{last4}.',
+        'Added funds using saved {brand} card ****{last4}.'
+    ],
+    withdraw: [
+        'Transfer initiated to {bank} account.',
+        'Withdrawal requested to {bank}.',
+        'Funds moving to linked {bank} account.'
+    ],
+    convert: [
+        'Converted SAR {amount} to {points} reward points.',
+        'Moved {amount} Riyal into loyalty balance ({points} pts).',
+        'Wallet credits exchanged for {points} points.'
+    ],
+    purchase: [
+        'Order #{orderId} paid with wallet balance.',
+        'Marketplace purchase #{orderId} charged to wallet.',
+        'Wallet payment completed for order #{orderId}.'
+    ],
+    adFee: [
+        'Promotion fee for ad {adId}.',
+        'Charged posting fee for listing {adId}.',
+        'Wallet payment for ad boost {adId}.'
+    ],
+    pendingSale: [
+        'Order #{orderId} awaiting delivery confirmation.',
+        'Pending payout for sold item #{orderId}.',
+        'Funds held until order #{orderId} is delivered.'
+    ],
+    pendingRelease: [
+        'Order #{orderId} delivered; funds moved to available balance.',
+        'Shipment for order #{orderId} confirmed; releasing funds to current balance.',
+        'Order #{orderId} cleared; payout transferred to available funds.'
+    ]
+};
+
+const INDIVIDUAL_POINTS_MIN_TRANSACTIONS = 6;
+const INDIVIDUAL_POINTS_MAX_TRANSACTIONS = 20;
+const INDIVIDUAL_POINTS_MIN_PURCHASE_BALANCE = 140;
+const INDIVIDUAL_POINTS_MAX_HISTORY_DAYS = 240;
+
+const INDIVIDUAL_POINTS_EVENT_DEFINITIONS = {
+    welcome: {
+        label: 'Welcome bonus points',
+        minDelta: 180,
+        maxDelta: 420,
+        direction: 1,
+        notePool: INDIVIDUAL_POINTS_WELCOME_NOTES
+    },
+    referral: {
+        label: 'Referral reward',
+        minDelta: 60,
+        maxDelta: 180,
+        direction: 1,
+        noteBuilder: ({ account, rng }) => {
+            const template = pickFromArray(rng, INDIVIDUAL_POINTS_REFERRAL_NOTES);
+            const invitedName = pickFromArray(rng, INDIVIDUAL_RATING_REVIEWERS);
+            const rawCode = account.invitationCode
+                || account.invitation?.code
+                || account.invitation?.token
+                || (account.id ? account.id.toString().slice(-4) : 'ONRUF');
+            const code = rawCode ? rawCode.toString().toUpperCase() : 'ONRUF';
+            return formatPointsNote(template, { name: invitedName, code });
+        }
+    },
+    wallet: {
+        label: 'Wallet conversion',
+        minDelta: 90,
+        maxDelta: 220,
+        direction: 1,
+        noteBuilder: ({ delta, rng }) => {
+            const template = pickFromArray(rng, INDIVIDUAL_POINTS_WALLET_NOTES);
+            const sarAmount = Math.max(50, Math.round(delta * 0.75)).toLocaleString('en-US');
+            const pointsText = Math.max(0, Math.round(delta)).toLocaleString('en-US');
+            return formatPointsNote(template, { amount: sarAmount, points: pointsText });
+        }
+    },
+    purchase: {
+        label: 'Points purchase',
+        minDelta: 120,
+        maxDelta: 260,
+        direction: -1,
+        minRequiredBalance: INDIVIDUAL_POINTS_MIN_PURCHASE_BALANCE,
+        noteBuilder: ({ rng, delta }) => {
+            const template = pickFromArray(rng, INDIVIDUAL_POINTS_PURCHASE_NOTES);
+            const orderId = generateOrderIdFromRng(rng);
+            const pointsText = Math.abs(Math.round(delta)).toLocaleString('en-US');
+            return formatPointsNote(template, { orderId, points: pointsText });
+        }
+    }
+};
+
+function formatPointsNote(template, replacements) {
+    if (typeof template !== 'string') {
+        return '';
+    }
+    return template.replace(/\{(.*?)\}/g, (match, key) => {
+        if (!key) {
+            return match;
+        }
+        const replacement = replacements && Object.prototype.hasOwnProperty.call(replacements, key)
+            ? replacements[key]
+            : undefined;
+        return replacement === undefined || replacement === null ? match : String(replacement);
+    });
+}
+
+function generateOrderIdFromRng(rng) {
+    const randomDigits = Math.floor(rng() * 900000) + 100000;
+    return `ORD-${randomDigits}`;
+}
+
+function generateWalletAdIdFromRng(rng) {
+    const code = Math.floor(rng() * 9000) + 1000;
+    return `AD-${code}`;
+}
+
+function hashString(value) {
+    const source = String(value || '');
+    let hash = 0;
+    for (let index = 0; index < source.length; index += 1) {
+        hash = ((hash << 5) - hash + source.charCodeAt(index)) | 0;
+    }
+    return hash >>> 0;
+}
+
+function createDeterministicRandom(seed) {
+    let state = hashString(seed) || 1;
+    return function next() {
+        state = (state * 1664525 + 1013904223) >>> 0;
+        return state / 0x100000000;
+    };
+}
+
+function pickFromArray(rng, collection) {
+    const list = Array.isArray(collection) && collection.length ? collection : [''];
+    const index = Math.floor(rng() * list.length) % list.length;
+    return list[index];
+}
+
+const INDIVIDUAL_PAYMENT_CARD_BRANDS = ['Visa', 'Mastercard', 'Mada', 'Visa', 'Mastercard'];
+const INDIVIDUAL_BANK_PROVIDERS = [
+    { name: 'Al Rajhi Bank', swift: 'RJHISARI', code: '80' },
+    { name: 'Saudi National Bank', swift: 'NCBKSARI', code: '10' },
+    { name: 'Riyad Bank', swift: 'RIBLSARI', code: '30' },
+    { name: 'Bank Albilad', swift: 'ALBISARI', code: '50' }
+];
+
+const REQUIRED_PAYMENT_CARD_COUNT = 5;
+const REQUIRED_BANK_ACCOUNT_COUNT = 3;
+const REQUIRED_ADDITIONAL_SAVED_ADDRESS_COUNT = 4;
+const MIN_SAVED_ADDRESS_UPDATED_COUNT = 2;
+const SAVED_ADDRESS_LABEL_OPTIONS = [
+    'Primary Home',
+    'Family Villa',
+    'Parents House',
+    'Office',
+    'Warehouse',
+    'Pickup Point',
+    'Weekend Home',
+    'Studio Apartment',
+    'Secondary Flat',
+    'Guest Suite'
+];
+const SAVED_ADDRESS_CITY_OPTIONS = ['Riyadh', 'Jeddah', 'Dammam', 'Khobar', 'Mecca', 'Medina', 'Abha', 'Tabuk'];
+const SAVED_ADDRESS_DISTRICT_OPTIONS = [
+    'Al Olaya',
+    'Al Nakheel',
+    'Al Malaz',
+    'Al Yasmin',
+    'Al Hamra',
+    'Al Rawdah',
+    'Al Nuzha',
+    'Al Shati',
+    'Al Khuzama',
+    'Al Muruj'
+];
+const SAVED_ADDRESS_STREET_OPTIONS = [
+    'King Fahd',
+    'King Abdullah',
+    'Prince Sultan',
+    'Prince Muhammad',
+    'Imam Saud',
+    'Tahlia',
+    'Olaya',
+    'Abi Bakr',
+    'Anas Bin Malik',
+    'Uthman Bin Affan'
+];
+const DEFAULT_ADDRESS_COUNTRY = 'Saudi Arabia';
+const DEFAULT_ADDRESS_REGION = 'Riyadh Province';
+
+function resolveIndividualAccountHolderName(account) {
+    if (!account || typeof account !== 'object') {
+        return 'Account Holder';
+    }
+    const parts = [];
+    if (typeof account.firstName === 'string' && account.firstName.trim()) {
+        parts.push(account.firstName.trim());
+    }
+    if (typeof account.lastName === 'string' && account.lastName.trim()) {
+        parts.push(account.lastName.trim());
+    }
+    if (parts.length) {
+        return parts.join(' ');
+    }
+    if (typeof account.fullName === 'string' && account.fullName.trim()) {
+        return account.fullName.trim();
+    }
+    if (typeof account.name === 'string' && account.name.trim()) {
+        return account.name.trim();
+    }
+    if (typeof account.email === 'string' && account.email.trim()) {
+        return account.email.trim();
+    }
+    if (typeof account.username === 'string' && account.username.trim()) {
+        return account.username.trim();
+    }
+    if (typeof account.id === 'string' && account.id.trim()) {
+        return `Account ${account.id.trim()}`;
+    }
+    return 'Account Holder';
+}
+
+function buildIndividualAccountPaymentMethods(account) {
+    if (!account || typeof account !== 'object') {
+        return [];
+    }
+
+    const holderName = resolveIndividualAccountHolderName(account);
+    const seedBase = (account.id || account.email || account.fullName || 'IND')
+        .toString()
+        .replace(/[^a-z0-9]/gi, '')
+        .toLowerCase() || 'ind';
+    const rng = createDeterministicRandom(`${seedBase}|payments`);
+    const now = Date.now();
+    const msPerDay = 86_400_000;
+    const pad = (value, length) => String(value).padStart(length, '0');
+    const generateDigitString = length => {
+        let result = '';
+        while (result.length < length) {
+            const chunk = Math.floor(rng() * 1_000_000_000);
+            result += String(chunk).padStart(9, '0');
+        }
+        return result.slice(0, length);
+    };
+    const makeAccountNumber = () => {
+        const leading = String(Math.floor(rng() * 9) + 1);
+        return leading + generateDigitString(13);
+    };
+    const slugifyForCertificate = value => String(value || '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '') || 'iban';
+
+    const createTimestampPair = offset => {
+        const addedDaysAgo = Math.floor(rng() * 360 + offset * 12) + 7;
+        const addedTime = now - addedDaysAgo * msPerDay;
+        const includeUpdate = offset > 0 && offset % 3 === 1;
+        let updatedAt = null;
+        if (includeUpdate) {
+            const candidateGapDays = Math.max(1, Math.floor(rng() * 90));
+            const candidateUpdatedTime = addedTime + candidateGapDays * msPerDay;
+            const latestAllowed = now - Math.floor(rng() * 10) * msPerDay;
+            const updatedTime = Math.max(addedTime + msPerDay, Math.min(candidateUpdatedTime, latestAllowed));
+            updatedAt = new Date(updatedTime).toISOString();
+        }
+        const addedAt = new Date(addedTime).toISOString();
+        return { addedAt, updatedAt, wasUpdated: includeUpdate };
+    };
+
+    const cardBrands = INDIVIDUAL_PAYMENT_CARD_BRANDS.slice(0, REQUIRED_PAYMENT_CARD_COUNT);
+    const cards = cardBrands.map((brand, index) => {
+        const last4 = pad(Math.floor(rng() * 9000) + 1000, 4);
+        const expiryMonth = pad(Math.floor(rng() * 12) + 1, 2);
+        const expiryYearValue = new Date().getFullYear() + 2 + Math.floor(rng() * 5);
+        const { addedAt, updatedAt, wasUpdated } = createTimestampPair(index);
+        return {
+            id: `card-${seedBase}-${pad(index + 1, 2)}`,
+            type: 'card',
+            brand,
+            last4,
+            expiryMonth,
+            expiryYear: String(expiryYearValue),
+            holderName,
+            status: 'Active',
+            addedAt,
+            createdAt: addedAt,
+            updatedAt,
+            wasUpdated,
+            isDefault: index === 0
+        };
+    });
+
+    const bankAccounts = [];
+    for (let index = 0; index < REQUIRED_BANK_ACCOUNT_COUNT; index += 1) {
+        const bank = INDIVIDUAL_BANK_PROVIDERS[index % INDIVIDUAL_BANK_PROVIDERS.length];
+        const accountNumber = makeAccountNumber();
+        const checkDigits = pad(Math.floor(rng() * 90) + 10, 2);
+        const bankCode = pad(bank.code, 2);
+        const accountBody = generateDigitString(18);
+        const iban = `SA${checkDigits}${bankCode}${accountBody}`.toUpperCase();
+        const certificateFile = `${slugifyForCertificate(bank.name)}-iban-${accountBody.slice(-4)}.pdf`;
+        const { addedAt, updatedAt, wasUpdated } = createTimestampPair(index + cardBrands.length);
+        bankAccounts.push({
+            id: `bank-${seedBase}-${pad(index + 1, 2)}`,
+            type: 'bank-account',
+            brand: bank.name,
+            bankName: bank.name,
+            bankAccountNumber: accountNumber,
+            holderName,
+            accountHolder: holderName,
+            iban,
+            ibanCertificate: certificateFile,
+            swiftCode: bank.swift,
+            status: 'Active',
+            addedAt,
+            createdAt: addedAt,
+            updatedAt,
+            wasUpdated,
+            isDefault: false
+        });
+    }
+
+    return [...cards, ...bankAccounts];
+}
+
+function rebuildIndividualWalletHistory(entries, { rng, idSeed }) {
+    if (!Array.isArray(entries) || !entries.length) {
+        return { history: [], available: 0, pending: 0 };
+    }
+
+    const baseTime = Date.now();
+    const normalized = entries
+        .map((entry, index) => {
+            if (!entry || typeof entry !== 'object') {
+                return null;
+            }
+
+            const rawAmount = Number.parseFloat(entry.amount);
+            const amount = Number.isFinite(rawAmount) ? Math.round(rawAmount) : 0;
+            const timestamp = normalizeIsoTimestamp(
+                entry.timestamp,
+                new Date(baseTime - (entries.length - index) * 4_320_000).toISOString()
+            );
+            const typeRaw = typeof entry.type === 'string' ? entry.type.trim() : '';
+            const labelRaw = typeof entry.label === 'string' ? entry.label.trim() : '';
+            const note = typeof entry.note === 'string' ? entry.note.trim() : '';
+
+            return {
+                id: typeof entry.id === 'string' && entry.id.trim()
+                    ? entry.id.trim()
+                    : `wallet-${idSeed}-${String(index + 1).padStart(3, '0')}`,
+                label: labelRaw || (amount >= 0 ? 'Wallet credit' : 'Wallet debit'),
+                amount,
+                type: typeRaw || (amount >= 0 ? 'credit' : 'debit'),
+                timestamp,
+                note,
+                balanceAfter: 0
+            };
+        })
+        .filter(Boolean)
+        .sort((a, b) => Date.parse(a.timestamp || '') - Date.parse(b.timestamp || ''));
+
+    let available = 0;
+    let pending = 0;
+    normalized.forEach(entry => {
+        const amount = entry.amount || 0;
+        const typeLabel = (entry.type || '').toLowerCase();
+        if (typeLabel.includes('pending-release')) {
+            const releaseAmount = Math.abs(amount);
+            pending = Math.max(0, pending - releaseAmount);
+            available = Math.max(0, available + releaseAmount);
+        } else if (typeLabel.includes('pending')) {
+            pending = Math.max(0, pending + amount);
+        } else {
+            available = Math.max(0, available + amount);
+        }
+        entry.balanceAfter = Math.max(0, Math.round(available + pending));
+    });
+
+    return {
+        history: normalized,
+        available: Math.max(0, Math.round(available)),
+        pending: Math.max(0, Math.round(pending))
+    };
+}
+
+function generateIndividualWalletHistory({ account, rng, idSeed }) {
+    const minTransactions = 10;
+    const maxTransactions = 20;
+    const totalTransactions = minTransactions + Math.floor(rng() * (maxTransactions - minTransactions + 1));
+    const events = [];
+    const now = Date.now();
+    let timestampCursor = now - (totalTransactions + 2) * 6_480_000;
+    let available = 0;
+    let pending = 0;
+    let pendingEvents = 0;
+    const pendingOrders = [];
+
+    const cardBrand = pickFromArray(rng, INDIVIDUAL_WALLET_CARD_BRANDS);
+    const cardLast4 = String(Math.floor(rng() * 9000) + 1000);
+    const bankName = pickFromArray(rng, INDIVIDUAL_WALLET_BANKS);
+
+    const nextTimestamp = () => {
+        timestampCursor += (3 + Math.floor(rng() * 18)) * 3_600_000;
+        const latestAllowed = now - Math.max(2, totalTransactions - events.length) * 90_000;
+        if (timestampCursor > latestAllowed) {
+            timestampCursor = latestAllowed;
+        }
+        const minimumAllowed = now - (totalTransactions - events.length + 2) * 7_200_000;
+        const candidate = Math.max(timestampCursor, minimumAllowed);
+        return new Date(candidate).toISOString();
+    };
+
+    const pushEvent = ({ label, amount, type, note }) => {
+        events.push({
+            id: `wallet-${idSeed}-${String(events.length + 1).padStart(3, '0')}`,
+            label,
+            amount: Math.round(amount),
+            type,
+            timestamp: nextTimestamp(),
+            note,
+            balanceAfter: 0
+        });
+    };
+
+    const addTopUp = () => {
+        const amount = 250 + Math.round(rng() * 550);
+        available += amount;
+        const note = formatPointsNote(pickFromArray(rng, INDIVIDUAL_WALLET_NOTES.topUp), {
+            brand: cardBrand,
+            last4: cardLast4
+        });
+        pushEvent({ label: 'Wallet Top-Up', amount, type: 'credit', note });
+        return true;
+    };
+
+    const addWithdrawal = () => {
+        const maxAmount = Math.min(available * 0.6, 600);
+        const minAmount = 140;
+        if (maxAmount < minAmount) {
+            return false;
+        }
+        const amount = minAmount + Math.round(rng() * (maxAmount - minAmount));
+        available -= amount;
+        const note = formatPointsNote(pickFromArray(rng, INDIVIDUAL_WALLET_NOTES.withdraw), { bank: bankName });
+        pushEvent({ label: 'Bank Withdrawal', amount: -amount, type: 'debit', note });
+        return true;
+    };
+
+    const addConversion = () => {
+        const maxAmount = Math.min(available * 0.5, 360);
+        const minAmount = 90;
+        if (maxAmount < minAmount) {
+            return false;
+        }
+        const amount = minAmount + Math.round(rng() * (maxAmount - minAmount));
+        available -= amount;
+        const points = Math.max(1, Math.round(amount));
+        const note = formatPointsNote(pickFromArray(rng, INDIVIDUAL_WALLET_NOTES.convert), {
+            amount: amount.toLocaleString('en-US'),
+            points: points.toLocaleString('en-US')
+        });
+        pushEvent({ label: 'Points Conversion', amount: -amount, type: 'debit', note });
+        return true;
+    };
+
+    const addPurchase = () => {
+        const maxAmount = Math.min(available * 0.7, 420);
+        const minAmount = 110;
+        if (maxAmount < minAmount) {
+            return false;
+        }
+        const amount = minAmount + Math.round(rng() * (maxAmount - minAmount));
+        available -= amount;
+        const orderId = generateOrderIdFromRng(rng);
+        const note = formatPointsNote(pickFromArray(rng, INDIVIDUAL_WALLET_NOTES.purchase), { orderId });
+        pushEvent({ label: 'Marketplace Purchase', amount: -amount, type: 'debit', note });
+        return true;
+    };
+
+    const addAdFee = () => {
+        const maxAmount = Math.min(available * 0.4, 220);
+        const minAmount = 45;
+        if (maxAmount < minAmount) {
+            return false;
+        }
+        const amount = minAmount + Math.round(rng() * (maxAmount - minAmount));
+        available -= amount;
+        const adId = generateWalletAdIdFromRng(rng);
+        const note = formatPointsNote(pickFromArray(rng, INDIVIDUAL_WALLET_NOTES.adFee), { adId });
+        pushEvent({ label: 'Ad Promotion Fee', amount: -amount, type: 'debit', note });
+        return true;
+    };
+
+    const addPendingSale = () => {
+        const amount = 160 + Math.round(rng() * 420);
+        pending += amount;
+        const orderId = generateOrderIdFromRng(rng);
+        const note = formatPointsNote(pickFromArray(rng, INDIVIDUAL_WALLET_NOTES.pendingSale), { orderId });
+        pushEvent({ label: 'Sale Pending Clearance', amount, type: 'pending-credit', note });
+        pendingEvents += 1;
+        pendingOrders.push({ orderId, amount });
+        return true;
+    };
+
+    const addPendingRelease = () => {
+        if (!pendingOrders.length) {
+            return false;
+        }
+        const pendingContext = pendingOrders.shift();
+        const amount = Math.max(0, Math.round(pendingContext.amount));
+        if (amount <= 0 || pending < amount) {
+            return false;
+        }
+        pending = Math.max(0, pending - amount);
+        available += amount;
+        pendingEvents = Math.max(0, pendingEvents - 1);
+        const note = formatPointsNote(pickFromArray(rng, INDIVIDUAL_WALLET_NOTES.pendingRelease), {
+            orderId: pendingContext.orderId
+        });
+        pushEvent({ label: 'Sale Cleared to Available Balance', amount, type: 'pending-release', note });
+        return true;
+    };
+
+    addTopUp();
+
+    const seedSequence = ['purchase', 'withdrawal', 'conversion', 'adFee', 'pending', 'pendingRelease'];
+    seedSequence.forEach(step => {
+        if (events.length >= maxTransactions) {
+            return;
+        }
+
+        let success = false;
+        let attempts = 0;
+        while (!success && attempts < 4) {
+            attempts += 1;
+            switch (step) {
+                case 'purchase':
+                    success = addPurchase();
+                    break;
+                case 'withdrawal':
+                    success = addWithdrawal();
+                    break;
+                case 'conversion':
+                    success = addConversion();
+                    break;
+                case 'adFee':
+                    success = addAdFee();
+                    break;
+                case 'pending':
+                    success = addPendingSale();
+                    break;
+                case 'pendingRelease':
+                    success = addPendingRelease();
+                    break;
+                default:
+                    success = false;
+            }
+
+            if (!success && step !== 'pending') {
+                success = addTopUp();
+            }
+        }
+    });
+
+    let attempts = 0;
+    while (events.length < totalTransactions && attempts < totalTransactions * 5) {
+        attempts += 1;
+        const options = [];
+        if (available < 220) {
+            options.push('topUp');
+        }
+        options.push('purchase', 'adFee');
+        if (available > 180) {
+            options.push('conversion', 'withdrawal');
+        }
+        if (pending < 900) {
+            options.push('pending');
+        }
+        if (pendingOrders.length) {
+            options.push('pendingRelease');
+        }
+
+        const choice = pickFromArray(rng, options);
+        let applied = false;
+        switch (choice) {
+            case 'topUp':
+                applied = addTopUp();
+                break;
+            case 'withdrawal':
+                applied = addWithdrawal();
+                break;
+            case 'conversion':
+                applied = addConversion();
+                break;
+            case 'adFee':
+                applied = addAdFee();
+                break;
+            case 'pending':
+                applied = addPendingSale();
+                break;
+            case 'pendingRelease':
+                applied = addPendingRelease();
+                break;
+            default:
+                applied = addPurchase();
+                break;
+        }
+
+        if (!applied && choice !== 'topUp') {
+            addTopUp();
+        }
+    }
+
+    const sorted = events.sort((a, b) => Date.parse(a.timestamp) - Date.parse(b.timestamp));
+    let runningAvailable = 0;
+    let runningPending = 0;
+    sorted.forEach(entry => {
+        const amount = entry.amount || 0;
+        const typeLabel = (entry.type || '').toLowerCase();
+        if (typeLabel.includes('pending-release')) {
+            const releaseAmount = Math.abs(amount);
+            runningPending = Math.max(0, runningPending - releaseAmount);
+            runningAvailable = Math.max(0, runningAvailable + releaseAmount);
+        } else if (typeLabel.includes('pending')) {
+            runningPending = Math.max(0, runningPending + amount);
+        } else {
+            runningAvailable = Math.max(0, runningAvailable + amount);
+        }
+        entry.balanceAfter = Math.max(0, Math.round(runningAvailable + runningPending));
+    });
+
+    return {
+        history: sorted,
+        available: Math.max(0, Math.round(runningAvailable)),
+        pending: Math.max(0, Math.round(runningPending))
+    };
+}
+
+function ensureIndividualAccountWallet(account) {
+    if (!account || typeof account !== 'object') {
+        return false;
+    }
+
+    const idSeed = (account.id || account.email || account.fullName || 'IND')
+        .toString()
+        .replace(/[^a-z0-9]/gi, '')
+        .toLowerCase() || 'ind';
+    const rng = createDeterministicRandom(`${idSeed}|wallet`);
+
+    const snapshotBefore = JSON.stringify({
+        balance: account.balance,
+        availableBalance: account.availableBalance,
+        pendingBalance: account.pendingBalance,
+        balanceBreakdown: account.balanceBreakdown,
+        financialHistory: account.financialHistory,
+        walletUpdatedAt: account.walletUpdatedAt,
+        walletCurrency: account.walletCurrency
+    });
+
+    const existingHistory = Array.isArray(account.financialHistory)
+        ? account.financialHistory.filter(Boolean)
+        : [];
+
+    let history;
+    let availableBalance;
+    let pendingBalance;
+    if (existingHistory.length) {
+        const rebuilt = rebuildIndividualWalletHistory(existingHistory, { rng, idSeed });
+        history = rebuilt.history;
+        availableBalance = rebuilt.available;
+        pendingBalance = rebuilt.pending;
+    } else {
+        const generated = generateIndividualWalletHistory({ account, rng, idSeed });
+        history = generated.history;
+        availableBalance = generated.available;
+        pendingBalance = generated.pending;
+    }
+
+    const trimmedHistory = history.slice(-20);
+    const latestEntry = trimmedHistory[trimmedHistory.length - 1] || null;
+    const totalBalance = Math.max(0, Math.round((availableBalance || 0) + (pendingBalance || 0)));
+
+    account.financialHistory = trimmedHistory;
+    account.availableBalance = availableBalance || 0;
+    account.pendingBalance = pendingBalance || 0;
+    account.balance = totalBalance;
+    account.walletCurrency = typeof account.walletCurrency === 'string' && account.walletCurrency.trim()
+        ? account.walletCurrency.trim().toUpperCase()
+        : 'SAR';
+    account.walletUpdatedAt = latestEntry?.timestamp || account.walletUpdatedAt || new Date().toISOString();
+    account.balanceBreakdown = [
+        {
+            label: 'Available Balance',
+            amount: account.availableBalance,
+            type: 'available'
+        },
+        {
+            label: 'Pending Balance',
+            amount: account.pendingBalance,
+            type: 'pending'
+        }
+    ];
+
+    const snapshotAfter = JSON.stringify({
+        balance: account.balance,
+        availableBalance: account.availableBalance,
+        pendingBalance: account.pendingBalance,
+        balanceBreakdown: account.balanceBreakdown,
+        financialHistory: account.financialHistory,
+        walletUpdatedAt: account.walletUpdatedAt,
+        walletCurrency: account.walletCurrency
+    });
+
+    return snapshotBefore !== snapshotAfter;
+}
+
+function roundToDecimal(value, decimals) {
+    const factor = 10 ** Math.max(decimals, 0);
+    return Math.round(value * factor) / factor;
+}
+
+function computeAverageRating(entries) {
+    const collection = Array.isArray(entries) ? entries : [];
+    let total = 0;
+    let weight = 0;
+    collection.forEach(entry => {
+        if (entry === null || entry === undefined) {
+            return;
+        }
+        const ratingCandidate = typeof entry === 'number'
+            ? entry
+            : Number(entry.rating ?? entry.score ?? entry.value ?? entry.average ?? entry.stars ?? entry.result);
+        if (!Number.isFinite(ratingCandidate)) {
+            return;
+        }
+        const weightCandidate = typeof entry === 'number'
+            ? 1
+            : Number(entry.reviews ?? entry.count ?? entry.votes ?? entry.weight ?? entry.total ?? entry.quantity ?? 1);
+        const ratingWeight = Number.isFinite(weightCandidate) && weightCandidate > 0 ? weightCandidate : 1;
+        total += ratingCandidate * ratingWeight;
+        weight += ratingWeight;
+    });
+    if (!weight) {
+        return null;
+    }
+    return total / weight;
+}
+
+function generateIndividualRatingEntries(accountId, role, limit = 20) {
+    const seed = `${accountId || 'IND'}|${role}`;
+    const rng = createDeterministicRandom(seed);
+    const maxEntries = Math.max(1, limit);
+    const minEntries = Math.min(4, maxEntries);
+    const span = Math.max(maxEntries - minEntries + 1, 1);
+    const count = minEntries + Math.floor(rng() * span);
+    const now = Date.now();
+    const entries = [];
+    for (let index = 0; index < count; index += 1) {
+        const rawRating = 3 + rng() * 2;
+        const rating = roundToDecimal(Math.max(2.5, Math.min(5, rawRating)), 1);
+        const weight = Math.max(1, Math.round(rng() * 3));
+        const reviewerName = pickFromArray(rng, INDIVIDUAL_RATING_REVIEWERS);
+        let commentPool = INDIVIDUAL_RATING_COMMENTS.neutral;
+        if (rating >= 4.3) {
+            commentPool = INDIVIDUAL_RATING_COMMENTS.positive;
+        } else if (rating < 3.6) {
+            commentPool = INDIVIDUAL_RATING_COMMENTS.negative;
+        }
+        const comment = pickFromArray(rng, commentPool);
+        const daysAgo = Math.floor(rng() * 180) + index;
+        const hoursOffset = Math.floor(rng() * 12);
+        const reviewedAt = new Date(now - daysAgo * 86_400_000 - hoursOffset * 3_600_000).toISOString();
+        const orderSuffix = String(Math.floor(rng() * 9000) + 1000);
+        entries.push({
+            id: `${accountId || 'IND'}-${role}-rating-${String(index + 1).padStart(3, '0')}`,
+            rating,
+            reviews: weight,
+            reviewerName,
+            reviewerRole: role === 'seller' ? 'Buyer' : 'Seller',
+            comment,
+            reviewedAt,
+            role,
+            relatedOrderId: `ORD-${orderSuffix}`
+        });
+    }
+    return entries;
+}
+
+function ensureIndividualAccountPoints(account) {
+    if (!account || typeof account !== 'object') {
+        return;
+    }
+
+    const idBase = (account.id || account.email || 'IND')
+        .toString()
+        .replace(/[^a-z0-9]/gi, '')
+        .toLowerCase() || 'ind';
+    const existingHistoryRaw = Array.isArray(account.pointsHistory) ? account.pointsHistory.filter(Boolean) : [];
+
+    const coerceTimestamp = (value, fallbackIso) => {
+        const normalized = normalizeIsoTimestamp(value, null);
+        if (normalized) {
+            return normalized;
+        }
+        return fallbackIso || new Date().toISOString();
+    };
+
+    if (existingHistoryRaw.length) {
+        const fallbackNow = Date.now();
+        const sortedHistory = existingHistoryRaw
+            .map((entry, index) => {
+                const deltaCandidate = Number(entry?.delta ?? entry?.amount ?? 0);
+                const delta = Number.isFinite(deltaCandidate) ? Math.round(deltaCandidate) : 0;
+                const fallbackTimestamp = new Date(fallbackNow - (existingHistoryRaw.length - index) * 3_600_000).toISOString();
+                const timestamp = coerceTimestamp(entry?.timestamp || entry?.recordedAt || entry?.date, fallbackTimestamp);
+                const balanceCandidate = Number(entry?.balanceAfter ?? entry?.balance);
+                const balanceAfter = Number.isFinite(balanceCandidate) ? Math.round(balanceCandidate) : null;
+                const label = typeof entry?.label === 'string' && entry.label.trim()
+                    ? entry.label.trim()
+                    : delta >= 0
+                        ? 'Points credit'
+                        : 'Points redemption';
+                const note = typeof entry?.note === 'string' ? entry.note.trim() : '';
+                return {
+                    id: typeof entry?.id === 'string' && entry.id.trim() ? entry.id.trim() : null,
+                    label,
+                    delta,
+                    balanceAfter,
+                    timestamp,
+                    note
+                };
+            })
+            .sort((a, b) => Date.parse(a.timestamp) - Date.parse(b.timestamp));
+
+        const rebuiltHistory = [];
+        let runningBalance = 0;
+        sortedHistory.forEach((entry) => {
+            const delta = Number.isFinite(entry.delta) ? entry.delta : 0;
+            if (Number.isFinite(entry.balanceAfter)) {
+                runningBalance = Math.max(0, entry.balanceAfter);
+            } else {
+                runningBalance = Math.max(0, runningBalance + delta);
+            }
+            rebuiltHistory.push({
+                id: entry.id,
+                label: entry.label,
+                delta: Math.round(delta),
+                balanceAfter: Math.round(runningBalance),
+                timestamp: entry.timestamp,
+                note: entry.note
+            });
+        });
+
+        const limitedHistory = rebuiltHistory.slice(-INDIVIDUAL_POINTS_MAX_TRANSACTIONS).map((entry, index) => ({
+            id: `points-${idBase}-${String(index + 1).padStart(3, '0')}`,
+            label: entry.label,
+            delta: entry.delta,
+            balanceAfter: entry.balanceAfter,
+            timestamp: entry.timestamp,
+            note: entry.note
+        }));
+
+        const latestEntry = limitedHistory[limitedHistory.length - 1] || null;
+        account.pointsHistory = limitedHistory;
+        const derivedBalance = latestEntry ? latestEntry.balanceAfter : (rebuiltHistory.length ? rebuiltHistory[rebuiltHistory.length - 1].balanceAfter : 0);
+        if (!Number.isFinite(Number(account.pointsBalance))) {
+            account.pointsBalance = derivedBalance;
+        } else {
+            account.pointsBalance = Math.max(0, Math.round(Number(account.pointsBalance)));
+        }
+        account.points = account.pointsBalance;
+        if (!account.pointsUpdatedAt && latestEntry) {
+            account.pointsUpdatedAt = latestEntry.timestamp;
+        }
+        if (!account.pointsUpdatedAt) {
+            account.pointsUpdatedAt = new Date().toISOString();
+        }
+        return;
+    }
+
+    const rng = createDeterministicRandom(`${account.id || account.email || account.fullName || Date.now()}|points`);
+    const totalTransactions = INDIVIDUAL_POINTS_MIN_TRANSACTIONS
+        + Math.floor(rng() * (INDIVIDUAL_POINTS_MAX_TRANSACTIONS - INDIVIDUAL_POINTS_MIN_TRANSACTIONS + 1));
+    const events = [];
+    let balance = 0;
+    const now = Date.now();
+
+    const generateTimestamp = index => {
+        const remaining = totalTransactions - index;
+        const baseDays = (remaining + 1) * 5;
+        const jitterDays = Math.floor((rng() - 0.5) * 4);
+        let candidate = now - Math.min(INDIVIDUAL_POINTS_MAX_HISTORY_DAYS, baseDays + Math.max(jitterDays, -baseDays)) * 86_400_000;
+        candidate += Math.floor(rng() * 18) * 3_600_000;
+        candidate += Math.floor(rng() * 60) * 60_000;
+        if (events.length) {
+            const previousTime = Date.parse(events[events.length - 1].timestamp) || (now - (remaining + 1) * 3_600_000);
+            if (candidate <= previousTime) {
+                candidate = previousTime + Math.max(3_600_000, Math.floor(rng() * 6) * 3_600_000);
+            }
+        }
+        const minAllowed = now - INDIVIDUAL_POINTS_MAX_HISTORY_DAYS * 86_400_000;
+        if (candidate < minAllowed) {
+            candidate = minAllowed + index * 3_600_000;
+        }
+        const maxAllowed = now - Math.max(0, (totalTransactions - index - 1) * 3_600_000);
+        if (candidate > maxAllowed) {
+            candidate = maxAllowed - Math.floor(rng() * 90) * 60_000;
+        }
+        return new Date(Math.min(candidate, now - 60_000)).toISOString();
+    };
+
+    const addEvent = type => {
+        const definition = INDIVIDUAL_POINTS_EVENT_DEFINITIONS[type];
+        if (!definition) {
+            return false;
+        }
+        const minDelta = Math.max(10, Math.round(definition.minDelta || 50));
+        const deltaSpan = Math.max(0, Math.round((definition.maxDelta || minDelta) - minDelta));
+        const magnitude = minDelta + Math.round(rng() * deltaSpan);
+        let delta = definition.direction === -1 ? -magnitude : magnitude;
+        if (definition.direction === -1) {
+            const minBalance = definition.minRequiredBalance || INDIVIDUAL_POINTS_MIN_PURCHASE_BALANCE;
+            if (balance < minBalance) {
+                return false;
+            }
+            const maxSpend = Math.max(40, Math.floor(balance * 0.7));
+            if (maxSpend < 40) {
+                return false;
+            }
+            const spend = Math.min(Math.max(40, magnitude), maxSpend);
+            delta = -spend;
+        }
+        balance = Math.max(0, Math.round(balance + delta));
+        const timestamp = generateTimestamp(events.length);
+        const note = typeof definition.noteBuilder === 'function'
+            ? definition.noteBuilder({ account, rng, delta, magnitude: Math.abs(delta) })
+            : (Array.isArray(definition.notePool) && definition.notePool.length
+                ? pickFromArray(rng, definition.notePool)
+                : '');
+        events.push({
+            id: `points-${idBase}-${String(events.length + 1).padStart(3, '0')}`,
+            label: definition.label,
+            delta: Math.round(delta),
+            balanceAfter: balance,
+            timestamp,
+            note: note || ''
+        });
+        return true;
+    };
+
+    addEvent('welcome');
+
+    const requiredTypes = new Set(['referral', 'wallet', 'purchase']);
+    let attempts = 0;
+    while (events.length < totalTransactions && attempts < totalTransactions * 4) {
+        attempts += 1;
+        if (requiredTypes.has('purchase') && balance < INDIVIDUAL_POINTS_MIN_PURCHASE_BALANCE && events.length >= 3) {
+            requiredTypes.delete('purchase');
+        }
+        let candidates = ['referral', 'wallet', 'purchase'];
+        if (requiredTypes.size) {
+            candidates = candidates.filter(type => requiredTypes.has(type));
+        }
+        candidates = candidates.filter(type => type !== 'purchase' || balance >= INDIVIDUAL_POINTS_MIN_PURCHASE_BALANCE);
+        if (!candidates.length) {
+            candidates = ['referral', 'wallet'];
+            if (balance >= INDIVIDUAL_POINTS_MIN_PURCHASE_BALANCE && events.length > 3) {
+                candidates.push('purchase');
+            }
+        }
+        if (!candidates.length) {
+            break;
+        }
+        const choice = pickFromArray(rng, candidates);
+        if (addEvent(choice)) {
+            requiredTypes.delete(choice);
+        }
+    }
+
+    account.pointsHistory = events;
+    const latestGenerated = events[events.length - 1] || null;
+    account.pointsBalance = latestGenerated ? latestGenerated.balanceAfter : balance;
+    account.points = account.pointsBalance;
+    account.pointsUpdatedAt = latestGenerated ? latestGenerated.timestamp : new Date(now).toISOString();
+}
+
+function ensureIndividualAccountRatings(account) {
+    if (!account || typeof account !== 'object') {
+        return;
+    }
+    if (!account.marketplaceActivity || typeof account.marketplaceActivity !== 'object') {
+        account.marketplaceActivity = {
+            purchases: [],
+            sales: [],
+            productAds: [],
+            followUps: {},
+            sellerRatings: [],
+            buyerRatings: [],
+            savedAddresses: []
+        };
+    } else {
+        if (!Array.isArray(account.marketplaceActivity.purchases)) account.marketplaceActivity.purchases = [];
+        if (!Array.isArray(account.marketplaceActivity.sales)) account.marketplaceActivity.sales = [];
+        if (!Array.isArray(account.marketplaceActivity.productAds)) account.marketplaceActivity.productAds = [];
+        if (!account.marketplaceActivity.followUps || typeof account.marketplaceActivity.followUps !== 'object') {
+            account.marketplaceActivity.followUps = {};
+        }
+        if (!Array.isArray(account.marketplaceActivity.savedAddresses)) account.marketplaceActivity.savedAddresses = [];
+        if (!Array.isArray(account.marketplaceActivity.sellerRatings)) account.marketplaceActivity.sellerRatings = [];
+        if (!Array.isArray(account.marketplaceActivity.buyerRatings)) account.marketplaceActivity.buyerRatings = [];
+    }
+
+    const existingSeller = Array.isArray(account.sellerRatings) ? account.sellerRatings.filter(Boolean) : [];
+    const existingBuyer = Array.isArray(account.buyerRatings) ? account.buyerRatings.filter(Boolean) : [];
+    const activitySeller = Array.isArray(account.marketplaceActivity.sellerRatings)
+        ? account.marketplaceActivity.sellerRatings.filter(Boolean)
+        : [];
+    const activityBuyer = Array.isArray(account.marketplaceActivity.buyerRatings)
+        ? account.marketplaceActivity.buyerRatings.filter(Boolean)
+        : [];
+
+    const sellerRatings = existingSeller.length
+        ? existingSeller
+        : activitySeller.length
+            ? activitySeller
+            : generateIndividualRatingEntries(account.id || account.email || Date.now(), 'seller');
+    const buyerRatings = existingBuyer.length
+        ? existingBuyer
+        : activityBuyer.length
+            ? activityBuyer
+            : generateIndividualRatingEntries(account.id || account.email || Date.now(), 'buyer');
+
+    account.sellerRatings = sellerRatings;
+    account.buyerRatings = buyerRatings;
+    account.marketplaceActivity.sellerRatings = sellerRatings;
+    account.marketplaceActivity.buyerRatings = buyerRatings;
+
+    const sellerAverage = computeAverageRating(sellerRatings);
+    const buyerAverage = computeAverageRating(buyerRatings);
+    if (sellerAverage !== null) {
+        if (!Number.isFinite(Number(account.sellerRating))) {
+            account.sellerRating = roundToDecimal(sellerAverage, 2);
+        }
+        if (!Number.isFinite(Number(account.averageSellerRating))) {
+            account.averageSellerRating = roundToDecimal(sellerAverage, 2);
+        }
+    }
+    if (buyerAverage !== null) {
+        if (!Number.isFinite(Number(account.buyerRating))) {
+            account.buyerRating = roundToDecimal(buyerAverage, 2);
+        }
+        if (!Number.isFinite(Number(account.averageBuyerRating))) {
+            account.averageBuyerRating = roundToDecimal(buyerAverage, 2);
+        }
+    }
+    const combinedAverage = computeAverageRating([...sellerRatings, ...buyerRatings]);
+    if (combinedAverage !== null && !Number.isFinite(Number(account.rating))) {
+        account.rating = roundToDecimal(combinedAverage, 2);
+    }
+    if (!Number.isFinite(Number(account.ratingCount))) {
+        account.ratingCount = sellerRatings.length + buyerRatings.length;
+    }
+}
+
+function ensureIndividualAccountSavedAddresses(account) {
+    if (!account || typeof account !== 'object') {
+        return;
+    }
+
+    if (!account.marketplaceActivity || typeof account.marketplaceActivity !== 'object') {
+        account.marketplaceActivity = { savedAddresses: [] };
+    }
+    if (!Array.isArray(account.marketplaceActivity.savedAddresses)) {
+        account.marketplaceActivity.savedAddresses = [];
+    }
+    if (!Array.isArray(account.savedAddresses)) {
+        account.savedAddresses = [];
+    }
+
+    const mergedSaved = [];
+    const seenKeys = new Set();
+    const pushUniqueAddress = entry => {
+        if (!entry || typeof entry !== 'object') {
+            return;
+        }
+        const identifierRaw = typeof entry.id === 'string' && entry.id.trim() ? entry.id.trim() : null;
+        const identifier = identifierRaw ? identifierRaw.toLowerCase() : null;
+        if (identifier && seenKeys.has(identifier)) {
+            return;
+        }
+        if (identifier) {
+            seenKeys.add(identifier);
+        }
+        mergedSaved.push(entry);
+    };
+
+    account.savedAddresses.forEach(pushUniqueAddress);
+    account.marketplaceActivity.savedAddresses.forEach(pushUniqueAddress);
+
+    const seedBase = (account.id || account.email || account.fullName || 'individual')
+        .toString()
+        .trim()
+        .toLowerCase() || 'individual';
+    const preferredCountry = account.address && account.address.country ? account.address.country : DEFAULT_ADDRESS_COUNTRY;
+    const preferredRegion = account.address && account.address.region ? account.address.region : DEFAULT_ADDRESS_REGION;
+    const preferredCity = account.address && account.address.city ? account.address.city : account.city || 'Riyadh';
+    const baseTime = Date.parse(account.createdAt || account.signupCompletedAt || account.signupDate || '') || Date.now();
+    const normalizedMobile = typeof account.mobile === 'string' && account.mobile.trim() ? account.mobile.trim() : '';
+
+    for (let index = 0; index < REQUIRED_ADDITIONAL_SAVED_ADDRESS_COUNT; index += 1) {
+        const autoId = `${seedBase}-auto-address-${index + 1}`;
+        if (seenKeys.has(autoId.toLowerCase())) {
+            continue;
+        }
+        const addressRng = createDeterministicRandom(`${seedBase}|auto-address-${index + 1}`);
+        const cityCandidates = [preferredCity, ...SAVED_ADDRESS_CITY_OPTIONS];
+        const city = pickFromArray(addressRng, cityCandidates.filter(Boolean)) || preferredCity || 'Riyadh';
+        const districtCandidates = [account.address && account.address.district, ...SAVED_ADDRESS_DISTRICT_OPTIONS];
+        const district = pickFromArray(addressRng, districtCandidates.filter(Boolean)) || 'Central District';
+        const streetRoot = pickFromArray(addressRng, SAVED_ADDRESS_STREET_OPTIONS);
+        const streetName = streetRoot ? `${streetRoot} ${addressRng() > 0.5 ? 'Street' : 'Road'}` : 'Main Street';
+        const streetNumber = String(Math.floor(addressRng() * 600) + 50);
+        const buildingNumber = String(Math.floor(addressRng() * 40) + 10);
+        const apartmentNumber = String(Math.floor(addressRng() * 50) + 1);
+        const floorNumber = String(Math.floor(addressRng() * 15) + 1);
+        const zipCode = String(10000 + Math.floor(addressRng() * 90000));
+        const addedOffsetDays = 7 * (index + 1);
+        const addedAt = new Date(baseTime + addedOffsetDays * 86_400_000).toISOString();
+        let updatedAt = null;
+        if (addressRng() > 0.65) {
+            const updateOffsetDays = 10 + Math.floor(addressRng() * 60);
+            updatedAt = new Date(Date.parse(addedAt) + updateOffsetDays * 86_400_000).toISOString();
+        }
+        const phoneNumber = normalizedMobile || `+9665${String(Math.floor(addressRng() * 90000000) + 10000000)}`;
+        const label = pickFromArray(addressRng, SAVED_ADDRESS_LABEL_OPTIONS) || `Address ${index + 1}`;
+
+        const generatedEntry = {
+            id: autoId,
+            label,
+            nickname: label,
+            country: preferredCountry || DEFAULT_ADDRESS_COUNTRY,
+            region: preferredRegion || DEFAULT_ADDRESS_REGION,
+            city,
+            district,
+            streetName,
+            streetNumber,
+            zipCode,
+            apartment: apartmentNumber,
+            apartmentNo: apartmentNumber,
+            building: buildingNumber,
+            buildingNo: buildingNumber,
+            floor: floorNumber,
+            floorNo: floorNumber,
+            contactPhone: phoneNumber,
+            addedAt
+        };
+        if (updatedAt) {
+            generatedEntry.updatedAt = updatedAt;
+            generatedEntry.hasBeenUpdated = true;
+        }
+        pushUniqueAddress(generatedEntry);
+    }
+
+    if (mergedSaved.length) {
+        let defaultIndex = mergedSaved.findIndex(entry => resolveSavedAddressIsDefault(entry));
+        if (defaultIndex < 0) {
+            defaultIndex = 0;
+        }
+        mergedSaved.forEach((entry, index) => {
+            if (!entry || typeof entry !== 'object') {
+                return;
+            }
+            const isDefault = index === defaultIndex;
+            entry.isDefault = isDefault;
+            if (Object.prototype.hasOwnProperty.call(entry, 'isPrimary')) {
+                entry.isPrimary = isDefault;
+            }
+            if (Object.prototype.hasOwnProperty.call(entry, 'primary')) {
+                entry.primary = isDefault;
+            }
+            if (Object.prototype.hasOwnProperty.call(entry, 'default')) {
+                entry.default = isDefault;
+            }
+            if (Object.prototype.hasOwnProperty.call(entry, 'preferred')) {
+                entry.preferred = isDefault;
+            }
+            if (Object.prototype.hasOwnProperty.call(entry, 'isPreferred')) {
+                entry.isPreferred = isDefault;
+            }
+        });
+
+        const requiredUpdatedCount = Math.min(MIN_SAVED_ADDRESS_UPDATED_COUNT, mergedSaved.length);
+        let updatedCount = 0;
+        const lackingUpdates = [];
+        mergedSaved.forEach((entry, index) => {
+            if (!entry || typeof entry !== 'object') {
+                return;
+            }
+            const addedMeta = resolveSavedAddressAddedTimestamp(entry);
+            const updatedMeta = resolveSavedAddressUpdatedTimestamp(entry);
+            const hasFlag = entry.wasUpdated === true
+                || entry.hasBeenUpdated === true
+                || entry.hasBeenEdited === true
+                || entry.wasEdited === true;
+            const hasDistinctTimestamps = Boolean(
+                updatedMeta.raw
+                && (
+                    (addedMeta.time && updatedMeta.time && addedMeta.time !== updatedMeta.time)
+                    || (!addedMeta.raw && updatedMeta.raw)
+                )
+            );
+            const isAlreadyUpdated = (updatedMeta.raw && (hasDistinctTimestamps || hasFlag));
+            if (isAlreadyUpdated) {
+                updatedCount += 1;
+            } else {
+                lackingUpdates.push({ entry, index, addedMeta });
+            }
+        });
+
+        if (updatedCount < requiredUpdatedCount && lackingUpdates.length) {
+            const fillCount = Math.min(requiredUpdatedCount - updatedCount, lackingUpdates.length);
+            for (let offset = 0; offset < fillCount; offset += 1) {
+                const { entry, index, addedMeta } = lackingUpdates[offset];
+                const updateRng = createDeterministicRandom(`${seedBase}|address-update-${index}`);
+                const baseTimestamp = Number.isFinite(addedMeta.time) && addedMeta.time > 0
+                    ? addedMeta.time
+                    : Date.parse(entry.addedAt || entry.createdAt || entry.savedAt || entry.timestamp || '') || baseTime;
+                const daysOffset = 5 + Math.floor(updateRng() * 45);
+                const hoursOffset = Math.floor(updateRng() * 12);
+                const updatedTime = baseTimestamp + daysOffset * 86_400_000 + hoursOffset * 3_600_000;
+                entry.updatedAt = new Date(updatedTime).toISOString();
+                entry.hasBeenUpdated = true;
+                entry.wasUpdated = true;
+            }
+        }
+    }
+
+    account.savedAddresses = mergedSaved;
+    account.marketplaceActivity.savedAddresses = mergedSaved;
+}
+
 function normalizeIndividualAccountPayload(account, index = 0) {
     if (!account || typeof account !== 'object') {
         return null;
@@ -5458,14 +7102,130 @@ function normalizeIndividualAccountPayload(account, index = 0) {
     const cloneCollection = collection => (Array.isArray(collection) ? collection : [])
         .map(entry => (entry && typeof entry === 'object' ? { ...entry } : null))
         .filter(Boolean);
+    const cloneFavoriteEntry = entry => {
+        if (!entry || typeof entry !== 'object') {
+            return entry;
+        }
+        if (Array.isArray(entry)) {
+            return entry.map(item => cloneFavoriteEntry(item)).filter(item => item !== null && item !== undefined);
+        }
+        const clone = {};
+        Object.keys(entry).forEach(key => {
+            const value = entry[key];
+            if (value !== undefined) {
+                clone[key] = cloneFavoriteEntry(value);
+            }
+        });
+        return clone;
+    };
+    const normalizeFavoriteCollection = value => {
+        if (!value) {
+            return [];
+        }
+        if (Array.isArray(value)) {
+            return value
+                .map(item => cloneFavoriteEntry(item))
+                .filter(item => item !== null && item !== undefined && !(typeof item === 'string' && !item.trim()));
+        }
+        if (value && typeof value === 'object') {
+            if (Array.isArray(value.items)) {
+                return value.items
+                    .map(item => cloneFavoriteEntry(item))
+                    .filter(item => item !== null && item !== undefined && !(typeof item === 'string' && !item.trim()));
+            }
+            return [cloneFavoriteEntry(value)];
+        }
+        if (typeof value === 'string') {
+            const trimmed = value.trim();
+            return trimmed ? [trimmed] : [];
+        }
+        return [value];
+    };
+    const mergeFavoriteCollections = function () {
+        const merged = [];
+        const seen = new Set();
+        for (let i = 0; i < arguments.length; i += 1) {
+            const set = normalizeFavoriteCollection(arguments[i]);
+            set.forEach(entry => {
+                if (entry === null || entry === undefined) {
+                    return;
+                }
+                let key = '';
+                if (typeof entry === 'string' || typeof entry === 'number' || typeof entry === 'boolean') {
+                    key = String(entry);
+                } else if (entry && typeof entry === 'object') {
+                    try {
+                        key = JSON.stringify(entry);
+                    } catch (error) {
+                        key = '';
+                    }
+                }
+                if (key && seen.has(key)) {
+                    return;
+                }
+                if (key) {
+                    seen.add(key);
+                }
+                merged.push(entry);
+            });
+        }
+        return merged;
+    };
+    const accountFollowUpsSource = account.followUps && typeof account.followUps === 'object' ? account.followUps : {};
+    const activityFollowUpsSource = marketplaceActivitySource.followUps && typeof marketplaceActivitySource.followUps === 'object'
+        ? marketplaceActivitySource.followUps
+        : {};
+    const followUps = {};
+    const copyFollowUpsMeta = source => {
+        if (!source || typeof source !== 'object') {
+            return;
+        }
+        Object.keys(source).forEach(key => {
+            if (key === 'favoriteCategories' || key === 'favoriteSellers' || key === 'favoriteSearches') {
+                return;
+            }
+            const value = source[key];
+            if (Array.isArray(value)) {
+                followUps[key] = value.map(item => (item && typeof item === 'object' ? { ...item } : item));
+            } else if (value && typeof value === 'object') {
+                followUps[key] = { ...followUps[key], ...value };
+            } else {
+                followUps[key] = value;
+            }
+        });
+    };
+    copyFollowUpsMeta(activityFollowUpsSource);
+    copyFollowUpsMeta(accountFollowUpsSource);
+    const favoriteCategories = mergeFavoriteCollections(
+        account.favoriteCategories,
+        accountFollowUpsSource.favoriteCategories,
+        activityFollowUpsSource.favoriteCategories
+    );
+    const favoriteSellers = mergeFavoriteCollections(
+        account.favoriteSellers,
+        accountFollowUpsSource.favoriteSellers,
+        activityFollowUpsSource.favoriteSellers
+    );
+    const favoriteSearches = mergeFavoriteCollections(
+        account.favoriteSearches,
+        accountFollowUpsSource.favoriteSearches,
+        activityFollowUpsSource.favoriteSearches
+    );
+    followUps.favoriteCategories = favoriteCategories;
+    followUps.favoriteSellers = favoriteSellers;
+    followUps.favoriteSearches = favoriteSearches;
+    const savedAddressesCombined = [
+        ...cloneCollection(account.savedAddresses),
+        ...cloneCollection(marketplaceActivitySource.savedAddresses)
+    ];
     const marketplaceActivity = {
         purchases: cloneCollection(marketplaceActivitySource.purchases),
         sales: cloneCollection(marketplaceActivitySource.sales),
         productAds: cloneCollection(marketplaceActivitySource.productAds),
-        followUps: cloneCollection(marketplaceActivitySource.followUps),
+        followUps,
         sellerRatings: cloneCollection(marketplaceActivitySource.sellerRatings),
         buyerRatings: cloneCollection(marketplaceActivitySource.buyerRatings),
-        savedAddresses: cloneCollection(marketplaceActivitySource.savedAddresses)
+        savedAddresses: savedAddressesCombined
     };
     const balanceBreakdown = Array.isArray(account.balanceBreakdown)
         ? account.balanceBreakdown.map((entry, entryIndex) => {
@@ -5497,27 +7257,7 @@ function normalizeIndividualAccountPayload(account, index = 0) {
             };
         }).filter(Boolean)
         : [];
-    const paymentCards = Array.isArray(account.paymentCards)
-        ? account.paymentCards.map((card, cardIndex) => {
-            if (!card || typeof card !== 'object') return null;
-            const brand = typeof card.brand === 'string' && card.brand.trim() ? card.brand.trim() : 'Card';
-            const last4 = typeof card.last4 === 'string' && card.last4.trim() ? card.last4.trim() : '';
-            const expiryMonth = typeof card.expiryMonth === 'string' && card.expiryMonth.trim()
-                ? card.expiryMonth.trim()
-                : Number.isFinite(card.expiryMonth)
-                    ? String(card.expiryMonth).padStart(2, '0')
-                    : '';
-            const expiryYear = typeof card.expiryYear === 'string' && card.expiryYear.trim()
-                ? card.expiryYear.trim()
-                : Number.isFinite(card.expiryYear)
-                    ? String(card.expiryYear)
-                    : '';
-            const holderName = typeof card.holderName === 'string' && card.holderName.trim() ? card.holderName.trim() : '';
-            const statusLabel = typeof card.status === 'string' && card.status.trim() ? card.status.trim() : '';
-            const addedAt = normalizeIsoTimestamp(card.addedAt, null);
-            return { brand, last4, expiryMonth, expiryYear, holderName, status: statusLabel, addedAt };
-        }).filter(Boolean)
-        : [];
+    const paymentCards = buildIndividualAccountPaymentMethods(account, index);
     const subscriptions = Array.isArray(account.subscriptions)
         ? account.subscriptions.map(subscription => ({
             name: typeof subscription.name === 'string' && subscription.name.trim() ? subscription.name.trim() : 'Subscription',
@@ -5591,14 +7331,14 @@ function normalizeIndividualAccountPayload(account, index = 0) {
         .map((entry, logIndex) => normalizeIndividualAccountLogEntry(entry, logIndex))
         .filter(Boolean);
     const notes = typeof account.notes === 'string' ? account.notes.trim() : '';
-    return {
+    const normalizedAccount = {
         id,
         fullName,
         firstName,
         lastName,
         profilePicture,
-    photoDataUrl,
-    photoFileName,
+        photoDataUrl,
+        photoFileName,
         gender,
         dateOfBirth,
         email,
@@ -5617,6 +7357,11 @@ function normalizeIndividualAccountPayload(account, index = 0) {
         lastActiveAt,
         username,
         permissions,
+        savedAddresses: savedAddressesCombined,
+        followUps,
+        favoriteCategories,
+        favoriteSellers,
+        favoriteSearches,
         marketplaceActivity,
         subscriptions,
         financialHistory,
@@ -5628,6 +7373,11 @@ function normalizeIndividualAccountPayload(account, index = 0) {
         invitationOwner,
         notes
     };
+    ensureIndividualAccountWallet(normalizedAccount);
+    ensureIndividualAccountPoints(normalizedAccount);
+    ensureIndividualAccountRatings(normalizedAccount);
+    ensureIndividualAccountSavedAddresses(normalizedAccount);
+    return normalizedAccount;
 }
 
 function appendIndividualAccountLogEntry(account, entry) {
@@ -5703,6 +7453,17 @@ function saveIndividualAccountsToStorage() {
     }
 }
 
+function saveIndividualSignupRecordsToStorage() {
+    try {
+        if (!Array.isArray(individualSignupRecords)) {
+            return;
+        }
+        localStorage.setItem(INDIVIDUAL_SIGNUP_RECORDS_STORAGE_KEY, JSON.stringify(individualSignupRecords));
+    } catch (error) {
+        console.warn('Unable to save individual signup records:', error);
+    }
+}
+
 function normalizeBusinessAccountInvoice(invoice, index = 0) {
     if (!invoice || typeof invoice !== 'object') {
         return null;
@@ -5741,7 +7502,7 @@ function normalizeBusinessAccountPayload(account, index = 0) {
     const submittedAt = normalizeIsoTimestamp(account.submittedAt, new Date().toISOString());
     const approvedAt = normalizeIsoTimestamp(account.approvedAt, null);
     const statusCandidate = typeof account.status === 'string' && account.status.trim() ? account.status.trim().toLowerCase() : 'pending';
-    const allowedStatuses = new Set(['pending', 'docs-requested', 'active', 'suspended', 'cancelled', 'rejected']);
+    const allowedStatuses = new Set(['pending', 'docs-requested', 'active', 'inactive', 'suspended', 'cancelled', 'rejected']);
     const status = allowedStatuses.has(statusCandidate) ? statusCandidate : 'pending';
     const packageId = typeof account.packageId === 'string' && account.packageId.trim() ? account.packageId.trim() : '';
     const requestedDocuments = Array.isArray(account.requestedDocuments)
@@ -5884,6 +7645,30 @@ function normalizeBusinessAccountPayload(account, index = 0) {
     if (!history.length) {
         history.push(normalizeBusinessAccountHistoryEntry({ action: 'request-submitted', timestamp: submittedAt, actor: companyName, context: 'Application captured.' }, 'request-submitted', submittedAt, 0));
     }
+
+    const primaryIndividualIdCandidate = account.primaryIndividualId !== undefined && account.primaryIndividualId !== null
+        ? account.primaryIndividualId
+        : account.application && account.application.primaryIndividualId !== undefined && account.application.primaryIndividualId !== null
+            ? account.application.primaryIndividualId
+            : null;
+    const primaryIndividualId = typeof primaryIndividualIdCandidate === 'string'
+        ? primaryIndividualIdCandidate.trim()
+        : Number.isFinite(primaryIndividualIdCandidate)
+            ? String(primaryIndividualIdCandidate)
+            : '';
+
+    const defaultPublishingListTypeRaw = typeof account.defaultPublishingListType === 'string' && account.defaultPublishingListType.trim()
+        ? account.defaultPublishingListType.trim()
+        : account.publishingListPreset && typeof account.publishingListPreset === 'string' && account.publishingListPreset.trim()
+            ? account.publishingListPreset.trim()
+            : '';
+    const defaultPublishingListType = defaultPublishingListTypeRaw;
+    const defaultPublishingListNote = typeof account.defaultPublishingListNote === 'string'
+        ? account.defaultPublishingListNote.trim()
+        : typeof account.publishingListPresetNote === 'string'
+            ? account.publishingListPresetNote.trim()
+            : '';
+
     return {
         id,
         companyName,
@@ -5912,7 +7697,10 @@ function normalizeBusinessAccountPayload(account, index = 0) {
         certificates,
         address,
         logoFileName,
-        logoDataUrl
+        logoDataUrl,
+        primaryIndividualId: primaryIndividualId || null,
+        defaultPublishingListType,
+        defaultPublishingListNote
     };
 }
 
@@ -6670,6 +8458,526 @@ function hideRoleBuilder() {
     updateBreadcrumb('users');
 }
 
+function enrichIndividualAccountsWithSampleFavorites() {
+    if (!Array.isArray(individualAccounts) || !individualAccounts.length) {
+        return;
+    }
+
+    const now = Date.now();
+    const isoDaysAgo = daysAgo => new Date(now - Math.max(0, daysAgo) * 86400000).toISOString();
+    const desiredFavoriteCount = 9;
+
+    const sampleCategories = [
+        {
+            categoryId: 'cat-electronics-smartphones',
+            categoryName: 'Electronics',
+            categoryPath: 'Electronics > Phones > Android',
+            pathSegments: ['Electronics', 'Phones', 'Android'],
+            label: 'Android Smartphones',
+            notes: 'Tracking flagship Android releases',
+            followedDaysAgo: 12
+        },
+        {
+            categoryId: 'cat-smart-home-lighting',
+            categoryName: 'Smart Home',
+            categoryPath: 'Smart Home > Lighting > LED Strips',
+            pathSegments: ['Smart Home', 'Lighting', 'LED Strips'],
+            label: 'Smart Lighting Kits',
+            notes: 'Exploring ambient lighting ideas',
+            followedDaysAgo: 18
+        },
+        {
+            categoryId: 'cat-luxury-watches',
+            categoryName: 'Fashion',
+            categoryPath: 'Fashion > Accessories > Luxury Watches',
+            pathSegments: ['Fashion', 'Accessories', 'Luxury Watches'],
+            label: 'Luxury Watches',
+            followedDaysAgo: 26
+        },
+        {
+            categoryId: 'cat-outdoor-furniture',
+            categoryName: 'Home & Garden',
+            categoryPath: 'Home & Garden > Outdoor Living > Furniture Sets',
+            pathSegments: ['Home & Garden', 'Outdoor Living', 'Furniture Sets'],
+            label: 'Outdoor Furniture Sets',
+            followedDaysAgo: 33
+        },
+        {
+            categoryId: 'cat-electric-vehicles',
+            categoryName: 'Automotive',
+            categoryPath: 'Automotive > Vehicles > Electric',
+            pathSegments: ['Automotive', 'Vehicles', 'Electric'],
+            label: 'Electric Vehicles',
+            notes: 'Monitoring new EV launches',
+            followedDaysAgo: 41
+        },
+        {
+            categoryId: 'cat-organic-grocery',
+            categoryName: 'Grocery',
+            categoryPath: 'Grocery > Organic > Pantry Staples',
+            pathSegments: ['Grocery', 'Organic', 'Pantry Staples'],
+            label: 'Organic Pantry Staples',
+            followedDaysAgo: 47
+        },
+        {
+            categoryId: 'cat-fitness-trackers',
+            categoryName: 'Sports & Outdoors',
+            categoryPath: 'Sports & Outdoors > Wearables > Fitness Trackers',
+            pathSegments: ['Sports & Outdoors', 'Wearables', 'Fitness Trackers'],
+            label: 'Fitness Trackers',
+            followedDaysAgo: 21
+        },
+        {
+            categoryId: 'cat-business-books',
+            categoryName: 'Books & Media',
+            categoryPath: 'Books & Media > Audiobooks > Business & Finance',
+            pathSegments: ['Books & Media', 'Audiobooks', 'Business & Finance'],
+            label: 'Business Audiobooks',
+            followedDaysAgo: 29
+        },
+        {
+            categoryId: 'cat-baby-strollers',
+            categoryName: 'Baby & Kids',
+            categoryPath: 'Baby & Kids > Gear > Strollers',
+            pathSegments: ['Baby & Kids', 'Gear', 'Strollers'],
+            label: 'Baby Travel Gear',
+            followedDaysAgo: 9
+        }
+    ];
+
+    const sampleSellers = [
+        {
+            sellerId: 'BUS-001',
+            sellerName: 'Tech Innovations Co.',
+            companyName: 'Tech Innovations Co.',
+            label: 'Tech Innovations Co.',
+            rating: 4.7,
+            followers: 1250,
+            city: 'Riyadh',
+            region: 'Riyadh Province',
+            country: 'Saudi Arabia',
+            contactEmail: 'support@techinnovations.co',
+            phone: '+966 11 123 4567',
+            accountType: 'business',
+            segments: ['Electronics', 'Wearables'],
+            tags: ['Flagship', 'Warranty'],
+            followedDaysAgo: 14
+        },
+        {
+            sellerId: 'BUS-002',
+            sellerName: 'Home Essentials Store',
+            companyName: 'Home Essentials Store',
+            label: 'Home Essentials Store',
+            rating: 4.5,
+            followers: 890,
+            city: 'Mecca',
+            region: 'Makkah Province',
+            country: 'Saudi Arabia',
+            contactEmail: 'hello@homeessentials.store',
+            phone: '+966 12 765 4321',
+            accountType: 'business',
+            segments: ['Home & Garden', 'Decor'],
+            followedDaysAgo: 23
+        },
+        {
+            sellerId: 'BUS-003',
+            sellerName: 'Riyadh Fitness Hub',
+            companyName: 'Riyadh Fitness Hub',
+            label: 'Riyadh Fitness Hub',
+            rating: 4.2,
+            followers: 540,
+            city: 'Riyadh',
+            region: 'Riyadh Province',
+            country: 'Saudi Arabia',
+            contactEmail: 'coach@riyadhfitness.sa',
+            phone: '+966 55 222 3344',
+            accountType: 'individual',
+            segments: ['Fitness', 'Wearables'],
+            tags: ['Membership', 'Classes'],
+            followedDaysAgo: 19
+        },
+        {
+            sellerId: 'BUS-004',
+            sellerName: 'Luxury Timepieces Ltd.',
+            companyName: 'Luxury Timepieces Ltd.',
+            label: 'Luxury Timepieces Ltd.',
+            rating: 4.9,
+            followers: 1875,
+            city: 'Jeddah',
+            region: 'Makkah Province',
+            country: 'Saudi Arabia',
+            contactEmail: 'concierge@luxurytimepieces.sa',
+            phone: '+966 12 998 2211',
+            accountType: 'business',
+            segments: ['Fashion', 'Accessories'],
+            tags: ['Luxury', 'Certified'],
+            followedDaysAgo: 31
+        },
+        {
+            sellerId: 'BUS-005',
+            sellerName: 'GreenGrocer Market',
+            companyName: 'GreenGrocer Market',
+            label: 'GreenGrocer Market',
+            rating: 4.4,
+            followers: 675,
+            city: 'Al Khobar',
+            region: 'Eastern Province',
+            country: 'Saudi Arabia',
+            contactEmail: 'fresh@greengrocer.sa',
+            phone: '+966 13 445 7788',
+            accountType: 'business',
+            segments: ['Grocery', 'Organic'],
+            followedDaysAgo: 27
+        },
+        {
+            sellerId: 'BUS-006',
+            sellerName: 'Smart Living Solutions',
+            companyName: 'Smart Living Solutions',
+            label: 'Smart Living Solutions',
+            rating: 4.6,
+            followers: 1020,
+            city: 'Riyadh',
+            region: 'Riyadh Province',
+            country: 'Saudi Arabia',
+            contactEmail: 'hello@smartliving.sa',
+            phone: '+966 50 112 2211',
+            accountType: 'business',
+            segments: ['Smart Home', 'Security'],
+            tags: ['Installation'],
+            followedDaysAgo: 16
+        },
+        {
+            sellerId: 'BUS-007',
+            sellerName: 'Sunrise Furnishings',
+            companyName: 'Sunrise Furnishings',
+            label: 'Sunrise Furnishings',
+            rating: 4.1,
+            followers: 420,
+            city: 'Yanbu',
+            region: 'Medina Province',
+            country: 'Saudi Arabia',
+            contactEmail: 'support@sunrisefurnishings.sa',
+            phone: '+966 14 667 8890',
+            accountType: 'business',
+            segments: ['Home & Garden', 'Outdoor'],
+            followedDaysAgo: 35
+        },
+        {
+            sellerId: 'BUS-008',
+            sellerName: 'Kiddo World Toys',
+            companyName: 'Kiddo World Toys',
+            label: 'Kiddo World Toys',
+            rating: 4.3,
+            followers: 510,
+            city: 'Jeddah',
+            region: 'Makkah Province',
+            country: 'Saudi Arabia',
+            contactEmail: 'play@kiddoworld.sa',
+            phone: '+966 53 778 9900',
+            accountType: 'individual',
+            segments: ['Baby & Kids', 'STEM'],
+            tags: ['Educational'],
+            followedDaysAgo: 11
+        },
+        {
+            sellerId: 'BUS-009',
+            sellerName: 'Desert Motors Marketplace',
+            companyName: 'Desert Motors Marketplace',
+            label: 'Desert Motors Marketplace',
+            rating: 4.8,
+            followers: 1540,
+            city: 'Dammam',
+            region: 'Eastern Province',
+            country: 'Saudi Arabia',
+            contactEmail: 'support@desertmotors.sa',
+            phone: '+966 13 998 4400',
+            accountType: 'business',
+            segments: ['Automotive', 'Electric'],
+            tags: ['Certified', 'Financing'],
+            followedDaysAgo: 38
+        }
+    ];
+
+    const sampleSearches = [
+        {
+            query: 'wireless headphones',
+            label: 'Wireless Headphones',
+            search: 'wireless headphones',
+            filters: {
+                priceRange: '500-1500 SAR',
+                brand: 'Sony, Bose',
+                condition: 'New'
+            },
+            alertsEnabled: true,
+            alertFrequency: 'daily',
+            resultsCount: 45,
+            scope: 'Marketplace',
+            categories: ['Electronics', 'Audio'],
+            followedDaysAgo: 10,
+            lastRunDaysAgo: 2
+        },
+        {
+            query: 'furniture deals',
+            label: 'Furniture Deals',
+            search: 'furniture deals',
+            filters: {
+                location: 'Riyadh',
+                delivery: 'Free'
+            },
+            alertsEnabled: false,
+            resultsCount: 78,
+            scope: 'Marketplace',
+            followedDaysAgo: 24,
+            lastRunDaysAgo: 6
+        },
+        {
+            query: 'smart lighting kits',
+            label: 'Smart Lighting Kits',
+            search: 'smart lighting kits',
+            filters: {
+                compatibility: 'Apple HomeKit',
+                delivery: 'Same Day'
+            },
+            alertsEnabled: true,
+            alertFrequency: 'weekly',
+            resultsCount: 32,
+            scope: 'Marketplace',
+            categories: ['Smart Home', 'Lighting'],
+            followedDaysAgo: 18,
+            lastRunDaysAgo: 3
+        },
+        {
+            query: 'electric scooters',
+            label: 'Electric Scooters',
+            search: 'electric scooters',
+            filters: {
+                range: '40km+',
+                weightCapacity: '120kg'
+            },
+            alertsEnabled: true,
+            alertFrequency: 'weekly',
+            resultsCount: 21,
+            scope: 'Marketplace',
+            followedDaysAgo: 30,
+            lastRunDaysAgo: 7
+        },
+        {
+            query: 'designer handbags',
+            label: 'Designer Handbags',
+            search: 'designer handbags',
+            filters: {
+                condition: 'New With Tags',
+                priceRange: '3000-9000 SAR'
+            },
+            alertsEnabled: false,
+            resultsCount: 56,
+            scope: 'Marketplace',
+            categories: ['Fashion', 'Accessories'],
+            followedDaysAgo: 16,
+            lastRunDaysAgo: 4
+        },
+        {
+            query: 'organic coffee beans',
+            label: 'Organic Coffee Beans',
+            search: 'organic coffee beans',
+            filters: {
+                roastLevel: 'Medium',
+                origin: 'Ethiopia'
+            },
+            alertsEnabled: true,
+            alertFrequency: 'daily',
+            resultsCount: 18,
+            scope: 'Marketplace',
+            followedDaysAgo: 12,
+            lastRunDaysAgo: 1
+        },
+        {
+            query: 'baby stroller deals',
+            label: 'Baby Stroller Deals',
+            search: 'baby stroller deals',
+            filters: {
+                weightLimit: '15kg',
+                foldType: 'One-Hand Fold'
+            },
+            alertsEnabled: false,
+            resultsCount: 27,
+            scope: 'Marketplace',
+            categories: ['Baby & Kids', 'Gear'],
+            followedDaysAgo: 20,
+            lastRunDaysAgo: 5
+        },
+        {
+            query: 'premium gaming laptops',
+            label: 'Premium Gaming Laptops',
+            search: 'premium gaming laptops',
+            filters: {
+                gpu: 'RTX 4080',
+                memory: '32GB'
+            },
+            alertsEnabled: true,
+            alertFrequency: 'weekly',
+            resultsCount: 14,
+            scope: 'Marketplace',
+            followedDaysAgo: 28,
+            lastRunDaysAgo: 8
+        },
+        {
+            query: 'fitness class subscriptions',
+            label: 'Fitness Class Subscriptions',
+            search: 'fitness class subscriptions',
+            filters: {
+                duration: 'Monthly',
+                availability: 'Evenings'
+            },
+            alertsEnabled: true,
+            alertFrequency: 'monthly',
+            resultsCount: 19,
+            scope: 'Marketplace',
+            followedDaysAgo: 22,
+            lastRunDaysAgo: 9
+        }
+    ];
+
+    const cloneCategory = (sample, adjustment = 0) => {
+        const copy = {
+            categoryId: sample.categoryId,
+            categoryName: sample.categoryName,
+            categoryPath: sample.categoryPath,
+            pathSegments: Array.isArray(sample.pathSegments) ? sample.pathSegments.slice() : [],
+            label: sample.label,
+            followedAt: isoDaysAgo(sample.followedDaysAgo + adjustment)
+        };
+        if (sample.notes) {
+            copy.notes = sample.notes;
+        }
+        return copy;
+    };
+
+    const cloneSeller = (sample, adjustment = 0) => {
+        const copy = {
+            sellerId: sample.sellerId,
+            sellerName: sample.sellerName,
+            companyName: sample.companyName,
+            label: sample.label,
+            rating: sample.rating,
+            followers: sample.followers,
+            city: sample.city,
+            region: sample.region,
+            country: sample.country,
+            contactEmail: sample.contactEmail,
+            phone: sample.phone,
+            accountType: sample.accountType,
+            followedAt: isoDaysAgo(sample.followedDaysAgo + adjustment)
+        };
+        if (Array.isArray(sample.segments)) {
+            copy.categories = sample.segments.slice();
+        }
+        if (Array.isArray(sample.tags)) {
+            copy.tags = sample.tags.slice();
+        }
+        return copy;
+    };
+
+    const cloneSearch = (sample, adjustment = 0) => {
+        const copy = {
+            query: sample.query,
+            label: sample.label,
+            search: sample.search || sample.query,
+            alertsEnabled: sample.alertsEnabled,
+            alertFrequency: sample.alertFrequency,
+            resultsCount: sample.resultsCount,
+            scope: sample.scope || '',
+            followedAt: isoDaysAgo(sample.followedDaysAgo + adjustment),
+            lastRunAt: isoDaysAgo(sample.lastRunDaysAgo + adjustment)
+        };
+        if (sample.filters && typeof sample.filters === 'object') {
+            copy.filters = { ...sample.filters };
+        }
+        if (Array.isArray(sample.categories)) {
+            copy.categories = sample.categories.slice();
+        }
+        return copy;
+    };
+
+    individualAccounts.forEach((account, index) => {
+        if (!account || typeof account !== 'object') {
+            return;
+        }
+
+        const existingCategoryCount = Array.isArray(account.favoriteCategories) ? account.favoriteCategories.length : 0;
+        const existingSellerCount = Array.isArray(account.favoriteSellers) ? account.favoriteSellers.length : 0;
+        const existingSearchCount = Array.isArray(account.favoriteSearches) ? account.favoriteSearches.length : 0;
+
+        const needsCategories = existingCategoryCount < desiredFavoriteCount;
+        const needsSellers = existingSellerCount < desiredFavoriteCount;
+        const needsSearches = existingSearchCount < desiredFavoriteCount;
+
+        if (!needsCategories && !needsSellers && !needsSearches) {
+            return;
+        }
+
+        const rotationOffset = index % desiredFavoriteCount;
+
+        if (needsCategories) {
+            const categories = [];
+            for (let i = 0; i < desiredFavoriteCount; i += 1) {
+                const sampleIndex = (rotationOffset + i) % sampleCategories.length;
+                categories.push(cloneCategory(sampleCategories[sampleIndex], i));
+            }
+            account.favoriteCategories = categories;
+        }
+
+        if (needsSellers) {
+            const sellers = [];
+            for (let i = 0; i < desiredFavoriteCount; i += 1) {
+                const sampleIndex = (rotationOffset + i) % sampleSellers.length;
+                sellers.push(cloneSeller(sampleSellers[sampleIndex], i));
+            }
+            account.favoriteSellers = sellers;
+        }
+
+        if (needsSearches) {
+            const searches = [];
+            for (let i = 0; i < desiredFavoriteCount; i += 1) {
+                const sampleIndex = (rotationOffset + i) % sampleSearches.length;
+                searches.push(cloneSearch(sampleSearches[sampleIndex], i));
+            }
+            account.favoriteSearches = searches;
+        }
+
+        if (!account.followUps || typeof account.followUps !== 'object') {
+            account.followUps = {};
+        }
+        if (needsCategories) {
+            account.followUps.favoriteCategories = account.favoriteCategories;
+        }
+        if (needsSellers) {
+            account.followUps.favoriteSellers = account.favoriteSellers;
+        }
+        if (needsSearches) {
+            account.followUps.favoriteSearches = account.favoriteSearches;
+        }
+
+        if (!account.marketplaceActivity || typeof account.marketplaceActivity !== 'object') {
+            account.marketplaceActivity = {};
+        }
+        if (!account.marketplaceActivity.followUps || typeof account.marketplaceActivity.followUps !== 'object') {
+            account.marketplaceActivity.followUps = {};
+        }
+        if (needsCategories) {
+            account.marketplaceActivity.followUps.favoriteCategories = account.favoriteCategories;
+        }
+        if (needsSellers) {
+            account.marketplaceActivity.followUps.favoriteSellers = account.favoriteSellers;
+        }
+        if (needsSearches) {
+            account.marketplaceActivity.followUps.favoriteSearches = account.favoriteSearches;
+        }
+    });
+
+    saveIndividualAccountsToStorage();
+}
+
 function ensureSeedDataReset() {
     try {
         const recordedVersion = localStorage.getItem(DATA_RESET_KEY);
@@ -6785,10 +9093,12 @@ function initializeApp() {
     const storedIndividualAccounts = loadIndividualAccountsFromStorage();
     if (storedIndividualAccounts && storedIndividualAccounts.length) {
         individualAccounts = storedIndividualAccounts;
+        enrichIndividualAccountsWithSampleFavorites();
     } else {
         individualAccounts = defaultIndividualAccounts
             .map((account, index) => normalizeIndividualAccountPayload(account, index))
             .filter(Boolean);
+        enrichIndividualAccountsWithSampleFavorites();
         saveIndividualAccountsToStorage();
     }
 
@@ -6875,6 +9185,7 @@ function initializeApp() {
     renderProductAdAutomationLists();
     renderIndividualAccountsTable(1);
     renderBusinessAccountsTable(1);
+    renderBusinessRequestsBoard();
     renderBusinessPackagesTable();
     renderBusinessSubscribersTable();
     renderBusinessPackageStats();
@@ -7768,6 +10079,53 @@ function setupEventListeners() {
         individualAccountsImportInput.dataset.bound = 'true';
     }
 
+    const businessRequestsSearchInput = document.getElementById('businessRequestsSearchInput');
+    if (businessRequestsSearchInput && businessRequestsSearchInput.dataset.bound !== 'true') {
+        const handler = () => handleBusinessRequestsSearch(businessRequestsSearchInput.value);
+        businessRequestsSearchInput.addEventListener('input', handler);
+        businessRequestsSearchInput.addEventListener('search', handler);
+        businessRequestsSearchInput.dataset.bound = 'true';
+    }
+
+    document.querySelectorAll('[data-business-request-period]').forEach(button => {
+        if (!button || button.dataset.bound === 'true') {
+            return;
+        }
+        button.addEventListener('click', () => {
+            const period = button.dataset.businessRequestPeriod || 'today';
+            setBusinessRequestPeriod(period);
+        });
+        button.dataset.bound = 'true';
+    });
+
+    const businessRequestsStartDate = document.getElementById('businessRequestsStartDate');
+    if (businessRequestsStartDate && businessRequestsStartDate.dataset.bound !== 'true') {
+        const handler = () => handleBusinessRequestDateChange();
+        businessRequestsStartDate.addEventListener('change', handler);
+        businessRequestsStartDate.addEventListener('input', handler);
+        businessRequestsStartDate.dataset.bound = 'true';
+    }
+
+    const businessRequestsEndDate = document.getElementById('businessRequestsEndDate');
+    if (businessRequestsEndDate && businessRequestsEndDate.dataset.bound !== 'true') {
+        const handler = () => handleBusinessRequestDateChange();
+        businessRequestsEndDate.addEventListener('change', handler);
+        businessRequestsEndDate.addEventListener('input', handler);
+        businessRequestsEndDate.dataset.bound = 'true';
+    }
+
+    const businessRequestsResetBtn = document.getElementById('businessRequestsResetBtn');
+    if (businessRequestsResetBtn && businessRequestsResetBtn.dataset.bound !== 'true') {
+        businessRequestsResetBtn.addEventListener('click', resetBusinessRequestsFilters);
+        businessRequestsResetBtn.dataset.bound = 'true';
+    }
+
+    const businessRequestsGrid = document.getElementById('businessRequestsGrid');
+    if (businessRequestsGrid && businessRequestsGrid.dataset.bound !== 'true') {
+        businessRequestsGrid.addEventListener('click', handleBusinessRequestsGridClick);
+        businessRequestsGrid.dataset.bound = 'true';
+    }
+
     const businessAccountsSearchInput = document.getElementById('businessAccountsSearchInput');
     if (businessAccountsSearchInput && businessAccountsSearchInput.dataset.bound !== 'true') {
         const handler = () => handleBusinessAccountsSearch(businessAccountsSearchInput.value);
@@ -7804,6 +10162,16 @@ function setupEventListeners() {
     if (businessAccountsTableBody && businessAccountsTableBody.dataset.bound !== 'true') {
         businessAccountsTableBody.addEventListener('click', handleBusinessAccountsTableClick);
         businessAccountsTableBody.dataset.bound = 'true';
+    }
+
+    const businessAccountDetailOverlay = document.getElementById('businessAccountDetailOverlay');
+    if (businessAccountDetailOverlay && businessAccountDetailOverlay.dataset.bound !== 'true') {
+        businessAccountDetailOverlay.addEventListener('click', event => {
+            if (event.target === businessAccountDetailOverlay) {
+                closeBusinessAccountDetailDrawer();
+            }
+        });
+        businessAccountDetailOverlay.dataset.bound = 'true';
     }
 
     const businessAccountDetailCloseBtn = document.getElementById('businessAccountDetailCloseBtn');
@@ -8514,6 +10882,9 @@ function activateSubApp(sectionId, subAppId) {
         if (subAppId !== 'onruf-users-business') {
             closeBusinessAccountDetailDrawer();
             closeBusinessAccountDecisionOverlay();
+        }
+        if (subAppId === 'onruf-users-business-requests') {
+            refreshBusinessRequestsWorkspace();
         }
     }
 }
@@ -18929,7 +21300,10 @@ function setupUserConfirmOverlay() {
     const overlay = document.getElementById('userConfirmOverlay');
     const okBtn = document.getElementById('userConfirmOk');
     const cancelBtn = document.getElementById('userConfirmCancel');
+    
     if (!overlay || !okBtn || !cancelBtn) return;
+    
+    if (overlay.dataset.bound === 'true') return;
 
     const complete = result => {
         if (userConfirmResolver) {
@@ -18952,6 +21326,8 @@ function setupUserConfirmOverlay() {
             complete(false);
         }
     });
+    
+    overlay.dataset.bound = 'true';
 }
 
 function showUserConfirm(message, confirmLabel = 'Confirm', cancelLabel = 'Cancel') {
@@ -18959,12 +21335,26 @@ function showUserConfirm(message, confirmLabel = 'Confirm', cancelLabel = 'Cance
     const messageEl = document.getElementById('userConfirmMessage');
     const okBtn = document.getElementById('userConfirmOk');
     const cancelBtn = document.getElementById('userConfirmCancel');
-    if (!overlay || !messageEl || !okBtn || !cancelBtn) return Promise.resolve(false);
+    
+    if (!overlay || !messageEl || !okBtn || !cancelBtn) {
+        return Promise.resolve(false);
+    }
+    
+    // Move overlay to body if it's not already there to ensure proper z-index layering
+    if (overlay.parentElement !== document.body) {
+        document.body.appendChild(overlay);
+    }
 
     messageEl.textContent = message;
     okBtn.textContent = confirmLabel;
     cancelBtn.textContent = cancelLabel;
+    
     overlay.classList.remove('hidden');
+    overlay.style.display = 'flex';
+    overlay.style.zIndex = '999999';
+    overlay.style.position = 'fixed';
+    overlay.style.inset = '0';
+    
     okBtn.focus();
 
     return new Promise(resolve => {
@@ -19058,6 +21448,11 @@ function showUserPrompt(message, confirmLabel = 'Confirm', cancelLabel = 'Cancel
     if (!overlay || !messageEl || !confirmBtn || !cancelBtn || !input) {
         return Promise.resolve({ confirmed: false, value: '' });
     }
+    
+    // Move overlay to body if it's not already there to ensure proper z-index layering
+    if (overlay.parentElement !== document.body) {
+        document.body.appendChild(overlay);
+    }
 
     const { validate, errorMessage = '' } = options || {};
     const defaultErrorMessage = typeof errorMessage === 'string' ? errorMessage : '';
@@ -19143,6 +21538,11 @@ function showUserAlert(message) {
     const okBtn = document.getElementById('userAlertOk');
     if (!overlay || !messageEl || !okBtn) {
         return Promise.resolve();
+    }
+    
+    // Move overlay to body if it's not already there to ensure proper z-index layering
+    if (overlay.parentElement !== document.body) {
+        document.body.appendChild(overlay);
     }
 
     messageEl.textContent = message;
@@ -22569,16 +24969,14 @@ function addProductAdAutomationEntry(listType, payload, options = {}) {
     if (!productAdAutomation || typeof productAdAutomation !== 'object') {
         productAdAutomation = { trusted: [], manualReview: [], blacklist: [] };
     }
-    const collections = {
-        trusted: productAdAutomation.trusted,
-        manualReview: productAdAutomation.manualReview,
-        blacklist: productAdAutomation.blacklist
+    const ensureList = key => {
+        if (!Array.isArray(productAdAutomation[key])) {
+            productAdAutomation[key] = [];
+        }
+        return productAdAutomation[key];
     };
-    const targetList = collections[listType];
-    if (!Array.isArray(targetList)) {
-        showNotification('warning', 'Unable to update automation list.');
-        return;
-    }
+
+    const targetList = ensureList(listType);
 
     if (targetList.some(entry => entry.account === payload.account)) {
         showNotification('warning', 'This account is already listed.');
@@ -23049,7 +25447,6 @@ function renderIndividualAccountsToolbar(account) {
 
     const viewBtn = document.getElementById('individualAccountsActionViewBtn');
     const marketplaceBtn = document.getElementById('individualAccountsActionMarketplaceBtn');
-    const logBtn = document.getElementById('individualAccountsActionLogBtn');
     const activateBtn = document.getElementById('individualAccountsActionActivateBtn');
     const deactivateBtn = document.getElementById('individualAccountsActionDeactivateBtn');
     const addToBtn = document.getElementById('individualAccountsActionAddToBtn');
@@ -23073,11 +25470,11 @@ function renderIndividualAccountsToolbar(account) {
     };
 
     if (!account) {
-        [viewBtn, marketplaceBtn, logBtn, activateBtn, deactivateBtn, addToBtn].forEach(button => setDisabled(button, true));
+        [viewBtn, marketplaceBtn, activateBtn, deactivateBtn, addToBtn].forEach(button => setDisabled(button, true));
         setLabel(activateBtn, 'Activate');
         setLabel(deactivateBtn, 'Deactivate');
         if (addToBtn) {
-            setLabel(addToBtn, 'Add to');
+            setLabel(addToBtn, 'Update list');
             delete addToBtn.dataset.automationAccount;
             delete addToBtn.dataset.currentList;
             delete addToBtn.dataset.accountId;
@@ -23095,7 +25492,6 @@ function renderIndividualAccountsToolbar(account) {
 
     setDisabled(viewBtn, false);
     setDisabled(marketplaceBtn, false);
-    setDisabled(logBtn, false);
 
     if (marketplaceBtn) {
         marketplaceBtn.dataset.accountId = account.id || '';
@@ -23117,7 +25513,7 @@ function renderIndividualAccountsToolbar(account) {
         const canAddToPublishingList = !isDeleted && !!automationIdentifier;
         setDisabled(addToBtn, !canAddToPublishingList);
         const existingAutomationEntry = automationIdentifier ? findAutomationListEntryForAccount(automationIdentifier) : null;
-        setLabel(addToBtn, existingAutomationEntry ? 'Update list' : 'Add to');
+    setLabel(addToBtn, 'Update list');
         if (automationIdentifier) {
             addToBtn.dataset.automationAccount = automationIdentifier;
         } else {
@@ -23206,6 +25602,1225 @@ function findAutomationListEntryForAccount(identifier) {
     return null;
 }
 
+function ensureIndividualAccountTrusted(account, options = {}) {
+    if (!account || typeof account !== 'object') {
+        return null;
+    }
+
+    const settings = {
+        persist: true,
+        refreshAutomation: true,
+        note: undefined,
+        ...options
+    };
+
+    const identifier = resolveIndividualAccountAutomationIdentifier(account);
+    if (!identifier) {
+        return null;
+    }
+
+    if (!productAdAutomation || typeof productAdAutomation !== 'object') {
+        productAdAutomation = { trusted: [], manualReview: [], blacklist: [] };
+    }
+
+    const ensureList = key => {
+        if (!Array.isArray(productAdAutomation[key])) {
+            productAdAutomation[key] = [];
+        }
+        return productAdAutomation[key];
+    };
+
+    const trustedList = ensureList('trusted');
+    const manualReviewList = ensureList('manualReview');
+    const blacklist = ensureList('blacklist');
+
+    const removeFromList = list => {
+        const index = list.findIndex(entry => entry && entry.account === identifier);
+        if (index > -1) {
+            list.splice(index, 1);
+            return true;
+        }
+        return false;
+    };
+
+    let mutated = removeFromList(manualReviewList) || removeFromList(blacklist);
+
+    const existingTrustedEntry = trustedList.find(entry => entry && entry.account === identifier) || null;
+    const desiredLabel = resolveIndividualAccountDisplayName(account);
+    const hasCustomNote = Object.prototype.hasOwnProperty.call(settings, 'note');
+    const normalizedNote = hasCustomNote
+        ? (typeof settings.note === 'string' ? settings.note.trim() : '')
+        : 'Auto-added to Trusted Accounts list.';
+
+    if (existingTrustedEntry) {
+        if (desiredLabel && existingTrustedEntry.label !== desiredLabel) {
+            existingTrustedEntry.label = desiredLabel;
+            mutated = true;
+        }
+        if (hasCustomNote) {
+            if (existingTrustedEntry.notes !== normalizedNote) {
+                existingTrustedEntry.notes = normalizedNote;
+                mutated = true;
+            }
+        } else if (!existingTrustedEntry.notes) {
+            existingTrustedEntry.notes = normalizedNote;
+            mutated = true;
+        }
+
+        if (mutated && settings.persist) {
+            saveProductAdAutomationToStorage();
+        }
+        if (mutated && settings.refreshAutomation) {
+            renderProductAdAutomationLists();
+        }
+        return existingTrustedEntry;
+    }
+
+    const newEntry = normalizeAutomationEntry({
+        id: '',
+        account: identifier,
+        label: desiredLabel,
+        notes: normalizedNote,
+        addedAt: new Date().toISOString()
+    }, trustedList.length);
+
+    if (!newEntry) {
+        return null;
+    }
+
+    trustedList.push(newEntry);
+
+    if (settings.persist) {
+        saveProductAdAutomationToStorage();
+    }
+    if (settings.refreshAutomation) {
+        renderProductAdAutomationLists();
+    }
+
+    return newEntry;
+}
+
+function resolveSavedAddressTimestamp(entry, keys) {
+    if (!entry || typeof entry !== 'object') {
+        return { raw: null, time: 0 };
+    }
+    for (const key of keys) {
+        const value = entry[key];
+        if (value === null || value === undefined) {
+            continue;
+        }
+        if (value instanceof Date && Number.isFinite(value.getTime())) {
+            return { raw: value.toISOString(), time: value.getTime() };
+        }
+        if (typeof value === 'number' && Number.isFinite(value)) {
+            return { raw: new Date(value).toISOString(), time: value };
+        }
+        if (typeof value === 'string') {
+            const trimmed = value.trim();
+            if (!trimmed) {
+                continue;
+            }
+            const parsed = Date.parse(trimmed);
+            if (Number.isFinite(parsed)) {
+                return { raw: trimmed, time: parsed };
+            }
+            return { raw: trimmed, time: 0 };
+        }
+    }
+    return { raw: null, time: 0 };
+}
+
+function resolveSavedAddressAddedTimestamp(entry) {
+    return resolveSavedAddressTimestamp(entry, ['addedAt', 'createdAt', 'savedAt', 'firstUsedAt', 'timestamp']);
+}
+
+function resolveSavedAddressUpdatedTimestamp(entry) {
+    return resolveSavedAddressTimestamp(entry, ['updatedAt', 'modifiedAt', 'lastUpdated', 'editedAt', 'modifiedOn']);
+}
+
+function resolveSavedAddressIsDefault(entry) {
+    if (!entry || typeof entry !== 'object') {
+        return false;
+    }
+    const candidates = [
+        entry.isDefault,
+        entry.default,
+        entry.isPrimary,
+        entry.primary,
+        entry.isPreferred,
+        entry.preferred,
+        entry.isDefaultAddress,
+        entry.defaultAddress
+    ];
+    for (const candidate of candidates) {
+        if (candidate === true) {
+            return true;
+        }
+        if (typeof candidate === 'number' && candidate === 1) {
+            return true;
+        }
+        if (typeof candidate === 'string') {
+            const normalized = candidate.trim().toLowerCase();
+            if (['true', '1', 'yes', 'y', 'default', 'primary', 'preferred'].includes(normalized)) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+function resolveSavedAddressField(entry, keys) {
+    if (!entry || typeof entry !== 'object' || !Array.isArray(keys)) {
+        return '';
+    }
+    for (const key of keys) {
+        if (typeof key !== 'string' || !key) {
+            continue;
+        }
+        const value = entry[key];
+        if (value === null || value === undefined) {
+            continue;
+        }
+        if (typeof value === 'string') {
+            const trimmed = value.trim();
+            if (trimmed) {
+                return trimmed;
+            }
+            continue;
+        }
+        if (typeof value === 'number' && Number.isFinite(value)) {
+            return String(value);
+        }
+    }
+    return '';
+}
+
+const formatKeyLabel = key => key
+    .replace(/[_-]+/g, ' ')
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/^./, char => char.toUpperCase());
+
+const formatFavoriteValue = value => {
+    if (Array.isArray(value)) {
+        return value
+            .map(item => formatFavoriteValue(item))
+            .filter(part => typeof part === 'string' && part.length > 0)
+            .join(', ');
+    }
+    if (value && typeof value === 'object') {
+        return Object.entries(value)
+            .map(([key, nested]) => {
+                const nestedLabel = formatFavoriteValue(nested);
+                if (!nestedLabel) {
+                    return '';
+                }
+                return `${formatKeyLabel(key)}: ${nestedLabel}`;
+            })
+            .filter(Boolean)
+            .join(' | ');
+    }
+    if (typeof value === 'boolean') {
+        return value ? 'Yes' : 'No';
+    }
+    if (value === null || value === undefined) {
+        return '';
+    }
+    return String(value).trim();
+};
+
+const normalizeFavoriteLabelFallback = entry => {
+    if (entry === null || entry === undefined) {
+        return '';
+    }
+    if (typeof entry === 'string' || typeof entry === 'number') {
+        const value = String(entry).trim();
+        return value;
+    }
+    if (typeof entry === 'object') {
+        const candidates = [
+            entry.label,
+            entry.name,
+            entry.title,
+            entry.category,
+            entry.categoryName,
+            entry.section,
+            entry.seller,
+            entry.sellerName,
+            entry.storeName,
+            entry.search,
+            entry.query,
+            entry.value,
+            entry.id
+        ];
+        for (const candidate of candidates) {
+            if (typeof candidate === 'string' && candidate.trim()) {
+                return candidate.trim();
+            }
+        }
+    }
+    try {
+        const serialized = JSON.stringify(entry);
+        return typeof serialized === 'string' ? serialized : '';
+    } catch (error) {
+        return '';
+    }
+};
+
+const resolveFavoriteCategoryInfo = entry => {
+    const categoriesList = Array.isArray(categories) ? categories.filter(Boolean) : [];
+    const info = {
+        label: '',
+        path: '',
+        code: '',
+        category: null,
+        filters: [],
+        followers: null,
+        followSince: null,
+        note: ''
+    };
+    const candidates = [];
+    const pushCandidate = value => {
+        if (typeof value === 'string' && value.trim()) {
+            candidates.push(value.trim());
+        } else if (typeof value === 'number') {
+            const numeric = String(value).trim();
+            if (numeric) {
+                candidates.push(numeric);
+            }
+        }
+    };
+    if (typeof entry === 'string' || typeof entry === 'number') {
+        pushCandidate(entry);
+    } else if (entry && typeof entry === 'object') {
+        [
+            entry.categoryId,
+            entry.category,
+            entry.categoryCode,
+            entry.categorySlug,
+            entry.categoryName,
+            entry.id,
+            entry.code,
+            entry.slug,
+            entry.primaryCategoryId,
+            entry.primaryCategory,
+            entry.path
+        ].forEach(pushCandidate);
+    }
+    for (const candidate of candidates) {
+        const resolved = resolveCategoryByIdentifier(candidate);
+        if (resolved) {
+            info.category = resolved;
+            break;
+        }
+    }
+    if (info.category) {
+        info.label = getCategoryDisplayName(info.category) || '';
+        info.path = buildCategoryDisplayPath(info.category, categoriesList) || info.path;
+        info.code = typeof info.category.categoryCode === 'string' ? info.category.categoryCode : '';
+    }
+    if (typeof entry === 'string') {
+        info.label = info.label || entry.trim();
+    }
+    if (entry && typeof entry === 'object') {
+        if (!info.label) {
+            const labelCandidates = [entry.label, entry.name, entry.categoryName, entry.category, entry.id];
+            const matched = labelCandidates.find(value => typeof value === 'string' && value.trim());
+            if (matched) {
+                info.label = matched.trim();
+            }
+        }
+        if (!info.path) {
+            if (typeof entry.path === 'string' && entry.path.trim()) {
+                info.path = entry.path.trim();
+            } else if (Array.isArray(entry.pathSegments) && entry.pathSegments.length) {
+                info.path = entry.pathSegments
+                    .map(segment => String(segment).trim())
+                    .filter(Boolean)
+                    .join(' › ');
+            }
+        }
+        if (!info.code && typeof entry.categoryCode === 'string' && entry.categoryCode.trim()) {
+            info.code = entry.categoryCode.trim();
+        }
+        const followerCandidates = [entry.followers, entry.followerCount, entry.followCount, entry.subscriberCount];
+        for (const candidate of followerCandidates) {
+            const numeric = Number(candidate);
+            if (Number.isFinite(numeric)) {
+                info.followers = numeric;
+                break;
+            }
+        }
+        info.followSince = entry.followedAt || entry.savedAt || entry.createdAt || entry.updatedAt || null;
+        info.note = typeof entry.notes === 'string' ? entry.notes.trim() : '';
+        if (entry.filters) {
+            if (Array.isArray(entry.filters)) {
+                info.filters = entry.filters
+                    .map(item => {
+                        if (typeof item === 'string') {
+                            return item.trim();
+                        }
+                        if (item && typeof item === 'object') {
+                            const nestedKey = Object.keys(item)[0];
+                            if (!nestedKey) return '';
+                            const nestedValue = formatFavoriteValue(item[nestedKey]);
+                            return nestedValue ? `${formatKeyLabel(nestedKey)}: ${nestedValue}` : '';
+                        }
+                        return '';
+                    })
+                    .filter(Boolean)
+                    .slice(0, 4);
+            } else if (typeof entry.filters === 'object') {
+                info.filters = Object.entries(entry.filters)
+                    .map(([key, value]) => {
+                        const formatted = formatFavoriteValue(value);
+                        if (!formatted) return '';
+                        return `${formatKeyLabel(key)}: ${formatted}`;
+                    })
+                    .filter(Boolean)
+                    .slice(0, 4);
+            }
+        }
+    }
+    if (!info.label) {
+        info.label = info.path || candidates.find(Boolean) || '';
+    }
+    return info;
+};
+
+const resolveFavoriteSellerInfo = entry => {
+    const businessAccountsList = Array.isArray(businessAccounts) ? businessAccounts.filter(Boolean) : [];
+    const info = {
+        label: '',
+        business: null,
+        statusLabel: '',
+        location: '',
+        ratingScore: null,
+        ratingLabel: '',
+        followers: null,
+        contact: '',
+        phone: '',
+        segments: [],
+        tags: [],
+        followingSince: null,
+        accountType: ''
+    };
+    const candidateSet = new Set();
+    const pushCandidate = value => {
+        if (typeof value === 'string' && value.trim()) {
+            candidateSet.add(value.trim());
+        } else if (typeof value === 'number') {
+            const numeric = String(value).trim();
+            if (numeric) {
+                candidateSet.add(numeric);
+            }
+        }
+    };
+    if (typeof entry === 'string' || typeof entry === 'number') {
+        const base = String(entry).trim();
+        if (base) {
+            info.label = base;
+            pushCandidate(base);
+        }
+    }
+    if (entry && typeof entry === 'object') {
+        const labelCandidates = [
+            entry.label,
+            entry.name,
+            entry.companyName,
+            entry.storeName,
+            entry.sellerName,
+            entry.brandName
+        ];
+        labelCandidates.forEach(value => {
+            if (typeof value === 'string' && value.trim()) {
+                info.label = info.label || value.trim();
+                pushCandidate(value);
+            }
+        });
+        [
+            entry.businessAccountId,
+            entry.businessId,
+            entry.sellerId,
+            entry.accountId,
+            entry.id,
+            entry.companyId,
+            entry.registrationNumber,
+            entry.documentNumber,
+            entry.email,
+            entry.contactEmail,
+            entry.invitationEmail,
+            entry.licenseNumber,
+            entry.taxNumber,
+            entry.vatNumber
+        ].forEach(pushCandidate);
+        if (Array.isArray(entry.categories)) {
+            info.segments = entry.categories
+                .map(value => {
+                    if (typeof value === 'string') return value.trim();
+                    if (value && typeof value === 'object') {
+                        const label = value.name || value.label;
+                        return typeof label === 'string' ? label.trim() : '';
+                    }
+                    return '';
+                })
+                .filter(Boolean);
+        }
+        if (Array.isArray(entry.tags)) {
+            info.tags = entry.tags.map(value => String(value).trim()).filter(Boolean);
+        }
+        info.followingSince = entry.followedAt || entry.savedAt || entry.createdAt || entry.updatedAt || null;
+
+        const phoneCandidates = [
+            entry.phone,
+            entry.phoneNumber,
+            entry.contactPhone,
+            entry.mobile,
+            entry.whatsapp,
+            entry.telephone,
+            entry.tel
+        ];
+        for (const candidate of phoneCandidates) {
+            if (typeof candidate === 'string' && candidate.trim()) {
+                info.phone = candidate.trim();
+                break;
+            }
+        }
+
+        info.contact = [
+            entry.contact,
+            entry.email,
+            entry.contactEmail,
+            entry.website,
+            entry.url
+        ].find(value => typeof value === 'string' && value.trim()) || '';
+        if (entry.location) {
+            info.location = typeof entry.location === 'string'
+                ? entry.location.trim()
+                : entry.location && typeof entry.location === 'object'
+                    ? [entry.location.country, entry.location.region, entry.location.city]
+                        .map(value => (value ? String(value).trim() : ''))
+                        .filter(Boolean)
+                        .join(', ')
+                    : '';
+        } else {
+            const locationParts = [entry.country, entry.region, entry.city]
+                .map(value => (typeof value === 'string' ? value.trim() : ''))
+                .filter(Boolean);
+            if (locationParts.length) {
+                info.location = locationParts.join(', ');
+            }
+        }
+        const ratingCandidates = [
+            entry.rating,
+            entry.averageRating,
+            entry.score,
+            entry.sellerRating
+        ];
+        for (const candidate of ratingCandidates) {
+            const numeric = Number(candidate);
+            if (!Number.isNaN(numeric) && Number.isFinite(numeric)) {
+                info.ratingScore = numeric;
+                break;
+            }
+        }
+        const followerCandidates = [entry.followers, entry.followerCount];
+        for (const candidate of followerCandidates) {
+            const numeric = Number(candidate);
+            if (Number.isFinite(numeric)) {
+                info.followers = numeric;
+                break;
+            }
+        }
+
+        const inferAccountTypeFromString = raw => {
+            if (!raw || typeof raw !== 'string') {
+                return false;
+            }
+            if (info.accountType) {
+                return true;
+            }
+            const normalized = raw.trim().toLowerCase();
+            if (!normalized) {
+                return false;
+            }
+            const businessTokens = ['business', 'company', 'merchant', 'vendor', 'store', 'brand', 'corporate', 'organization', 'enterprise', 'seller'];
+            const individualTokens = ['individual', 'person', 'customer', 'consumer', 'personal', 'private', 'member', 'user'];
+            if (businessTokens.some(token => normalized === token || normalized.includes(token))) {
+                info.accountType = 'Business';
+                return true;
+            }
+            if (individualTokens.some(token => normalized === token || normalized.includes(token))) {
+                info.accountType = 'Individual';
+                return true;
+            }
+            return false;
+        };
+
+        const accountTypeCandidates = [
+            entry.accountType,
+            entry.account_type,
+            entry.accountCategory,
+            entry.accountClassification,
+            entry.userType,
+            entry.type,
+            entry.profileType,
+            entry.tier
+        ];
+        accountTypeCandidates.forEach(candidate => {
+            if (info.accountType) return;
+            if (typeof candidate === 'string') {
+                inferAccountTypeFromString(candidate);
+            }
+        });
+
+        if (!info.accountType) {
+            if (entry.isBusiness === true || entry.businessAccount === true || entry.isCompany === true || entry.isMerchant === true) {
+                info.accountType = 'Business';
+            } else if (entry.isIndividual === true || entry.personalAccount === true || entry.isPersonal === true) {
+                info.accountType = 'Individual';
+            }
+        }
+    }
+    const candidates = Array.from(candidateSet);
+    const normalize = value => value.trim().toLowerCase();
+    info.business = businessAccountsList.find(account => {
+        if (!account || typeof account !== 'object') return false;
+        const matchValues = [];
+        if (typeof account.id === 'string') matchValues.push(account.id);
+        if (typeof account.businessId === 'string') matchValues.push(account.businessId);
+        if (typeof account.companyName === 'string') matchValues.push(account.companyName);
+        if (typeof account.legalName === 'string') matchValues.push(account.legalName);
+        if (typeof account.tradeName === 'string') matchValues.push(account.tradeName);
+        if (typeof account.email === 'string') matchValues.push(account.email);
+        if (typeof account.contactEmail === 'string') matchValues.push(account.contactEmail);
+        if (typeof account.registrationNumber === 'string') matchValues.push(account.registrationNumber);
+        if (typeof account.vatNumber === 'string') matchValues.push(account.vatNumber);
+        return matchValues.some(value => {
+            if (typeof value !== 'string') return false;
+            const normalized = normalize(value);
+            return normalized && candidates.some(candidate => normalize(candidate) === normalized);
+        });
+    }) || null;
+    if (info.business) {
+        if (!info.label && info.business.companyName) {
+            info.label = info.business.companyName;
+        }
+        if (!info.accountType) {
+            info.accountType = 'Business';
+        }
+        if (!info.location) {
+            const locationParts = [info.business.country, info.business.region, info.business.city]
+                .map(value => (typeof value === 'string' ? value.trim() : ''))
+                .filter(Boolean);
+            info.location = locationParts.join(', ');
+        }
+        if (!info.ratingScore) {
+            const ratingCandidates = [
+                info.business.rating,
+                info.business.averageRating,
+                info.business.sellerRating,
+                info.business.reputationScore
+            ];
+            for (const candidate of ratingCandidates) {
+                const numeric = Number(candidate);
+                if (!Number.isNaN(numeric) && Number.isFinite(numeric)) {
+                    info.ratingScore = numeric;
+                    break;
+                }
+            }
+        }
+        if (!info.statusLabel && typeof getBusinessAccountStatusLabel === 'function') {
+            info.statusLabel = getBusinessAccountStatusLabel(info.business.status) || '';
+        }
+        if (info.business.followers && Number.isFinite(Number(info.business.followers))) {
+            info.followers = Number(info.business.followers);
+        } else if (info.business.followerCount && Number.isFinite(Number(info.business.followerCount))) {
+            info.followers = Number(info.business.followerCount);
+        }
+        if (!info.contact) {
+            info.contact = [
+                info.business.contactEmail,
+                info.business.supportEmail,
+                info.business.email,
+                info.business.website
+            ].find(value => typeof value === 'string' && value.trim()) || '';
+        }
+        if (!info.phone) {
+            const businessPhoneCandidates = [
+                info.business.phone,
+                info.business.contactPhone,
+                info.business.mobile,
+                info.business.telephone,
+                info.business.whatsapp
+            ];
+            for (const candidate of businessPhoneCandidates) {
+                if (typeof candidate === 'string' && candidate.trim()) {
+                    info.phone = candidate.trim();
+                    break;
+                }
+            }
+        }
+        if (!info.followingSince) {
+            info.followingSince = info.business.approvedAt || info.business.createdAt || info.business.submittedAt || null;
+        }
+    }
+    if (info.ratingScore !== null && Number.isFinite(info.ratingScore)) {
+        const rounded = Math.round(info.ratingScore * 10) / 10;
+        info.ratingLabel = Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
+    }
+    if (!info.label && candidates.length) {
+        info.label = candidates[0];
+    }
+    if (!info.accountType && entry && typeof entry === 'string') {
+        // String-only favorites default to business unless clearly individual
+        const normalized = entry.trim().toLowerCase();
+        if (normalized.includes('store') || normalized.includes('company') || normalized.includes('co.') || normalized.includes('inc')) {
+            info.accountType = 'Business';
+        }
+    }
+    if (!info.accountType) {
+        info.accountType = 'Individual';
+    }
+    return info;
+};
+
+const resolveFavoriteSearchInfo = entry => {
+    const info = {
+        label: '',
+        query: '',
+        filters: [],
+        sort: '',
+        resultsCount: null,
+        alertsEnabled: null,
+        alertFrequency: '',
+        followSince: null,
+        lastRun: null,
+        scope: '',
+        categories: []
+    };
+    const ensureString = value => (typeof value === 'string' ? value.trim() : '');
+    if (typeof entry === 'string' || typeof entry === 'number') {
+        const base = String(entry).trim();
+        info.label = base;
+        info.query = base;
+        return info;
+    }
+    if (!entry || typeof entry !== 'object') {
+        return info;
+    }
+    const labelCandidates = [
+        entry.label,
+        entry.name,
+        entry.title,
+        entry.query,
+        entry.search,
+        entry.keyword,
+        entry.id
+    ];
+    info.label = labelCandidates.map(ensureString).find(Boolean) || '';
+    info.query = ensureString(entry.query) || ensureString(entry.search) || ensureString(entry.keyword) || '';
+    if (!info.label && info.query) {
+        info.label = info.query;
+    }
+    if (!info.query && Array.isArray(entry.keywords) && entry.keywords.length) {
+        info.query = entry.keywords
+            .map(value => ensureString(value))
+            .filter(Boolean)
+            .join(', ');
+    }
+    if (info.label) {
+        const trimmedLabel = info.label.trim();
+        if (trimmedLabel) {
+            const withoutSearchSuffix = trimmedLabel.replace(/\bsearch$/i, '').trim();
+            if (withoutSearchSuffix) {
+                info.label = withoutSearchSuffix;
+            }
+        }
+    }
+    if (Array.isArray(entry.categories)) {
+        info.categories = entry.categories
+            .map(value => ensureString(value))
+            .filter(Boolean);
+    }
+    info.sort = ensureString(entry.sort) || ensureString(entry.sortOrder) || ensureString(entry.orderBy);
+    const resultsCandidates = [entry.resultsCount, entry.resultCount, entry.matches, entry.totalResults];
+    for (const candidate of resultsCandidates) {
+        const numeric = Number(candidate);
+        if (Number.isFinite(numeric)) {
+            info.resultsCount = numeric;
+            break;
+        }
+    }
+    if (entry.alertsEnabled !== undefined) {
+        info.alertsEnabled = Boolean(entry.alertsEnabled);
+    } else if (entry.notificationsEnabled !== undefined) {
+        info.alertsEnabled = Boolean(entry.notificationsEnabled);
+    } else if (entry.alert !== undefined) {
+        info.alertsEnabled = Boolean(entry.alert);
+    }
+    const frequencyCandidates = [
+        entry.alertFrequency,
+        entry.alertCadence,
+        entry.alertInterval,
+        entry.frequency,
+        entry.notificationsFrequency
+    ];
+    info.alertFrequency = frequencyCandidates.map(ensureString).find(Boolean) || '';
+    info.followSince = entry.followedAt || entry.savedAt || entry.createdAt || entry.updatedAt || null;
+    info.lastRun = entry.lastRunAt || entry.lastExecutedAt || entry.lastSearchedAt || entry.lastVisitedAt || null;
+    info.scope = ensureString(entry.scope) || ensureString(entry.channel);
+    if (entry.filters && typeof entry.filters === 'object' && !Array.isArray(entry.filters)) {
+        info.filters = Object.entries(entry.filters)
+            .map(([key, value]) => {
+                const formatted = formatFavoriteValue(value);
+                if (!formatted) return '';
+                return `${formatKeyLabel(key)}: ${formatted}`;
+            })
+            .filter(Boolean)
+            .slice(0, 6);
+    } else if (Array.isArray(entry.filters)) {
+        info.filters = entry.filters
+            .map(item => {
+                if (typeof item === 'string') {
+                    return item.trim();
+                }
+                if (item && typeof item === 'object') {
+                    const nestedKey = Object.keys(item)[0];
+                    if (!nestedKey) return '';
+                    const nestedValue = formatFavoriteValue(item[nestedKey]);
+                    return nestedValue ? `${formatKeyLabel(nestedKey)}: ${nestedValue}` : '';
+                }
+                return '';
+            })
+            .filter(Boolean)
+            .slice(0, 6);
+    }
+    return info;
+};
+
+const resolveFavoriteInfo = (entry, type = 'generic') => {
+    if (type === 'category') {
+        return resolveFavoriteCategoryInfo(entry);
+    }
+    if (type === 'seller') {
+        return resolveFavoriteSellerInfo(entry);
+    }
+    if (type === 'search') {
+        return resolveFavoriteSearchInfo(entry);
+    }
+    return null;
+};
+
+const FAVORITE_CATEGORY_PAGE_SIZE = 5;
+const FAVORITE_SELLER_PAGE_SIZE = 5;
+const FAVORITE_SEARCH_PAGE_SIZE = 5;
+
+const extractFavoriteFollowTimestamp = (item, type) => {
+    if (!item || typeof item !== 'object') {
+        return 0;
+    }
+    const { info, entry } = item;
+    const candidates = [];
+
+    if (info && typeof info === 'object') {
+        if (type === 'category' && info.followSince) {
+            candidates.push(info.followSince);
+        }
+        if (type === 'seller' && info.followingSince) {
+            candidates.push(info.followingSince);
+        }
+        if (type === 'search' && info.followSince) {
+            candidates.push(info.followSince);
+        }
+    }
+
+    if (entry && typeof entry === 'object') {
+        candidates.push(
+            entry.followSince,
+            entry.followingSince,
+            entry.following_since,
+            entry.followedSince,
+            entry.followed_at,
+            entry.followedAt,
+            entry.savedAt,
+            entry.saved_at,
+            entry.createdAt,
+            entry.created_at,
+            entry.updatedAt,
+            entry.updated_at
+        );
+    }
+
+    for (const candidate of candidates) {
+        if (candidate === null || candidate === undefined || candidate === '') {
+            continue;
+        }
+        if (candidate instanceof Date && Number.isFinite(candidate.getTime())) {
+            return candidate.getTime();
+        }
+        if (typeof candidate === 'number' && Number.isFinite(candidate)) {
+            return candidate;
+        }
+        if (typeof candidate === 'string') {
+            const trimmed = candidate.trim();
+            if (!trimmed) {
+                continue;
+            }
+            const parsed = Date.parse(trimmed);
+            if (Number.isFinite(parsed)) {
+                return parsed;
+            }
+        }
+    }
+
+    return 0;
+};
+
+const extractFavoriteCategorySegmentLabel = value => {
+    if (value === null || value === undefined) {
+        return '';
+    }
+    if (typeof value === 'string' || typeof value === 'number') {
+        const trimmed = String(value).trim();
+        return trimmed;
+    }
+    if (typeof value === 'object') {
+        if (value instanceof Date) {
+            return '';
+        }
+        const candidateKeys = [
+            'label',
+            'name',
+            'title',
+            'text',
+            'category',
+            'categoryName',
+            'value',
+            'displayName'
+        ];
+        for (const key of candidateKeys) {
+            if (Object.prototype.hasOwnProperty.call(value, key)) {
+                const nested = extractFavoriteCategorySegmentLabel(value[key]);
+                if (nested) {
+                    return nested;
+                }
+            }
+        }
+    }
+    return '';
+};
+
+const extractFavoriteCategoryPathSegments = candidate => {
+    if (candidate === null || candidate === undefined) {
+        return [];
+    }
+    if (Array.isArray(candidate)) {
+        const segments = [];
+        candidate.forEach(item => {
+            const nestedSegments = extractFavoriteCategoryPathSegments(item);
+            if (nestedSegments.length) {
+                segments.push(...nestedSegments);
+            } else {
+                const label = extractFavoriteCategorySegmentLabel(item);
+                if (label) {
+                    const labelSegments = extractFavoriteCategoryPathSegments(label);
+                    if (labelSegments.length) {
+                        segments.push(...labelSegments);
+                    } else {
+                        segments.push(label);
+                    }
+                }
+            }
+        });
+        return segments.filter(Boolean);
+    }
+    if (typeof candidate === 'string' || typeof candidate === 'number') {
+        const normalized = String(candidate).replace(/\s+/g, ' ').trim();
+        if (!normalized) {
+            return [];
+        }
+        return normalized
+            .split(/(?:›|\/|>|→|->|\||\\)+/)
+            .map(segment => segment.replace(/\s+/g, ' ').trim())
+            .filter(Boolean);
+    }
+    if (typeof candidate === 'object') {
+        if (candidate instanceof Date) {
+            return [];
+        }
+        const arrayKeys = ['segments', 'pathSegments', 'breadcrumbs', 'parents', 'ancestors', 'hierarchy', 'categoryHierarchy'];
+        for (const key of arrayKeys) {
+            if (Array.isArray(candidate[key])) {
+                const nested = extractFavoriteCategoryPathSegments(candidate[key]);
+                if (nested.length) {
+                    return nested;
+                }
+            }
+        }
+        const stringKeys = ['path', 'displayPath', 'categoryPath', 'fullPath', 'breadcrumb'];
+        for (const key of stringKeys) {
+            if (candidate[key]) {
+                const nested = extractFavoriteCategoryPathSegments(candidate[key]);
+                if (nested.length) {
+                    return nested;
+                }
+            }
+        }
+        const label = extractFavoriteCategorySegmentLabel(candidate);
+        if (label) {
+            return extractFavoriteCategoryPathSegments(label);
+        }
+    }
+    return [];
+};
+
+const resolveFavoriteCategoryPathLabel = (entry, info = null) => {
+    const categoryDataset = Array.isArray(categories) ? categories : [];
+    const candidates = [];
+
+    if (info) {
+        if (info.path) {
+            candidates.push(info.path);
+        }
+        if (info.category) {
+            const derivedPath = buildCategoryDisplayPath(info.category, categoryDataset);
+            if (derivedPath) {
+                candidates.push(derivedPath);
+            }
+            if (Array.isArray(info.category.pathSegments)) {
+                candidates.push(info.category.pathSegments);
+            }
+        }
+    }
+    if (entry && typeof entry === 'object') {
+        const entryKeys = [
+            'pathSegments',
+            'path',
+            'displayPath',
+            'categoryPath',
+            'fullPath',
+            'breadcrumb',
+            'breadcrumbs',
+            'parents',
+            'ancestors',
+            'hierarchy',
+            'categoryHierarchy'
+        ];
+        entryKeys.forEach(key => {
+            if (Object.prototype.hasOwnProperty.call(entry, key) && entry[key] !== null && entry[key] !== undefined) {
+                candidates.push(entry[key]);
+            }
+        });
+    }
+
+    let singleSegmentFallback = '';
+    for (const candidate of candidates) {
+        const segments = extractFavoriteCategoryPathSegments(candidate);
+        if (!segments.length) {
+            continue;
+        }
+        if (segments.length > 1) {
+            return segments.join('/');
+        }
+        if (!singleSegmentFallback) {
+            singleSegmentFallback = segments.join('/');
+        }
+    }
+    return singleSegmentFallback;
+};
+
+const normalizeFavoriteLabel = (entry, type = 'generic', infoOverride = null) => {
+    const info = infoOverride || resolveFavoriteInfo(entry, type);
+    if (info) {
+        if (type === 'category') {
+            const pathLabel = resolveFavoriteCategoryPathLabel(entry, info);
+            if (pathLabel) {
+                return pathLabel;
+            }
+        }
+        if (info.label) {
+            return info.label;
+        }
+    }
+    return normalizeFavoriteLabelFallback(entry);
+};
+
+const renderFavoriteDetails = (entry, type = 'generic', infoOverride = null) => {
+    const info = infoOverride || resolveFavoriteInfo(entry, type);
+    const details = [];
+    if (type === 'category' && info) {
+        if (info.code) {
+            details.push(`<div class="helper-text">Category Code: ${escapeHtml(info.code)}</div>`);
+        }
+        if (info.filters && info.filters.length) {
+            details.push(`<div class="helper-text">Preferred Filters: ${escapeHtml(info.filters.join(' • '))}</div>`);
+        }
+        if (info.followers !== null && Number.isFinite(info.followers)) {
+            details.push(`<div class="helper-text">Followers: ${escapeHtml(info.followers.toLocaleString('en-US'))}</div>`);
+        }
+        if (info.followSince) {
+            const stamp = formatDateForDisplay(info.followSince, { includeTime: true }) || info.followSince;
+            details.push(`<div class="helper-text">Following since ${escapeHtml(String(stamp))}</div>`);
+        }
+    } else if (type === 'seller' && info) {
+        if (info.statusLabel) {
+            details.push(`<div class="helper-text">Status: ${escapeHtml(info.statusLabel)}</div>`);
+        }
+        if (info.location) {
+            details.push(`<div class="helper-text">Location: ${escapeHtml(info.location)}</div>`);
+        }
+        if (info.contact) {
+            details.push(`<div class="helper-text">Email: ${escapeHtml(info.contact)}</div>`);
+        }
+        if (info.phone) {
+            details.push(`<div class="helper-text">Phone Number: ${escapeHtml(info.phone)}</div>`);
+        }
+        if (info.ratingLabel) {
+            const ratingDisplay = info.ratingScore !== null && info.ratingScore <= 5
+                ? `${info.ratingLabel} / 5`
+                : info.ratingLabel;
+            details.push(`<div class="helper-text">Rating: ${escapeHtml(ratingDisplay)}</div>`);
+        }
+        if (info.followingSince) {
+            const stamp = formatDateForDisplay(info.followingSince, { includeTime: true }) || info.followingSince;
+            details.push(`<div class="helper-text">Following since ${escapeHtml(String(stamp))}</div>`);
+        }
+        if (info.business && info.business.id) {
+            details.push(`<div class="helper-text">Business ID: ${escapeHtml(String(info.business.id))}</div>`);
+        }
+    } else if (type === 'search' && info) {
+        if (info.categories && info.categories.length) {
+            details.push(`<div class="helper-text">Categories: ${escapeHtml(info.categories.join(', '))}</div>`);
+        }
+        if (info.filters && info.filters.length) {
+            details.push(`<div class="helper-text">Filters: ${escapeHtml(info.filters.join(' • '))}</div>`);
+        }
+        if (info.sort) {
+            details.push(`<div class="helper-text">Sort: ${escapeHtml(formatKeyLabel(info.sort))}</div>`);
+        }
+        if (info.resultsCount !== null && Number.isFinite(info.resultsCount)) {
+            details.push(`<div class="helper-text">Last results count: ${escapeHtml(info.resultsCount.toLocaleString('en-US'))}</div>`);
+        }
+        if (info.lastRun) {
+            const stamp = formatDateForDisplay(info.lastRun, { includeTime: true }) || info.lastRun;
+            details.push(`<div class="helper-text">Last run ${escapeHtml(String(stamp))}</div>`);
+        }
+        if (info.followSince) {
+            const stamp = formatDateForDisplay(info.followSince, { includeTime: true }) || info.followSince;
+            details.push(`<div class="helper-text">Following since ${escapeHtml(String(stamp))}</div>`);
+        }
+    }
+    if (entry && typeof entry === 'object') {
+        if (entry.notes && type !== 'search') {
+            details.push(`<div class="helper-text">${escapeHtml(String(entry.notes))}</div>`);
+        }
+        const lastVisitedRaw = entry.lastVisitedAt || entry.lastViewedAt || entry.updatedAt || entry.savedAt || entry.createdAt;
+        let includeLastVisited = Boolean(lastVisitedRaw);
+        if (includeLastVisited && info) {
+            const compareTargets = [];
+            if (type === 'category' && info.followSince) {
+                compareTargets.push(info.followSince);
+            }
+            if (type === 'seller' && info.followingSince) {
+                compareTargets.push(info.followingSince);
+            }
+            if (type === 'search') {
+                if (info.lastRun) compareTargets.push(info.lastRun);
+                if (info.followSince) compareTargets.push(info.followSince);
+            }
+            includeLastVisited = !compareTargets.some(target => target && String(target) === String(lastVisitedRaw));
+        }
+        if (includeLastVisited) {
+            const stamp = formatDateForDisplay(lastVisitedRaw, { includeTime: true }) || lastVisitedRaw;
+            details.push(`<div class="helper-text">Last visited ${escapeHtml(String(stamp))}</div>`);
+        }
+        const meta = entry.metadata || entry.meta;
+        if (meta && typeof meta === 'object') {
+            const metaEntries = Object.entries(meta)
+                .filter(([, value]) => value !== null && value !== undefined && value !== '')
+                .slice(0, 3)
+                .map(([key, value]) => `${formatKeyLabel(key)}: ${String(value)}`);
+            if (metaEntries.length) {
+                details.push(`<div class="helper-text">${escapeHtml(metaEntries.join(' | '))}</div>`);
+            }
+        }
+    }
+    return details.join('');
+};
+
+const renderFavoriteCollection = (entries, emptyMessage, type = 'generic', options = {}) => {
+    const source = Array.isArray(entries) ? entries.filter(entry => entry !== null && entry !== undefined) : [];
+    const {
+        visibleCount = null,
+        loadMoreAction = '',
+        loadMoreAttributes = null
+    } = options || {};
+
+    const processed = source
+        .map(entry => {
+            const info = resolveFavoriteInfo(entry, type);
+            const label = normalizeFavoriteLabel(entry, type, info);
+            if (!label) {
+                return null;
+            }
+            const detailsMarkup = renderFavoriteDetails(entry, type, info);
+            let displayLabel = label;
+            if (type === 'seller' && info && info.accountType) {
+                const accountTypeLabel = formatKeyLabel(info.accountType);
+                displayLabel = `${label} • ${accountTypeLabel}`;
+            }
+            return { entry, info, label: displayLabel, detailsMarkup };
+        })
+        .filter(Boolean);
+
+    const shouldSortByFollowDate = type === 'category' || type === 'seller' || type === 'search';
+    if (shouldSortByFollowDate && processed.length > 1) {
+        processed.sort((a, b) => extractFavoriteFollowTimestamp(b, type) - extractFavoriteFollowTimestamp(a, type));
+    }
+
+    if (!processed.length) {
+        return `<p class="helper-text">${escapeHtml(emptyMessage)}</p>`;
+    }
+    let limited = processed;
+    let hasMore = false;
+
+    const supportsPagination = type === 'category' || type === 'seller' || type === 'search';
+
+    if (supportsPagination && Number.isFinite(visibleCount) && visibleCount > 0) {
+        const limit = Math.max(1, Math.floor(visibleCount));
+        limited = processed.slice(0, limit);
+        hasMore = processed.length > limit;
+    }
+
+    if (!limited.length) {
+        return `<p class="helper-text">${escapeHtml(emptyMessage)}</p>`;
+    }
+
+    const items = limited
+        .map(item => `<li><div><strong>${escapeHtml(item.label)}</strong></div>${item.detailsMarkup}</li>`)
+        .join('');
+
+    let loadMoreMarkup = '';
+    if (supportsPagination && hasMore && loadMoreAction) {
+        const attributes = [];
+        attributes.push(`data-action="${escapeAttribute(loadMoreAction)}"`);
+        if (loadMoreAttributes && typeof loadMoreAttributes === 'object') {
+            for (const [key, value] of Object.entries(loadMoreAttributes)) {
+                if (value === null || value === undefined) {
+                    continue;
+                }
+                attributes.push(`${key}="${escapeAttribute(String(value))}"`);
+            }
+        }
+        const attributeString = attributes.join(' ');
+        loadMoreMarkup = `<div class="detail-subsection detail-load-more"><button type="button" class="btn btn-outline" ${attributeString} style="margin: auto;">More</button></div>`;
+    }
+
+    return `<ul class="detail-list">${items}</ul>${loadMoreMarkup}`;
+};
+
 function selectIndividualAccount(accountId) {
     const previousAccountId = state.activeIndividualAccountId;
     const isTogglingOff = previousAccountId && previousAccountId === accountId;
@@ -23218,9 +26833,54 @@ function selectIndividualAccount(accountId) {
 
     if (isTogglingOff) {
         state.activeIndividualAccountId = null;
+        if (state.individualFavoriteCategoryVisibleCounts && typeof state.individualFavoriteCategoryVisibleCounts === 'object' && previousAccountId !== null && previousAccountId !== undefined) {
+            delete state.individualFavoriteCategoryVisibleCounts[String(previousAccountId)];
+        }
+        if (state.individualFavoriteSellerVisibleCounts && typeof state.individualFavoriteSellerVisibleCounts === 'object' && previousAccountId !== null && previousAccountId !== undefined) {
+            delete state.individualFavoriteSellerVisibleCounts[String(previousAccountId)];
+        }
+        if (state.individualFavoriteSearchVisibleCounts && typeof state.individualFavoriteSearchVisibleCounts === 'object' && previousAccountId !== null && previousAccountId !== undefined) {
+            delete state.individualFavoriteSearchVisibleCounts[String(previousAccountId)];
+        }
+        if (state.individualWalletVisibleCounts && typeof state.individualWalletVisibleCounts === 'object' && previousAccountId !== null && previousAccountId !== undefined) {
+            delete state.individualWalletVisibleCounts[String(previousAccountId)];
+        }
+        if (state.individualPointsVisibleCounts && typeof state.individualPointsVisibleCounts === 'object' && previousAccountId !== null && previousAccountId !== undefined) {
+            delete state.individualPointsVisibleCounts[String(previousAccountId)];
+        }
+        if (state.individualPaymentMethodVisibleCounts && typeof state.individualPaymentMethodVisibleCounts === 'object' && previousAccountId !== null && previousAccountId !== undefined) {
+            delete state.individualPaymentMethodVisibleCounts[String(previousAccountId)];
+        }
+        if (state.individualSavedAddressVisibleCounts && typeof state.individualSavedAddressVisibleCounts === 'object' && previousAccountId !== null && previousAccountId !== undefined) {
+            delete state.individualSavedAddressVisibleCounts[String(previousAccountId)];
+        }
     } else {
         account = (individualAccounts || []).find(entry => entry && entry.id === accountId) || null;
         state.activeIndividualAccountId = account ? account.id : null;
+    }
+
+    if (previousAccountId && previousAccountId !== state.activeIndividualAccountId) {
+        if (state.individualFavoriteCategoryVisibleCounts && typeof state.individualFavoriteCategoryVisibleCounts === 'object') {
+            delete state.individualFavoriteCategoryVisibleCounts[String(previousAccountId)];
+        }
+        if (state.individualFavoriteSellerVisibleCounts && typeof state.individualFavoriteSellerVisibleCounts === 'object') {
+            delete state.individualFavoriteSellerVisibleCounts[String(previousAccountId)];
+        }
+        if (state.individualFavoriteSearchVisibleCounts && typeof state.individualFavoriteSearchVisibleCounts === 'object') {
+            delete state.individualFavoriteSearchVisibleCounts[String(previousAccountId)];
+        }
+        if (state.individualWalletVisibleCounts && typeof state.individualWalletVisibleCounts === 'object') {
+            delete state.individualWalletVisibleCounts[String(previousAccountId)];
+        }
+        if (state.individualPointsVisibleCounts && typeof state.individualPointsVisibleCounts === 'object') {
+            delete state.individualPointsVisibleCounts[String(previousAccountId)];
+        }
+        if (state.individualPaymentMethodVisibleCounts && typeof state.individualPaymentMethodVisibleCounts === 'object') {
+            delete state.individualPaymentMethodVisibleCounts[String(previousAccountId)];
+        }
+        if (state.individualSavedAddressVisibleCounts && typeof state.individualSavedAddressVisibleCounts === 'object') {
+            delete state.individualSavedAddressVisibleCounts[String(previousAccountId)];
+        }
     }
 
     renderIndividualAccountsTable(state.currentIndividualAccountsPage);
@@ -23303,9 +26963,41 @@ function renderIndividualAccountDetail(account, { forceOpen = false } = {}) {
     const pointsHistory = Array.isArray(account.pointsHistory) ? account.pointsHistory : [];
     const paymentCards = Array.isArray(account.paymentCards) ? account.paymentCards : [];
     const marketplaceActivity = account.marketplaceActivity && typeof account.marketplaceActivity === 'object' ? account.marketplaceActivity : {};
-    const savedAddresses = Array.isArray(account.savedAddresses)
+    const savedAddressesSource = Array.isArray(account.savedAddresses)
         ? account.savedAddresses
         : Array.isArray(marketplaceActivity.savedAddresses) ? marketplaceActivity.savedAddresses : [];
+    const savedAddressSeedBase = account && (account.id || account.email || account.fullName)
+        ? `${account.id || account.email || account.fullName}`
+        : displayName;
+    const normalizedSavedAddresses = savedAddressesSource.map((entry, index) => {
+        if (!entry || typeof entry !== 'object') {
+            return entry;
+        }
+        const clone = Object.assign({}, entry);
+        const addedMeta = resolveSavedAddressAddedTimestamp(clone);
+        const updatedMeta = resolveSavedAddressUpdatedTimestamp(clone);
+        const hasMeaningfulUpdate = Boolean(
+            (updatedMeta.raw && addedMeta.raw && updatedMeta.time && addedMeta.time && updatedMeta.time !== addedMeta.time)
+            || clone.wasUpdated === true
+            || clone.hasBeenUpdated === true
+            || clone.hasBeenEdited === true
+            || clone.wasEdited === true
+        );
+        if (!hasMeaningfulUpdate) {
+            const rng = createDeterministicRandom(`${savedAddressSeedBase || 'address'}|saved-address-${index}`);
+            if (rng() > 0.55) {
+                const baseTime = addedMeta.time
+                    || Date.parse(clone.addedAt || clone.createdAt || clone.savedAt || clone.timestamp || '')
+                    || Date.now();
+                const offsetDays = 5 + Math.floor(rng() * 90);
+                const offsetHours = Math.floor(rng() * 24);
+                const updatedTime = baseTime + offsetDays * 86_400_000 + offsetHours * 3_600_000;
+                clone.updatedAt = new Date(updatedTime).toISOString();
+                clone.hasBeenUpdated = true;
+            }
+        }
+        return clone;
+    });
     const sellerRatingsSource = Array.isArray(account.sellerRatings)
         ? account.sellerRatings
         : Array.isArray(marketplaceActivity.sellerRatings) ? marketplaceActivity.sellerRatings : [];
@@ -23370,13 +27062,6 @@ function renderIndividualAccountDetail(account, { forceOpen = false } = {}) {
         return initials || parts[0].slice(0, 2).toUpperCase() || 'NA';
     };
 
-    const formatKeyLabel = key => key
-        .replace(/[_-]+/g, ' ')
-        .replace(/([a-z])([A-Z])/g, '$1 $2')
-        .replace(/\s+/g, ' ')
-        .trim()
-        .replace(/^./, char => char.toUpperCase());
-
     const renderGenericActivityItem = entry => {
         if (!entry || typeof entry !== 'object') {
             return '<li><div><strong>Activity</strong></div></li>';
@@ -23427,6 +27112,10 @@ function renderIndividualAccountDetail(account, { forceOpen = false } = {}) {
             return renderGenericActivityItem(entry);
         }
         const title = entry.label || entry.nickname || entry.id || 'Saved address';
+        const headerParts = [`<strong>${escapeHtml(String(title))}</strong>`];
+        if (resolveSavedAddressIsDefault(entry)) {
+            headerParts.push('<span class="helper-chip success">Default</span>');
+        }
         const primaryParts = joinCommaParts([entry.country, entry.region, entry.city]);
         const savedStreet = joinSpaceParts([entry.streetNumber, entry.streetName]);
         const secondaryParts = joinCommaParts([entry.district, savedStreet, entry.zipCode || entry.postalCode]);
@@ -23437,246 +27126,184 @@ function renderIndividualAccountDetail(account, { forceOpen = false } = {}) {
         if (secondaryParts) {
             detailLines.push(`<div class="helper-text">${escapeHtml(secondaryParts)}</div>`);
         }
-        if (entry.notes) {
-            detailLines.push(`<div class="helper-text">${escapeHtml(String(entry.notes))}</div>`);
+        const apartmentValue = resolveSavedAddressField(entry, ['apartment', 'apartmentNo', 'apartmentNumber', 'unit', 'unitNo', 'unitNumber', 'suite']);
+        const buildingValue = resolveSavedAddressField(entry, ['building', 'buildingNo', 'buildingNumber', 'tower', 'towerNumber']);
+        const floorValue = resolveSavedAddressField(entry, ['floor', 'floorNo', 'floorNumber', 'level', 'levelNumber']);
+        const locationMetaParts = [];
+        if (apartmentValue) {
+            locationMetaParts.push(`Apartment No.: ${escapeHtml(apartmentValue)}`);
         }
-        const timestampValue = entry.updatedAt || entry.createdAt;
-        if (timestampValue) {
-            const tsLabel = formatDateForDisplay(timestampValue, { includeTime: true }) || timestampValue;
-            detailLines.push(`<div class="helper-text">Updated ${escapeHtml(String(tsLabel))}</div>`);
+        const buildingLabel = buildingValue ? escapeHtml(buildingValue) : '—';
+        locationMetaParts.push(`Building No.: ${buildingLabel}`);
+        const floorLabel = floorValue ? escapeHtml(floorValue) : '—';
+        locationMetaParts.push(`Floor No.: ${floorLabel}`);
+        if (locationMetaParts.length) {
+            detailLines.push(`<div class="helper-text">${locationMetaParts.join(', ')}</div>`);
         }
-        return `<li><div><strong>${escapeHtml(String(title))}</strong></div>${detailLines.join('')}</li>`;
+        const phoneValue = resolveSavedAddressField(entry, ['contactPhone', 'phone', 'phoneNumber', 'mobile', 'recipientPhone', 'primaryPhone']);
+        if (phoneValue) {
+            detailLines.push(`<div class="helper-text">Phone Number: ${escapeHtml(phoneValue)}</div>`);
+        }
+        // Notes intentionally suppressed to avoid showing deprecated delivery instructions.
+        const addedAtInfo = resolveSavedAddressAddedTimestamp(entry);
+        const updatedAtInfo = resolveSavedAddressUpdatedTimestamp(entry);
+        const addedAtLabel = addedAtInfo.raw ? (formatDateForDisplay(addedAtInfo.raw, { includeTime: true }) || addedAtInfo.raw) : '';
+        const addedDisplay = addedAtLabel || '—';
+        detailLines.push(`<div class="helper-text">Added ${escapeHtml(String(addedDisplay))}</div>`);
+        const updatedAtLabel = updatedAtInfo.raw ? (formatDateForDisplay(updatedAtInfo.raw, { includeTime: true }) || updatedAtInfo.raw) : '';
+        const wasUpdatedFlag = entry.wasUpdated === true
+            || entry.hasBeenUpdated === true
+            || entry.hasBeenEdited === true
+            || entry.wasEdited === true;
+        const hasDistinctTimestamps = addedAtInfo.time && updatedAtInfo.time
+            ? addedAtInfo.time !== updatedAtInfo.time
+            : Boolean(updatedAtInfo.time && !addedAtInfo.time);
+        if (updatedAtLabel && (wasUpdatedFlag || hasDistinctTimestamps)) {
+            detailLines.push(`<div class="helper-text">Last updated ${escapeHtml(String(updatedAtLabel))}</div>`);
+        }
+        return `<li><div>${headerParts.join(' ')}</div>${detailLines.join('')}</li>`;
     };
 
-    const renderPaymentCardItem = card => {
-        if (!card) {
-            return '<li><div><strong>Payment card</strong></div></li>';
+    const renderPaymentCardItem = method => {
+        if (!method) {
+            return '<li><div><strong>Payment method</strong></div></li>';
         }
-        if (typeof card !== 'object') {
-            const value = parseNumericAmount(card);
+        if (typeof method !== 'object') {
+            const value = parseNumericAmount(method);
             if (value !== null) {
-                return `<li><div><strong>Payment card</strong></div><div class="helper-text">Value: ${escapeHtml(String(value))}</div></li>`;
+                return `<li><div><strong>Payment method</strong></div><div class="helper-text">Value: ${escapeHtml(String(value))}</div></li>`;
             }
-            return `<li><div><strong>${escapeHtml(String(card))}</strong></div></li>`;
+            return `<li><div><strong>${escapeHtml(String(method))}</strong></div></li>`;
         }
-        const brandCandidate = typeof card.brand === 'string' && card.brand.trim() ? card.brand.trim() : '';
-        const brandLabel = brandCandidate ? formatKeyLabel(brandCandidate) : 'Card';
-        const lastFourRaw = typeof card.last4 === 'string' && card.last4.trim()
-            ? card.last4.trim().slice(-4)
-            : Number.isFinite(card.last4)
-                ? String(card.last4).slice(-4)
-                : '';
-        const maskedDigits = lastFourRaw ? `•••• ${lastFourRaw}` : '';
-        const titleParts = [brandLabel, maskedDigits].filter(Boolean);
 
-        const expiryMonthRaw = card.expiryMonth;
-        const expiryYearRaw = card.expiryYear;
-        const normalizeMonth = value => {
-            if (Number.isFinite(value)) {
-                return String(value).padStart(2, '0');
+        const maskAccountNumber = value => {
+            if (typeof value !== 'string') return '';
+            const cleaned = value.replace(/[^0-9a-z]/gi, '').toUpperCase();
+            if (!cleaned) return '';
+            if (cleaned.length <= 4) {
+                return cleaned;
             }
-            if (typeof value === 'string') {
-                const trimmed = value.trim();
-                if (!trimmed) return '';
-                const digits = trimmed.replace(/[^0-9]/g, '');
-                if (!digits) return '';
-                return digits.padStart(2, '0').slice(-2);
-            }
-            return '';
+            return `••••${cleaned.slice(-4)}`;
         };
-        const normalizeYear = value => {
-            if (Number.isFinite(value)) {
-                const text = String(Math.trunc(value));
-                return text.length === 2 ? text : text.padStart(4, '0');
+
+        const maskIban = value => {
+            if (typeof value !== 'string') return '';
+            const cleaned = value.replace(/\s+/g, '').toUpperCase();
+            if (!cleaned) return '';
+            if (cleaned.length <= 8) {
+                return cleaned;
             }
-            if (typeof value === 'string') {
-                const trimmed = value.trim();
-                if (!trimmed) return '';
-                const digits = trimmed.replace(/[^0-9]/g, '');
-                if (!digits) return '';
-                if (digits.length === 2) {
-                    return digits;
-                }
-                return digits.padStart(4, '0').slice(-4);
-            }
-            return '';
+            return `${cleaned.slice(0, 4)}••••${cleaned.slice(-4)}`;
         };
-        const expiryMonth = normalizeMonth(expiryMonthRaw);
-        const expiryYear = normalizeYear(expiryYearRaw);
-        const expiryLabel = expiryMonth || expiryYear ? `${expiryMonth || '??'} / ${expiryYear || '??'}` : '';
 
-        const holderCandidate = typeof card.holderName === 'string' && card.holderName.trim()
-            ? card.holderName.trim()
-            : typeof card.name === 'string' && card.name.trim()
-                ? card.name.trim()
+        const typeRaw = typeof method.type === 'string' && method.type.trim() ? method.type.trim().toLowerCase() : '';
+        const normalizedType = typeRaw.replace(/\s+/g, '-');
+        const bankName = typeof method.bankName === 'string' && method.bankName.trim() ? method.bankName.trim() : '';
+        const accountNumberRaw = typeof method.bankAccountNumber === 'string' && method.bankAccountNumber.trim()
+            ? method.bankAccountNumber.trim()
+            : typeof method.accountNumber === 'string' && method.accountNumber.trim()
+                ? method.accountNumber.trim()
                 : '';
-        const statusCandidate = typeof card.status === 'string' && card.status.trim()
-            ? card.status.trim()
-            : typeof card.state === 'string' && card.state.trim()
-                ? card.state.trim()
+        const ibanRaw = typeof method.iban === 'string' && method.iban.trim() ? method.iban.trim() : '';
+        const swiftRaw = typeof method.swiftCode === 'string' && method.swiftCode.trim()
+            ? method.swiftCode.trim()
+            : typeof method.swift === 'string' && method.swift.trim()
+                ? method.swift.trim()
                 : '';
-        const addedAt = card.addedAt || card.createdAt || card.updatedAt || null;
-        const isDefault = card.isDefault === true
-            || (typeof card.isDefault === 'string' && card.isDefault.trim().toLowerCase() === 'true');
 
+        const holderCandidate = typeof method.holderName === 'string' && method.holderName.trim()
+            ? method.holderName.trim()
+            : typeof method.accountHolder === 'string' && method.accountHolder.trim()
+                ? method.accountHolder.trim()
+                : '';
+        const addedAtRaw = method.addedAt || method.createdAt || null;
+        const updatedAtRaw = method.updatedAt || method.modifiedAt || method.lastUpdated || null;
+        const wasUpdatedFlag = method.wasUpdated === true
+            || method.hasBeenEdited === true
+            || method.hasBeenUpdated === true
+            || method.wasEdited === true;
+        const addedAtLabel = addedAtRaw
+            ? formatDateForDisplay(addedAtRaw, { includeTime: true }) || addedAtRaw
+            : '';
+        const updatedAtLabel = updatedAtRaw
+            ? formatDateForDisplay(updatedAtRaw, { includeTime: true }) || updatedAtRaw
+            : '';
+        const hasDistinctTimestamps = addedAtRaw && updatedAtRaw
+            ? new Date(updatedAtRaw).getTime() !== new Date(addedAtRaw).getTime()
+            : Boolean(updatedAtRaw);
+        const showUpdatedLabel = Boolean(updatedAtLabel && (wasUpdatedFlag || hasDistinctTimestamps));
+        const isDefault = method.isDefault === true
+            || (typeof method.isDefault === 'string' && method.isDefault.trim().toLowerCase() === 'true');
+        const ibanCertificateRaw = typeof method.ibanCertificate === 'string' && method.ibanCertificate.trim()
+            ? method.ibanCertificate.trim()
+            : '';
+        const ibanCertificateLabel = ibanCertificateRaw ? ibanCertificateRaw.split(/[\\/]/).pop() : '';
+
+        const isBankAccount = normalizedType === 'bank-account' || Boolean(bankName || accountNumberRaw || ibanRaw);
+
+        const titleParts = [];
         const details = [];
-        if (holderCandidate) {
-            details.push(`<div class="helper-text">Holder: ${escapeHtml(holderCandidate)}</div>`);
-        }
-        if (expiryLabel) {
-            details.push(`<div class="helper-text">Expires ${escapeHtml(expiryLabel)}</div>`);
-        }
-        if (statusCandidate) {
-            details.push(`<div class="helper-text">Status: ${escapeHtml(formatKeyLabel(statusCandidate))}</div>`);
-        }
-        if (addedAt) {
-            const addedLabel = formatDateForDisplay(addedAt, { includeTime: true }) || addedAt;
-            details.push(`<div class="helper-text">Added ${escapeHtml(String(addedLabel))}</div>`);
-        }
-        if (isDefault) {
-            details.push('<div class="helper-text">Primary card</div>');
-        }
 
-        const title = titleParts.length ? titleParts.join(' • ') : 'Payment card';
-        return `<li><div><strong>${escapeHtml(title)}</strong></div>${details.join('')}</li>`;
-    };
+        if (isBankAccount) {
+            const accountDisplay = accountNumberRaw ? accountNumberRaw : '';
+            const ibanDisplay = ibanRaw ? ibanRaw.toUpperCase() : '';
+            const primaryLabel = bankName ? `Bank Account • ${bankName}` : 'Bank Account';
+            titleParts.push(primaryLabel);
 
-    const computeRatingSummary = (entries, fallbackCandidates = []) => {
-        const collection = Array.isArray(entries) ? entries : [];
-        let sum = 0;
-        let count = 0;
+            if (holderCandidate) {
+                details.push(`<div class="helper-text">Account Holder: ${escapeHtml(holderCandidate)}</div>`);
+            }
+            if (accountDisplay) {
+                details.push(`<div class="helper-text">Account #: ${escapeHtml(accountDisplay)}</div>`);
+            }
+            if (ibanDisplay) {
+                details.push(`<div class="helper-text">IBAN: ${escapeHtml(ibanDisplay)}</div>`);
+            }
+            if (swiftRaw) {
+                details.push(`<div class="helper-text">SWIFT: ${escapeHtml(swiftRaw.toUpperCase())}</div>`);
+            }
+            if (ibanCertificateLabel) {
+                const certificatePreviewTrigger = `<button type="button" class="detail-link-button" data-action="preview-iban-certificate"${account && account.id ? ` data-account-id="${escapeAttribute(String(account.id))}"` : ''}${method && method.id ? ` data-method-id="${escapeAttribute(String(method.id))}"` : ''}${ibanCertificateRaw ? ` data-certificate="${escapeAttribute(ibanCertificateRaw)}"` : ''}>${escapeHtml(ibanCertificateLabel)}</button>`;
+                details.push(`<div class="helper-text">IBAN Certificate: ${certificatePreviewTrigger}</div>`);
+            }
+        } else {
+            const brandCandidate = typeof method.brand === 'string' && method.brand.trim() ? method.brand.trim() : '';
+            const brandLabel = brandCandidate ? formatKeyLabel(brandCandidate) : 'Card';
+            const lastFourRaw = typeof method.last4 === 'string' && method.last4.trim()
+                ? method.last4.trim().slice(-4)
+                : Number.isFinite(method.last4)
+                    ? String(method.last4).slice(-4)
+                    : '';
+            const maskedFullNumber = lastFourRaw ? `•••• •••• •••• ${lastFourRaw}` : '';
+            if (brandLabel) {
+                titleParts.push(`Bank Card • ${brandLabel}`);
+            }
 
-        const pushRating = (ratingValue, weight = 1) => {
-            const parsedRating = parseNumericAmount(ratingValue);
-            const parsedWeight = parseNumericAmount(weight);
-            if (parsedRating === null) return;
-            const normalizedWeight = parsedWeight !== null && parsedWeight > 0 ? parsedWeight : 1;
-            sum += parsedRating * normalizedWeight;
-            count += normalizedWeight;
-        };
+            const expiryMonth = typeof method.expiryMonth === 'string' && method.expiryMonth.trim() ? method.expiryMonth.trim() : '';
+            const expiryYear = typeof method.expiryYear === 'string' && method.expiryYear.trim() ? method.expiryYear.trim() : '';
+            const expiryLabel = expiryMonth || expiryYear ? `${expiryMonth || '??'} / ${expiryYear || '??'}` : '';
 
-        collection.forEach(entry => {
-            if (entry === null || entry === undefined) {
-                return;
+            if (holderCandidate) {
+                details.push(`<div class="helper-text">Cardholder: ${escapeHtml(holderCandidate)}</div>`);
             }
-            if (typeof entry === 'number' || typeof entry === 'string') {
-                pushRating(entry);
-                return;
+            if (maskedFullNumber) {
+                details.push(`<div class="helper-text">Card Number: ${escapeHtml(maskedFullNumber)}</div>`);
             }
-            if (typeof entry !== 'object') {
-                return;
-            }
-            const ratingCandidates = [
-                entry.rating,
-                entry.score,
-                entry.value,
-                entry.average,
-                entry.stars,
-                entry.result
-            ];
-            let rating = null;
-            for (const candidate of ratingCandidates) {
-                const parsedCandidate = parseNumericAmount(candidate);
-                if (parsedCandidate !== null) {
-                    rating = parsedCandidate;
-                    break;
-                }
-            }
-            if (rating === null && typeof entry === 'object') {
-                const nested = entry.rating && typeof entry.rating === 'object' ? parseNumericAmount(entry.rating.value) : null;
-                if (nested !== null) {
-                    rating = nested;
-                }
-            }
-            if (rating === null) {
-                return;
-            }
-            const weightCandidates = [
-                entry.count,
-                entry.votes,
-                entry.reviews,
-                entry.total,
-                entry.numberOfRatings,
-                entry.quantity
-            ];
-            let weight = null;
-            for (const candidate of weightCandidates) {
-                const parsedWeight = parseNumericAmount(candidate);
-                if (parsedWeight !== null && parsedWeight > 0) {
-                    weight = parsedWeight;
-                    break;
-                }
-            }
-            pushRating(rating, weight || 1);
-        });
-
-        if (count > 0) {
-            return { average: sum / count, count };
-        }
-
-        for (const fallback of fallbackCandidates) {
-            const parsed = parseNumericAmount(fallback);
-            if (parsed !== null) {
-                return { average: parsed, count: 0 };
+            if (expiryLabel) {
+                details.push(`<div class="helper-text">Expires ${escapeHtml(expiryLabel)}</div>`);
             }
         }
 
-        return { average: null, count: 0 };
-    };
-
-    const formatRatingSummary = summary => {
-        if (!summary || summary.average === null) {
-            return 'Not rated';
+        if (addedAtLabel) {
+            details.push(`<div class="helper-text">Added ${escapeHtml(String(addedAtLabel))}</div>`);
         }
-        const average = summary.average;
-        const rounded = Number.isFinite(average) ? Math.round(average * 10) / 10 : null;
-        if (rounded === null) {
-            return 'Not rated';
+        if (showUpdatedLabel) {
+            details.push(`<div class="helper-text">Last updated ${escapeHtml(String(updatedAtLabel))}</div>`);
         }
-        const averageLabel = Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
-        if (summary.count && summary.count > 0) {
-            const countLabel = `${summary.count} rating${summary.count === 1 ? '' : 's'}`;
-            return `${averageLabel} (${countLabel})`;
-        }
-        return averageLabel;
-    };
-
-    const formatRatingScore = summary => {
-        if (!summary || summary.average === null || !Number.isFinite(summary.average)) {
-            return '—';
-        }
-        const normalized = Math.round(summary.average * 10) / 10;
-        if (!Number.isFinite(normalized)) {
-            return '—';
-        }
-        return Number.isInteger(normalized) ? String(normalized) : normalized.toFixed(1);
-    };
-
-    const resolveRatingFaceDescriptor = score => {
-        if (!Number.isFinite(score)) {
-            return { emoji: '&#128528;', descriptor: 'No ratings yet' };
-        }
-        if (score >= 4.5) {
-            return { emoji: '&#128513;', descriptor: 'Excellent' };
-        }
-        if (score >= 4) {
-            return { emoji: '&#128522;', descriptor: 'Great' };
-        }
-        if (score >= 3) {
-            return { emoji: '&#128528;', descriptor: 'Okay' };
-        }
-        if (score >= 2) {
-            return { emoji: '&#128533;', descriptor: 'Poor' };
-        }
-        return { emoji: '&#128545;', descriptor: 'Very poor' };
-    };
-
-    const buildRatingFaceMarkup = (score, labelPrefix) => {
-        const { emoji, descriptor } = resolveRatingFaceDescriptor(score);
-        const ariaLabel = labelPrefix
-            ? `${labelPrefix} ${descriptor.toLowerCase()}`.trim()
-            : descriptor;
-        return `<span class="rating-face" role="img" aria-label="${escapeAttribute(ariaLabel || descriptor)}">${emoji}</span>`;
+        const title = titleParts.filter(Boolean).join(' • ') || 'Payment method';
+        const headingParts = [`<strong>${escapeHtml(title)}</strong>`];
+        const detailMarkup = details.join('');
+        return `<li><div class="payment-method-header">${headingParts.join(' ')}</div>${detailMarkup}</li>`;
     };
 
     const parseNumericAmount = value => {
@@ -23730,35 +27357,122 @@ function renderIndividualAccountDetail(account, { forceOpen = false } = {}) {
         }
     }
 
-    const walletAvailableLabel = availableBalanceAmount !== null ? formatCurrency(availableBalanceAmount) : '—';
-    const walletPendingLabel = pendingBalanceAmount !== null ? formatCurrency(pendingBalanceAmount) : '—';
+    const walletCurrencyCode = typeof account.walletCurrency === 'string' && account.walletCurrency.trim()
+        ? account.walletCurrency.trim().toUpperCase()
+        : 'SAR';
+    const walletCurrencyLabel = walletCurrencyCode ? walletCurrencyCode : '—';
+    const formatWalletAmountLabel = amount => {
+        const numeric = Number.isFinite(amount) ? amount : Number.parseFloat(amount);
+        if (!Number.isFinite(numeric)) {
+            return '—';
+        }
+        let formatted;
+        try {
+            formatted = new Intl.NumberFormat('en-US', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            }).format(numeric);
+        } catch (error) {
+            formatted = numeric.toFixed(2);
+        }
+        const trailingCurrency = walletCurrencyLabel && walletCurrencyLabel !== '—' ? walletCurrencyLabel : 'SAR';
+        return `${formatted} ${trailingCurrency}`;
+    };
+    const walletAvailableLabel = availableBalanceAmount !== null ? formatWalletAmountLabel(availableBalanceAmount) : '—';
+    const walletPendingLabel = pendingBalanceAmount !== null ? formatWalletAmountLabel(pendingBalanceAmount) : '—';
+    const availableNumeric = availableBalanceAmount !== null ? availableBalanceAmount : 0;
+    const pendingNumeric = pendingBalanceAmount !== null ? pendingBalanceAmount : 0;
+    let walletTotalNumeric = parseNumericAmount(account.balance);
+    if (walletTotalNumeric === null) {
+        const combined = availableNumeric + pendingNumeric;
+        walletTotalNumeric = Number.isFinite(combined) ? combined : null;
+    }
+    if (walletTotalNumeric !== null) {
+        walletTotalNumeric = Math.max(0, walletTotalNumeric);
+    }
+    const walletTotalLabel = walletTotalNumeric !== null ? formatWalletAmountLabel(walletTotalNumeric) : '—';
+    const walletUpdatedLabel = account.walletUpdatedAt
+        ? formatDateForDisplay(account.walletUpdatedAt, { includeTime: true }) || '—'
+        : '—';
+
+    const formatWalletTransactionAmount = (value, currencyCode = walletCurrencyCode) => {
+        const numeric = Number.isFinite(value) ? value : Number.parseFloat(value);
+        if (!Number.isFinite(numeric)) {
+            return formatCurrency(value, currencyCode || 'SAR');
+        }
+        let formattedAbsolute;
+        try {
+            formattedAbsolute = new Intl.NumberFormat('en-US', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            }).format(Math.abs(numeric));
+        } catch (error) {
+            formattedAbsolute = Math.abs(numeric).toFixed(2);
+        }
+    const sign = numeric < 0 ? '-' : numeric > 0 ? '+' : '';
+        const code = currencyCode && String(currencyCode).trim() ? String(currencyCode).trim() : 'SAR';
+        return `${sign}${formattedAbsolute} ${code}`;
+    };
+
+    const resolveWalletBalanceTypeLabel = type => {
+        const raw = typeof type === 'string' ? type.toLowerCase() : '';
+        if (!raw) {
+            return 'Available Balance';
+        }
+        if (raw.includes('pending-release')) {
+            return 'Available Balance';
+        }
+        return raw.includes('pending') ? 'Pending Balance' : 'Available Balance';
+    };
 
     const renderFinancialTransactionItem = entry => {
         if (!entry || typeof entry !== 'object') {
             return '<li><div><strong>Transaction</strong></div></li>';
         }
         const label = entry.label || 'Transaction';
-        const typeLabel = entry.type ? `<div class="helper-text">Type: ${escapeHtml(String(entry.type))}</div>` : '';
-        const amountLabel = formatCurrency(entry.amount || 0);
+        const balanceTypeLabel = resolveWalletBalanceTypeLabel(entry.type);
+        const amountLabel = formatWalletTransactionAmount(entry.amount);
         const timestampLabel = formatDateForDisplay(entry.timestamp, { includeTime: true }) || 'Unknown date';
-        const noteLine = entry.note ? `<div class="helper-text">${escapeHtml(entry.note)}</div>` : '';
-        return `<li><div><strong>${escapeHtml(label)}</strong></div>${typeLabel}<div>${escapeHtml(amountLabel)}</div><div class="helper-text">Recorded ${escapeHtml(timestampLabel)}</div>${noteLine}</li>`;
+        const timestampMarkup = timestampLabel ? ` &bull; ${escapeHtml(timestampLabel)}` : '';
+        const balanceDescriptionLine = entry.note
+            ? `<div class="helper-text">${escapeHtml(balanceTypeLabel)} &bull; ${escapeHtml(entry.note)}</div>`
+            : `<div class="helper-text">${escapeHtml(balanceTypeLabel)}</div>`;
+        return `<li><div><strong>${escapeHtml(label)}</strong></div>${balanceDescriptionLine}<div class="helper-text">${escapeHtml(amountLabel)}${timestampMarkup}</div></li>`;
     };
 
     const sortedFinancialHistory = financialHistory
         .slice()
         .sort((a, b) => Date.parse(b?.timestamp || '') - Date.parse(a?.timestamp || ''));
-    const walletRecentTransactions = sortedFinancialHistory.slice(0, 3);
-    const walletRemainingTransactions = sortedFinancialHistory.slice(3);
-    const walletRecentMarkup = walletRecentTransactions.length
-        ? `<ul class="detail-list">${walletRecentTransactions.map(renderFinancialTransactionItem).join('')}</ul>`
+    const walletTransactionsChunkSize = 10;
+    const walletVisibleCounts = state.individualWalletVisibleCounts && typeof state.individualWalletVisibleCounts === 'object'
+        ? state.individualWalletVisibleCounts
+        : (state.individualWalletVisibleCounts = Object.create(null));
+    const walletVisibilityKey = account.id ? String(account.id) : '__unknown__';
+    let walletVisibleCountRaw = Number.parseInt(walletVisibleCounts[walletVisibilityKey], 10);
+    if (!Number.isFinite(walletVisibleCountRaw) || walletVisibleCountRaw < walletTransactionsChunkSize) {
+        walletVisibleCountRaw = walletTransactionsChunkSize;
+        walletVisibleCounts[walletVisibilityKey] = walletVisibleCountRaw;
+    }
+    const walletVisibleCount = sortedFinancialHistory.length
+        ? Math.min(walletVisibleCountRaw, sortedFinancialHistory.length)
+        : 0;
+    const walletVisibleTransactions = sortedFinancialHistory.slice(0, walletVisibleCount);
+    const walletHasMoreTransactions = walletVisibleCount < sortedFinancialHistory.length;
+    const walletRecentMarkup = sortedFinancialHistory.length
+        ? ''
         : '<p class="helper-text">No financial transactions recorded.</p>';
-    const walletMoreButtonMarkup = walletRemainingTransactions.length
-        ? `<div class="detail-subsection detail-more-actions"><button type="button" class="btn btn-outline" data-action="show-more-wallet" data-target-id="individualWalletTransactionsAll">More</button></div>`
+    const walletMoreButtonMarkup = '';
+    const walletTransactionsRemainingMarkup = '';
+    const walletFullHistoryMarkup = walletVisibleTransactions.length
+        ? `<ul class="detail-list">${walletVisibleTransactions.map(renderFinancialTransactionItem).join('')}</ul>`
+        : '<p class="helper-text">No financial transactions recorded.</p>';
+    const walletLoadMoreMarkup = walletHasMoreTransactions
+        ? `<div class="detail-subsection detail-load-more"><button type="button" class="btn btn-outline" data-action="load-more-wallet-transactions"${account.id ? ` data-account-id="${escapeAttribute(String(account.id))}"` : ''} style="
+    margin: auto;">More</button></div>`
         : '';
-    const walletTransactionsRemainingMarkup = walletRemainingTransactions.length
-        ? `<div class="detail-subsection hidden" id="individualWalletTransactionsAll"><h5>Earlier Transactions</h5><ul class="detail-list">${walletRemainingTransactions.map(renderFinancialTransactionItem).join('')}</ul></div>`
-        : '';
+    const walletTransactionCountLabel = sortedFinancialHistory.length
+        ? `#${sortedFinancialHistory.length} Transaction${sortedFinancialHistory.length === 1 ? '' : 's'}`
+        : '#0 Transactions';
 
     const followUpsSource = account.followUps && typeof account.followUps === 'object'
         ? account.followUps
@@ -23773,97 +27487,112 @@ function renderIndividualAccountDetail(account, { forceOpen = false } = {}) {
         ? account.favoriteSearches
         : Array.isArray(followUpsSource.favoriteSearches) ? followUpsSource.favoriteSearches : [];
 
-    const normalizeFavoriteLabel = entry => {
-        if (entry === null || entry === undefined) {
-            return '';
+    const favoriteCategoryCounts = state.individualFavoriteCategoryVisibleCounts && typeof state.individualFavoriteCategoryVisibleCounts === 'object'
+        ? state.individualFavoriteCategoryVisibleCounts
+        : (state.individualFavoriteCategoryVisibleCounts = Object.create(null));
+    const favoriteCategoryVisibilityKey = account && account.id ? String(account.id) : '__unknown__';
+    let favoriteCategoryVisibleCountRaw = Number.parseInt(favoriteCategoryCounts[favoriteCategoryVisibilityKey], 10);
+    if (!Number.isFinite(favoriteCategoryVisibleCountRaw) || favoriteCategoryVisibleCountRaw < FAVORITE_CATEGORY_PAGE_SIZE) {
+        favoriteCategoryVisibleCountRaw = FAVORITE_CATEGORY_PAGE_SIZE;
+        favoriteCategoryCounts[favoriteCategoryVisibilityKey] = favoriteCategoryVisibleCountRaw;
+    }
+    const favoriteCategoryVisibleCount = favoriteCategoriesRaw.length
+        ? Math.min(favoriteCategoryVisibleCountRaw, favoriteCategoriesRaw.length)
+        : 0;
+
+    const favoriteSellerCounts = state.individualFavoriteSellerVisibleCounts && typeof state.individualFavoriteSellerVisibleCounts === 'object'
+        ? state.individualFavoriteSellerVisibleCounts
+        : (state.individualFavoriteSellerVisibleCounts = Object.create(null));
+    const favoriteSellerVisibilityKey = account && account.id ? String(account.id) : '__unknown__';
+    let favoriteSellerVisibleCountRaw = Number.parseInt(favoriteSellerCounts[favoriteSellerVisibilityKey], 10);
+    if (!Number.isFinite(favoriteSellerVisibleCountRaw) || favoriteSellerVisibleCountRaw < FAVORITE_SELLER_PAGE_SIZE) {
+        favoriteSellerVisibleCountRaw = FAVORITE_SELLER_PAGE_SIZE;
+        favoriteSellerCounts[favoriteSellerVisibilityKey] = favoriteSellerVisibleCountRaw;
+    }
+    const favoriteSellerVisibleCount = favoriteSellersRaw.length
+        ? Math.min(favoriteSellerVisibleCountRaw, favoriteSellersRaw.length)
+        : 0;
+
+    const favoriteSearchCounts = state.individualFavoriteSearchVisibleCounts && typeof state.individualFavoriteSearchVisibleCounts === 'object'
+        ? state.individualFavoriteSearchVisibleCounts
+        : (state.individualFavoriteSearchVisibleCounts = Object.create(null));
+    const favoriteSearchVisibilityKey = account && account.id ? String(account.id) : '__unknown__';
+    let favoriteSearchVisibleCountRaw = Number.parseInt(favoriteSearchCounts[favoriteSearchVisibilityKey], 10);
+    if (!Number.isFinite(favoriteSearchVisibleCountRaw) || favoriteSearchVisibleCountRaw < FAVORITE_SEARCH_PAGE_SIZE) {
+        favoriteSearchVisibleCountRaw = FAVORITE_SEARCH_PAGE_SIZE;
+        favoriteSearchCounts[favoriteSearchVisibilityKey] = favoriteSearchVisibleCountRaw;
+    }
+    const favoriteSearchVisibleCount = favoriteSearchesRaw.length
+        ? Math.min(favoriteSearchVisibleCountRaw, favoriteSearchesRaw.length)
+        : 0;
+
+    const favoriteCategoriesMarkup = renderFavoriteCollection(
+        favoriteCategoriesRaw,
+        'No favorite categories saved.',
+        'category',
+        {
+            visibleCount: favoriteCategoryVisibleCount,
+            loadMoreAction: 'load-more-favorite-categories',
+            loadMoreAttributes: account && account.id ? { 'data-account-id': String(account.id) } : {}
         }
-        if (typeof entry === 'string' || typeof entry === 'number') {
-            const value = String(entry).trim();
-            return value;
+    );
+    const favoriteCategoriesCountLabel = `#${favoriteCategoriesRaw.length} ${favoriteCategoriesRaw.length === 1 ? 'Category' : 'Categories'}`;
+    const favoriteSellersMarkup = renderFavoriteCollection(
+        favoriteSellersRaw,
+        'No favorite sellers saved.',
+        'seller',
+        {
+            visibleCount: favoriteSellerVisibleCount,
+            loadMoreAction: 'load-more-favorite-sellers',
+            loadMoreAttributes: account && account.id ? { 'data-account-id': String(account.id) } : {}
         }
-        if (typeof entry === 'object') {
-            const candidates = [
-                entry.label,
-                entry.name,
-                entry.title,
-                entry.category,
-                entry.categoryName,
-                entry.section,
-                entry.seller,
-                entry.sellerName,
-                entry.storeName,
-                entry.search,
-                entry.query,
-                entry.value,
-                entry.id
-            ];
-            for (const candidate of candidates) {
-                if (typeof candidate === 'string' && candidate.trim()) {
-                    return candidate.trim();
-                }
+    );
+    const favoriteSellersCountLabel = `#${favoriteSellersRaw.length} ${favoriteSellersRaw.length === 1 ? 'Seller' : 'Sellers'}`;
+    const favoriteSearchesMarkup = renderFavoriteCollection(
+        favoriteSearchesRaw,
+        'No favorite searches saved.',
+        'search',
+        {
+            visibleCount: favoriteSearchVisibleCount,
+            loadMoreAction: 'load-more-favorite-searches',
+            loadMoreAttributes: account && account.id ? { 'data-account-id': String(account.id) } : {}
+        }
+    );
+    const favoriteSearchesCountLabel = `#${favoriteSearchesRaw.length} ${favoriteSearchesRaw.length === 1 ? 'Search' : 'Searches'}`;
+    const totalFollowUpsCount = favoriteCategoriesRaw.length + favoriteSellersRaw.length + favoriteSearchesRaw.length;
+    const followUpsCountLabel = `#${totalFollowUpsCount} Follow-ups`;
+
+    const formatPointsTransactionLabel = value => {
+        const raw = typeof value === 'string' ? value.trim() : '';
+        if (!raw) {
+            return 'Points Activity';
+        }
+        const transformToken = token => {
+            if (!token) {
+                return token;
             }
-        }
-        try {
-            const serialized = JSON.stringify(entry);
-            return typeof serialized === 'string' ? serialized : '';
-        } catch (error) {
-            return '';
-        }
-    };
-
-    const renderFavoriteDetails = entry => {
-        if (!entry || typeof entry !== 'object') {
-            return '';
-        }
-        const details = [];
-        if (entry.notes) {
-            details.push(`<div class="helper-text">${escapeHtml(String(entry.notes))}</div>`);
-        }
-        const lastVisited = entry.lastVisitedAt || entry.updatedAt || entry.savedAt || entry.createdAt;
-        if (lastVisited) {
-            const stamp = formatDateForDisplay(lastVisited, { includeTime: true }) || lastVisited;
-            details.push(`<div class="helper-text">Last visited ${escapeHtml(String(stamp))}</div>`);
-        }
-        const meta = entry.metadata || entry.meta;
-        if (meta && typeof meta === 'object') {
-            const metaEntries = Object.entries(meta)
-                .filter(([, value]) => value !== null && value !== undefined && value !== '')
-                .slice(0, 3)
-                .map(([key, value]) => `${formatKeyLabel(key)}: ${String(value)}`);
-            if (metaEntries.length) {
-                details.push(`<div class="helper-text">${escapeHtml(metaEntries.join(' | '))}</div>`);
+            const segments = token.match(/^([^a-zA-Z0-9]*)([a-zA-Z0-9][a-zA-Z0-9'_-]*)([^a-zA-Z0-9]*)$/);
+            if (!segments) {
+                return token.charAt(0).toUpperCase() + token.slice(1).toLowerCase();
             }
-        }
-        return details.join('');
+            const [, prefix, core, suffix] = segments;
+            if (core.toUpperCase() === core) {
+                return `${prefix}${core}${suffix}`;
+            }
+            const transformedCore = core
+                .split(/(-)/)
+                .map(piece => (piece === '-' ? piece : piece.charAt(0).toUpperCase() + piece.slice(1).toLowerCase()))
+                .join('');
+            return `${prefix}${transformedCore}${suffix}`;
+        };
+        return raw.split(/\s+/).map(transformToken).join(' ');
     };
-
-    const renderFavoriteCollection = (entries, emptyMessage) => {
-        const source = Array.isArray(entries) ? entries.filter(entry => entry !== null && entry !== undefined) : [];
-        const items = source
-            .map(entry => {
-                const label = normalizeFavoriteLabel(entry);
-                if (!label) {
-                    return null;
-                }
-                const detailsMarkup = renderFavoriteDetails(entry);
-                return `<li><div><strong>${escapeHtml(label)}</strong></div>${detailsMarkup}</li>`;
-            })
-            .filter(Boolean);
-        if (!items.length) {
-            return `<p class="helper-text">${escapeHtml(emptyMessage)}</p>`;
-        }
-        return `<ul class="detail-list">${items.join('')}</ul>`;
-    };
-
-    const favoriteCategoriesMarkup = renderFavoriteCollection(favoriteCategoriesRaw, 'No favorite categories saved.');
-    const favoriteSellersMarkup = renderFavoriteCollection(favoriteSellersRaw, 'No favorite sellers saved.');
-    const favoriteSearchesMarkup = renderFavoriteCollection(favoriteSearchesRaw, 'No favorite searches saved.');
 
     const renderPointsHistoryEntry = entry => {
         if (!entry || typeof entry !== 'object') {
-            return '<li><div><strong>Points activity</strong></div></li>';
+            return '<li><div><strong>Points Activity</strong></div></li>';
         }
-        const label = entry.label || 'Points activity';
+        const label = formatPointsTransactionLabel(entry.label) || 'Points Activity';
         const deltaValue = Number(entry.delta) || 0;
         const deltaLabel = Number.isFinite(deltaValue)
             ? (deltaValue > 0 ? `+${deltaValue.toLocaleString('en-US')}` : deltaValue.toLocaleString('en-US'))
@@ -23871,96 +27600,143 @@ function renderIndividualAccountDetail(account, { forceOpen = false } = {}) {
         const balanceAfterLabel = Number.isFinite(entry.balanceAfter) ? entry.balanceAfter.toLocaleString('en-US') : null;
         const timestampLabel = entry.timestamp ? formatDateForDisplay(entry.timestamp, { includeTime: true }) : null;
         const noteLine = entry.note ? `<div class="helper-text">${escapeHtml(entry.note)}</div>` : '';
-        return `<li><div><strong>${escapeHtml(label)}</strong></div><div class="helper-text">Delta: ${escapeHtml(deltaLabel)}</div>${balanceAfterLabel ? `<div class="helper-text">Balance: ${escapeHtml(balanceAfterLabel)}</div>` : ''}${timestampLabel ? `<div class="helper-text">Recorded ${escapeHtml(timestampLabel)}</div>` : ''}${noteLine}</li>`;
+        const metaParts = [];
+        if (deltaLabel) {
+            metaParts.push(`${escapeHtml(deltaLabel)}`);
+        }
+        if (timestampLabel) {
+            metaParts.push(`${escapeHtml(timestampLabel)}`);
+        }
+        const metaLine = metaParts.length ? `<div class="helper-text">${metaParts.join(' • ')}</div>` : '';
+        return `<li><div><strong>${escapeHtml(label)}</strong></div>${noteLine}${metaLine}${balanceAfterLabel ? `<div class="helper-text">Balance: ${escapeHtml(balanceAfterLabel)}</div>` : ''}</li>`;
     };
 
     const sortedPointsHistory = pointsHistory
         .slice()
         .sort((a, b) => Date.parse(b?.timestamp || '') - Date.parse(a?.timestamp || ''));
-    const recentPointsEntries = sortedPointsHistory.slice(0, 3);
-    const remainingPointsEntries = sortedPointsHistory.slice(3);
-    const pointsRecentMarkup = recentPointsEntries.length
-        ? `<ul class="detail-list">${recentPointsEntries.map(renderPointsHistoryEntry).join('')}</ul>`
-        : '<p class="helper-text">No points activity recorded.</p>';
-    const pointsMoreButtonMarkup = remainingPointsEntries.length
-        ? `<div class="detail-subsection detail-more-actions"><button type="button" class="btn btn-outline" data-action="show-more-points" data-target-id="individualPointsHistoryAll">More</button></div>`
-        : '';
-    const pointsHistoryRemainingMarkup = remainingPointsEntries.length
-        ? `<div class="detail-subsection hidden" id="individualPointsHistoryAll"><h5>Earlier Transactions</h5><ul class="detail-list">${remainingPointsEntries.map(renderPointsHistoryEntry).join('')}</ul></div>`
-        : '';
+    const pointsTransactionsChunkSize = 10;
+    const pointsVisibleCounts = state.individualPointsVisibleCounts && typeof state.individualPointsVisibleCounts === 'object'
+        ? state.individualPointsVisibleCounts
+        : (state.individualPointsVisibleCounts = Object.create(null));
+    const pointsVisibilityKey = account.id ? String(account.id) : '__unknown__';
+    let pointsVisibleCountRaw = Number.parseInt(pointsVisibleCounts[pointsVisibilityKey], 10);
+    if (!Number.isFinite(pointsVisibleCountRaw) || pointsVisibleCountRaw < pointsTransactionsChunkSize) {
+        pointsVisibleCountRaw = pointsTransactionsChunkSize;
+        pointsVisibleCounts[pointsVisibilityKey] = pointsVisibleCountRaw;
+    }
+    const pointsVisibleCount = sortedPointsHistory.length
+        ? Math.min(pointsVisibleCountRaw, sortedPointsHistory.length)
+        : 0;
+    const pointsVisibleTransactions = sortedPointsHistory.slice(0, pointsVisibleCount);
+    const pointsHasMoreTransactions = pointsVisibleCount < sortedPointsHistory.length;
 
-    const paymentCardItems = paymentCards.map(renderPaymentCardItem).filter(Boolean);
+    const recentPointsEntries = sortedPointsHistory.slice(0, 3);
+    const pointsRecentMarkup = '';
+    const pointsFullHistoryMarkup = pointsVisibleTransactions.length
+        ? `<ul class="detail-list">${pointsVisibleTransactions.map(renderPointsHistoryEntry).join('')}</ul>`
+        : '<p class="helper-text">No points activity recorded.</p>';
+    const pointsLoadMoreMarkup = pointsHasMoreTransactions
+        ? `<div class="detail-subsection detail-load-more"><button type="button" class="btn btn-outline" data-action="load-more-points-transactions"${account.id ? ` data-account-id="${escapeAttribute(String(account.id))}"` : ''} style="margin: auto;">More</button></div>`
+        : '';
+    const pointsTransactionCountLabel = sortedPointsHistory.length
+        ? `#${sortedPointsHistory.length} Transaction${sortedPointsHistory.length === 1 ? '' : 's'}`
+        : '#0 Transactions';
+    const pointsUpdatedLabel = account.pointsUpdatedAt
+        ? (formatDateForDisplay(account.pointsUpdatedAt, { includeTime: true }) || '—')
+        : '—';
+
+    const resolvePaymentTimestamp = entry => {
+        if (!entry || typeof entry !== 'object') {
+            return 0;
+        }
+        const candidates = [entry.addedAt, entry.createdAt, entry.updatedAt, entry.modifiedAt, entry.lastUpdated];
+        for (const value of candidates) {
+            const stamp = Date.parse(value || '');
+            if (Number.isFinite(stamp)) {
+                return stamp;
+            }
+        }
+        return 0;
+    };
+
+    const sortedPaymentCards = paymentCards
+        .slice()
+        .sort((a, b) => resolvePaymentTimestamp(b) - resolvePaymentTimestamp(a));
+    const paymentMethodsChunkSize = 3;
+    const paymentVisibleCounts = state.individualPaymentMethodVisibleCounts && typeof state.individualPaymentMethodVisibleCounts === 'object'
+        ? state.individualPaymentMethodVisibleCounts
+        : (state.individualPaymentMethodVisibleCounts = Object.create(null));
+    const paymentVisibilityKey = account && account.id ? String(account.id) : '__unknown__';
+    let paymentVisibleCountRaw = Number.parseInt(paymentVisibleCounts[paymentVisibilityKey], 10);
+    if (!Number.isFinite(paymentVisibleCountRaw) || paymentVisibleCountRaw < paymentMethodsChunkSize) {
+        paymentVisibleCountRaw = paymentMethodsChunkSize;
+        paymentVisibleCounts[paymentVisibilityKey] = paymentVisibleCountRaw;
+    }
+    const paymentVisibleCount = sortedPaymentCards.length
+        ? Math.min(paymentVisibleCountRaw, sortedPaymentCards.length)
+        : 0;
+    const visiblePaymentCards = sortedPaymentCards.slice(0, paymentVisibleCount);
+    const paymentHasMoreMethods = paymentVisibleCount < sortedPaymentCards.length;
+    const paymentCardItems = visiblePaymentCards.map(renderPaymentCardItem).filter(Boolean);
     const paymentCardsMarkup = paymentCardItems.length
         ? `<ul class="detail-list">${paymentCardItems.join('')}</ul>`
-        : '<p class="helper-text">No payment cards on file.</p>';
-    const savedAddressItems = savedAddresses.map(renderSavedAddressItem).filter(Boolean);
+        : '<p class="helper-text">No saved payment methods on file.</p>';
+    const paymentMethodsLoadMoreMarkup = paymentHasMoreMethods
+        ? `<div class="detail-subsection detail-load-more"><button type="button" class="btn btn-outline" data-action="load-more-payment-methods"${account && account.id ? ` data-account-id="${escapeAttribute(String(account.id))}"` : ''} style="margin: auto;">More</button></div>`
+        : '';
+    const paymentMethodsCountLabel = sortedPaymentCards.length
+        ? `#${sortedPaymentCards.length} Method${sortedPaymentCards.length === 1 ? '' : 's'}`
+        : '#0 Methods';
+    const sortedSavedAddresses = normalizedSavedAddresses
+        .slice()
+        .sort((a, b) => resolveSavedAddressAddedTimestamp(b).time - resolveSavedAddressAddedTimestamp(a).time);
+    const savedAddressesChunkSize = 3;
+    const savedAddressVisibleCounts = state.individualSavedAddressVisibleCounts && typeof state.individualSavedAddressVisibleCounts === 'object'
+        ? state.individualSavedAddressVisibleCounts
+        : (state.individualSavedAddressVisibleCounts = Object.create(null));
+    const savedAddressVisibilityKey = account && account.id ? String(account.id) : '__unknown__';
+    let savedAddressVisibleCountRaw = Number.parseInt(savedAddressVisibleCounts[savedAddressVisibilityKey], 10);
+    if (!Number.isFinite(savedAddressVisibleCountRaw) || savedAddressVisibleCountRaw < savedAddressesChunkSize) {
+        savedAddressVisibleCountRaw = savedAddressesChunkSize;
+        savedAddressVisibleCounts[savedAddressVisibilityKey] = savedAddressVisibleCountRaw;
+    }
+    const savedAddressVisibleCount = sortedSavedAddresses.length
+        ? Math.min(savedAddressVisibleCountRaw, sortedSavedAddresses.length)
+        : 0;
+    const visibleSavedAddresses = sortedSavedAddresses.slice(0, savedAddressVisibleCount);
+    const savedAddressesHasMore = savedAddressVisibleCount < sortedSavedAddresses.length;
+    const savedAddressItems = visibleSavedAddresses.map(renderSavedAddressItem).filter(Boolean);
     const savedAddressesMarkup = savedAddressItems.length
         ? `<ul class="detail-list">${savedAddressItems.join('')}</ul>`
         : '<p class="helper-text">No saved addresses found.</p>';
-
-    const sellerRatingSummary = computeRatingSummary(sellerRatingsSource, [
-        account.sellerRating,
-        account.sellerScore,
-        account.averageSellerRating,
-        marketplaceActivity.sellerRating,
-        marketplaceActivity.sellerScore,
-        marketplaceActivity.averageSellerRating
-    ]);
-    const buyerRatingSummary = computeRatingSummary(buyerRatingsSource, [
-        account.buyerRating,
-        account.buyerScore,
-        account.averageBuyerRating,
-        marketplaceActivity.buyerRating,
-        marketplaceActivity.buyerScore,
-        marketplaceActivity.averageBuyerRating
-    ]);
-    const sellerRatingScoreLabel = formatRatingScore(sellerRatingSummary);
-    const buyerRatingScoreLabel = formatRatingScore(buyerRatingSummary);
-    const sellerRatingTooltip = formatRatingSummary(sellerRatingSummary);
-    const buyerRatingTooltip = formatRatingSummary(buyerRatingSummary);
-    const sellerRatingFaceMarkup = buildRatingFaceMarkup(
-        Number.isFinite(sellerRatingSummary.average) ? sellerRatingSummary.average : null,
-        'Seller rating'
-    );
-    const buyerRatingFaceMarkup = buildRatingFaceMarkup(
-        Number.isFinite(buyerRatingSummary.average) ? buyerRatingSummary.average : null,
-        'Buyer rating'
-    );
-    const sellerRatingCountMarkup = sellerRatingSummary.count && sellerRatingSummary.count > 0
-        ? `<div class="helper-text">${escapeHtml(`${sellerRatingSummary.count} rating${sellerRatingSummary.count === 1 ? '' : 's'}`)}</div>`
-        : (!Number.isFinite(sellerRatingSummary.average)
-            ? '<div class="helper-text">No ratings yet</div>'
-            : '');
-    const buyerRatingCountMarkup = buyerRatingSummary.count && buyerRatingSummary.count > 0
-        ? `<div class="helper-text">${escapeHtml(`${buyerRatingSummary.count} rating${buyerRatingSummary.count === 1 ? '' : 's'}`)}</div>`
-        : (!Number.isFinite(buyerRatingSummary.average)
-            ? '<div class="helper-text">No ratings yet</div>'
-            : '');
-
-    const supportRequestsMarkup = supportRequests.length
-        ? `<ul class="detail-list">${supportRequests
-            .slice()
-            .sort((a, b) => Date.parse(b.requestedAt || '') - Date.parse(a.requestedAt || ''))
-            .map(request => {
-                const requested = formatDateForDisplay(request.requestedAt, { includeTime: true }) || 'Unknown date';
-                const expires = request.expiresAt ? formatDateForDisplay(request.expiresAt, { includeTime: true }) : null;
-                const normalizedStatus = (request.status || '').toLowerCase();
-                const statusClass = normalizedStatus === 'approved' ? 'success' : normalizedStatus === 'pending' ? 'warning' : 'neutral';
-                return `<li><div><strong>${escapeHtml(request.reason || 'Support access')}</strong></div><div class="helper-text">Requested ${escapeHtml(requested)}</div>${expires ? `<div class="helper-text">Expires ${escapeHtml(expires)}</div>` : ''}<span class="helper-chip ${statusClass}">${escapeHtml((request.status || '').toUpperCase())}</span></li>`;
-            }).join('')}</ul>`
-        : '<p class="helper-text">No support requests recorded.</p>';
-
-    const profilePicture = account.profilePicture
-        || signupProfile.avatarUrl
-        || signupProfile.photoDataUrl
-        || signupProfile.profilePhoto
-        || '';
-    const avatarAlt = `${displayName} profile picture`;
-    const avatarMarkup = profilePicture
-        ? `<img src="${escapeAttribute(profilePicture)}" alt="${escapeAttribute(avatarAlt)}">`
-        : `<span>${escapeHtml(getInitials(displayName))}</span>`;
+    const savedAddressesCountLabel = sortedSavedAddresses.length
+        ? `#${sortedSavedAddresses.length} Address${sortedSavedAddresses.length === 1 ? '' : 'es'}`
+        : '#0 Addresses';
+    const savedAddressesLoadMoreMarkup = savedAddressesHasMore
+        ? `<div class="detail-subsection detail-load-more"><button type="button" class="btn btn-outline" data-action="load-more-saved-addresses"${account && account.id ? ` data-account-id="${escapeAttribute(String(account.id))}"` : ''} style="margin: auto;">More</button></div>`
+        : '';
 
     const genderRaw = account.gender || signupProfile.gender || '';
+    const normalizedGender = typeof genderRaw === 'string' ? genderRaw.trim().toLowerCase() : '';
+
+    const pictureCandidates = [
+        account.profilePicture,
+        signupProfile.avatarUrl,
+        signupProfile.photoDataUrl,
+        signupProfile.profilePhoto
+    ];
+    const profilePicture = pictureCandidates.find(candidate => typeof candidate === 'string' && candidate.trim())?.trim() || '';
+    const fallbackAvatarSrc = getUserAvatarUrl(normalizedGender);
+    const avatarSrc = profilePicture || fallbackAvatarSrc;
+    const avatarAlt = profilePicture
+        ? `${displayName} profile picture`
+        : normalizedGender === 'male'
+            ? `Default male profile avatar for ${displayName}`
+            : normalizedGender === 'female'
+                ? `Default female profile avatar for ${displayName}`
+                : `Default profile avatar for ${displayName}`;
+    const avatarMarkup = `<img src="${escapeAttribute(avatarSrc)}" alt="${escapeAttribute(avatarAlt)}">`;
+
     const genderLabel = genderRaw ? formatKeyLabel(genderRaw) : '—';
     const phoneNumber = account.mobile || signupProfile.phone || signupProfile.mobile || signupRecord?.phone || '';
 
@@ -23974,127 +27750,155 @@ function renderIndividualAccountDetail(account, { forceOpen = false } = {}) {
     const lastLoginSource = account.lastActiveAt || signupRecord?.lastLoginAt;
     const lastLoginLabel = formatDateForDisplay(lastLoginSource, { includeTime: true }) || '—';
     const accountUsername = account.username || account.userName || signupRecord?.userName || signupProfile.userName || '';
+    const accountEmailRaw = account.email || signupProfile.email || signupRecord?.email || '';
+    const accountEmailDisplay = (() => {
+        const trimmed = typeof accountEmailRaw === 'string' ? accountEmailRaw.trim() : '';
+        if (!trimmed) {
+            return '';
+        }
+        const atIndex = trimmed.indexOf('@');
+        const localPart = atIndex >= 0 ? trimmed.slice(0, atIndex) : trimmed;
+        const fallbackLocal = accountUsername || account.id || 'user';
+        const normalizedLocal = localPart || fallbackLocal;
+        return `${normalizedLocal}@onruf.com`;
+    })();
     const invitationCode = account.invitationCode || (account.invitation && (account.invitation.code || account.invitation.token)) || '';
     const pointsBalanceValue = Number.isFinite(account.pointsBalance) ? account.pointsBalance : 0;
     const pointsBalanceLabel = Number.isFinite(pointsBalanceValue) ? pointsBalanceValue.toLocaleString('en-US') : '0';
 
     if (subtitleEl) {
         const statusDisplay = getIndividualAccountStatusLabel(account.status) || 'Inactive';
-        subtitleEl.textContent = statusDisplay;
+        const automationIdentifier = resolveIndividualAccountAutomationIdentifier(account);
+        const automationDetails = automationIdentifier ? findAutomationListEntryForAccount(automationIdentifier) : null;
+        const publishingListLabel = automationDetails && automationDetails.listType
+            ? (PUBLISHING_LIST_LABELS[automationDetails.listType] || formatKeyLabel(automationDetails.listType))
+            : '';
+        const subtitleParts = [statusDisplay];
+        if (publishingListLabel) {
+            subtitleParts.push(publishingListLabel);
+        }
+        subtitleEl.textContent = subtitleParts.join(' • ');
     }
 
     body.innerHTML = `
-        <section class="detail-section">
-            <h4>User Info</h4>
-            <div class="account-profile-row">
-                <div class="account-avatar-card">
-                    <div class="account-avatar" aria-label="${escapeAttribute(avatarAlt)}">
-                        ${avatarMarkup}
+        <div class="detail-main" id="individualAccountDetailMain">
+            <section class="detail-section">
+                <h4>User Info</h4>
+                <div class="account-profile-row">
+                    <div class="account-avatar-card">
+                        <div class="account-avatar" aria-label="${escapeAttribute(avatarAlt)}">
+                            ${avatarMarkup}
+                        </div>
+                    </div>
+                    <div class="detail-grid">
+                        <div><dt>First Name</dt><dd>${firstName ? escapeHtml(firstName) : '—'}</dd></div>
+                        <div><dt>Last Name</dt><dd>${lastName ? escapeHtml(lastName) : '—'}</dd></div>
+                        <div><dt>Gender</dt><dd>${genderLabel !== '—' ? escapeHtml(genderLabel) : '—'}</dd></div>
+                        <div><dt>Phone Number</dt><dd>${phoneNumber ? escapeHtml(phoneNumber) : '—'}</dd></div>
+                        <div><dt>Date of Birth</dt><dd>${dateOfBirthLabel !== '—' ? escapeHtml(dateOfBirthLabel) : '—'}</dd></div>
+                        <div><dt>Age</dt><dd>${ageLabel !== '—' ? escapeHtml(ageLabel) : '—'}</dd></div>
+                        <div class="detail-grid-full">
+                            <dt>Address</dt>
+                            <dd>${addressPrimary ? escapeHtml(addressPrimary) : '—'}</dd>
+                            ${addressSecondary ? `<div class="helper-text">${escapeHtml(addressSecondary)}</div>` : ''}
+                        </div>
                     </div>
                 </div>
+            </section>
+            <section class="detail-section">
+                <h4>Account Info</h4>
                 <div class="detail-grid">
-                    <div><dt>First Name</dt><dd>${firstName ? escapeHtml(firstName) : '—'}</dd></div>
-                    <div><dt>Last Name</dt><dd>${lastName ? escapeHtml(lastName) : '—'}</dd></div>
-                    <div><dt>Gender</dt><dd>${genderLabel !== '—' ? escapeHtml(genderLabel) : '—'}</dd></div>
-                    <div><dt>Phone Number</dt><dd>${phoneNumber ? escapeHtml(phoneNumber) : '—'}</dd></div>
-                    <div><dt>Date of Birth</dt><dd>${dateOfBirthLabel !== '—' ? escapeHtml(dateOfBirthLabel) : '—'}</dd></div>
-                    <div><dt>Age</dt><dd>${ageLabel !== '—' ? escapeHtml(ageLabel) : '—'}</dd></div>
-                    <div class="detail-grid-full">
-                        <dt>Address</dt>
-                        <dd>${addressPrimary ? escapeHtml(addressPrimary) : '—'}</dd>
-                        ${addressSecondary ? `<div class="helper-text">${escapeHtml(addressSecondary)}</div>` : ''}
-                    </div>
+                    <div><dt>ID</dt><dd>${account.id ? escapeHtml(account.id) : '—'}</dd></div>
+                    <div><dt>User Name</dt><dd>${accountUsername ? escapeHtml(accountUsername) : '—'}</dd></div>
+                    <div><dt>E-Mail</dt><dd>${accountEmailDisplay ? escapeHtml(accountEmailDisplay) : '—'}</dd></div>
+                    <div><dt>Member since</dt><dd>${memberSinceLabel !== '—' ? escapeHtml(memberSinceLabel) : '—'}</dd></div>
+                    <div><dt>Last Login</dt><dd>${lastLoginLabel !== '—' ? escapeHtml(lastLoginLabel) : '—'}</dd></div>
+                </div>
+            </section>
+            <section class="detail-section">
+                <h4>My Wallet</h4>
+                <div class="detail-grid">
+                    <div><dt>Total Balance</dt><dd>${escapeHtml(walletTotalLabel)}</dd></div>
+                    <div><dt>Available Balance</dt><dd>${escapeHtml(walletAvailableLabel)}</dd></div>
+                    <div><dt>Pending Balance</dt><dd>${escapeHtml(walletPendingLabel)}</dd></div>
+                    <div><dt>Currency</dt><dd>${escapeHtml(walletCurrencyLabel)}</dd></div>
+                    <div><dt>Last Updated</dt><dd>${escapeHtml(walletUpdatedLabel)}</dd></div>
+                </div>
+                <div class="detail-subsection">
+                    <h5><button type="button" class="detail-link-button" data-action="open-wallet-transactions" aria-controls="individualAccountWalletPage">Recent Transactions</button></h5>
+                    ${walletRecentMarkup}
+                </div>
+                ${walletMoreButtonMarkup}
+                ${walletTransactionsRemainingMarkup}
+            </section>
+            <section class="detail-section">
+                <h4>My Points</h4>
+                <div class="detail-grid">
+                    <div><dt>Current Balance</dt><dd>${escapeHtml(pointsBalanceLabel)}</dd></div>
+                    <div><dt>Invitation Code</dt><dd>${invitationCode ? escapeHtml(invitationCode) : '—'}</dd></div>
+                    <div><dt>Last Updated</dt><dd>${pointsUpdatedLabel !== '—' ? escapeHtml(pointsUpdatedLabel) : '—'}</dd></div>
+                </div>
+                <div class="detail-subsection">
+                    <h5><button type="button" class="detail-link-button" data-action="open-points-transactions" aria-controls="individualAccountPointsPage">Recent Transactions</button></h5>
+                    ${pointsRecentMarkup}
+                </div>
+            </section>
+            <section class="detail-section">
+                <h4>Payment Methods <span class="detail-count-label">${escapeHtml(paymentMethodsCountLabel)}</span></h4>
+                ${paymentCardsMarkup}
+                ${paymentMethodsLoadMoreMarkup}
+            </section>
+            <section class="detail-section">
+                <h4>Saved Addresses <span class="detail-count-label">${escapeHtml(savedAddressesCountLabel)}</span></h4>
+                ${savedAddressesMarkup}
+                ${savedAddressesLoadMoreMarkup}
+            </section>
+            <section class="detail-section">
+                <h4>Follow-ups <span class="detail-count-label">${escapeHtml(followUpsCountLabel)}</span></h4>
+                <div class="detail-subsection">
+                    <h5>Favorite Categories <span class="detail-count-label">${escapeHtml(favoriteCategoriesCountLabel)}</span></h5>
+                    ${favoriteCategoriesMarkup}
+                </div>
+                <div class="detail-subsection">
+                    <h5>Favorite Sellers <span class="detail-count-label">${escapeHtml(favoriteSellersCountLabel)}</span></h5>
+                    ${favoriteSellersMarkup}
+                </div>
+                <div class="detail-subsection">
+                    <h5>Favorite Searches <span class="detail-count-label">${escapeHtml(favoriteSearchesCountLabel)}</span></h5>
+                    ${favoriteSearchesMarkup}
+                </div>
+            </section>
+        </div>
+        <div class="detail-subpage hidden" id="individualAccountWalletPage" aria-hidden="true">
+            <div class="detail-subpage-header">
+                <button type="button" class="btn btn-outline detail-back-btn" data-action="close-wallet-transactions" aria-controls="individualAccountDetailMain">Back to Account Details</button>
+                <div class="detail-subpage-title">
+                    <h4>Wallet Transactions <span class="detail-count-label">${escapeHtml(walletTransactionCountLabel)}</span></h4>
+                    <p class="helper-text">Full wallet activity for ${escapeHtml(displayName)}.</p>
                 </div>
             </div>
-        </section>
-        <section class="detail-section">
-            <h4>Account Info</h4>
-            <div class="detail-grid">
-                <div><dt>ID</dt><dd>${account.id ? escapeHtml(account.id) : '—'}</dd></div>
-                <div><dt>User Name</dt><dd>${accountUsername ? escapeHtml(accountUsername) : '—'}</dd></div>
-                <div><dt>E-Mail</dt><dd>${account.email ? escapeHtml(account.email) : '—'}</dd></div>
-                <div><dt>Member since</dt><dd>${memberSinceLabel !== '—' ? escapeHtml(memberSinceLabel) : '—'}</dd></div>
-                <div><dt>Last Login</dt><dd>${lastLoginLabel !== '—' ? escapeHtml(lastLoginLabel) : '—'}</dd></div>
+            <div class="detail-subpage-body">
+                <section class="detail-section">
+                    ${walletFullHistoryMarkup}
+                    ${walletLoadMoreMarkup}
+                </section>
             </div>
-        </section>
-        <section class="detail-section">
-            <h4>Rating</h4>
-            <div class="detail-grid">
-                <div>
-                    <dt>Seller</dt>
-                    <dd>
-                        <div class="rating-display" title="${escapeAttribute(sellerRatingTooltip)}">
-                            <span class="rating-score">${escapeHtml(sellerRatingScoreLabel)}</span>
-                            ${sellerRatingFaceMarkup}
-                        </div>
-                        ${sellerRatingCountMarkup}
-                    </dd>
-                </div>
-                <div>
-                    <dt>Buyer</dt>
-                    <dd>
-                        <div class="rating-display" title="${escapeAttribute(buyerRatingTooltip)}">
-                            <span class="rating-score">${escapeHtml(buyerRatingScoreLabel)}</span>
-                            ${buyerRatingFaceMarkup}
-                        </div>
-                        ${buyerRatingCountMarkup}
-                    </dd>
+        </div>
+    <div class="detail-subpage hidden" id="individualAccountPointsPage" aria-hidden="true">
+            <div class="detail-subpage-header">
+                <button type="button" class="btn btn-outline detail-back-btn" data-action="close-points-transactions" aria-controls="individualAccountDetailMain">Back to Account Details</button>
+                <div class="detail-subpage-title">
+                    <h4>Points Transactions <span class="detail-count-label">${escapeHtml(pointsTransactionCountLabel)}</span></h4>
+                    <p class="helper-text">Comprehensive Points history for ${escapeHtml(displayName)}.</p>
                 </div>
             </div>
-        </section>
-        <section class="detail-section">
-            <h4>My Wallet</h4>
-            <div class="detail-grid">
-                <div><dt>Available Balance</dt><dd>${escapeHtml(walletAvailableLabel)}</dd></div>
-                <div><dt>Pending Balance</dt><dd>${escapeHtml(walletPendingLabel)}</dd></div>
+            <div class="detail-subpage-body">
+                <section class="detail-section">
+                    ${pointsFullHistoryMarkup}
+                    ${pointsLoadMoreMarkup}
+                </section>
             </div>
-            <div class="detail-subsection">
-                <h5>Recent Transactions</h5>
-                ${walletRecentMarkup}
-            </div>
-            ${walletMoreButtonMarkup}
-            ${walletTransactionsRemainingMarkup}
-        </section>
-        <section class="detail-section">
-            <h4>Payment Cards</h4>
-            ${paymentCardsMarkup}
-        </section>
-        <section class="detail-section">
-            <h4>Saved Addresses</h4>
-            ${savedAddressesMarkup}
-        </section>
-        <section class="detail-section">
-            <h4>My Points</h4>
-            <div class="detail-grid">
-                <div><dt>Current Balance</dt><dd>${escapeHtml(pointsBalanceLabel)}</dd></div>
-                <div><dt>Invitation Code</dt><dd>${invitationCode ? escapeHtml(invitationCode) : '—'}</dd></div>
-            </div>
-            <div class="detail-subsection">
-                <h5>Recent Transactions</h5>
-                ${pointsRecentMarkup}
-            </div>
-            ${pointsMoreButtonMarkup}
-            ${pointsHistoryRemainingMarkup}
-        </section>
-        <section class="detail-section">
-            <h4>Follow-ups</h4>
-            <div class="detail-subsection">
-                <h5>Favorite Categories</h5>
-                ${favoriteCategoriesMarkup}
-            </div>
-            <div class="detail-subsection">
-                <h5>Favorite Sellers</h5>
-                ${favoriteSellersMarkup}
-            </div>
-            <div class="detail-subsection">
-                <h5>Favorite Searches</h5>
-                ${favoriteSearchesMarkup}
-            </div>
-        </section>
-        <section class="detail-section">
-            <h4>Support Requests</h4>
-            ${supportRequestsMarkup}
-        </section>
+        </div>
     `;
 
     renderIndividualAccountQuickActions(account);
@@ -24122,6 +27926,18 @@ function openIndividualAccountDetail(accountId, { forceOpen = true } = {}) {
 }
 
 function closeIndividualAccountDetailOverlay() {
+    if (state.individualWalletVisibleCounts && typeof state.individualWalletVisibleCounts === 'object' && state.activeIndividualAccountId !== null && state.activeIndividualAccountId !== undefined) {
+        delete state.individualWalletVisibleCounts[String(state.activeIndividualAccountId)];
+    }
+    if (state.individualPointsVisibleCounts && typeof state.individualPointsVisibleCounts === 'object' && state.activeIndividualAccountId !== null && state.activeIndividualAccountId !== undefined) {
+        delete state.individualPointsVisibleCounts[String(state.activeIndividualAccountId)];
+    }
+    if (state.individualPaymentMethodVisibleCounts && typeof state.individualPaymentMethodVisibleCounts === 'object' && state.activeIndividualAccountId !== null && state.activeIndividualAccountId !== undefined) {
+        delete state.individualPaymentMethodVisibleCounts[String(state.activeIndividualAccountId)];
+    }
+    if (state.individualSavedAddressVisibleCounts && typeof state.individualSavedAddressVisibleCounts === 'object' && state.activeIndividualAccountId !== null && state.activeIndividualAccountId !== undefined) {
+        delete state.individualSavedAddressVisibleCounts[String(state.activeIndividualAccountId)];
+    }
     renderIndividualAccountDetail(null);
 }
 
@@ -24202,6 +28018,458 @@ async function handleIndividualAccountsDeleteAllRequest() {
     showNotification('success', 'All individual accounts deleted.');
 }
 
+function handleIndividualAccountsSeedRequest() {
+    try {
+        const ensureArray = value => (Array.isArray(value) ? value : []);
+        const createSlug = value => {
+            if (value === null || value === undefined) {
+                return '';
+            }
+            const stringValue = String(value);
+            const normalized = typeof stringValue.normalize === 'function'
+                ? stringValue.normalize('NFKD')
+                : stringValue;
+            return normalized
+                .toLowerCase()
+                .replace(/[^a-z0-9]+/g, '-')
+                .replace(/^-+|-+$/g, '');
+        };
+        const generateSequentialIdentifier = (usedIds, prefix) => {
+            const normalizedPrefix = `${String(prefix || '').toUpperCase()}-`;
+            const pattern = new RegExp(`^${normalizedPrefix.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&')}(\\d+)$`, 'i');
+            let maxValue = 0;
+            usedIds.forEach(value => {
+                const match = String(value || '').toUpperCase().match(pattern);
+                if (match) {
+                    const parsed = Number.parseInt(match[1], 10);
+                    if (Number.isFinite(parsed) && parsed > maxValue) {
+                        maxValue = parsed;
+                    }
+                }
+            });
+            let candidate = maxValue + 1;
+            for (let attempt = 0; attempt < 500; attempt += 1) {
+                const candidateId = `${normalizedPrefix}${String(candidate).padStart(4, '0')}`;
+                const normalizedCandidate = candidateId.toUpperCase();
+                if (!usedIds.has(normalizedCandidate)) {
+                    usedIds.add(normalizedCandidate);
+                    return normalizedCandidate;
+                }
+                candidate += 1;
+            }
+            const fallback = `${normalizedPrefix}${Date.now().toString()}`.toUpperCase();
+            usedIds.add(fallback);
+            return fallback;
+        };
+        const collectExistingInvitationCodes = () => {
+            const codes = new Set();
+            const register = value => {
+                if (typeof value !== 'string') {
+                    return;
+                }
+                const trimmed = value.trim();
+                if (trimmed) {
+                    codes.add(trimmed.toUpperCase());
+                }
+            };
+            ensureArray(individualAccounts).forEach(account => {
+                if (!account) return;
+                register(account.invitationCode);
+                if (account.invitation && typeof account.invitation === 'object') {
+                    register(account.invitation.code);
+                    register(account.invitation.token);
+                }
+            });
+            ensureArray(individualSignupRecords).forEach(record => {
+                if (!record) return;
+                register(record.generatedInviteCode);
+                register(record.invitationCode);
+            });
+            return codes;
+        };
+        const generateUniqueInvitationCode = (existingCodes, prefix = 'INV', length = 8) => {
+            const codesSet = existingCodes instanceof Set ? existingCodes : new Set();
+            const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+            const normalizedPrefix = String(prefix || 'INV').toUpperCase();
+            for (let attempt = 0; attempt < 50; attempt += 1) {
+                let code = '';
+                for (let index = 0; index < length; index += 1) {
+                    const randomIndex = Math.floor(Math.random() * alphabet.length);
+                    code += alphabet.charAt(randomIndex);
+                }
+                const candidate = `${normalizedPrefix}-${code}`;
+                if (!codesSet.has(candidate.toUpperCase())) {
+                    return candidate;
+                }
+            }
+            return `${normalizedPrefix}-${Date.now().toString(36).toUpperCase().padStart(length, '0').slice(-length)}`;
+        };
+
+        const now = new Date();
+        const nowIso = now.toISOString();
+
+        individualAccounts = ensureArray(individualAccounts);
+        businessAccounts = ensureArray(businessAccounts);
+        individualSignupRecords = ensureArray(individualSignupRecords);
+
+        const existingIndividualIds = new Set(individualAccounts
+            .map(account => (account && typeof account.id === 'string') ? account.id.trim().toUpperCase() : '')
+            .filter(Boolean));
+        const existingBusinessIds = new Set(businessAccounts
+            .map(account => (account && typeof account.id === 'string') ? account.id.trim().toUpperCase() : '')
+            .filter(Boolean));
+
+        const individualId = generateSequentialIdentifier(existingIndividualIds, 'IND');
+        const numericSeedMatch = individualId.match(/(\d+)$/);
+        const numericSeed = numericSeedMatch ? Number.parseInt(numericSeedMatch[1], 10) : Math.floor(Math.random() * 10000);
+
+        const seedFirstNames = ['Layla', 'Omar', 'Sara', 'Hassan', 'Fatimah', 'Yousef', 'Maya', 'Tariq', 'Noor', 'Khalid'];
+        const seedLastNames = ['Al-Rashid', 'Al-Qahtani', 'Al-Mutairi', 'Al-Saud', 'Al-Harbi', 'Al-Zahrani', 'Al-Anazi', 'Al-Otaibi', 'Al-Shehri', 'Al-Mansour'];
+        const seedGenderMap = {
+            Layla: 'female',
+            Omar: 'male',
+            Sara: 'female',
+            Hassan: 'male',
+            Fatimah: 'female',
+            Yousef: 'male',
+            Maya: 'female',
+            Tariq: 'male',
+            Noor: 'female',
+            Khalid: 'male'
+        };
+        const seedCities = ['Riyadh', 'Jeddah', 'Dammam', 'Khobar', 'Madinah', 'Tabuk', 'Abha', 'Buraydah'];
+        const cityRegionMap = {
+            Riyadh: 'Riyadh Province',
+            Jeddah: 'Makkah Province',
+            Dammam: 'Eastern Province',
+            Khobar: 'Eastern Province',
+            Madinah: 'Madinah Province',
+            Tabuk: 'Tabuk Province',
+            Abha: 'Asir Province',
+            Buraydah: 'Qassim Province'
+        };
+        const cityAddressProfiles = {
+            Riyadh: {
+                districts: ['Al Olaya', 'Al Nakheel', 'Al Malaz', 'King Abdullah District'],
+                streets: ['King Fahd Road', 'Takhassusi Street', 'Olaya Street', 'Al Imam Saud Ibn Abdul Aziz Road'],
+                postalCodes: ['12212', '12332', '11433']
+            },
+            Jeddah: {
+                districts: ['Al Andalus', 'Al Zahra', 'Al Rawdah', 'Al Hamra'],
+                streets: ['Prince Sultan Road', 'King Abdulaziz Road', 'Palestine Street', 'Corniche Road'],
+                postalCodes: ['23326', '23424', '22234']
+            },
+            Dammam: {
+                districts: ['Al Faisaliah', 'Al Shula', 'Al Khalidiyah', 'Al Hamra'],
+                streets: ['King Saud Street', 'King Fahd Road', 'Prince Nayef Road'],
+                postalCodes: ['32271', '32414', '32423']
+            },
+            Khobar: {
+                districts: ['Al Khobar Al Shamalia', 'Al Aqrabiyah', 'Al Ulaya'],
+                streets: ['Prince Faisal Bin Fahd Road', 'Prince Turkey Street', 'King Abdulaziz Street'],
+                postalCodes: ['31952', '34611', '34448']
+            },
+            Madinah: {
+                districts: ['Qurban', 'Al Madinah Central', 'Bani Khidrah'],
+                streets: ['King Faisal Road', 'Sultana Street', 'Quba Road'],
+                postalCodes: ['42316', '42313', '42311']
+            },
+            Tabuk: {
+                districts: ['Al Iskan', 'Al Taif', 'Al Faisaliyah'],
+                streets: ['King Fahd Road', 'Prince Sultan Road', 'King Abdulaziz Road'],
+                postalCodes: ['47712', '47711', '47512']
+            },
+            Abha: {
+                districts: ['Al Aziziyah', 'Al Manhal', 'Al Shamasan'],
+                streets: ['King Abdulaziz Road', 'Al Saadah Street', 'Prince Sultan Road'],
+                postalCodes: ['62521', '62523', '62564']
+            },
+            Buraydah: {
+                districts: ['Al Iskan', 'Al Nahdah', 'Al Shifa'],
+                streets: ['King Abdulaziz Road', 'Prince Faisal Bin Bandar Road', 'King Fahd Road'],
+                postalCodes: ['52385', '52261', '52366']
+            }
+        };
+
+        const firstName = seedFirstNames[numericSeed % seedFirstNames.length];
+        const lastName = seedLastNames[numericSeed % seedLastNames.length];
+        const fullName = `${firstName} ${lastName}`;
+        const city = seedCities[numericSeed % seedCities.length];
+        const region = cityRegionMap[city] || DEFAULT_ADDRESS_REGION;
+        const cityProfile = cityAddressProfiles[city] || cityAddressProfiles.Riyadh;
+        const resolveProfileValue = (collection, fallback) => {
+            if (!Array.isArray(collection) || !collection.length) {
+                return fallback;
+            }
+            return collection[numericSeed % collection.length] || fallback;
+        };
+        const district = resolveProfileValue(cityProfile.districts, 'Central District');
+        const streetName = resolveProfileValue(cityProfile.streets, 'Main Street');
+        const streetNumber = String(10 + (numericSeed % 60));
+        const zipCode = resolveProfileValue(cityProfile.postalCodes, '12212');
+        const gender = seedGenderMap[firstName] || (numericSeed % 2 === 0 ? 'female' : 'male');
+        const minimumAgeYears = 22;
+        const maximumAgeYears = 48;
+        const ageSpan = maximumAgeYears - minimumAgeYears + 1;
+        const ageYears = minimumAgeYears + (numericSeed % ageSpan);
+        const birthMonth = numericSeed % 12;
+        const birthDay = Math.min(28, (numericSeed % 28) + 1);
+        const birthYear = now.getUTCFullYear() - ageYears;
+        const dateOfBirthIso = new Date(Date.UTC(birthYear, birthMonth, birthDay)).toISOString();
+
+        const usernameRoot = [createSlug(firstName), createSlug(lastName)].filter(Boolean).join('.');
+        const usernameSuffix = String(numericSeed).padStart(4, '0');
+        const usernameCandidate = `${usernameRoot || 'member'}.${usernameSuffix}`.replace(/\.\.+/g, '.').replace(/^\.+|\.+$/g, '');
+        const username = usernameCandidate || `member.${usernameSuffix}`;
+
+        const emailLocalPartBase = (usernameRoot || 'member').replace(/[^a-z0-9.]/g, '');
+        const emailLocalPart = `${emailLocalPartBase || 'member'}${usernameSuffix}`;
+        const email = `${emailLocalPart}@seed.onruf.com`;
+
+        const phoneSuffix = String(10000000 + (numericSeed % 90000000)).slice(-8);
+        const mobile = `+9665${phoneSuffix}`;
+
+        const invitationCodes = collectExistingInvitationCodes();
+        const invitationCodeRaw = generateUniqueInvitationCode(invitationCodes);
+        const invitationCode = invitationCodeRaw.toUpperCase();
+        invitationCodes.add(invitationCode);
+        const invitationToken = generateRegistrationToken();
+        const invitation = {
+            id: `INV-${individualId.replace(/[^0-9]/g, '') || Date.now().toString(36).toUpperCase()}`,
+            code: invitationCode,
+            token: invitationToken,
+            ownerId: '',
+            sentAt: nowIso,
+            expiresAt: new Date(now.getTime() + INVITATION_VALIDITY_MS).toISOString(),
+            redeemedAt: null
+        };
+
+        const balanceBreakdown = [
+            { label: 'Available Balance', amount: 0, type: 'available' },
+            { label: 'Pending Balance', amount: 0, type: 'pending' }
+        ];
+        const autoPostingEnabled = numericSeed % 2 === 0;
+
+        const baseAccount = {
+            id: individualId,
+            fullName,
+            firstName,
+            lastName,
+            email,
+            mobile,
+            city,
+            status: 'active',
+            balance: 0,
+            balanceBreakdown,
+            adsCount: numericSeed % 3,
+            pendingAds: numericSeed % 2,
+            createdAt: nowIso,
+            lastActiveAt: null,
+            username,
+            gender,
+            dateOfBirth: dateOfBirthIso,
+            permissions: {
+                autoPosting: autoPostingEnabled,
+                manualReview: !autoPostingEnabled
+            },
+            address: {
+                country: DEFAULT_ADDRESS_COUNTRY,
+                region,
+                city,
+                district,
+                streetNumber,
+                streetName,
+                zipCode
+            },
+            invitation,
+            invitationCode,
+            businessAssociations: []
+        };
+
+        const businessTemplates = [
+            { suffix: 'Trading', packageId: 'PKG-START', autoRenew: false, financialStatus: 'pending' },
+            { suffix: 'Logistics', packageId: 'PKG-GROWTH', autoRenew: true, financialStatus: 'pending' }
+        ];
+        const businessAssociationRng = createDeterministicRandom(`${individualId}|business-association`);
+        const desiredBusinessAccountCount = Math.min(
+            businessTemplates.length,
+            Math.floor(businessAssociationRng() * 3)
+        );
+        const selectedBusinessTemplates = desiredBusinessAccountCount
+            ? businessTemplates
+                .map(template => ({ template, order: businessAssociationRng() }))
+                .sort((a, b) => a.order - b.order)
+                .slice(0, desiredBusinessAccountCount)
+                .map(entry => entry.template)
+            : [];
+        const newBusinessAccounts = [];
+        const businessAssociations = [];
+
+        selectedBusinessTemplates.forEach((template, index) => {
+            const businessId = generateSequentialIdentifier(existingBusinessIds, 'BUS');
+            const submittedAt = new Date(now.getTime() - index * 3600000).toISOString();
+            const approvedAt = null;
+            const companySlug = createSlug(`${lastName} ${template.suffix}`) || `business-${index + 1}`;
+            const businessEmail = `${companySlug}@seed.onruf.com`;
+            const registrationNumber = `CR-${String(numericSeed).padStart(4, '0')}${index + 1}`;
+            const detailRegistrationNumber = `DR-${String(numericSeed).padStart(4, '0')}${index + 1}`;
+            const vatNumber = `31${String(numericSeed).padStart(6, '0')}${index + 1}`;
+
+            const businessStatus = 'pending';
+            const requestedDocuments = ['Commercial Registration Copy', 'Tax Certificate'];
+            const invoices = [];
+
+            const businessRaw = {
+                id: businessId,
+                companyName: `${lastName} ${template.suffix}`,
+                contactName: fullName,
+                email: businessEmail,
+                phone: mobile,
+                city,
+                submittedAt,
+                approvedAt,
+                status: businessStatus,
+                packageId: template.packageId,
+                requestedDocuments,
+                invoices,
+                autoRenew: template.autoRenew,
+                financialStatus: template.financialStatus,
+                registrationNumber,
+                detailRegistrationNumber,
+                registrationDocumentType: 'commercial-registration',
+                expiryDate: new Date(now.getTime() + 180 * 86400000).toISOString(),
+                vatNumber,
+                maroofUrl: '',
+                website: `https://www.${companySlug}.com`,
+                socials: {
+                    instagram: `https://instagram.com/${companySlug}`,
+                    linkedin: `https://linkedin.com/company/${companySlug}`
+                },
+                certificates: [],
+                address: {
+                    country: DEFAULT_ADDRESS_COUNTRY,
+                    region,
+                    city,
+                    district: '',
+                    street: '',
+                    streetNumber: '',
+                    streetName: '',
+                    zipCode: '',
+                    zip: ''
+                },
+                history: [
+                    {
+                        id: `${businessId}-seeded`,
+                        action: 'request-submitted',
+                        timestamp: submittedAt,
+                        actor: fullName,
+                        context: 'Seeded sample business application.'
+                    }
+                ]
+            };
+
+            const normalizedBusiness = normalizeBusinessAccountPayload(
+                businessRaw,
+                businessAccounts.length + newBusinessAccounts.length
+            );
+            normalizedBusiness.primaryIndividualId = individualId;
+            normalizedBusiness.defaultPublishingListType = 'trusted';
+            normalizedBusiness.defaultPublishingListNote = 'Auto-added to Trusted Accounts list.';
+            appendBusinessAccountHistory(normalizedBusiness, 'linked-individual', `Linked to ${fullName}.`);
+            newBusinessAccounts.push(normalizedBusiness);
+
+            businessAssociations.push({
+                businessId: normalizedBusiness.id,
+                businessAccountId: normalizedBusiness.id,
+                companyName: normalizedBusiness.companyName,
+                relationship: index === 0 ? 'Owner' : 'Authorized Representative',
+                linkedAt: nowIso
+            });
+        });
+
+        baseAccount.businessAssociations = businessAssociations;
+
+        const normalizedAccount = normalizeIndividualAccountPayload(baseAccount, individualAccounts.length);
+        appendIndividualAccountLogEntry(normalizedAccount, {
+            action: 'account-seeded',
+            label: 'Seeded sample account',
+            timestamp: nowIso,
+            actor: resolveProductAdModeratorLabel(),
+            context: `Account seeded with ${newBusinessAccounts.length} linked business account${newBusinessAccounts.length === 1 ? '' : 's'}.`
+        });
+
+        individualAccounts.push(normalizedAccount);
+
+        saveIndividualAccountsToStorage();
+
+        ensureIndividualAccountTrusted(normalizedAccount);
+
+        newBusinessAccounts.forEach(business => {
+            const existingIndex = businessAccounts.findIndex(entry => entry && entry.id === business.id);
+            if (existingIndex === -1) {
+                businessAccounts.push(business);
+            } else {
+                businessAccounts[existingIndex] = business;
+            }
+        });
+
+        enrichIndividualAccountsWithSampleFavorites();
+        saveBusinessAccountsToStorage();
+
+        const normalizedEmail = normalizeEmail(normalizedAccount.email);
+        individualSignupRecords = individualSignupRecords
+            .filter(record => normalizeEmail(record?.email) !== normalizedEmail);
+        const signupRecord = {
+            accountId: normalizedAccount.id,
+            userName: normalizedAccount.username,
+            email: normalizedAccount.email,
+            phone: normalizedAccount.mobile,
+            invitationCode: normalizedAccount.invitationCode || null,
+            passwordHash: hashPasswordValue('AAtt1234'),
+            submittedAt: nowIso,
+            profile: {
+                fullName: normalizedAccount.fullName,
+                firstName: normalizedAccount.firstName,
+                lastName: normalizedAccount.lastName,
+                country: normalizedAccount.address && normalizedAccount.address.country
+                    ? normalizedAccount.address.country
+                    : DEFAULT_ADDRESS_COUNTRY,
+                region: normalizedAccount.address && normalizedAccount.address.region
+                    ? normalizedAccount.address.region
+                    : region,
+                city: normalizedAccount.city,
+                inviteCode: normalizedAccount.invitationCode || null,
+                district,
+                streetNumber,
+                streetName,
+                zip: zipCode,
+                gender,
+                dateOfBirth: dateOfBirthIso
+            },
+            referralReward: null,
+            generatedInviteCode: normalizedAccount.invitationCode || null
+        };
+        individualSignupRecords.push(signupRecord);
+        saveIndividualSignupRecordsToStorage();
+
+        const updatedAccount = individualAccounts.find(account => account && account.id === normalizedAccount.id) || normalizedAccount;
+
+        state.activeIndividualAccountId = updatedAccount.id;
+        state.currentIndividualAccountsPage = 1;
+        renderIndividualAccountsTable(1);
+        renderIndividualAccountDetail(updatedAccount, { forceOpen: true });
+        renderIndividualAccountSupportRequests();
+
+        state.currentBusinessAccountsPage = 1;
+        renderBusinessAccountsTable(1);
+        refreshBusinessRequestsWorkspace();
+
+    } catch (error) {
+        console.warn('Unable to seed individual account:', error);
+        showNotification('error', 'Unable to seed an individual account. Please try again.');
+    }
+}
+
 function deleteAllIndividualAccounts({ refresh = true } = {}) {
     individualAccounts = [];
     try {
@@ -24280,6 +28548,326 @@ function handleIndividualAccountDetailBodyClick(event) {
     const button = event.target.closest('button[data-action]');
     if (!button) return;
     const action = button.dataset.action;
+    if (action === 'open-wallet-transactions') {
+        event.preventDefault();
+        openIndividualAccountWalletPage();
+        return;
+    }
+    if (action === 'close-wallet-transactions') {
+        event.preventDefault();
+        closeIndividualAccountWalletPage();
+        return;
+    }
+    if (action === 'open-points-transactions') {
+        event.preventDefault();
+        openIndividualAccountPointsPage();
+        return;
+    }
+    if (action === 'close-points-transactions') {
+        event.preventDefault();
+        closeIndividualAccountPointsPage();
+        return;
+    }
+    if (action === 'load-more-wallet-transactions') {
+        event.preventDefault();
+        const datasetAccountId = typeof button.dataset.accountId === 'string' ? button.dataset.accountId.trim() : '';
+        const activeAccountId = state.activeIndividualAccountId !== null && state.activeIndividualAccountId !== undefined
+            ? String(state.activeIndividualAccountId)
+            : '';
+        const lookupId = datasetAccountId || activeAccountId;
+        if (!lookupId) {
+            return;
+        }
+        const allAccounts = Array.isArray(individualAccounts) ? individualAccounts : [];
+        const account = allAccounts.find(entry => entry && String(entry.id) === lookupId);
+        if (!account) {
+            showNotification('warning', 'Unable to load more wallet transactions.');
+            return;
+        }
+
+        const walletPageEl = document.getElementById('individualAccountWalletPage');
+        const wasWalletVisible = walletPageEl ? !walletPageEl.classList.contains('hidden') : false;
+
+        const countsMap = state.individualWalletVisibleCounts && typeof state.individualWalletVisibleCounts === 'object'
+            ? state.individualWalletVisibleCounts
+            : (state.individualWalletVisibleCounts = Object.create(null));
+        const visibilityKey = account.id ? String(account.id) : '__unknown__';
+        const currentCount = Number.parseInt(countsMap[visibilityKey], 10);
+        const increment = 10;
+        const nextCount = Number.isFinite(currentCount) ? currentCount + increment : increment;
+        countsMap[visibilityKey] = nextCount;
+
+        renderIndividualAccountDetail(account, { forceOpen: true });
+        if (wasWalletVisible) {
+            openIndividualAccountWalletPage();
+            const refreshedWalletPage = document.getElementById('individualAccountWalletPage');
+            if (refreshedWalletPage) {
+                const nextButton = refreshedWalletPage.querySelector('button[data-action="load-more-wallet-transactions"]');
+                if (nextButton) {
+                    nextButton.focus();
+                }
+            }
+        }
+        return;
+    }
+    if (action === 'load-more-favorite-categories') {
+        event.preventDefault();
+        const datasetAccountId = typeof button.dataset.accountId === 'string' ? button.dataset.accountId.trim() : '';
+        const activeAccountId = state.activeIndividualAccountId !== null && state.activeIndividualAccountId !== undefined
+            ? String(state.activeIndividualAccountId)
+            : '';
+        const lookupId = datasetAccountId || activeAccountId;
+        if (!lookupId) {
+            return;
+        }
+        const allAccounts = Array.isArray(individualAccounts) ? individualAccounts : [];
+        const account = allAccounts.find(entry => entry && String(entry.id) === lookupId);
+        if (!account) {
+            showNotification('warning', 'Unable to load more favorite categories.');
+            return;
+        }
+
+        const countsMap = state.individualFavoriteCategoryVisibleCounts && typeof state.individualFavoriteCategoryVisibleCounts === 'object'
+            ? state.individualFavoriteCategoryVisibleCounts
+            : (state.individualFavoriteCategoryVisibleCounts = Object.create(null));
+        const visibilityKey = account.id ? String(account.id) : '__unknown__';
+        const currentCount = Number.parseInt(countsMap[visibilityKey], 10);
+        const increment = FAVORITE_CATEGORY_PAGE_SIZE;
+        const nextCount = Number.isFinite(currentCount) ? currentCount + increment : increment;
+        countsMap[visibilityKey] = nextCount;
+
+        renderIndividualAccountDetail(account, { forceOpen: true });
+
+        const detailBodyEl = document.getElementById('individualAccountDetailBody');
+        if (detailBodyEl) {
+            const nextButton = detailBodyEl.querySelector('button[data-action="load-more-favorite-categories"]');
+            if (nextButton) {
+                nextButton.focus();
+            }
+        }
+        return;
+    }
+    if (action === 'load-more-favorite-sellers') {
+        event.preventDefault();
+        const datasetAccountId = typeof button.dataset.accountId === 'string' ? button.dataset.accountId.trim() : '';
+        const activeAccountId = state.activeIndividualAccountId !== null && state.activeIndividualAccountId !== undefined
+            ? String(state.activeIndividualAccountId)
+            : '';
+        const lookupId = datasetAccountId || activeAccountId;
+        if (!lookupId) {
+            return;
+        }
+        const allAccounts = Array.isArray(individualAccounts) ? individualAccounts : [];
+        const account = allAccounts.find(entry => entry && String(entry.id) === lookupId);
+        if (!account) {
+            showNotification('warning', 'Unable to load more favorite sellers.');
+            return;
+        }
+
+        const countsMap = state.individualFavoriteSellerVisibleCounts && typeof state.individualFavoriteSellerVisibleCounts === 'object'
+            ? state.individualFavoriteSellerVisibleCounts
+            : (state.individualFavoriteSellerVisibleCounts = Object.create(null));
+        const visibilityKey = account.id ? String(account.id) : '__unknown__';
+        const currentCount = Number.parseInt(countsMap[visibilityKey], 10);
+        const increment = FAVORITE_SELLER_PAGE_SIZE;
+        const nextCount = Number.isFinite(currentCount) ? currentCount + increment : increment;
+        countsMap[visibilityKey] = nextCount;
+
+        renderIndividualAccountDetail(account, { forceOpen: true });
+
+        const detailBodyEl = document.getElementById('individualAccountDetailBody');
+        if (detailBodyEl) {
+            const nextButton = detailBodyEl.querySelector('button[data-action="load-more-favorite-sellers"]');
+            if (nextButton) {
+                nextButton.focus();
+            }
+        }
+        return;
+    }
+    if (action === 'load-more-favorite-searches') {
+        event.preventDefault();
+        const datasetAccountId = typeof button.dataset.accountId === 'string' ? button.dataset.accountId.trim() : '';
+        const activeAccountId = state.activeIndividualAccountId !== null && state.activeIndividualAccountId !== undefined
+            ? String(state.activeIndividualAccountId)
+            : '';
+        const lookupId = datasetAccountId || activeAccountId;
+        if (!lookupId) {
+            return;
+        }
+        const allAccounts = Array.isArray(individualAccounts) ? individualAccounts : [];
+        const account = allAccounts.find(entry => entry && String(entry.id) === lookupId);
+        if (!account) {
+            showNotification('warning', 'Unable to load more favorite searches.');
+            return;
+        }
+
+        const countsMap = state.individualFavoriteSearchVisibleCounts && typeof state.individualFavoriteSearchVisibleCounts === 'object'
+            ? state.individualFavoriteSearchVisibleCounts
+            : (state.individualFavoriteSearchVisibleCounts = Object.create(null));
+        const visibilityKey = account.id ? String(account.id) : '__unknown__';
+        const currentCount = Number.parseInt(countsMap[visibilityKey], 10);
+        const increment = FAVORITE_SEARCH_PAGE_SIZE;
+        const nextCount = Number.isFinite(currentCount) ? currentCount + increment : increment;
+        countsMap[visibilityKey] = nextCount;
+
+        renderIndividualAccountDetail(account, { forceOpen: true });
+
+        const detailBodyEl = document.getElementById('individualAccountDetailBody');
+        if (detailBodyEl) {
+            const nextButton = detailBodyEl.querySelector('button[data-action="load-more-favorite-searches"]');
+            if (nextButton) {
+                nextButton.focus();
+            }
+        }
+        return;
+    }
+    if (action === 'load-more-points-transactions') {
+        event.preventDefault();
+        const datasetAccountId = typeof button.dataset.accountId === 'string' ? button.dataset.accountId.trim() : '';
+        const activeAccountId = state.activeIndividualAccountId !== null && state.activeIndividualAccountId !== undefined
+            ? String(state.activeIndividualAccountId)
+            : '';
+        const lookupId = datasetAccountId || activeAccountId;
+        if (!lookupId) {
+            return;
+        }
+        const allAccounts = Array.isArray(individualAccounts) ? individualAccounts : [];
+        const account = allAccounts.find(entry => entry && String(entry.id) === lookupId);
+        if (!account) {
+            showNotification('warning', 'Unable to load more points transactions.');
+            return;
+        }
+
+        const pointsPageEl = document.getElementById('individualAccountPointsPage');
+        const wasPointsVisible = pointsPageEl ? !pointsPageEl.classList.contains('hidden') : false;
+
+        const countsMap = state.individualPointsVisibleCounts && typeof state.individualPointsVisibleCounts === 'object'
+            ? state.individualPointsVisibleCounts
+            : (state.individualPointsVisibleCounts = Object.create(null));
+        const visibilityKey = account.id ? String(account.id) : '__unknown__';
+        const currentCount = Number.parseInt(countsMap[visibilityKey], 10);
+        const increment = 10;
+        const nextCount = Number.isFinite(currentCount) ? currentCount + increment : increment;
+        countsMap[visibilityKey] = nextCount;
+
+        renderIndividualAccountDetail(account, { forceOpen: true });
+        if (wasPointsVisible) {
+            openIndividualAccountPointsPage();
+            const refreshedPointsPage = document.getElementById('individualAccountPointsPage');
+            if (refreshedPointsPage) {
+                const nextButton = refreshedPointsPage.querySelector('button[data-action="load-more-points-transactions"]');
+                if (nextButton) {
+                    nextButton.focus();
+                }
+            }
+        }
+        return;
+    }
+    if (action === 'load-more-payment-methods') {
+        event.preventDefault();
+        const datasetAccountId = typeof button.dataset.accountId === 'string' ? button.dataset.accountId.trim() : '';
+        const activeAccountId = state.activeIndividualAccountId !== null && state.activeIndividualAccountId !== undefined
+            ? String(state.activeIndividualAccountId)
+            : '';
+        const lookupId = datasetAccountId || activeAccountId;
+        if (!lookupId) {
+            return;
+        }
+        const allAccounts = Array.isArray(individualAccounts) ? individualAccounts : [];
+        const account = allAccounts.find(entry => entry && String(entry.id) === lookupId);
+        if (!account) {
+            showNotification('warning', 'Unable to load additional payment methods.');
+            return;
+        }
+
+        const countsMap = state.individualPaymentMethodVisibleCounts && typeof state.individualPaymentMethodVisibleCounts === 'object'
+            ? state.individualPaymentMethodVisibleCounts
+            : (state.individualPaymentMethodVisibleCounts = Object.create(null));
+        const visibilityKey = account.id ? String(account.id) : '__unknown__';
+        const currentCount = Number.parseInt(countsMap[visibilityKey], 10);
+        const increment = 3;
+        const nextCount = Number.isFinite(currentCount) ? currentCount + increment : increment;
+        countsMap[visibilityKey] = nextCount;
+
+        renderIndividualAccountDetail(account, { forceOpen: true });
+        const refreshedBody = document.getElementById('individualAccountDetailBody');
+        if (refreshedBody) {
+            const nextButton = refreshedBody.querySelector('button[data-action="load-more-payment-methods"]');
+            if (nextButton) {
+                nextButton.focus();
+            }
+        }
+        return;
+    }
+    if (action === 'load-more-saved-addresses') {
+        event.preventDefault();
+        const datasetAccountId = typeof button.dataset.accountId === 'string' ? button.dataset.accountId.trim() : '';
+        const activeAccountId = state.activeIndividualAccountId !== null && state.activeIndividualAccountId !== undefined
+            ? String(state.activeIndividualAccountId)
+            : '';
+        const lookupId = datasetAccountId || activeAccountId;
+        if (!lookupId) {
+            return;
+        }
+        const allAccounts = Array.isArray(individualAccounts) ? individualAccounts : [];
+        const account = allAccounts.find(entry => entry && String(entry.id) === lookupId);
+        if (!account) {
+            showNotification('warning', 'Unable to load additional saved addresses.');
+            return;
+        }
+
+        const countsMap = state.individualSavedAddressVisibleCounts && typeof state.individualSavedAddressVisibleCounts === 'object'
+            ? state.individualSavedAddressVisibleCounts
+            : (state.individualSavedAddressVisibleCounts = Object.create(null));
+        const visibilityKey = account.id ? String(account.id) : '__unknown__';
+        const currentCount = Number.parseInt(countsMap[visibilityKey], 10);
+        const increment = 3;
+        const nextCount = Number.isFinite(currentCount) ? currentCount + increment : increment;
+        countsMap[visibilityKey] = nextCount;
+
+        renderIndividualAccountDetail(account, { forceOpen: true });
+        const refreshedBody = document.getElementById('individualAccountDetailBody');
+        if (refreshedBody) {
+            const nextButton = refreshedBody.querySelector('button[data-action="load-more-saved-addresses"]');
+            if (nextButton) {
+                nextButton.focus();
+            }
+        }
+        return;
+    }
+    if (action === 'preview-iban-certificate') {
+        event.preventDefault();
+        const datasetAccountId = typeof button.dataset.accountId === 'string' ? button.dataset.accountId.trim() : '';
+        const activeAccountId = state.activeIndividualAccountId !== null && state.activeIndividualAccountId !== undefined
+            ? String(state.activeIndividualAccountId)
+            : '';
+        const lookupId = datasetAccountId || activeAccountId;
+        if (!lookupId) {
+            showNotification('warning', 'Unable to resolve the account for this certificate.');
+            return;
+        }
+
+        const allAccounts = Array.isArray(individualAccounts) ? individualAccounts : [];
+        const account = allAccounts.find(entry => entry && String(entry.id) === lookupId);
+        if (!account) {
+            showNotification('warning', 'Unable to load the IBAN certificate for this account.');
+            return;
+        }
+
+        const methodId = typeof button.dataset.methodId === 'string' ? button.dataset.methodId.trim() : '';
+        const certificateName = typeof button.dataset.certificate === 'string' ? button.dataset.certificate.trim() : '';
+        const methodsSource = Array.isArray(account.paymentCards) ? account.paymentCards : [];
+        const method = methodId
+            ? methodsSource.find(entry => entry && String(entry.id) === methodId)
+            : null;
+        if (!method) {
+            showNotification('warning', 'Unable to locate the selected payment method.');
+            return;
+        }
+
+        openIndividualAccountIbanCertificatePreview(account, method, certificateName);
+        return;
+    }
     if (action !== 'show-more-points' && action !== 'show-more-wallet') {
         return;
     }
@@ -24303,11 +28891,328 @@ function handleIndividualAccountDetailBodyClick(event) {
     }
 }
 
+function openIndividualAccountIbanCertificatePreview(account, method, certificateName) {
+    if (!method) {
+        showNotification('warning', 'Unable to preview the IBAN certificate at this time.');
+        return;
+    }
+
+    const previewWindow = window.open('', '_blank', 'noopener=yes,width=720,height=900');
+    if (!previewWindow) {
+        return;
+    }
+
+    const holderName = (typeof method.holderName === 'string' && method.holderName.trim())
+        ? method.holderName.trim()
+        : (typeof method.accountHolder === 'string' && method.accountHolder.trim())
+            ? method.accountHolder.trim()
+            : resolveIndividualAccountHolderName(account);
+    const accountDisplayName = account ? resolveUserDisplayName(account) : holderName;
+    const bankName = (typeof method.bankName === 'string' && method.bankName.trim()) ? method.bankName.trim() : '—';
+    const accountNumber = (typeof method.bankAccountNumber === 'string' && method.bankAccountNumber.trim())
+        ? method.bankAccountNumber.trim()
+        : (typeof method.accountNumber === 'string' && method.accountNumber.trim())
+            ? method.accountNumber.trim()
+            : '—';
+    const iban = (typeof method.iban === 'string' && method.iban.trim())
+        ? method.iban.trim().toUpperCase()
+        : (typeof method.internationalBankAccountNumber === 'string' && method.internationalBankAccountNumber.trim())
+            ? method.internationalBankAccountNumber.trim().toUpperCase()
+            : '—';
+    const swift = (typeof method.swiftCode === 'string' && method.swiftCode.trim())
+        ? method.swiftCode.trim().toUpperCase()
+        : (typeof method.swift === 'string' && method.swift.trim())
+            ? method.swift.trim().toUpperCase()
+            : (typeof method.bic === 'string' && method.bic.trim())
+                ? method.bic.trim().toUpperCase()
+                : '—';
+
+    const certificateLabel = certificateName
+        || (typeof method.ibanCertificate === 'string' && method.ibanCertificate.trim() ? method.ibanCertificate.trim() : '')
+        || (typeof method.ibanDocument === 'string' && method.ibanDocument.trim() ? method.ibanDocument.trim() : '')
+        || (typeof method.ibanAttachment === 'string' && method.ibanAttachment.trim() ? method.ibanAttachment.trim() : 'IBAN Certificate.pdf');
+
+    const issuedAtRaw = method.updatedAt || method.createdAt || method.addedAt || new Date().toISOString();
+    const issuedAtLabel = issuedAtRaw ? (formatDateForDisplay(issuedAtRaw, { includeTime: true }) || issuedAtRaw) : '—';
+
+    const summaryLines = [
+        'IBAN Certificate Summary',
+        '------------------------',
+        `Certificate File: ${certificateLabel || '—'}`,
+        `Account Holder: ${holderName || '—'}`,
+        `Account (Display): ${accountDisplayName || '—'}`,
+        `Bank: ${bankName || '—'}`,
+        `Account Number: ${accountNumber || '—'}`,
+        `IBAN: ${iban || '—'}`,
+        `SWIFT/BIC: ${swift || '—'}`,
+        `Issued / Updated: ${issuedAtLabel || '—'}`,
+        '',
+        'This summary was generated for preview purposes within the ONRUF Central Control Panel.',
+        'The live production environment will surface the actual PDF certificate.'
+    ];
+
+    const certificateSummaryBlob = new Blob([summaryLines.join('\n')], { type: 'text/plain;charset=utf-8' });
+    const summaryUrl = URL.createObjectURL(certificateSummaryBlob);
+    const summaryFilenameBase = (certificateLabel || 'iban-certificate')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '') || 'iban-certificate';
+    const summaryFilename = `${summaryFilenameBase}-summary.txt`;
+
+    const safeHolder = escapeHtml(holderName || '—');
+    const safeAccountDisplayName = escapeHtml(accountDisplayName || '—');
+    const safeBank = escapeHtml(bankName || '—');
+    const safeAccountNumber = escapeHtml(accountNumber || '—');
+    const safeIban = escapeHtml(iban || '—');
+    const safeSwift = escapeHtml(swift || '—');
+    const safeCertificateLabel = escapeHtml(certificateLabel || '—');
+    const safeIssuedAt = escapeHtml(issuedAtLabel || '—');
+
+    const html = `<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>IBAN Certificate Preview</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        :root {
+            color-scheme: light dark;
+        }
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            margin: 0;
+            padding: 24px;
+            background: #f8fafc;
+            color: #0f172a;
+        }
+        body.dark-mode {
+            background: #0f172a;
+            color: #e2e8f0;
+        }
+        header {
+            margin-bottom: 24px;
+        }
+        h1 {
+            margin: 0 0 8px;
+            font-size: 1.75rem;
+        }
+        .subtitle {
+            margin: 0;
+            color: #475569;
+        }
+        body.dark-mode .subtitle {
+            color: #cbd5f5;
+        }
+        section {
+            background: #ffffff;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 10px 30px -12px rgba(15, 23, 42, 0.4);
+            margin-bottom: 16px;
+        }
+        body.dark-mode section {
+            background: #1e293b;
+            box-shadow: 0 12px 40px -18px rgba(15, 23, 42, 0.9);
+        }
+        dl {
+            margin: 0;
+            display: grid;
+            grid-template-columns: minmax(160px, 220px) 1fr;
+            gap: 12px 20px;
+        }
+        dt {
+            font-weight: 600;
+            color: #334155;
+        }
+        body.dark-mode dt {
+            color: #e2e8f0;
+        }
+        dd {
+            margin: 0;
+        }
+        .download-box {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .download-button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 10px 18px;
+            background: #4338ca;
+            color: #ffffff;
+            border-radius: 999px;
+            text-decoration: none;
+            font-weight: 600;
+        }
+        .download-button:hover {
+            background: #3730a3;
+        }
+        footer {
+            margin-top: 24px;
+            font-size: 0.82rem;
+            color: #475569;
+        }
+        body.dark-mode footer {
+            color: #94a3b8;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>IBAN Certificate Preview</h1>
+        <p class="subtitle">${safeCertificateLabel}</p>
+    </header>
+    <section>
+        <dl>
+            <dt>Account Holder</dt>
+            <dd>${safeHolder}</dd>
+            <dt>Account (Display)</dt>
+            <dd>${safeAccountDisplayName}</dd>
+            <dt>Bank</dt>
+            <dd>${safeBank}</dd>
+            <dt>Account Number</dt>
+            <dd>${safeAccountNumber}</dd>
+            <dt>IBAN</dt>
+            <dd>${safeIban}</dd>
+            <dt>SWIFT/BIC</dt>
+            <dd>${safeSwift}</dd>
+            <dt>Issued / Updated</dt>
+            <dd>${safeIssuedAt}</dd>
+        </dl>
+    </section>
+    <section class="download-box">
+        <div>This preview provides a plain-text summary of the stored IBAN certificate metadata. Use the download link if you need an offline reference.</div>
+        <a class="download-button" href="${escapeAttribute(summaryUrl)}" download="${escapeAttribute(summaryFilename)}">Download summary</a>
+    </section>
+    <footer>
+        This preview is intended for operational review within the ONRUF Central Control Panel. In production, the full certificate document would be delivered to the requester.
+    </footer>
+    <script>
+        (function() {
+            if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+                document.body.classList.add('dark-mode');
+            }
+        }());
+    </script>
+</body>
+</html>`;
+
+    previewWindow.document.open();
+    previewWindow.document.write(html);
+    previewWindow.document.close();
+    previewWindow.document.title = `IBAN Certificate Preview - ${holderName || accountDisplayName || 'Account Holder'}`;
+
+    previewWindow.addEventListener('beforeunload', () => {
+        URL.revokeObjectURL(summaryUrl);
+    });
+}
+
+function openIndividualAccountWalletPage() {
+    const mainView = document.getElementById('individualAccountDetailMain');
+    const walletPage = document.getElementById('individualAccountWalletPage');
+    if (!mainView || !walletPage) {
+        return;
+    }
+    mainView.classList.add('hidden');
+    walletPage.classList.remove('hidden');
+    mainView.setAttribute('aria-hidden', 'true');
+    walletPage.removeAttribute('aria-hidden');
+    const pointsPage = document.getElementById('individualAccountPointsPage');
+    if (pointsPage) {
+        pointsPage.classList.add('hidden');
+        pointsPage.setAttribute('aria-hidden', 'true');
+    }
+    const focusTarget = walletPage.querySelector('button[data-action="close-wallet-transactions"]');
+    if (focusTarget) {
+        focusTarget.focus();
+    }
+    try {
+        walletPage.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } catch (error) {
+        walletPage.scrollIntoView();
+    }
+}
+
+function closeIndividualAccountWalletPage() {
+    const mainView = document.getElementById('individualAccountDetailMain');
+    const walletPage = document.getElementById('individualAccountWalletPage');
+    if (!mainView || !walletPage) {
+        return;
+    }
+    walletPage.classList.add('hidden');
+    mainView.classList.remove('hidden');
+    walletPage.setAttribute('aria-hidden', 'true');
+    mainView.removeAttribute('aria-hidden');
+    const trigger = mainView.querySelector('button[data-action="open-wallet-transactions"]');
+    if (trigger) {
+        trigger.focus();
+    }
+    try {
+        mainView.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } catch (error) {
+        mainView.scrollIntoView();
+    }
+}
+
+function openIndividualAccountPointsPage() {
+    const mainView = document.getElementById('individualAccountDetailMain');
+    const pointsPage = document.getElementById('individualAccountPointsPage');
+    if (!mainView || !pointsPage) {
+        return;
+    }
+    mainView.classList.add('hidden');
+    pointsPage.classList.remove('hidden');
+    mainView.setAttribute('aria-hidden', 'true');
+    pointsPage.removeAttribute('aria-hidden');
+    const walletPage = document.getElementById('individualAccountWalletPage');
+    if (walletPage) {
+        walletPage.classList.add('hidden');
+        walletPage.setAttribute('aria-hidden', 'true');
+    }
+    const focusTarget = pointsPage.querySelector('button[data-action="close-points-transactions"]');
+    if (focusTarget) {
+        focusTarget.focus();
+    }
+    try {
+        pointsPage.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } catch (error) {
+        pointsPage.scrollIntoView();
+    }
+}
+
+function closeIndividualAccountPointsPage() {
+    const mainView = document.getElementById('individualAccountDetailMain');
+    const pointsPage = document.getElementById('individualAccountPointsPage');
+    if (!mainView || !pointsPage) {
+        return;
+    }
+    pointsPage.classList.add('hidden');
+    mainView.classList.remove('hidden');
+    pointsPage.setAttribute('aria-hidden', 'true');
+    mainView.removeAttribute('aria-hidden');
+    const trigger = mainView.querySelector('button[data-action="open-points-transactions"]');
+    if (trigger) {
+        trigger.focus();
+    }
+    try {
+        mainView.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } catch (error) {
+        mainView.scrollIntoView();
+    }
+}
+
 function handleIndividualAccountsToolbarClick(event) {
     const button = event.target.closest('button[data-action]');
     if (!button || button.disabled) return;
     const action = button.dataset.action;
     if (!action) return;
+
+    if (action === 'seed') {
+        handleIndividualAccountsSeedRequest();
+        return;
+    }
 
     if (action === 'delete-all') {
         handleIndividualAccountsDeleteAllRequest();
@@ -24350,8 +29255,6 @@ function handleIndividualAccountsToolbarClick(event) {
         renderIndividualAccountDetail(account, { forceOpen: true });
     } else if (action === 'view-marketplace') {
         openIndividualAccountMarketplaceOverlay(account.id);
-    } else if (action === 'view-log') {
-        openIndividualAccountLogOverlay(account.id);
     } else if (action === 'activate') {
         updateIndividualAccountStatus(account, 'active', `${resolveProductAdModeratorLabel()} reactivated the account.`);
         showNotification('success', 'Account activated.');
@@ -24384,23 +29287,6 @@ function renderIndividualAccountMarketplaceOverlay(account) {
     const purchases = Array.isArray(activity.purchases) ? activity.purchases.slice() : [];
     const sales = Array.isArray(activity.sales) ? activity.sales.slice() : [];
     const productAds = Array.isArray(activity.productAds) ? activity.productAds.slice() : [];
-    const savedAddresses = Array.isArray(activity.savedAddresses)
-        ? activity.savedAddresses.slice()
-        : Array.isArray(account.savedAddresses) ? account.savedAddresses.slice() : [];
-
-    const followUpsSource = account.followUps && typeof account.followUps === 'object'
-        ? account.followUps
-        : (activity.followUps && typeof activity.followUps === 'object' ? activity.followUps : {});
-    const favoriteCategories = Array.isArray(account.favoriteCategories)
-        ? account.favoriteCategories.slice()
-        : Array.isArray(followUpsSource.favoriteCategories) ? followUpsSource.favoriteCategories.slice() : [];
-    const favoriteSellers = Array.isArray(account.favoriteSellers)
-        ? account.favoriteSellers.slice()
-        : Array.isArray(followUpsSource.favoriteSellers) ? followUpsSource.favoriteSellers.slice() : [];
-    const favoriteSearches = Array.isArray(account.favoriteSearches)
-        ? account.favoriteSearches.slice()
-        : Array.isArray(followUpsSource.favoriteSearches) ? followUpsSource.favoriteSearches.slice() : [];
-
     const sellerRatingsSource = Array.isArray(account.sellerRatings)
         ? account.sellerRatings
         : Array.isArray(activity.sellerRatings) ? activity.sellerRatings : [];
@@ -24565,135 +29451,6 @@ function renderIndividualAccountMarketplaceOverlay(account) {
         return `<li><div><strong>${escapeHtml(title)}</strong></div>${detailLines.join('')}</li>`;
     };
 
-    const joinCommaParts = parts => parts
-        .map(value => {
-            if (value === null || value === undefined) return '';
-            if (typeof value === 'number') {
-                return Number.isFinite(value) ? String(value) : '';
-            }
-            const trimmed = String(value).trim();
-            return trimmed;
-        })
-        .filter(Boolean)
-        .join(', ');
-
-    const joinSpaceParts = parts => parts
-        .map(value => {
-            if (value === null || value === undefined) return '';
-            const trimmed = String(value).trim();
-            return trimmed;
-        })
-        .filter(Boolean)
-        .join(' ');
-
-    const renderSavedAddressItem = entry => {
-        if (!entry || typeof entry !== 'object') {
-            return '<li><div><strong>Saved address</strong></div></li>';
-        }
-        const title = entry.label || entry.nickname || entry.name || entry.id || 'Saved address';
-        const primaryParts = joinCommaParts([entry.country, entry.region, entry.city]);
-        const streetLine = joinSpaceParts([entry.streetNumber, entry.streetName]);
-        const secondaryParts = joinCommaParts([entry.district, streetLine, entry.zipCode || entry.postalCode]);
-        const detailLines = [];
-        if (primaryParts) {
-            detailLines.push(`<div class="helper-text">${escapeHtml(primaryParts)}</div>`);
-        }
-        if (secondaryParts) {
-            detailLines.push(`<div class="helper-text">${escapeHtml(secondaryParts)}</div>`);
-        }
-        if (entry.notes) {
-            detailLines.push(`<div class="helper-text">${escapeHtml(String(entry.notes))}</div>`);
-        }
-        const timestamp = entry.updatedAt || entry.createdAt;
-        if (timestamp) {
-            const label = formatDateForDisplay(timestamp, { includeTime: true }) || timestamp;
-            detailLines.push(`<div class="helper-text">Updated ${escapeHtml(String(label))}</div>`);
-        }
-        return `<li><div><strong>${escapeHtml(String(title))}</strong></div>${detailLines.join('')}</li>`;
-    };
-
-    const normalizeFavoriteLabel = entry => {
-        if (entry === null || entry === undefined) {
-            return '';
-        }
-        if (typeof entry === 'string' || typeof entry === 'number') {
-            const value = String(entry).trim();
-            return value;
-        }
-        if (typeof entry === 'object') {
-            const candidates = [
-                entry.label,
-                entry.name,
-                entry.title,
-                entry.category,
-                entry.categoryName,
-                entry.section,
-                entry.seller,
-                entry.sellerName,
-                entry.storeName,
-                entry.search,
-                entry.query,
-                entry.value,
-                entry.id
-            ];
-            for (const candidate of candidates) {
-                if (typeof candidate === 'string' && candidate.trim()) {
-                    return candidate.trim();
-                }
-            }
-        }
-        try {
-            const serialized = JSON.stringify(entry);
-            return typeof serialized === 'string' ? serialized : '';
-        } catch (error) {
-            return '';
-        }
-    };
-
-    const renderFavoriteDetails = entry => {
-        if (!entry || typeof entry !== 'object') {
-            return '';
-        }
-        const details = [];
-        if (entry.notes) {
-            details.push(`<div class="helper-text">${escapeHtml(String(entry.notes))}</div>`);
-        }
-        const lastVisited = entry.lastVisitedAt || entry.updatedAt || entry.savedAt || entry.createdAt;
-        if (lastVisited) {
-            const stamp = formatDateForDisplay(lastVisited, { includeTime: true }) || lastVisited;
-            details.push(`<div class="helper-text">Last visited ${escapeHtml(String(stamp))}</div>`);
-        }
-        const meta = entry.metadata || entry.meta;
-        if (meta && typeof meta === 'object') {
-            const metaEntries = Object.entries(meta)
-                .filter(([, value]) => value !== null && value !== undefined && value !== '')
-                .slice(0, 3)
-                .map(([key, value]) => `${key.replace(/[_-]+/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2')}: ${String(value)}`);
-            if (metaEntries.length) {
-                details.push(`<div class="helper-text">${escapeHtml(metaEntries.join(' | '))}</div>`);
-            }
-        }
-        return details.join('');
-    };
-
-    const renderFavoriteCollection = (entries, emptyMessage) => {
-        const source = Array.isArray(entries) ? entries.filter(entry => entry !== null && entry !== undefined) : [];
-        const items = source
-            .map(entry => {
-                const label = normalizeFavoriteLabel(entry);
-                if (!label) {
-                    return null;
-                }
-                const detailsMarkup = renderFavoriteDetails(entry);
-                return `<li><div><strong>${escapeHtml(label)}</strong></div>${detailsMarkup}</li>`;
-            })
-            .filter(Boolean);
-        if (!items.length) {
-            return `<p class="helper-text">${escapeHtml(emptyMessage)}</p>`;
-        }
-        return `<ul class="detail-list">${items.join('')}</ul>`;
-    };
-
     const computeRatingSummary = entries => {
         const collection = Array.isArray(entries) ? entries : [];
         let sum = 0;
@@ -24849,10 +29606,6 @@ function renderIndividualAccountMarketplaceOverlay(account) {
         renderSummaryMetric('Latest Activity', latestActivityMeta && latestActivityMeta.label ? latestActivityMeta.label : '—')
     ];
 
-    const savedAddressesMarkup = savedAddresses.length
-        ? `<ul class="detail-list">${savedAddresses.map(renderSavedAddressItem).join('')}</ul>`
-        : '<p class="helper-text">No saved addresses found.</p>';
-
     const purchasesMarkup = purchases.length
         ? `<ul class="detail-list">${sortByTimestampDesc(purchases).slice(0, 10).map(renderMarketplaceEntry).join('')}</ul>`
         : '<p class="helper-text">No purchases recorded.</p>';
@@ -24865,19 +29618,33 @@ function renderIndividualAccountMarketplaceOverlay(account) {
         ? `<ul class="detail-list">${sortByTimestampDesc(productAds).slice(0, 10).map(renderMarketplaceEntry).join('')}</ul>`
         : '<p class="helper-text">No product ad activity recorded.</p>';
 
-    const favoriteCategoriesMarkup = renderFavoriteCollection(favoriteCategories, 'No favorite categories saved.');
-    const favoriteSellersMarkup = renderFavoriteCollection(favoriteSellers, 'No favorite sellers saved.');
-    const favoriteSearchesMarkup = renderFavoriteCollection(favoriteSearches, 'No favorite searches saved.');
-
     const sellerRatingFaceMarkup = buildRatingFaceMarkup(Number.isFinite(sellerSummary.average) ? sellerSummary.average : null, 'Seller rating');
     const buyerRatingFaceMarkup = buildRatingFaceMarkup(Number.isFinite(buyerSummary.average) ? buyerSummary.average : null, 'Buyer rating');
     const sellerRatingCountMarkup = sellerSummary.count && sellerSummary.count > 0
-        ? `<div class="helper-text">${escapeHtml(`${sellerSummary.count} rating${sellerSummary.count === 1 ? '' : 's'}`)}</div>`
+        ? (() => {
+            const count = Math.max(0, Math.round(sellerSummary.count));
+            const contributors = Number.isFinite(sellerSummary.contributors)
+                ? Math.max(0, Math.round(sellerSummary.contributors))
+                : 0;
+            const accountCount = contributors > 0 ? contributors : count;
+            const ratingWord = count === 1 ? 'Rating' : 'Ratings';
+            const accountWord = accountCount === 1 ? 'Account' : 'Accounts';
+            return `<div class="helper-text">${escapeHtml(`${count} ${ratingWord} (From ${accountCount} ${accountWord})`)}</div>`;
+        })()
         : (!Number.isFinite(sellerSummary.average)
             ? '<div class="helper-text">No ratings yet</div>'
             : '');
     const buyerRatingCountMarkup = buyerSummary.count && buyerSummary.count > 0
-        ? `<div class="helper-text">${escapeHtml(`${buyerSummary.count} rating${buyerSummary.count === 1 ? '' : 's'}`)}</div>`
+        ? (() => {
+            const count = Math.max(0, Math.round(buyerSummary.count));
+            const contributors = Number.isFinite(buyerSummary.contributors)
+                ? Math.max(0, Math.round(buyerSummary.contributors))
+                : 0;
+            const accountCount = contributors > 0 ? contributors : count;
+            const ratingWord = count === 1 ? 'Rating' : 'Ratings';
+            const accountWord = accountCount === 1 ? 'Account' : 'Accounts';
+            return `<div class="helper-text">${escapeHtml(`${count} ${ratingWord} (From ${accountCount} ${accountWord})`)}</div>`;
+        })()
         : (!Number.isFinite(buyerSummary.average)
             ? '<div class="helper-text">No ratings yet</div>'
             : '');
@@ -24900,25 +29667,6 @@ function renderIndividualAccountMarketplaceOverlay(account) {
         <section class="detail-section">
             <h4>Product Ads</h4>
             ${productAdsMarkup}
-        </section>
-        <section class="detail-section">
-            <h4>Saved Addresses</h4>
-            ${savedAddressesMarkup}
-        </section>
-        <section class="detail-section">
-            <h4>Favorites</h4>
-            <div class="detail-subsection">
-                <h5>Favorite Categories</h5>
-                ${favoriteCategoriesMarkup}
-            </div>
-            <div class="detail-subsection">
-                <h5>Favorite Sellers</h5>
-                ${favoriteSellersMarkup}
-            </div>
-            <div class="detail-subsection">
-                <h5>Favorite Searches</h5>
-                ${favoriteSearchesMarkup}
-            </div>
         </section>
         <section class="detail-section">
             <h4>Marketplace Ratings</h4>
@@ -25141,63 +29889,92 @@ function closeIndividualAccountPublishingListOverlay() {
     }
 }
 
+let isProcessingPublishingSubmit = false;
+
 async function handleIndividualPublishingFormSubmit(event) {
     event.preventDefault();
-
-    const listSelect = document.getElementById('individualPublishingListSelect');
-    const notesInput = document.getElementById('individualPublishingNotesInput');
-    if (!listSelect || !notesInput) {
-        closeIndividualAccountPublishingListOverlay();
+    
+    if (isProcessingPublishingSubmit) {
         return;
     }
+    
+    isProcessingPublishingSubmit = true;
 
-    setIndividualPublishingFormError('');
-
-    const listType = listSelect.value;
-    if (!listType) {
-        setIndividualPublishingFormError('Select a publishing list.');
-        listSelect.focus();
-        return;
-    }
-
-    const context = state.individualPublishingOverlayContext;
-    if (!context || !context.accountId) {
-        showNotification('warning', 'No individual account selected.');
-        closeIndividualAccountPublishingListOverlay();
-        return;
-    }
-
-    const account = (individualAccounts || []).find(entry => entry && entry.id === context.accountId);
-    if (!account) {
-        showNotification('warning', 'Unable to locate the selected account.');
-        closeIndividualAccountPublishingListOverlay();
-        return;
-    }
-
-    const identifier = resolveIndividualAccountAutomationIdentifier(account);
-    if (!identifier) {
-        showNotification('warning', 'This account is missing an identifier for publishing lists.');
-        closeIndividualAccountPublishingListOverlay();
-        return;
-    }
-
-    if (!productAdAutomation || typeof productAdAutomation !== 'object') {
-        productAdAutomation = { trusted: [], manualReview: [], blacklist: [] };
-    }
-
-    const existingEntryDetails = findAutomationListEntryForAccount(identifier);
-    let movedFromList = null;
-
-    if (existingEntryDetails && existingEntryDetails.listType !== listType) {
-        const existingLabel = PUBLISHING_LIST_LABELS[existingEntryDetails.listType] || 'current';
-        const targetLabel = PUBLISHING_LIST_LABELS[listType] || 'selected';
-        const confirmed = await showUserConfirm(`Move this account from ${existingLabel} to ${targetLabel}?`, 'Move', 'Cancel');
-        if (!confirmed) {
+    try {
+        const listSelect = document.getElementById('individualPublishingListSelect');
+        const notesInput = document.getElementById('individualPublishingNotesInput');
+        
+        if (!listSelect || !notesInput) {
+            closeIndividualAccountPublishingListOverlay();
             return;
         }
-        const originList = Array.isArray(productAdAutomation[existingEntryDetails.listType]) ? productAdAutomation[existingEntryDetails.listType] : null;
-        if (originList) {
-            const index = originList.findIndex(entry => entry && entry.account === identifier);
+
+        setIndividualPublishingFormError('');
+
+        const listType = listSelect.value;
+        if (!listType) {
+            setIndividualPublishingFormError('Select a publishing list.');
+            listSelect.focus();
+            return;
+        }
+
+        const context = state.individualPublishingOverlayContext;
+        
+        if (!context || !context.accountId) {
+            showNotification('warning', 'No individual account selected.');
+            closeIndividualAccountPublishingListOverlay();
+            return;
+        }
+
+        const account = (individualAccounts || []).find(entry => entry && entry.id === context.accountId);
+        
+        if (!account) {
+            showNotification('warning', 'Unable to locate the selected account.');
+            closeIndividualAccountPublishingListOverlay();
+            return;
+        }
+
+        const identifier = resolveIndividualAccountAutomationIdentifier(account);
+        
+        if (!identifier) {
+            showNotification('warning', 'This account is missing an identifier for publishing lists.');
+            closeIndividualAccountPublishingListOverlay();
+            return;
+        }
+
+        if (!productAdAutomation || typeof productAdAutomation !== 'object') {
+            productAdAutomation = { trusted: [], manualReview: [], blacklist: [] };
+        }
+
+        const ensureAutomationList = key => {
+            if (!key) {
+                return [];
+            }
+            if (!Array.isArray(productAdAutomation[key])) {
+                productAdAutomation[key] = [];
+            }
+            return productAdAutomation[key];
+        };
+
+        ensureAutomationList('trusted');
+        ensureAutomationList('manualReview');
+        ensureAutomationList('blacklist');
+
+        const existingEntryDetails = findAutomationListEntryForAccount(identifier);
+        
+        let movedFromList = null;
+
+        if (existingEntryDetails && existingEntryDetails.listType !== listType) {
+            const existingLabel = PUBLISHING_LIST_LABELS[existingEntryDetails.listType] || 'current';
+            const targetLabel = PUBLISHING_LIST_LABELS[listType] || 'selected';
+            const confirmed = await showUserConfirm(`Move this account from ${existingLabel} to ${targetLabel}?`, 'Move', 'Cancel');
+            
+            if (!confirmed) {
+                return;
+            }
+            const originList = ensureAutomationList(existingEntryDetails.listType);
+            if (originList) {
+                const index = originList.findIndex(entry => entry && entry.account === identifier);
             if (index !== -1) {
                 originList.splice(index, 1);
             }
@@ -25217,11 +29994,7 @@ async function handleIndividualPublishingFormSubmit(event) {
         const updatedLabel = PUBLISHING_LIST_LABELS[listType] || 'publishing list';
         showNotification('success', `Publishing notes updated for ${updatedLabel}.`);
     } else {
-        const targetList = Array.isArray(productAdAutomation[listType]) ? productAdAutomation[listType] : null;
-        if (!targetList) {
-            showNotification('warning', 'Unable to update publishing list.');
-            return;
-        }
+        const targetList = ensureAutomationList(listType);
 
         const targetLabel = PUBLISHING_LIST_LABELS[listType] || 'publishing list';
 
@@ -25243,6 +30016,12 @@ async function handleIndividualPublishingFormSubmit(event) {
 
     renderIndividualAccountsToolbar(account);
     closeIndividualAccountPublishingListOverlay();
+    } catch (error) {
+        console.error('Error in handleIndividualPublishingFormSubmit:', error);
+        showNotification('error', 'An error occurred while updating the publishing list.');
+    } finally {
+        isProcessingPublishingSubmit = false;
+    }
 }
 
 function setupIndividualPublishingOverlay() {
@@ -25250,7 +30029,11 @@ function setupIndividualPublishingOverlay() {
     const form = document.getElementById('individualPublishingForm');
     const cancelBtn = document.getElementById('individualPublishingCancelBtn');
     const closeBtn = document.getElementById('individualPublishingCloseBtn');
-    if (!overlay || overlay.dataset.bound === 'true') {
+    if (!overlay || !form) {
+        return;
+    }
+    
+    if (overlay.dataset.bound === 'true') {
         return;
     }
 
@@ -25340,8 +30123,6 @@ function handleIndividualAccountsTableClick(event) {
         }
         if (action === 'view') {
             renderIndividualAccountDetail(account, { forceOpen: true });
-        } else if (action === 'view-log') {
-            openIndividualAccountLogOverlay(account.id);
         } else if (action === 'activate') {
             updateIndividualAccountStatus(account, 'active', `${resolveProductAdModeratorLabel()} reactivated the account.`);
             showNotification('success', 'Account activated.');
@@ -26129,6 +30910,7 @@ async function handleIndividualAccountsImport(file) {
                 }
             } else {
                 individualAccounts.push(account);
+                ensureIndividualAccountTrusted(account, { note: 'Imported account trusted by default.' });
             }
         });
 
@@ -26155,6 +30937,7 @@ const BUSINESS_ACCOUNT_STATUS_LABELS = new Map([
     ['pending', 'Pending Review'],
     ['docs-requested', 'Documents Requested'],
     ['active', 'Active'],
+    ['inactive', 'Inactive'],
     ['suspended', 'Suspended'],
     ['cancelled', 'Cancelled'],
     ['rejected', 'Rejected']
@@ -26164,6 +30947,7 @@ const BUSINESS_ACCOUNT_STATUS_CLASSES = new Map([
     ['pending', 'status-badge status-pending'],
     ['docs-requested', 'status-badge status-warning'],
     ['active', 'status-badge status-active'],
+    ['inactive', 'status-badge status-inactive'],
     ['suspended', 'status-badge status-danger'],
     ['cancelled', 'status-badge status-inactive'],
     ['rejected', 'status-badge status-danger']
@@ -26241,12 +31025,609 @@ function getFilteredBusinessAccounts() {
 
 function updateBusinessRequestsCountLabel() {
     const label = document.getElementById('businessRequestsCountLabel');
-    if (!label) return;
-    const pendingCount = (businessAccounts || []).filter(account => {
+    const eligibleStatuses = new Set(['pending', 'docs-requested']);
+    const reviewCount = (businessAccounts || []).filter(account => {
         const status = (account.status || '').toLowerCase();
-        return status === 'pending' || status === 'docs-requested';
+        return eligibleStatuses.has(status);
     }).length;
-    label.textContent = `#${pendingCount} Pending`;
+    if (label) {
+        label.textContent = `#${reviewCount} Account${reviewCount === 1 ? '' : 's'}`;
+    }
+    const reviewLabel = document.getElementById('businessRequestsReviewCountLabel');
+    if (reviewLabel) {
+        reviewLabel.textContent = `#${reviewCount} Pending`;
+    }
+}
+
+function ensureBusinessRequestsFiltersState() {
+    const defaults = {
+        search: '',
+        period: 'today',
+        startDate: null,
+        endDate: null
+    };
+    if (!state.businessRequestsFilters || typeof state.businessRequestsFilters !== 'object') {
+        state.businessRequestsFilters = { ...defaults };
+    }
+    state.businessRequestsFilters = { ...defaults, ...state.businessRequestsFilters };
+    return state.businessRequestsFilters;
+}
+
+function resolveBusinessRequestSubmissionDate(account) {
+    if (!account || typeof account !== 'object') {
+        return null;
+    }
+    return account.submittedAt || account.createdAt || null;
+}
+
+function formatRelativeTimeFromNow(value) {
+    const iso = normalizeIsoTimestamp(value, null);
+    if (!iso) {
+        return 'Timestamp unavailable';
+    }
+    const targetMs = Date.parse(iso);
+    if (!Number.isFinite(targetMs)) {
+        return 'Timestamp unavailable';
+    }
+    const nowMs = Date.now();
+    const delta = nowMs - targetMs;
+    const future = delta < 0;
+    const absolute = Math.abs(delta);
+    const minute = 60000;
+    const hour = 3600000;
+    const day = 86400000;
+    let label;
+    if (absolute < minute) {
+        label = 'moments';
+    } else if (absolute < hour) {
+        const minutes = Math.max(1, Math.round(absolute / minute));
+        label = `${minutes}m`;
+    } else if (absolute < day) {
+        const hours = Math.max(1, Math.round(absolute / hour));
+        label = `${hours}h`;
+    } else {
+        const days = Math.max(1, Math.round(absolute / day));
+        label = `${days}d`;
+    }
+    if (label === 'moments') {
+        return future ? 'in moments' : 'moments ago';
+    }
+    return future ? `in ${label}` : `${label} ago`;
+}
+
+function getPendingBusinessRequests() {
+    const dataset = Array.isArray(businessAccounts) ? businessAccounts : [];
+    const eligibleStatuses = new Set(['pending', 'docs-requested']);
+    return dataset
+        .filter(account => {
+            const status = typeof account.status === 'string' ? account.status.trim().toLowerCase() : '';
+            return eligibleStatuses.has(status);
+        })
+        .sort((a, b) => {
+            const timeA = Date.parse(resolveBusinessRequestSubmissionDate(a) || '') || 0;
+            const timeB = Date.parse(resolveBusinessRequestSubmissionDate(b) || '') || 0;
+            return timeB - timeA;
+        });
+}
+
+function matchesBusinessRequestSearch(account, term) {
+    const search = typeof term === 'string' ? term.trim().toLowerCase() : '';
+    if (!search) {
+        return true;
+    }
+    const words = search.split(/\s+/).filter(Boolean);
+    if (!words.length) {
+        return true;
+    }
+    const socialsSource = {
+        ...(account && account.socials ? account.socials : {}),
+        ...(account && account.application && account.application.socials ? account.application.socials : {})
+    };
+    const address = account && account.address ? account.address : {};
+    const fields = [
+        account?.companyName,
+        account?.contactName,
+        account?.email,
+        account?.phone,
+        account?.id,
+        account?.registrationNumber,
+        account?.detailRegistrationNumber,
+        account?.vatNumber,
+        account?.city,
+        address?.city,
+        address?.region,
+        address?.district,
+        account?.application?.companyNameEnglish,
+        account?.application?.companyNameArabic,
+        account?.application?.email
+    ];
+    Object.keys(socialsSource).forEach(key => {
+        fields.push(key);
+        fields.push(socialsSource[key]);
+    });
+    const haystack = fields
+        .filter(value => typeof value === 'string' && value.trim())
+        .map(value => value.trim().toLowerCase())
+        .join(' ');
+    if (!haystack) {
+        return false;
+    }
+    return words.every(word => haystack.includes(word));
+}
+
+function filterBusinessRequestsByPeriod(requests, filters) {
+    if (!Array.isArray(requests) || !requests.length) {
+        return [];
+    }
+    const period = typeof filters.period === 'string' ? filters.period : 'today';
+    if (period === 'all') {
+        return requests.slice();
+    }
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    let rangeStart = null;
+    let rangeEnd = null;
+    if (period === 'today') {
+        rangeStart = new Date(startOfToday.getTime());
+        rangeEnd = new Date(startOfToday.getTime() + 86400000);
+    } else if (period === '7days') {
+        rangeStart = new Date(startOfToday.getTime());
+        rangeStart.setDate(rangeStart.getDate() - 6);
+        rangeEnd = new Date(startOfToday.getTime() + 86400000);
+    } else if (period === '30days') {
+        rangeStart = new Date(startOfToday.getTime());
+        rangeStart.setDate(rangeStart.getDate() - 29);
+        rangeEnd = new Date(startOfToday.getTime() + 86400000);
+    } else if (period === 'custom') {
+        if (filters.startDate) {
+            const startMs = Date.parse(filters.startDate);
+            if (Number.isFinite(startMs)) {
+                rangeStart = new Date(startMs);
+                rangeStart.setHours(0, 0, 0, 0);
+            }
+        }
+        if (filters.endDate) {
+            const endMs = Date.parse(filters.endDate);
+            if (Number.isFinite(endMs)) {
+                rangeEnd = new Date(endMs);
+                rangeEnd.setHours(0, 0, 0, 0);
+                rangeEnd = new Date(rangeEnd.getTime() + 86400000);
+            }
+        }
+    }
+    return requests.filter(account => {
+        const iso = normalizeIsoTimestamp(resolveBusinessRequestSubmissionDate(account), null);
+        if (!iso) {
+            return false;
+        }
+        const stamp = Date.parse(iso);
+        if (!Number.isFinite(stamp)) {
+            return false;
+        }
+        if (rangeStart && stamp < rangeStart.getTime()) {
+            return false;
+        }
+        if (rangeEnd && stamp >= rangeEnd.getTime()) {
+            return false;
+        }
+        return true;
+    });
+}
+
+function buildBusinessRequestPeriodLabel(filters) {
+    const period = typeof filters.period === 'string' ? filters.period : 'today';
+    if (period === 'today') {
+        return 'Today';
+    }
+    if (period === '7days') {
+        return 'Last 7 days';
+    }
+    if (period === '30days') {
+        return 'Last 30 days';
+    }
+    if (period === 'all') {
+        return 'All pending';
+    }
+    if (period === 'custom') {
+        const startLabel = filters.startDate ? formatDateForDisplay(filters.startDate) : 'Start';
+        const endLabel = filters.endDate ? formatDateForDisplay(filters.endDate) : 'End';
+        return `${startLabel || 'Start'} – ${endLabel || 'End'}`;
+    }
+    return 'Pending requests';
+}
+
+function renderBusinessRequestsSummary(dataset, filtered) {
+    const summary = document.getElementById('businessRequestsSummary');
+    if (!summary) {
+        return;
+    }
+    const totalPending = dataset.length;
+    const filteredCount = filtered.length;
+    const docsRequestedCount = dataset.filter(account => (account.status || '').toLowerCase() === 'docs-requested').length;
+    const todayFilters = { period: 'today' };
+    const todaysCount = filterBusinessRequestsByPeriod(dataset, todayFilters).length;
+    const latestSubmission = dataset.reduce((latest, account) => {
+        const iso = normalizeIsoTimestamp(resolveBusinessRequestSubmissionDate(account), null);
+        const time = iso ? Date.parse(iso) : 0;
+        return time > latest.time ? { time, iso } : latest;
+    }, { time: 0, iso: null });
+    const latestLabel = latestSubmission.iso
+        ? `${formatRelativeTimeFromNow(latestSubmission.iso)} • ${formatDateForDisplay(latestSubmission.iso, { includeTime: true }) || latestSubmission.iso}`
+        : 'No submissions logged yet';
+    const docsCaptionMarkup = docsRequestedCount
+        ? `Awaiting a decision • <span class="helper-chip warning helper-chip-compact">${docsRequestedCount} need documents</span>`
+        : 'Awaiting a decision';
+    summary.innerHTML = `
+        <div class="business-requests-summary-card">
+            <span class="label">Pending queue</span>
+            <span class="value">#${totalPending}</span>
+            <span class="caption">${docsCaptionMarkup}</span>
+        </div>
+        <div class="business-requests-summary-card">
+            <span class="label">In view</span>
+            <span class="value">#${filteredCount}</span>
+            <span class="caption">Matching current filters</span>
+        </div>
+        <div class="business-requests-summary-card">
+            <span class="label">New today</span>
+            <span class="value">#${todaysCount}</span>
+            <span class="caption">Arrived since midnight</span>
+        </div>
+        <div class="business-requests-summary-card">
+            <span class="label">Latest submission</span>
+            <span class="value">${latestSubmission.iso ? formatRelativeTimeFromNow(latestSubmission.iso) : '—'}</span>
+            <span class="caption">${escapeHtml(latestLabel)}</span>
+        </div>
+    `;
+}
+
+function renderBusinessRequestCard(account) {
+    const requestId = account.id ? String(account.id) : '';
+    const safeCompany = account.companyName || requestId || 'Business Account';
+    const submissionIso = normalizeIsoTimestamp(resolveBusinessRequestSubmissionDate(account), null);
+    const submissionMeta = submissionIso
+        ? `${escapeHtml(formatRelativeTimeFromNow(submissionIso))} • ${escapeHtml(formatDateForDisplay(submissionIso, { includeTime: true }) || submissionIso)}`
+        : 'Submission timestamp unavailable';
+    const normalizedStatus = typeof account.status === 'string' ? account.status.trim().toLowerCase() : '';
+    const statusClass = getBusinessAccountStatusClass(normalizedStatus || account.status);
+    const statusLabel = getBusinessAccountStatusLabel(account.status);
+    const docsRequested = normalizedStatus === 'docs-requested';
+    const statusSlug = (normalizedStatus || 'pending').replace(/[^a-z0-9-]/g, '-');
+    const cardStateClasses = ['business-request-card'];
+    if (statusSlug) {
+        cardStateClasses.push(`business-request-card--${statusSlug}`);
+    }
+    if (docsRequested) {
+        cardStateClasses.push('business-request-card--needs-docs');
+    }
+    const initials = safeCompany.trim().charAt(0).toUpperCase();
+    const logoSource = typeof account.logoDataUrl === 'string' && account.logoDataUrl.trim()
+        ? account.logoDataUrl.trim()
+        : account.application && typeof account.application.logoDataUrl === 'string' && account.application.logoDataUrl.trim()
+            ? account.application.logoDataUrl.trim()
+            : '';
+    const avatarMarkup = logoSource
+        ? `<img src="${escapeAttribute(logoSource)}" alt="${escapeAttribute(safeCompany)} logo">`
+        : `<span>${escapeHtml(initials)}</span>`;
+    const documentType = account.registrationDocumentType
+        ? formatKeyLabel(account.registrationDocumentType)
+        : (account.application && account.application.documentType ? formatKeyLabel(account.application.documentType) : '—');
+    const expiryLabel = account.expiryDate
+        ? formatDateForDisplay(account.expiryDate, { includeTime: false }) || '—'
+        : '—';
+    const address = account.address || account.application?.address || {};
+    const cityLabel = address.city || account.city || '—';
+    const socialsSource = {
+        ...(account.socials || {}),
+        ...(account.application && account.application.socials ? account.application.socials : {})
+    };
+    const socialLabels = {
+        facebook: 'Facebook',
+        instagram: 'Instagram',
+        twitter: 'Twitter',
+        youtube: 'YouTube',
+        linkedin: 'LinkedIn',
+        snapchat: 'Snapchat',
+        tiktok: 'TikTok'
+    };
+    const socialEntries = Object.keys(socialsSource)
+        .filter(key => typeof socialsSource[key] === 'string' && socialsSource[key].trim())
+        .map(key => ({ key, label: socialLabels[key] || formatKeyLabel(key), value: socialsSource[key].trim() }));
+    const socialMarkup = socialEntries.length
+        ? socialEntries.map(entry => `<span class="helper-chip neutral">${escapeHtml(entry.label)}</span>`).join(' ')
+        : '<span class="helper-text">No social links provided.</span>';
+    const documentRequests = Array.isArray(account.requestedDocuments)
+        ? account.requestedDocuments.filter(item => typeof item === 'string' && item.trim())
+        : [];
+    const documentsMarkup = documentRequests.length
+        ? `<ul class="detail-list">${documentRequests.map(item => `<li>${escapeHtml(item)}</li>`).join('')}</ul>`
+        : '<p class="helper-text">No additional documents requested.</p>';
+    const { individual: linkedIndividual, association: linkedAssociation } = resolveBusinessAccountPrimaryIndividual(account);
+    const individualName = linkedIndividual ? (linkedIndividual.fullName || linkedIndividual.email || linkedIndividual.id) : '';
+    const individualEmail = linkedIndividual && linkedIndividual.email ? linkedIndividual.email : '';
+    const relationship = linkedAssociation && linkedAssociation.relationship ? linkedAssociation.relationship : '';
+    const individualSummary = linkedIndividual
+        ? `<div class="helper-text">${escapeHtml(individualName)}${individualEmail ? ` • ${escapeHtml(individualEmail)}` : ''}${relationship ? ` • ${escapeHtml(formatKeyLabel(relationship))}` : ''}</div>`
+        : '<p class="helper-text">No linked individual account detected.</p>';
+    const dataAttributes = [`data-request-id="${escapeAttribute(requestId)}"`];
+    if (statusSlug) {
+        dataAttributes.push(`data-request-status="${escapeAttribute(statusSlug)}"`);
+    }
+    if (linkedIndividual && linkedIndividual.id) {
+        dataAttributes.push(`data-individual-id="${escapeAttribute(String(linkedIndividual.id))}"`);
+    }
+    const cardClassList = cardStateClasses.join(' ');
+    const infoGrid = `
+        <dl class="info-grid">
+            <div><dt>Registration #</dt><dd>${account.registrationNumber ? escapeHtml(account.registrationNumber) : '—'}</dd></div>
+            <div><dt>VAT</dt><dd>${account.vatNumber ? escapeHtml(account.vatNumber) : '—'}</dd></div>
+            <div><dt>Document</dt><dd>${escapeHtml(documentType || '—')}</dd></div>
+            <div><dt>Expiry</dt><dd>${escapeHtml(expiryLabel || '—')}</dd></div>
+            <div><dt>City</dt><dd>${cityLabel ? escapeHtml(cityLabel) : '—'}</dd></div>
+            <div><dt>Submitted</dt><dd>${escapeHtml(formatDateForDisplay(submissionIso, { includeTime: true }) || '—')}</dd></div>
+        </dl>
+    `;
+    const actionsMarkup = `
+        <div class="business-request-actions">
+            <button type="button" class="btn btn-secondary" data-request-action="view-business">
+                <i class="fas fa-eye"></i>
+                <span>Inspect request</span>
+            </button>
+            <button type="button" class="btn btn-outline" data-request-action="view-individual"${linkedIndividual && linkedIndividual.id ? '' : ' disabled'}>
+                <i class="fas fa-user"></i>
+                <span>Individual details</span>
+            </button>
+        </div>
+    `;
+    return `
+        <article class="${cardClassList}" ${dataAttributes.join(' ')} tabindex="0" aria-label="Business account request for ${escapeAttribute(safeCompany)}${statusLabel ? `, status ${escapeAttribute(statusLabel)}` : ''}">
+            <header class="card-header">
+                <div class="business-request-identity">
+                    <div class="business-request-avatar">${avatarMarkup}</div>
+                    <div class="business-request-meta">
+                        <span class="company">${escapeHtml(safeCompany)}</span>
+                        <span class="context">${escapeHtml(submissionMeta)}</span>
+                        <span class="context">${account.email ? escapeHtml(account.email) : ''}${account.phone ? ` • ${escapeHtml(account.phone)}` : ''}</span>
+                    </div>
+                </div>
+                <span class="${statusClass}">${escapeHtml(statusLabel)}</span>
+            </header>
+            <div class="business-request-body">
+                ${infoGrid}
+                <div class="business-request-section">
+                    <h4>Social links</h4>
+                    ${socialMarkup}
+                </div>
+                <div class="business-request-section">
+                    <h4>Requested documents</h4>
+                    ${documentsMarkup}
+                </div>
+                <div class="business-request-section">
+                    <h4>Individual account</h4>
+                    ${individualSummary}
+                    ${actionsMarkup}
+                </div>
+            </div>
+            <footer class="business-request-footer">
+                <button type="button" class="btn btn-outline" data-request-action="request-docs">
+                    <i class="fas fa-file-circle-question"></i>
+                    <span>${docsRequested ? 'Update request' : 'Request documents'}</span>
+                </button>
+                <button type="button" class="btn btn-outline btn-reject" data-request-action="reject">
+                    <i class="fas fa-xmark"></i>
+                    <span>Reject</span>
+                </button>
+                <button type="button" class="btn btn-primary" data-request-action="approve">
+                    <i class="fas fa-circle-check"></i>
+                    <span>Approve</span>
+                </button>
+            </footer>
+        </article>
+    `;
+}
+
+function updateBusinessRequestsPeriodChips() {
+    const filters = ensureBusinessRequestsFiltersState();
+    document.querySelectorAll('[data-business-request-period]').forEach(button => {
+        if (!button || !button.dataset) {
+            return;
+        }
+        const value = button.dataset.businessRequestPeriod;
+        if (value === filters.period) {
+            button.classList.add('active');
+        } else {
+            button.classList.remove('active');
+        }
+    });
+}
+
+function renderBusinessRequestsBoard() {
+    const filters = ensureBusinessRequestsFiltersState();
+    const dataset = getPendingBusinessRequests();
+    const filtered = filterBusinessRequestsByPeriod(dataset.filter(account => matchesBusinessRequestSearch(account, filters.search)), filters);
+    const searchInput = document.getElementById('businessRequestsSearchInput');
+    if (searchInput && searchInput.value !== filters.search) {
+        searchInput.value = filters.search;
+    }
+    const startInput = document.getElementById('businessRequestsStartDate');
+    if (startInput && startInput.value !== (filters.startDate || '')) {
+        startInput.value = filters.startDate || '';
+    }
+    const endInput = document.getElementById('businessRequestsEndDate');
+    if (endInput && endInput.value !== (filters.endDate || '')) {
+        endInput.value = filters.endDate || '';
+    }
+    const label = document.getElementById('businessRequestsActiveFilterLabel');
+    if (label) {
+        label.textContent = buildBusinessRequestPeriodLabel(filters);
+    }
+    updateBusinessRequestsPeriodChips();
+    renderBusinessRequestsSummary(dataset, filtered);
+    const grid = document.getElementById('businessRequestsGrid');
+    if (grid) {
+        if (!filtered.length) {
+            grid.innerHTML = '<div class="empty-state">No pending business account requests match the current filters.</div>';
+        } else {
+            grid.innerHTML = filtered.map(renderBusinessRequestCard).join('');
+        }
+    }
+
+    updateBusinessRequestsCountLabel();
+}
+
+function setBusinessRequestPeriod(period) {
+    const filters = ensureBusinessRequestsFiltersState();
+    const normalized = typeof period === 'string' ? period : 'today';
+    filters.period = normalized;
+    if (normalized !== 'custom') {
+        filters.startDate = null;
+        filters.endDate = null;
+    }
+    state.businessRequestsFilters = filters;
+    renderBusinessRequestsBoard();
+}
+
+function handleBusinessRequestsSearch(value) {
+    const filters = ensureBusinessRequestsFiltersState();
+    filters.search = typeof value === 'string' ? value.trim() : '';
+    state.businessRequestsFilters = filters;
+    renderBusinessRequestsBoard();
+}
+
+function handleBusinessRequestDateChange() {
+    const filters = ensureBusinessRequestsFiltersState();
+    const startInput = document.getElementById('businessRequestsStartDate');
+    const endInput = document.getElementById('businessRequestsEndDate');
+    filters.startDate = startInput && startInput.value ? startInput.value : null;
+    filters.endDate = endInput && endInput.value ? endInput.value : null;
+    if (!filters.startDate && !filters.endDate) {
+        filters.period = 'all';
+    } else {
+        filters.period = 'custom';
+    }
+    state.businessRequestsFilters = filters;
+    renderBusinessRequestsBoard();
+}
+
+function resetBusinessRequestsFilters() {
+    state.businessRequestsFilters = {
+        search: '',
+        period: 'today',
+        startDate: null,
+        endDate: null
+    };
+    renderBusinessRequestsBoard();
+}
+
+function handleBusinessRequestsGridClick(event) {
+    const button = event.target.closest('[data-request-action]');
+    if (!button || button.disabled) {
+        return;
+    }
+    const card = button.closest('[data-request-id]');
+    if (!card) {
+        return;
+    }
+    const accountId = card.dataset.requestId;
+    if (!accountId) {
+        return;
+    }
+    const action = button.dataset.requestAction;
+    const account = (businessAccounts || []).find(entry => entry && entry.id === accountId);
+    if (!account) {
+        showNotification('warning', 'Unable to locate the selected business request.');
+        return;
+    }
+    state.activeBusinessRequestId = account.id;
+    if (action === 'view-business') {
+        openBusinessAccountDetail(account.id);
+        return;
+    }
+    if (action === 'view-individual') {
+        const { individual } = resolveBusinessAccountPrimaryIndividual(account);
+        if (!individual || !individual.id) {
+            showNotification('info', 'This request is not linked to an individual account yet.');
+            return;
+        }
+        openIndividualAccountDetail(individual.id, { forceOpen: true });
+        return;
+    }
+    if (['approve', 'request-docs', 'reject'].includes(action)) {
+        openBusinessAccountDecisionOverlay(account.id, action);
+        return;
+    }
+}
+
+function refreshBusinessRequestsWorkspace() {
+    renderBusinessRequestsBoard();
+}
+
+function resolveBusinessAccountPrimaryIndividual(account) {
+    if (!account || typeof account !== 'object') {
+        return { individual: null, association: null };
+    }
+
+    const individuals = Array.isArray(individualAccounts) ? individualAccounts : [];
+    let matchedIndividual = null;
+    let matchedAssociation = null;
+
+    if (account.primaryIndividualId !== null && account.primaryIndividualId !== undefined) {
+        const targetId = String(account.primaryIndividualId).trim();
+        if (targetId) {
+            matchedIndividual = individuals.find(candidate => {
+                const candidateId = candidate && candidate.id !== null && candidate.id !== undefined
+                    ? String(candidate.id).trim()
+                    : '';
+                return candidateId && candidateId === targetId;
+            }) || null;
+        }
+    }
+
+    let ownerMatch = null;
+    let fallbackMatch = null;
+
+    for (const candidate of individuals) {
+        if (!candidate) continue;
+        const associations = Array.isArray(candidate.businessAssociations) ? candidate.businessAssociations : [];
+        for (const association of associations) {
+            if (!association) continue;
+            const businessKey = association.businessId || association.businessAccountId;
+            if (!businessKey || businessKey !== account.id) {
+                continue;
+            }
+            const relationship = typeof association.relationship === 'string'
+                ? association.relationship.trim().toLowerCase()
+                : '';
+            const match = { individual: candidate, association };
+            if (!fallbackMatch) {
+                fallbackMatch = match;
+            }
+            if (relationship === 'owner') {
+                ownerMatch = match;
+                break;
+            }
+        }
+        if (ownerMatch) {
+            break;
+        }
+    }
+
+    if (ownerMatch) {
+        return ownerMatch;
+    }
+
+    if (matchedIndividual) {
+        const associations = Array.isArray(matchedIndividual.businessAssociations) ? matchedIndividual.businessAssociations : [];
+        const association = associations.find(entry => entry && (entry.businessId === account.id || entry.businessAccountId === account.id)) || null;
+        if (association || !fallbackMatch) {
+            return {
+                individual: matchedIndividual,
+                association
+            };
+        }
+    }
+
+    return fallbackMatch || { individual: null, association: null };
 }
 
 function renderBusinessAccountsTable(page = state.currentBusinessAccountsPage) {
@@ -26272,30 +31653,136 @@ function renderBusinessAccountsTable(page = state.currentBusinessAccountsPage) {
             const statusClass = getBusinessAccountStatusClass(account.status);
             const packageDetails = businessPackages.find(pkg => pkg.id === account.packageId);
             const packageLabel = packageDetails ? packageDetails.name : '—';
-            const invoices = Array.isArray(account.invoices) ? account.invoices : [];
-            const invoiceSummary = invoices.length ? `${invoices.length} invoice${invoices.length > 1 ? 's' : ''}` : '0 invoices';
-            const submittedLabel = formatDateForDisplay(account.submittedAt, { includeTime: true }) || '—';
+            const createdTimestamp = account.createdAt || account.submittedAt;
+            const createdLabel = formatDateForDisplay(createdTimestamp, { includeTime: true }) || '—';
+            const companyLabel = typeof account.companyName === 'string' && account.companyName.trim()
+                ? account.companyName.trim()
+                : (account.id || 'Business Account');
+            const addressSource = account && typeof account.address === 'object' ? account.address : null;
+            const countryLabel = addressSource && typeof addressSource.country === 'string' && addressSource.country.trim()
+                ? addressSource.country.trim()
+                : '';
+            const regionLabel = addressSource && typeof addressSource.region === 'string' && addressSource.region.trim()
+                ? addressSource.region.trim()
+                : '';
+            const cityValueRaw = addressSource && typeof addressSource.city === 'string' && addressSource.city.trim()
+                ? addressSource.city.trim()
+                : (typeof account.city === 'string' && account.city.trim() ? account.city.trim() : '');
+            const contactName = typeof account.contactName === 'string' ? account.contactName.trim() : '';
+            const contactEmail = typeof account.email === 'string' ? account.email.trim() : '';
+            const contactPhone = typeof account.phone === 'string' ? account.phone.trim() : '';
+            const detailLines = [];
+            const accountIdDisplay = typeof account.id === 'string' && account.id.trim() ? account.id.trim() : '';
+            if (accountIdDisplay) {
+                detailLines.push(`<div class="table-cell-meta">ID: ${escapeHtml(accountIdDisplay)}</div>`);
+            }
+            if (contactEmail) {
+                detailLines.push(`<div class="table-cell-meta">${escapeHtml(contactEmail)}</div>`);
+            }
+            if (contactPhone) {
+                detailLines.push(`<div class="table-cell-meta">${escapeHtml(contactPhone)}</div>`);
+            }
+            if (!detailLines.length) {
+                detailLines.push('<div class="table-cell-meta">Business details unavailable</div>');
+            }
+
+            const locationParts = [countryLabel, regionLabel, cityValueRaw].filter(Boolean);
+            const locationMarkup = locationParts.length
+                ? `<div class="table-cell-meta">${escapeHtml(locationParts.join(', '))}</div>`
+                : '<div class="table-cell-meta">Location details unavailable</div>';
+
+            const { individual: linkedIndividual, association: linkedAssociation } = resolveBusinessAccountPrimaryIndividual(account);
+
+            const relationshipLabel = linkedAssociation && typeof linkedAssociation.relationship === 'string'
+                ? linkedAssociation.relationship.trim()
+                : '';
+            const individualDisplayName = linkedIndividual
+                ? (linkedIndividual.fullName || linkedIndividual.email || linkedIndividual.id || 'Individual Account')
+                : '';
+            const individualEmail = linkedIndividual && typeof linkedIndividual.email === 'string'
+                ? linkedIndividual.email
+                : '';
+            const individualColumn = linkedIndividual
+                ? `
+                    <div class="table-cell-title">${escapeHtml(individualDisplayName)}</div>
+                    ${individualEmail ? `<div class="table-cell-meta">${escapeHtml(individualEmail)}</div>` : ''}
+                    ${relationshipLabel ? `<div class="table-cell-meta">${escapeHtml(relationshipLabel)}</div>` : ''}
+                `
+                : '<div class="table-cell-meta">—</div>';
+
+            let publishingListType = '';
+            let publishingColumn = '<div class="table-cell-meta">—</div>';
+            if (linkedIndividual) {
+                const automationIdentifier = resolveIndividualAccountAutomationIdentifier(linkedIndividual);
+                if (automationIdentifier) {
+                    const publishingEntry = findAutomationListEntryForAccount(automationIdentifier);
+                    if (publishingEntry && publishingEntry.listType) {
+                        publishingListType = publishingEntry.listType;
+                        const publishingListLabel = PUBLISHING_LIST_LABELS[publishingEntry.listType] || formatKeyLabel(publishingEntry.listType);
+                        const notes = publishingEntry.entry && typeof publishingEntry.entry.notes === 'string'
+                            ? publishingEntry.entry.notes.trim()
+                            : '';
+                        publishingColumn = `
+                            <div class="table-cell-title">${escapeHtml(publishingListLabel)}</div>
+                            ${notes ? `<div class="table-cell-meta">${escapeHtml(notes)}</div>` : ''}
+                        `;
+                    }
+                }
+            }
+
+            if (!publishingListType) {
+                const fallbackListType = typeof account.defaultPublishingListType === 'string'
+                    ? account.defaultPublishingListType.trim()
+                    : '';
+                if (fallbackListType) {
+                    publishingListType = fallbackListType;
+                    const fallbackLabel = PUBLISHING_LIST_LABELS[fallbackListType] || formatKeyLabel(fallbackListType);
+                    const fallbackNote = typeof account.defaultPublishingListNote === 'string'
+                        ? account.defaultPublishingListNote.trim()
+                        : '';
+                    publishingColumn = `
+                        <div class="table-cell-title">${escapeHtml(fallbackLabel)}</div>
+                        ${fallbackNote ? `<div class="table-cell-meta">${escapeHtml(fallbackNote)}</div>` : ''}
+                    `;
+                }
+            }
+
+            const isSelected = state.activeBusinessAccountId === account.id;
+            const attributeParts = [
+                `data-account-id="${escapeAttribute(account.id)}"`,
+                linkedIndividual && linkedIndividual.id ? `data-individual-id="${escapeAttribute(linkedIndividual.id)}"` : '',
+                publishingListType ? `data-publishing-list="${escapeAttribute(publishingListType)}"` : '',
+                `aria-selected="${isSelected ? 'true' : 'false'}"`
+            ].filter(Boolean);
+            if (isSelected) {
+                attributeParts.push('class="selected"');
+            }
+            const rowAttributes = attributeParts.join(' ');
 
             return `
-                <tr data-account-id="${escapeAttribute(account.id)}">
+                <tr ${rowAttributes}>
                     <td>${index++}</td>
                     <td>
-                        <div class="table-cell-title">${escapeHtml(account.companyName || account.id)}</div>
-                        <div class="table-cell-meta">${escapeHtml(account.city || '—')}</div>
-                    </td>
-                    <td>
-                        <div class="table-cell-meta">${escapeHtml(account.contactName || '—')}</div>
-                        <div class="table-cell-meta">${escapeHtml(account.email || '—')}</div>
-                        <div class="table-cell-meta">${escapeHtml(account.phone || '—')}</div>
+                        <div class="table-cell-title">${escapeHtml(companyLabel)}</div>
+                        ${locationMarkup}
+                        ${detailLines.join('')}
                     </td>
                     <td><span class="${statusClass}">${escapeHtml(statusLabel)}</span></td>
+                    <td>${escapeHtml(createdLabel)}</td>
                     <td>${escapeHtml(packageLabel)}</td>
-                    <td>${escapeHtml(submittedLabel)}</td>
-                    <td>${escapeHtml(invoiceSummary)}</td>
+                    <td>${individualColumn}</td>
+                    <td>${publishingColumn}</td>
                 </tr>
             `;
         }).join('');
     }
+
+    const activeAccount = (businessAccounts || []).find(entry => entry && entry.id === state.activeBusinessAccountId) || null;
+    if (!activeAccount && state.activeBusinessAccountId) {
+        closeBusinessAccountDetailDrawer();
+    }
+
+    syncBusinessAccountRowSelection();
 
     renderBusinessAccountsPagination(totalPages, filtered.length);
     updateBusinessAccountsActionToolbar();
@@ -26304,26 +31791,55 @@ function renderBusinessAccountsTable(page = state.currentBusinessAccountsPage) {
 function renderBusinessAccountsPagination(totalPages, totalItems) {
     const container = document.getElementById('businessAccountsPagination');
     if (!container) return;
+    const perPage = state.businessAccountsPerPage || 10;
     container.innerHTML = '';
-    if (totalPages <= 1 || totalItems <= state.businessAccountsPerPage) return;
+
+    if (!totalItems || totalPages <= 1 || totalItems <= perPage) {
+        container.classList.add('hidden');
+        container.classList.remove('has-summary');
+        return;
+    }
+
+    container.classList.remove('hidden');
+    container.classList.add('has-summary');
+
+    const startIndex = (state.currentBusinessAccountsPage - 1) * perPage + 1;
+    const endIndex = Math.min(totalItems, startIndex + perPage - 1);
+
+    const summary = document.createElement('span');
+    summary.className = 'pagination-summary';
+    summary.textContent = `Showing ${Math.max(startIndex, 1)}-${endIndex} of ${totalItems}`;
+    container.appendChild(summary);
+
+    const controls = document.createElement('div');
+    controls.className = 'pagination-controls';
 
     const createButton = (label, page, disabled = false, active = false) => {
         const button = document.createElement('button');
         button.type = 'button';
         button.textContent = label;
-        if (disabled) button.disabled = true;
-        if (active) button.classList.add('active');
+        if (disabled) {
+            button.disabled = true;
+        }
+        if (active) {
+            button.classList.add('active');
+        }
         button.addEventListener('click', () => {
+            if (button.disabled || page === state.currentBusinessAccountsPage) {
+                return;
+            }
             renderBusinessAccountsTable(page);
         });
         return button;
     };
 
-    container.appendChild(createButton('Prev', state.currentBusinessAccountsPage - 1, state.currentBusinessAccountsPage === 1));
+    controls.appendChild(createButton('Prev', state.currentBusinessAccountsPage - 1, state.currentBusinessAccountsPage === 1));
     for (let index = 1; index <= totalPages; index += 1) {
-        container.appendChild(createButton(String(index), index, false, index === state.currentBusinessAccountsPage));
+        controls.appendChild(createButton(String(index), index, false, index === state.currentBusinessAccountsPage));
     }
-    container.appendChild(createButton('Next', state.currentBusinessAccountsPage + 1, state.currentBusinessAccountsPage === totalPages));
+    controls.appendChild(createButton('Next', state.currentBusinessAccountsPage + 1, state.currentBusinessAccountsPage === totalPages));
+
+    container.appendChild(controls);
 }
 
 function updateBusinessAccountsActionToolbar() {
@@ -26332,28 +31848,151 @@ function updateBusinessAccountsActionToolbar() {
 
     const accountId = state.activeBusinessAccountId;
     const account = (businessAccounts || []).find(entry => entry && entry.id === accountId) || null;
-    const normalizedStatus = account ? (account.status || '').toLowerCase() : '';
     const totalAccounts = Array.isArray(businessAccounts) ? businessAccounts.length : 0;
 
-    toolbar.querySelectorAll('button[data-action]').forEach(button => {
-        const action = button.dataset.action;
-        if (action === 'delete-all') {
-            button.disabled = totalAccounts === 0;
+    const detailButton = toolbar.querySelector('button[data-action="detail"]');
+    const marketplaceButton = toolbar.querySelector('button[data-action="marketplace"]');
+    const activateButton = toolbar.querySelector('button[data-action="activate"]');
+    const deactivateButton = toolbar.querySelector('button[data-action="deactivate"]');
+    const approveButton = toolbar.querySelector('button[data-action="approve"]');
+    const rejectButton = toolbar.querySelector('button[data-action="reject"]');
+    const updateListButton = toolbar.querySelector('button[data-action="update-list"]');
+    const deleteAllButton = toolbar.querySelector('button[data-action="delete-all"]');
+    const detailLabel = detailButton ? detailButton.querySelector('.action-label') : null;
+    const updateDetailButtonLabel = label => {
+        if (!detailButton) return;
+        if (detailLabel) {
+            detailLabel.textContent = label;
             return;
         }
+        detailButton.childNodes.forEach(node => {
+            if (node.nodeType === Node.TEXT_NODE) {
+                node.textContent = ` ${label}`;
+            }
+        });
+    };
 
-        let disabled = !account;
+    const setButtonState = (button, disabled, tooltip = '') => {
+        if (!button) return;
+        button.disabled = Boolean(disabled);
+        if (button.disabled) {
+            button.setAttribute('aria-disabled', 'true');
+            if (tooltip) {
+                button.title = tooltip;
+            } else {
+                button.removeAttribute('title');
+            }
+        } else {
+            button.removeAttribute('aria-disabled');
+            button.removeAttribute('title');
+        }
+    };
 
-        if (account && action === 'approve' && normalizedStatus === 'active') {
-            disabled = true;
+    setButtonState(deleteAllButton, totalAccounts === 0);
+    updateDetailButtonLabel('Account Details');
+
+    const actionableButtons = [
+        detailButton,
+        marketplaceButton,
+        activateButton,
+        deactivateButton,
+        approveButton,
+        rejectButton,
+        updateListButton
+    ].filter(Boolean);
+
+    if (detailLabel) {
+        detailLabel.textContent = 'Account Details';
+    } else if (detailButton) {
+        detailButton.childNodes.forEach(node => {
+            if (node.nodeType === Node.TEXT_NODE) {
+                node.textContent = ' Account Details';
+            }
+        });
+    }
+
+    if (!account) {
+        actionableButtons.forEach(button => {
+            setButtonState(button, true);
+        });
+        if (updateListButton) {
+            delete updateListButton.dataset.individualId;
+            delete updateListButton.dataset.automationAccount;
+        }
+        return;
+    }
+
+    const normalizedStatus = (account.status || '').toLowerCase();
+    updateDetailButtonLabel(normalizedStatus === 'pending' ? 'Review Request' : 'Account Details');
+    const isPendingReview = normalizedStatus === 'pending';
+    const pendingBlockedMessage = 'Approve or reject the application before changing activation state.';
+
+    setButtonState(detailButton, false);
+    const approveBlocked = normalizedStatus !== 'pending';
+    const rejectBlocked = normalizedStatus !== 'pending';
+
+    setButtonState(approveButton, approveBlocked, approveBlocked ? 'Only pending review accounts can be approved.' : '');
+    setButtonState(rejectButton, rejectBlocked, rejectBlocked ? 'Only pending review accounts can be rejected.' : '');
+
+    const activateBlocked = normalizedStatus !== 'inactive';
+    const deactivateBlocked = normalizedStatus !== 'active';
+
+    setButtonState(
+        activateButton,
+        activateBlocked,
+        activateBlocked
+            ? (normalizedStatus === 'pending'
+                ? pendingBlockedMessage
+                : 'Only inactive accounts can be activated.')
+            : ''
+    );
+
+    setButtonState(
+        deactivateButton,
+        deactivateBlocked,
+        deactivateBlocked ? 'Only active accounts can be deactivated.' : ''
+    );
+
+    const { individual } = resolveBusinessAccountPrimaryIndividual(account);
+    const marketplaceBlocked = !individual || !['active', 'inactive'].includes(normalizedStatus);
+    setButtonState(
+        marketplaceButton,
+        marketplaceBlocked,
+        marketplaceBlocked
+            ? (!individual
+                ? 'Link an individual account to view marketplace activity.'
+                : 'Marketplace activity is available for active or inactive accounts only.')
+            : ''
+    );
+
+    if (updateListButton) {
+        const identifier = individual ? resolveIndividualAccountAutomationIdentifier(individual) : '';
+        const statusAllowsPublishing = ['active', 'inactive'].includes(normalizedStatus);
+        const updateListBlocked = !statusAllowsPublishing || !individual || !identifier;
+
+        let updateListTooltip = '';
+        if (!statusAllowsPublishing) {
+            updateListTooltip = 'Publishing lists are available for active or inactive accounts only.';
+        } else if (!individual) {
+            updateListTooltip = 'Link an individual account before updating publishing lists.';
+        } else if (!identifier) {
+            updateListTooltip = 'Linked individual is missing an automation identifier.';
         }
 
-        if (account && action === 'reject' && ['rejected', 'cancelled'].includes(normalizedStatus)) {
-            disabled = true;
-        }
+        setButtonState(updateListButton, updateListBlocked, updateListTooltip);
 
-        button.disabled = disabled;
-    });
+        if (updateListBlocked) {
+            delete updateListButton.dataset.individualId;
+            delete updateListButton.dataset.automationAccount;
+        } else {
+            if (individual.id !== null && individual.id !== undefined) {
+                updateListButton.dataset.individualId = String(individual.id);
+            } else {
+                delete updateListButton.dataset.individualId;
+            }
+            updateListButton.dataset.automationAccount = identifier;
+        }
+    }
 }
 
 function handleBusinessAccountsSearch(value) {
@@ -26380,20 +32019,43 @@ function resetBusinessAccountsFilters() {
     renderBusinessAccountsTable(1);
 }
 
+function syncBusinessAccountRowSelection() {
+    const tbody = document.getElementById('businessAccountsTableBody');
+    if (!tbody) return;
+    const activeId = state.activeBusinessAccountId === null || state.activeBusinessAccountId === undefined
+        ? null
+        : String(state.activeBusinessAccountId);
+    Array.from(tbody.querySelectorAll('tr[data-account-id]')).forEach(row => {
+        const isSelected = activeId && row.dataset.accountId === activeId;
+        row.classList.toggle('selected', Boolean(isSelected));
+        row.setAttribute('aria-selected', isSelected ? 'true' : 'false');
+    });
+}
+
 function renderBusinessAccountDetail(account) {
-    const drawer = document.getElementById('businessAccountDetailDrawer');
+    const overlay = document.getElementById('businessAccountDetailOverlay');
     const titleEl = document.getElementById('businessAccountDetailTitle');
     const subtitleEl = document.getElementById('businessAccountDetailSubtitle');
     const content = document.getElementById('businessAccountDetailContent');
-    if (!drawer || !titleEl || !content) return;
+    if (!titleEl || !content) return;
 
     if (!account) {
-        drawer.classList.add('hidden');
-        content.innerHTML = '<p class="empty-state">No business account selected.</p>';
+        if (titleEl) {
+            titleEl.textContent = 'No business selected';
+        }
+        if (subtitleEl) {
+            subtitleEl.textContent = 'Open an application to review requested documents, invoices, and history.';
+        }
+        content.innerHTML = '<p class="empty-state">Select a merchant to load their onboarding progress.</p>';
+        if (overlay) {
+            overlay.classList.add('hidden');
+        }
         return;
     }
 
-    drawer.classList.remove('hidden');
+    if (overlay) {
+        overlay.classList.remove('hidden');
+    }
     titleEl.textContent = account.companyName || account.id || 'Business Account';
     if (subtitleEl) {
         subtitleEl.textContent = `${getBusinessAccountStatusLabel(account.status)} · ${account.city || 'Unknown City'}`;
@@ -26427,7 +32089,6 @@ function renderBusinessAccountDetail(account) {
         <section class="detail-section">
             <h4>Contact &amp; Package</h4>
             <div class="detail-grid">
-                <div><dt>Contact</dt><dd>${escapeHtml(account.contactName || '—')}</dd></div>
                 <div><dt>Email</dt><dd>${escapeHtml(account.email || '—')}</dd></div>
                 <div><dt>Phone</dt><dd>${escapeHtml(account.phone || '—')}</dd></div>
                 <div><dt>Submitted</dt><dd>${escapeHtml(formatDateForDisplay(account.submittedAt, { includeTime: true }) || '—')}</dd></div>
@@ -26448,6 +32109,9 @@ function renderBusinessAccountDetail(account) {
             <ul class="detail-list">${historyMarkup}</ul>
         </section>
     `;
+    if (typeof content.scrollTop === 'number') {
+        content.scrollTop = 0;
+    }
 
     updateBusinessAccountsActionToolbar();
 }
@@ -26455,16 +32119,15 @@ function renderBusinessAccountDetail(account) {
 function openBusinessAccountDetail(accountId) {
     const account = (businessAccounts || []).find(entry => entry && entry.id === accountId);
     state.activeBusinessAccountId = account ? account.id : null;
+    syncBusinessAccountRowSelection();
     renderBusinessAccountDetail(account || null);
     updateBusinessAccountsActionToolbar();
 }
 
 function closeBusinessAccountDetailDrawer() {
     state.activeBusinessAccountId = null;
-    const drawer = document.getElementById('businessAccountDetailDrawer');
-    if (drawer) {
-        drawer.classList.add('hidden');
-    }
+    renderBusinessAccountDetail(null);
+    syncBusinessAccountRowSelection();
     updateBusinessAccountsActionToolbar();
 }
 
@@ -26507,30 +32170,96 @@ function closeBusinessAccountDecisionOverlay() {
         overlay.classList.add('hidden');
     }
     state.businessDecisionContext = null;
+    state.activeBusinessRequestId = null;
     const textarea = document.getElementById('businessAccountDecisionReasonInput');
     if (textarea) textarea.value = '';
 }
 
 function applyBusinessAccountDecision(account, action, reason) {
-    if (!account) return 'No account selected.';
+    if (!account) {
+        return { success: false, message: 'No account selected.', severity: 'warning' };
+    }
+
     const normalized = (action || '').toLowerCase();
+    const currentStatus = typeof account.status === 'string' ? account.status.trim().toLowerCase() : '';
+    const companyLabel = account.companyName || account.contactName || account.id || 'Business account';
+
+    if (['approve', 'reject'].includes(normalized) && currentStatus !== 'pending') {
+        return { success: false, message: 'Only pending review accounts can be approved or rejected.', severity: 'warning' };
+    }
+
+    let message = 'Business account updated.';
+    let severity = 'success';
+
     if (normalized === 'approve') {
         account.status = 'active';
         account.approvedAt = new Date().toISOString();
         account.financialStatus = 'settled';
         appendBusinessAccountHistory(account, 'approved', reason || 'Business account approved.');
+        message = `${companyLabel} approved.`;
+        severity = 'success';
     } else if (normalized === 'request-docs') {
         account.status = 'docs-requested';
         const note = reason || 'Additional documentation requested.';
         account.requestedDocuments = Array.isArray(account.requestedDocuments) ? account.requestedDocuments : [];
         account.requestedDocuments.push(note);
         appendBusinessAccountHistory(account, 'docs-requested', note);
+        message = `Document request sent to ${companyLabel}.`;
+        severity = 'info';
     } else if (normalized === 'reject') {
         account.status = 'rejected';
         account.financialStatus = 'closed';
         appendBusinessAccountHistory(account, 'rejected', reason || 'Application rejected.');
+        message = `${companyLabel} rejected.`;
+        severity = 'warning';
     } else {
-        return 'Unsupported action requested.';
+        return { success: false, message: 'Unsupported action requested.', severity: 'warning' };
+    }
+
+    saveBusinessAccountsToStorage();
+    refreshBusinessRequestsWorkspace();
+    renderBusinessAccountsTable(state.currentBusinessAccountsPage);
+    if (state.activeBusinessAccountId === account.id) {
+        renderBusinessAccountDetail(account);
+    }
+
+    return { success: true, message, severity };
+}
+
+function setBusinessAccountStatus(account, status, { reason } = {}) {
+    if (!account || typeof account !== 'object') {
+        return 'No account selected.';
+    }
+
+    const normalized = typeof status === 'string' ? status.trim().toLowerCase() : '';
+    if (!normalized) {
+        return 'Unsupported status change requested.';
+    }
+
+    const currentStatus = typeof account.status === 'string' ? account.status.trim().toLowerCase() : '';
+
+    if (normalized === 'active') {
+        if (currentStatus === 'active') {
+            return 'Business account is already active.';
+        }
+        if (currentStatus !== 'inactive') {
+            return 'Only inactive accounts can be activated.';
+        }
+        account.status = 'active';
+        account.approvedAt = account.approvedAt || new Date().toISOString();
+        account.financialStatus = account.financialStatus || 'settled';
+        appendBusinessAccountHistory(account, 'activated', reason || 'Business account activated.');
+    } else if (normalized === 'inactive') {
+        if (currentStatus === 'inactive') {
+            return 'Business account is already inactive.';
+        }
+        if (currentStatus !== 'active') {
+            return 'Only active accounts can be deactivated.';
+        }
+        account.status = 'inactive';
+        appendBusinessAccountHistory(account, 'deactivated', reason || 'Business account deactivated.');
+    } else {
+        return 'Unsupported status change requested.';
     }
 
     saveBusinessAccountsToStorage();
@@ -26538,7 +32267,10 @@ function applyBusinessAccountDecision(account, action, reason) {
     if (state.activeBusinessAccountId === account.id) {
         renderBusinessAccountDetail(account);
     }
-    return 'Business account updated.';
+
+    return normalized === 'active'
+        ? 'Business account activated.'
+        : 'Business account deactivated.';
 }
 
 function confirmBusinessAccountDecision() {
@@ -26556,15 +32288,42 @@ function confirmBusinessAccountDecision() {
     const textarea = document.getElementById('businessAccountDecisionReasonInput');
     const reason = textarea ? textarea.value.trim() : '';
 
-    const message = applyBusinessAccountDecision(account, context.action, reason);
-    showNotification('success', message);
+    const result = applyBusinessAccountDecision(account, context.action, reason);
+    if (!result || typeof result !== 'object') {
+        showNotification('warning', 'Unable to update the business account.');
+        return;
+    }
+
+    if (!result.success) {
+        showNotification(result.severity || 'warning', result.message || 'Unable to update the business account.');
+        return;
+    }
+
+    showNotification(result.severity || 'success', result.message || 'Business account updated.');
     closeBusinessAccountDecisionOverlay();
 }
 
 function handleBusinessAccountsTableClick(event) {
     const row = event.target.closest('tr[data-account-id]');
     if (row) {
-        openBusinessAccountDetail(row.dataset.accountId);
+        const accountId = row.dataset.accountId;
+        if (!accountId) {
+            return;
+        }
+        const account = (businessAccounts || []).find(entry => entry && String(entry.id) === accountId);
+        if (!account) {
+            return;
+        }
+        const activeId = state.activeBusinessAccountId !== null && state.activeBusinessAccountId !== undefined
+            ? String(state.activeBusinessAccountId)
+            : null;
+        if (activeId && activeId === accountId) {
+            closeBusinessAccountDetailDrawer();
+            return;
+        }
+        state.activeBusinessAccountId = account.id;
+        syncBusinessAccountRowSelection();
+        updateBusinessAccountsActionToolbar();
     }
 }
 
@@ -26587,6 +32346,77 @@ function handleBusinessAccountsToolbarClick(event) {
 
     if (action === 'detail') {
         openBusinessAccountDetail(accountId);
+        return;
+    }
+
+    const account = (businessAccounts || []).find(entry => entry && entry.id === accountId);
+    if (!account) {
+        showNotification('warning', 'Unable to locate the selected business account.');
+        return;
+    }
+
+    const normalizedStatus = (account.status || '').toLowerCase();
+
+    if ((action === 'approve' || action === 'reject') && normalizedStatus !== 'pending') {
+        showNotification('info', 'Only pending review accounts can be approved or rejected.');
+        return;
+    }
+
+    if (action === 'activate' && normalizedStatus !== 'inactive') {
+        if (normalizedStatus === 'pending') {
+            showNotification('warning', 'Approve or reject the application before changing activation state.');
+        } else {
+            showNotification('info', 'Only inactive accounts can be activated.');
+        }
+        return;
+    }
+
+    if (action === 'deactivate' && normalizedStatus !== 'active') {
+        showNotification('info', 'Only active accounts can be deactivated.');
+        return;
+    }
+
+    if (action === 'marketplace') {
+        const { individual } = resolveBusinessAccountPrimaryIndividual(account);
+        if (!individual || !individual.id) {
+            showNotification('warning', 'No linked individual account available for marketplace insights.');
+            return;
+        }
+        openIndividualAccountMarketplaceOverlay(individual.id);
+        return;
+    }
+
+    if (action === 'update-list') {
+        if (!['active', 'inactive'].includes(normalizedStatus)) {
+            showNotification('info', 'Publishing lists are available for active or inactive accounts only.');
+            return;
+        }
+        const { individual } = resolveBusinessAccountPrimaryIndividual(account);
+        if (!individual) {
+            showNotification('warning', 'Link an individual account before updating publishing lists.');
+            return;
+        }
+        const identifier = resolveIndividualAccountAutomationIdentifier(individual);
+        if (!identifier) {
+            showNotification('warning', 'Linked individual is missing an identifier for publishing lists.');
+            return;
+        }
+        if (individual.id !== null && individual.id !== undefined) {
+            state.activeIndividualAccountId = individual.id;
+        }
+        openIndividualAccountPublishingListOverlay(individual);
+        return;
+    }
+
+    if (action === 'activate') {
+        const message = setBusinessAccountStatus(account, 'active', {});
+        showNotification('success', message);
+        return;
+    }
+
+    if (action === 'deactivate') {
+        const message = setBusinessAccountStatus(account, 'inactive', {});
+        showNotification('success', message);
         return;
     }
 
@@ -26656,8 +32486,9 @@ function deleteAllBusinessAccounts({ refresh = true } = {}) {
         renderBusinessAccountsTable(1);
     } else {
         updateBusinessAccountsActionToolbar();
-        updateBusinessRequestsCountLabel();
     }
+
+    refreshBusinessRequestsWorkspace();
 }
 
 function generateBusinessPackageId() {
@@ -26908,9 +32739,10 @@ function exportBusinessAccounts() {
         showNotification('warning', 'There are no business accounts to export.');
         return;
     }
-    const headers = ['ID', 'Company Name', 'Contact Name', 'Email', 'Phone', 'City', 'Status', 'Package', 'Submitted', 'Approved', 'Financial Status'];
+    const headers = ['ID', 'Company Name', 'Contact Name', 'Email', 'Phone', 'City', 'Status', 'Created', 'Package', 'Approved', 'Financial Status'];
     const rows = businessAccounts.map(account => {
         const pkg = businessPackages.find(entry => entry && entry.id === account.packageId);
+        const createdTimestamp = account.createdAt || account.submittedAt;
         return [
             account.id || '',
             account.companyName || '',
@@ -26919,8 +32751,8 @@ function exportBusinessAccounts() {
             account.phone || '',
             account.city || '',
             getBusinessAccountStatusLabel(account.status),
+            formatDateForDisplay(createdTimestamp, { includeTime: true }) || '',
             pkg ? pkg.name : account.packageId || '',
-            formatDateForDisplay(account.submittedAt, { includeTime: true }) || '',
             formatDateForDisplay(account.approvedAt, { includeTime: true }) || '',
             account.financialStatus || ''
         ];
@@ -26987,6 +32819,7 @@ async function handleBusinessAccountsImport(file) {
 
         saveBusinessAccountsToStorage();
         renderBusinessAccountsTable(1);
+        refreshBusinessRequestsWorkspace();
         updateBusinessAccountsImportStatus(`Imported ${created.length} business accounts successfully.`, 'success');
         showNotification('success', 'Business accounts dataset updated.');
     } catch (error) {

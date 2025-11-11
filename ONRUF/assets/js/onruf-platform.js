@@ -144,7 +144,235 @@ const state = {
     businessAccounts: []
 };
 
-document.addEventListener('DOMContentLoaded', initializeMarketplace);
+const viewStore = {
+    activeView: null,
+    registry: new Map()
+};
+
+document.addEventListener('DOMContentLoaded', initializeOnrufPlatform);
+
+function initializeOnrufPlatform() {
+    registerDefaultViews();
+    setupViewTargetNavigation();
+    const initialView = document.body?.dataset?.view || 'marketplace';
+    setActiveView(initialView);
+}
+
+function registerDefaultViews() {
+    registerView('marketplace', { init: initializeMarketplace, activate: applyMarketplaceView });
+    registerView('add-product', { init: initializeAddProductView, activate: applyAddProductView });
+    registerView('add-product-checkout', { init: initializeAddProductCheckoutView, activate: applyAddProductCheckoutView });
+}
+
+function registerView(viewId, lifecycle) {
+    if (!viewId) {
+        return;
+    }
+    const normalized = typeof lifecycle === 'function' ? { init: lifecycle } : (lifecycle || {});
+    const entry = {
+        init: typeof normalized.init === 'function' ? normalized.init : null,
+        activate: typeof normalized.activate === 'function' ? normalized.activate : null,
+        teardown: typeof normalized.teardown === 'function' ? normalized.teardown : null,
+        initialized: false
+    };
+    viewStore.registry.set(viewId, entry);
+}
+
+function setActiveView(viewId, context = {}) {
+    if (!viewId || viewStore.activeView === viewId) {
+        return;
+    }
+    const nextView = document.querySelector(`.view[data-view-id="${viewId}"]`);
+    if (!nextView) {
+        console.warn(`View "${viewId}" not found.`);
+        return;
+    }
+
+    if (viewStore.activeView) {
+        const currentView = document.querySelector(`.view[data-view-id="${viewStore.activeView}"]`);
+        if (currentView) {
+            currentView.hidden = true;
+        }
+        const currentEntry = viewStore.registry.get(viewStore.activeView);
+        if (currentEntry && typeof currentEntry.teardown === 'function') {
+            currentEntry.teardown({ from: viewStore.activeView, to: viewId });
+        }
+    }
+
+    nextView.hidden = false;
+    document.body.setAttribute('data-view', viewId);
+    viewStore.activeView = viewId;
+
+    const entry = viewStore.registry.get(viewId);
+    if (entry) {
+        if (!entry.initialized && entry.init) {
+            entry.init(context);
+            entry.initialized = true;
+        }
+        if (entry.activate) {
+            entry.activate(context);
+        }
+    }
+}
+
+function setupViewTargetNavigation() {
+    document.addEventListener('click', event => {
+        const trigger = event.target.closest('[data-view-target]');
+        if (!trigger) {
+            return;
+        }
+        const targetView = trigger.getAttribute('data-view-target');
+        if (!targetView) {
+            return;
+        }
+        event.preventDefault();
+        setActiveView(targetView);
+    });
+
+    document.addEventListener('keydown', event => {
+        if (event.key !== 'Enter' && event.key !== ' ') {
+            return;
+        }
+        const trigger = event.target.closest('[data-view-target]');
+        if (!trigger) {
+            return;
+        }
+        const targetView = trigger.getAttribute('data-view-target');
+        if (!targetView) {
+            return;
+        }
+        event.preventDefault();
+        setActiveView(targetView);
+    });
+}
+
+function initializeAddProductView() {
+    const main = document.getElementById('addProductMain');
+    if (main && main.hidden) {
+        main.hidden = false;
+    }
+    setupAddProductNavigation();
+}
+
+function applyAddProductView() {
+    if (!ensureMarketplaceSession()) {
+        return;
+    }
+}
+
+function setupAddProductNavigation() {
+    const container = document.querySelector('.view-add-product');
+    if (!container || container.dataset.bound === 'true') {
+        return;
+    }
+
+    const profileBtn = document.getElementById('addProductProfileBtn');
+    if (profileBtn) {
+        profileBtn.addEventListener('click', () => {
+            setActiveView('profile');
+        });
+    }
+
+    const signOutBtn = document.getElementById('addProductSignOutBtn');
+    if (signOutBtn) {
+        signOutBtn.addEventListener('click', () => {
+            clearMarketplaceSession();
+            setActiveView('marketplace');
+        });
+    }
+
+    const packageAddBtn = document.getElementById('packageAddBtn');
+    if (packageAddBtn) {
+        packageAddBtn.addEventListener('click', () => {
+            showComingSoon('Package upgrades');
+        });
+    }
+
+    const packageSkipBtn = document.getElementById('packageSkipBtn');
+    if (packageSkipBtn) {
+        packageSkipBtn.addEventListener('click', () => {
+            setActiveView('add-product-checkout');
+        });
+    }
+
+    container.dataset.bound = 'true';
+}
+
+function initializeAddProductCheckoutView() {
+    const main = document.getElementById('checkoutMain');
+    if (main && main.hidden) {
+        main.hidden = false;
+    }
+    setupAddProductCheckoutNavigation();
+}
+
+function applyAddProductCheckoutView() {
+    if (!ensureMarketplaceSession()) {
+        return;
+    }
+}
+
+function setupAddProductCheckoutNavigation() {
+    const container = document.querySelector('.view-add-product-checkout');
+    if (!container || container.dataset.bound === 'true') {
+        return;
+    }
+
+    const profileBtn = document.getElementById('checkoutProfileBtn');
+    if (profileBtn) {
+        profileBtn.addEventListener('click', () => {
+            setActiveView('profile');
+        });
+    }
+
+    const signOutBtn = document.getElementById('checkoutSignOutBtn');
+    if (signOutBtn) {
+        signOutBtn.addEventListener('click', () => {
+            clearMarketplaceSession();
+            setActiveView('marketplace');
+        });
+    }
+
+    const backBtn = document.getElementById('checkoutBackBtn');
+    if (backBtn) {
+        backBtn.addEventListener('click', () => {
+            setActiveView('add-product');
+        });
+    }
+
+    const confirmBtn = document.getElementById('checkoutConfirmBtn');
+    if (confirmBtn) {
+        confirmBtn.addEventListener('click', () => {
+            showComingSoon('Checkout submission');
+        });
+    }
+
+    container.dataset.bound = 'true';
+}
+
+function ensureMarketplaceSession() {
+    if (state.session) {
+        return true;
+    }
+    const session = readMarketplaceSession();
+    if (session) {
+        state.session = session;
+        applyAuthState(session);
+        return true;
+    }
+    window.location.href = 'onruf-login.html';
+    return false;
+}
+
+function clearMarketplaceSession() {
+    try {
+        sessionStorage.removeItem(LOGIN_SESSION_KEY);
+    } catch (error) {
+        console.warn('Unable to remove login session', error);
+    }
+    state.session = null;
+    applyAuthState(null);
+}
 
 function initializeMarketplace() {
     const ads = loadProductAds();
@@ -156,6 +384,14 @@ function initializeMarketplace() {
     wireSearch();
     setupMarketplaceAuth();
     attachSellShortcut();
+}
+
+function applyMarketplaceView() {
+    const dataset = state.filteredAds && state.filteredAds.length ? state.filteredAds : state.ads;
+    renderCategories(state.ads);
+    renderShowcaseSections(dataset);
+    renderClosingSoon(dataset);
+    applyAuthState(readMarketplaceSession());
 }
 
 function loadProductAds() {
@@ -600,7 +836,7 @@ function attachUserMenuInteractions() {
     if (merchantBtn) {
         merchantBtn.addEventListener('click', () => {
             closeUserMenu();
-            window.location.href = 'onruf-business-sign-up.html';
+            setActiveView('business-sign-up', { entry: 'user-menu' });
         });
     }
 
@@ -608,7 +844,7 @@ function attachUserMenuInteractions() {
     if (profileLinkBtn) {
         profileLinkBtn.addEventListener('click', () => {
             closeUserMenu();
-            window.location.href = 'onruf-profile.html';
+            setActiveView('profile');
         });
     }
 
@@ -623,7 +859,7 @@ function attachUserMenuInteractions() {
             }
             state.session = null;
             applyAuthState(null);
-            window.location.href = 'onruf-login.html';
+            setActiveView('marketplace');
         });
     }
 
@@ -641,7 +877,7 @@ function attachSellShortcut() {
             window.location.href = 'onruf-login.html';
             return;
         }
-        window.location.href = 'onruf-add-product.html';
+        setActiveView('add-product');
     });
 }
 

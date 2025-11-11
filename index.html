@@ -655,6 +655,10 @@
                         <button class="sub-app-btn" data-target="onruf-users-business" data-label="Business Accounts Management">
                             <span>Business Accounts Management</span>
                         </button>
+                        <button class="sub-app-btn" data-target="onruf-users-business-requests" data-label="Business Requests Review">
+                            <span>Business Requests Review</span>
+                            <span class="count" id="businessRequestsReviewCountLabel">#0 Pending</span>
+                        </button>
                         <button class="sub-app-btn" data-target="onruf-users-automation" data-label="Automation Policies">
                             <span>Automation Policies</span>
                             <span class="count" id="onrufAutomationCountLabel">#0 Entries</span>
@@ -701,10 +705,6 @@
                                     <i class="fas fa-store"></i>
                                     <span>Marketplace Activity</span>
                                 </button>
-                                <button type="button" class="btn btn-secondary" id="individualAccountsActionLogBtn" data-action="view-log" disabled>
-                                    <i class="fas fa-clock-rotate-left"></i>
-                                    <span>View Log</span>
-                                </button>
                                 <button type="button" class="btn btn-outline individual-action-btn individual-action-activate" id="individualAccountsActionActivateBtn" data-action="activate" disabled>
                                     <i class="fas fa-circle-check"></i>
                                     <span>Activate</span>
@@ -715,7 +715,7 @@
                                 </button>
                                 <button type="button" class="btn btn-outline individual-action-btn individual-action-publish" id="individualAccountsActionAddToBtn" data-action="add-to" disabled>
                                     <i class="fas fa-list-check"></i>
-                                    <span>Add to</span>
+                                    <span>Update list</span>
                                 </button>
                                 <button type="button" class="btn btn-outline" id="individualAccountsResetFiltersBtn">
                                     <i class="fas fa-rotate-left"></i>
@@ -727,6 +727,10 @@
                                 </button>
                             </div>
                             <div class="individual-actions-group individual-actions-group-secondary">
+                                <button type="button" class="btn btn-primary" id="individualAccountsSeedBtn" data-action="seed">
+                                    <i class="fas fa-seedling"></i>
+                                    Seed Account
+                                </button>
                                 <button type="button" class="btn btn-outline" id="exportIndividualAccountsBtn">
                                     <i class="fas fa-file-export"></i>
                                     Export
@@ -883,7 +887,7 @@
                             <div class="header-stack">
                                 <h2 class="module-title" id="businessMerchantsModuleTitle">
                                     <span id="businessMerchantsModuleTitleText">Business Accounts</span>
-                                    <span class="count-badge" id="businessRequestsCountLabel">#0 Pending</span>
+                                    <span class="count-badge" id="businessRequestsCountLabel">#0 Account</span>
                                 </h2>
                                 <div class="detail-controls directory-controls">
                                     <div class="search-box">
@@ -916,23 +920,35 @@
                             <div class="quick-action-group" id="businessAccountsActionToolbar" role="group" aria-label="Business account actions">
                                 <button type="button" class="btn btn-secondary btn-compact" data-action="detail" disabled>
                                     <i class="fas fa-eye"></i>
-                                    View details
+                                    <span class="action-label">Account Details</span>
                                 </button>
-                                <button type="button" class="btn btn-secondary btn-compact" data-action="approve" disabled>
+                                <button type="button" class="btn btn-secondary btn-compact" data-action="marketplace" disabled>
+                                    <i class="fas fa-store"></i>
+                                    Marketplace Activity
+                                </button>
+                                <button type="button" class="btn btn-outline business-action-btn business-action-activate" data-action="activate" disabled>
+                                    <i class="fas fa-circle-check"></i>
+                                    Activate
+                                </button>
+                                <button type="button" class="btn btn-outline business-action-btn business-action-deactivate" data-action="deactivate" disabled>
+                                    <i class="fas fa-power-off"></i>
+                                    Deactivate
+                                </button>
+                                <button type="button" class="btn btn-outline business-action-btn business-action-approve" data-action="approve" disabled>
                                     <i class="fas fa-circle-check"></i>
                                     Approve
                                 </button>
-                                <button type="button" class="btn btn-secondary btn-compact" data-action="request-docs" disabled>
-                                    <i class="fas fa-file-signature"></i>
-                                    Request documents
-                                </button>
-                                <button type="button" class="btn btn-secondary btn-compact" data-action="reject" disabled>
+                                <button type="button" class="btn btn-outline business-action-btn business-action-reject" data-action="reject" disabled>
                                     <i class="fas fa-circle-xmark"></i>
                                     Reject
                                 </button>
+                                <button type="button" class="btn btn-secondary btn-compact" id="businessAccountsActionUpdateListBtn" data-action="update-list" disabled>
+                                    <i class="fas fa-list-check"></i>
+                                    Update list
+                                </button>
                                 <button type="button" class="btn btn-outline" id="businessAccountsResetFiltersBtn">
                                     <i class="fas fa-rotate-left"></i>
-                                    Reset Filters
+                                    Reset
                                 </button>
                                 <button type="button" class="btn btn-outline" id="businessAccountsDeleteAllBtn" data-action="delete-all" disabled>
                                     <i class="fas fa-trash"></i>
@@ -955,11 +971,11 @@
                                             <tr>
                                                 <th>#</th>
                                                 <th>Business</th>
-                                                <th>Contact</th>
                                                 <th>Status</th>
+                                                <th>Created</th>
                                                 <th>Package</th>
-                                                <th>Submitted</th>
-                                                <th>Invoices</th>
+                                                <th>Individual Account</th>
+                                                <th>Publishing List</th>
                                             </tr>
                                         </thead>
                                         <tbody id="businessAccountsTableBody">
@@ -971,9 +987,11 @@
                                 </div>
                                 <div class="pagination" id="businessAccountsPagination"></div>
                             </div>
+                        </div>
 
-                            <aside id="businessAccountDetailDrawer" class="form-card business-account-drawer hidden" role="complementary" aria-labelledby="businessAccountDetailTitle">
-                                <header class="detail-card-header">
+                        <div id="businessAccountDetailOverlay" class="role-detail-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="businessAccountDetailTitle">
+                            <div class="role-detail-modal" role="document">
+                                <header>
                                     <div>
                                         <h3 id="businessAccountDetailTitle">No business selected</h3>
                                         <p class="section-subtitle" id="businessAccountDetailSubtitle">Open an application to review requested documents, invoices, and history.</p>
@@ -982,10 +1000,10 @@
                                         <i class="fas fa-xmark"></i>
                                     </button>
                                 </header>
-                                <div id="businessAccountDetailContent" class="detail-card-body">
+                                <div id="businessAccountDetailContent" class="role-detail-content detail-card-body">
                                     <p class="empty-state">Select a merchant to load their onboarding progress.</p>
                                 </div>
-                            </aside>
+                            </div>
                         </div>
 
                         <div id="businessAccountDecisionOverlay" class="confirm-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="businessAccountDecisionTitle">
@@ -1007,50 +1025,52 @@
                             </div>
                         </div>
 
-                        <section class="business-subscriber-section">
-                            <div class="business-stats-grid" role="group" aria-label="Subscription insights">
-                                <article class="stats-card">
-                                    <span class="stats-label">Total Subscribers</span>
-                                    <strong id="businessSubscribersTotal">0</strong>
-                                    <p class="helper-text" id="businessRenewalNote">Auto-renew enabled for 0 merchants.</p>
-                                </article>
-                                <article class="stats-card">
-                                    <span class="stats-label">Renewal Rate</span>
-                                    <strong id="businessRenewalRate">0%</strong>
-                                    <p class="helper-text" id="businessRevenueDelta">No active subscriptions</p>
-                                </article>
-                                <article class="stats-card">
-                                    <span class="stats-label">Monthly Revenue</span>
-                                    <strong id="businessRevenueTotal">SAR 0.00</strong>
-                                    <p class="helper-text">Recurring totals from active merchants.</p>
-                                </article>
-                                <article class="stats-card">
-                                    <span class="stats-label">Expiring Soon</span>
-                                    <strong id="businessExpiringSoon">0</strong>
-                                    <p class="helper-text" id="businessExpiringNote">All renewals on track.</p>
-                                </article>
+                    </div>
+
+                    <div id="onruf-users-business-requests" class="sub-app">
+                        <section class="business-requests-shell" aria-labelledby="businessRequestsModuleTitleText">
+                            <div class="users-header">
+                                <div class="header-stack">
+                                    <h2 class="module-title" id="businessRequestsModuleTitle">
+                                        <span id="businessRequestsModuleTitleText">Business Account Requests</span>
+                                        <span class="count-badge" id="businessRequestsActiveFilterLabel">Today</span>
+                                    </h2>
+                                    <p class="helper-text">Inspect pending business account onboarding submissions, review the linked individual profile, and approve or reject in seconds.</p>
+                                </div>
                             </div>
 
-                            <div class="table-shell">
-                                <table>
-                                    <thead>
-                                        <tr>
-                                            <th>Business</th>
-                                            <th>Package</th>
-                                            <th>Start</th>
-                                            <th>End</th>
-                                            <th>Status</th>
-                                            <th>Auto-Renew</th>
-                                            <th>Payment</th>
-                                            <th>Notes</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="businessSubscribersTableBody">
-                                        <tr>
-                                            <td colspan="8">Subscriber insights will appear here.</td>
-                                        </tr>
-                                    </tbody>
-                                </table>
+                            <div class="business-requests-toolbar" id="businessRequestsToolbar">
+                                <div class="business-requests-search">
+                                    <i class="fas fa-search"></i>
+                                    <input type="search" id="businessRequestsSearchInput" placeholder="Search by company, contact, registration number, VAT, or city" autocomplete="off" />
+                                </div>
+                                <div class="business-requests-filters">
+                                    <div class="business-requests-period" id="businessRequestsPeriodChips" role="group" aria-label="Request time period filters">
+                                        <button type="button" class="chip" data-business-request-period="today">Today</button>
+                                        <button type="button" class="chip" data-business-request-period="7days">Last 7 days</button>
+                                        <button type="button" class="chip" data-business-request-period="30days">Last 30 days</button>
+                                        <button type="button" class="chip" data-business-request-period="all">All pending</button>
+                                        <button type="button" class="chip" data-business-request-period="custom">Custom</button>
+                                    </div>
+                                    <div class="business-requests-dates" aria-label="Custom date range">
+                                        <label class="filter-control" for="businessRequestsStartDate">From
+                                            <input type="date" id="businessRequestsStartDate" />
+                                        </label>
+                                        <label class="filter-control" for="businessRequestsEndDate">To
+                                            <input type="date" id="businessRequestsEndDate" />
+                                        </label>
+                                        <button type="button" class="btn btn-outline btn-compact" id="businessRequestsResetBtn">
+                                            <i class="fas fa-rotate-left"></i>
+                                            Reset
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="business-requests-summary" id="businessRequestsSummary"></div>
+
+                            <div class="business-requests-grid" id="businessRequestsGrid" aria-live="polite">
+                                <div class="empty-state" id="businessRequestsEmptyState">Pending business account requests will appear here.</div>
                             </div>
                         </section>
                     </div>
@@ -2057,7 +2077,6 @@
             <div class="individual-publishing-header">
                 <div>
                     <h3 id="individualPublishingOverlayTitle">Add to Publishing List</h3>
-                    <p class="helper-text" id="individualPublishingOverlayDescription">Route this individual account's listings to the appropriate review flow.</p>
                 </div>
                 <button type="button" class="modal-close-btn" id="individualPublishingCloseBtn" aria-label="Close publishing list overlay">
                     <i class="fas fa-xmark"></i>
@@ -2078,7 +2097,7 @@
                         <option value="blacklist">Blacklist</option>
                     </select>
                 </div>
-                <div class="form-group">
+                <div class="form-group individual-publishing-notes-group">
                     <label class="form-label" for="individualPublishingNotesInput">Internal notes</label>
                     <textarea id="individualPublishingNotesInput" class="form-input" rows="3" placeholder="Add internal context (optional)"></textarea>
                 </div>
