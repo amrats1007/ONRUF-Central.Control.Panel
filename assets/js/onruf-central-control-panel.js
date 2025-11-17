@@ -167,6 +167,43 @@ function buildCategoryModalHierarchy(items) {
     return { roots, nodesByKey, canonicalize };
 }
 
+function normalizeCategoryModalKey(entry) {
+    if (entry === null || entry === undefined) {
+        return '';
+    }
+    if (typeof entry === 'string' || typeof entry === 'number') {
+        return String(entry).trim();
+    }
+    if (typeof entry !== 'object') {
+        return '';
+    }
+
+    const candidates = [];
+    if (Array.isArray(entry.path) && entry.path.length) {
+        const lastPathSegment = entry.path[entry.path.length - 1];
+        if (typeof lastPathSegment === 'string') {
+            candidates.push(lastPathSegment);
+        }
+    }
+    candidates.push(
+        entry.id,
+        entry.categoryId,
+        entry.categoryCode,
+        entry.code,
+        entry.slug,
+        entry.nameEnglish,
+        entry.nameArabic
+    );
+
+    for (const candidate of candidates) {
+        if (typeof candidate === 'string' && candidate.trim()) {
+            return candidate.trim();
+        }
+    }
+
+    return '';
+}
+
 function renderCategoryModalTree(items, onSelect, { expandedKeys = null, selectedKey = null, disableEntry = null } = {}) {
     const container = document.getElementById('categoryModalTree');
     if (!container) {
@@ -2174,6 +2211,9 @@ const state = {
     individualBusinessOverlayReturnFocus: null,
     individualMarketplaceOverlayAccountId: null,
     individualMarketplaceOverlayReturnFocus: null,
+    businessMarketplaceOverlayBusinessId: null,
+    businessMarketplaceOverlayIndividualId: null,
+    businessMarketplaceOverlayReturnFocus: null,
     individualLogOverlayAccountId: null,
     individualPublishingOverlayContext: null,
     individualPublishingOverlayReturnFocus: null,
@@ -2193,9 +2233,12 @@ const state = {
     },
     activeBusinessAccountId: null,
     businessDecisionContext: null,
+    businessRequestDecisionContext: null,
+    businessRequestIndividualContext: null,
     businessRequestsFilters: {
         search: '',
         period: 'today',
+        previousPeriod: 'today',
         startDate: null,
         endDate: null
     },
@@ -2501,6 +2544,25 @@ const categoryImportElements = {
     submitBtn: null,
     submitLabel: null,
     cancelBtn: null
+};
+
+const categorySortState = {
+    activeParentId: CATEGORY_TREE_ROOT_ID,
+    orderByParent: new Map(),
+    initialSequence: new Map(),
+    isSaving: false
+};
+
+const categorySortElements = {
+    overlay: null,
+    tree: null,
+    list: null,
+    title: null,
+    hint: null,
+    closeBtn: null,
+    cancelBtn: null,
+    saveBtn: null,
+    saveLabel: null
 };
 
 const SPECIFICATION_IMPORT_CONFIG = {
@@ -2990,7 +3052,7 @@ const defaultBusinessAccounts = [
         ],
         primaryIndividualId: 'IND-5101',
         application: {
-            companyNameArabic: 'Sharikat Najd Culinary',
+            companyNameArabic: 'استوديو نجد للطهي',
             companyNameEnglish: 'Najd Culinary Studio',
             username: 'najd-culinary',
             registrationNumber: '1011223344',
@@ -3062,7 +3124,7 @@ const defaultBusinessAccounts = [
         ],
         primaryIndividualId: 'IND-5102',
         application: {
-            companyNameArabic: 'Orbit Activewear',
+            companyNameArabic: 'أوربت للملابس الرياضية',
             companyNameEnglish: 'Orbit Activewear',
             username: 'orbit-activewear',
             registrationNumber: '2053342211',
@@ -3131,7 +3193,7 @@ const defaultBusinessAccounts = [
         ],
         primaryIndividualId: 'IND-5103',
         application: {
-            companyNameArabic: 'Harbor Shared Offices',
+            companyNameArabic: 'مكاتب هاربور المشتركة',
             companyNameEnglish: 'Harbor Shared Offices',
             username: 'harbor-offices',
             registrationNumber: '2039988776',
@@ -3493,7 +3555,7 @@ const BUSINESS_PACKAGES_STORAGE_KEY = 'onruf_business_packages_v1';
 const BUSINESS_SUBSCRIBERS_STORAGE_KEY = 'onruf_business_subscribers_v1';
 const FINANCE_TRANSACTIONS_STORAGE_KEY = 'onruf_finance_transactions_v1';
 const FINANCE_AUDIT_STORAGE_KEY = 'onruf_finance_audit_v1';
-const DATA_RESET_VERSION = '20251110-follow-ups-v6';
+const DATA_RESET_VERSION = '20251114-individual-market-activity';
 const DATA_RESET_KEY = 'onruf_data_reset_version';
 const CATEGORY_RESET_VERSION = '20251021-delete-all-categories';
 const CATEGORY_RESET_KEY = 'onruf_category_reset_version';
@@ -4709,6 +4771,43 @@ function normalizeCategoryPayload(category, index = 0) {
         createdAt = new Date().toISOString();
     }
 
+    const sortOrderCandidates = [
+        category.sortOrder,
+        category.sort,
+        category.order,
+        category.orderIndex,
+        category.displayOrder,
+        category.sequence,
+        category.position
+    ];
+
+    let sortOrder = null;
+    for (const candidate of sortOrderCandidates) {
+        if (candidate === null || candidate === undefined) {
+            continue;
+        }
+        if (typeof candidate === 'number') {
+            if (Number.isFinite(candidate)) {
+                sortOrder = candidate;
+                break;
+            }
+            continue;
+        }
+        if (typeof candidate === 'string') {
+            const trimmed = candidate.trim();
+            if (!trimmed) {
+                continue;
+            }
+            const parsed = Number(trimmed);
+            if (Number.isFinite(parsed)) {
+                sortOrder = parsed;
+                break;
+            }
+        }
+    }
+
+    sortOrder = Number.isFinite(sortOrder) ? Math.round(sortOrder) : null;
+
     const createdMethod = normalizeCategoryCreationMethod(rawCreationMethod);
 
     return {
@@ -4751,6 +4850,13 @@ function normalizeCategoryPayload(category, index = 0) {
     createdById: Number.isInteger(createdById) ? createdById : null,
     createdByEmail,
     createdMethod,
+    sortOrder,
+    sort: sortOrder,
+    order: sortOrder,
+    orderIndex: sortOrder,
+    displayOrder: sortOrder,
+    sequence: sortOrder,
+    position: sortOrder,
         supportsFixedPrice,
         supportsAuction,
         supportsNegotiation,
@@ -5827,6 +5933,58 @@ const INDIVIDUAL_POINTS_EVENT_DEFINITIONS = {
     }
 };
 
+const INDIVIDUAL_WALLET_MAX_TRANSACTIONS = 20;
+
+const SEED_PROFILE_LIMITS = {
+    walletTransactions: { min: 0, max: INDIVIDUAL_WALLET_MAX_TRANSACTIONS },
+    pointsTransactions: { min: 0, max: INDIVIDUAL_POINTS_MAX_TRANSACTIONS },
+    paymentMethods: { min: 0, max: 10 },
+    savedAddresses: { min: 0, max: 10 },
+    favoriteCategories: { min: 0, max: 10 },
+    favoriteSellers: { min: 0, max: 10 },
+    favoriteSearches: { min: 0, max: 10 }
+};
+
+function sanitizeSeedProfile(profile) {
+    if (!profile || typeof profile !== 'object') {
+        return null;
+    }
+    const sanitized = {};
+    let hasValue = false;
+    Object.keys(SEED_PROFILE_LIMITS).forEach(key => {
+        const raw = Number(profile[key]);
+        if (!Number.isFinite(raw)) {
+            return;
+        }
+        const { min, max } = SEED_PROFILE_LIMITS[key];
+        const clamped = Math.min(max, Math.max(min, Math.round(raw)));
+        sanitized[key] = clamped;
+        hasValue = true;
+    });
+    return hasValue ? sanitized : null;
+}
+
+function resolveSeedPreference(account, key, min, max) {
+    if (!account || typeof account !== 'object') {
+        return null;
+    }
+    const profile = account.seedProfile && typeof account.seedProfile === 'object'
+        ? account.seedProfile
+        : null;
+    if (!profile || !(key in profile)) {
+        return null;
+    }
+    const lowerBound = Number.isFinite(min) ? min : Number.NEGATIVE_INFINITY;
+    const upperBound = Number.isFinite(max) ? max : Number.POSITIVE_INFINITY;
+    const raw = Number(profile[key]);
+    if (!Number.isFinite(raw)) {
+        return null;
+    }
+    const clamped = Math.min(upperBound, Math.max(lowerBound, Math.round(raw)));
+    profile[key] = clamped;
+    return clamped;
+}
+
 function formatPointsNote(template, replacements) {
     if (typeof template !== 'string') {
         return '';
@@ -5990,10 +6148,10 @@ function buildIndividualAccountPaymentMethods(account) {
         .replace(/[^a-z0-9]+/g, '-')
         .replace(/^-+|-+$/g, '') || 'iban';
 
-    const createTimestampPair = offset => {
-        const addedDaysAgo = Math.floor(rng() * 360 + offset * 12) + 7;
+    const createTimestampPair = sequenceIndex => {
+        const addedDaysAgo = Math.floor(rng() * 360 + sequenceIndex * 12) + 7;
         const addedTime = now - addedDaysAgo * msPerDay;
-        const includeUpdate = offset > 0 && offset % 3 === 1;
+        const includeUpdate = sequenceIndex > 0 && sequenceIndex % 3 === 1;
         let updatedAt = null;
         if (includeUpdate) {
             const candidateGapDays = Math.max(1, Math.floor(rng() * 90));
@@ -6006,14 +6164,25 @@ function buildIndividualAccountPaymentMethods(account) {
         return { addedAt, updatedAt, wasUpdated: includeUpdate };
     };
 
-    const cardBrands = INDIVIDUAL_PAYMENT_CARD_BRANDS.slice(0, REQUIRED_PAYMENT_CARD_COUNT);
-    const cards = cardBrands.map((brand, index) => {
+    const targetMethods = resolveSeedPreference(account, 'paymentMethods', 0, 10);
+    const defaultTotal = REQUIRED_PAYMENT_CARD_COUNT + REQUIRED_BANK_ACCOUNT_COUNT;
+    const desiredTotalRaw = Number.isFinite(targetMethods) ? targetMethods : defaultTotal;
+    const desiredTotal = Math.min(10, Math.max(0, desiredTotalRaw));
+    if (!desiredTotal) {
+        return [];
+    }
+
+    const cardBrands = INDIVIDUAL_PAYMENT_CARD_BRANDS;
+    const bankProviders = INDIVIDUAL_BANK_PROVIDERS.length ? INDIVIDUAL_BANK_PROVIDERS : [{ name: 'Bank', swift: 'BANKSARI', code: '00' }];
+
+    const buildCard = (cardIndex, sequenceIndex) => {
+        const brand = cardBrands[cardIndex % cardBrands.length];
         const last4 = pad(Math.floor(rng() * 9000) + 1000, 4);
         const expiryMonth = pad(Math.floor(rng() * 12) + 1, 2);
         const expiryYearValue = new Date().getFullYear() + 2 + Math.floor(rng() * 5);
-        const { addedAt, updatedAt, wasUpdated } = createTimestampPair(index);
+        const { addedAt, updatedAt, wasUpdated } = createTimestampPair(sequenceIndex);
         return {
-            id: `card-${seedBase}-${pad(index + 1, 2)}`,
+            id: `card-${seedBase}-${pad(cardIndex + 1, 2)}`,
             type: 'card',
             brand,
             last4,
@@ -6025,22 +6194,21 @@ function buildIndividualAccountPaymentMethods(account) {
             createdAt: addedAt,
             updatedAt,
             wasUpdated,
-            isDefault: index === 0
+            isDefault: sequenceIndex === 0
         };
-    });
+    };
 
-    const bankAccounts = [];
-    for (let index = 0; index < REQUIRED_BANK_ACCOUNT_COUNT; index += 1) {
-        const bank = INDIVIDUAL_BANK_PROVIDERS[index % INDIVIDUAL_BANK_PROVIDERS.length];
+    const buildBankAccount = (bankIndex, sequenceIndex) => {
+        const bank = bankProviders[bankIndex % bankProviders.length];
         const accountNumber = makeAccountNumber();
         const checkDigits = pad(Math.floor(rng() * 90) + 10, 2);
         const bankCode = pad(bank.code, 2);
         const accountBody = generateDigitString(18);
         const iban = `SA${checkDigits}${bankCode}${accountBody}`.toUpperCase();
         const certificateFile = `${slugifyForCertificate(bank.name)}-iban-${accountBody.slice(-4)}.pdf`;
-        const { addedAt, updatedAt, wasUpdated } = createTimestampPair(index + cardBrands.length);
-        bankAccounts.push({
-            id: `bank-${seedBase}-${pad(index + 1, 2)}`,
+        const { addedAt, updatedAt, wasUpdated } = createTimestampPair(sequenceIndex);
+        return {
+            id: `bank-${seedBase}-${pad(bankIndex + 1, 2)}`,
             type: 'bank-account',
             brand: bank.name,
             bankName: bank.name,
@@ -6056,10 +6224,26 @@ function buildIndividualAccountPaymentMethods(account) {
             updatedAt,
             wasUpdated,
             isDefault: false
-        });
+        };
+    };
+
+    const methods = [];
+    let cardIndex = 0;
+    let bankIndex = 0;
+    while (methods.length < desiredTotal) {
+        const sequenceIndex = methods.length;
+        const shouldAddCard = cardIndex < cardBrands.length
+            && (cardIndex < REQUIRED_PAYMENT_CARD_COUNT || bankIndex >= REQUIRED_BANK_ACCOUNT_COUNT || methods.length % 2 === 0);
+        if (shouldAddCard) {
+            methods.push(buildCard(cardIndex, sequenceIndex));
+            cardIndex += 1;
+        } else {
+            methods.push(buildBankAccount(bankIndex, sequenceIndex));
+            bankIndex += 1;
+        }
     }
 
-    return [...cards, ...bankAccounts];
+    return methods;
 }
 
 function rebuildIndividualWalletHistory(entries, { rng, idSeed }) {
@@ -6123,10 +6307,21 @@ function rebuildIndividualWalletHistory(entries, { rng, idSeed }) {
     };
 }
 
-function generateIndividualWalletHistory({ account, rng, idSeed }) {
-    const minTransactions = 10;
-    const maxTransactions = 20;
-    const totalTransactions = minTransactions + Math.floor(rng() * (maxTransactions - minTransactions + 1));
+function generateIndividualWalletHistory({ account, rng, idSeed, targetCount = null }) {
+    const hasTarget = Number.isFinite(targetCount);
+    const resolvedTarget = hasTarget
+        ? Math.min(INDIVIDUAL_WALLET_MAX_TRANSACTIONS, Math.max(0, Math.round(targetCount)))
+        : null;
+    if (resolvedTarget === 0) {
+        return { history: [], available: 0, pending: 0 };
+    }
+    const fallbackMin = 10;
+    const fallbackMax = INDIVIDUAL_WALLET_MAX_TRANSACTIONS;
+    const minTransactions = hasTarget ? Math.max(1, resolvedTarget) : fallbackMin;
+    const maxTransactions = hasTarget ? Math.max(minTransactions, resolvedTarget) : fallbackMax;
+    const totalTransactions = hasTarget
+        ? resolvedTarget
+        : minTransactions + Math.floor(rng() * (maxTransactions - minTransactions + 1));
     const events = [];
     const now = Date.now();
     let timestampCursor = now - (totalTransactions + 2) * 6_480_000;
@@ -6381,6 +6576,8 @@ function ensureIndividualAccountWallet(account) {
         return false;
     }
 
+    const walletTarget = resolveSeedPreference(account, 'walletTransactions', 0, INDIVIDUAL_WALLET_MAX_TRANSACTIONS);
+    const hasTarget = Number.isFinite(walletTarget);
     const idSeed = (account.id || account.email || account.fullName || 'IND')
         .toString()
         .replace(/[^a-z0-9]/gi, '')
@@ -6401,33 +6598,65 @@ function ensureIndividualAccountWallet(account) {
         ? account.financialHistory.filter(Boolean)
         : [];
 
-    let history;
-    let availableBalance;
-    let pendingBalance;
-    if (existingHistory.length) {
+    let history = [];
+    if (hasTarget && walletTarget === 0) {
+        history = [];
+    } else if (existingHistory.length) {
         const rebuilt = rebuildIndividualWalletHistory(existingHistory, { rng, idSeed });
         history = rebuilt.history;
-        availableBalance = rebuilt.available;
-        pendingBalance = rebuilt.pending;
     } else {
-        const generated = generateIndividualWalletHistory({ account, rng, idSeed });
+        const generated = generateIndividualWalletHistory({
+            account,
+            rng,
+            idSeed,
+            targetCount: hasTarget ? walletTarget : null
+        });
         history = generated.history;
-        availableBalance = generated.available;
-        pendingBalance = generated.pending;
     }
 
-    const trimmedHistory = history.slice(-20);
-    const latestEntry = trimmedHistory[trimmedHistory.length - 1] || null;
-    const totalBalance = Math.max(0, Math.round((availableBalance || 0) + (pendingBalance || 0)));
+    let limitedHistory = history.slice(-INDIVIDUAL_WALLET_MAX_TRANSACTIONS);
+    if (hasTarget) {
+        if (walletTarget === 0) {
+            limitedHistory = [];
+        } else if (limitedHistory.length > walletTarget) {
+            limitedHistory = limitedHistory.slice(-walletTarget);
+        }
+    }
 
-    account.financialHistory = trimmedHistory;
-    account.availableBalance = availableBalance || 0;
-    account.pendingBalance = pendingBalance || 0;
-    account.balance = totalBalance;
+    let computedAvailable = 0;
+    let computedPending = 0;
+    const normalizedHistory = limitedHistory.map(entry => {
+        if (!entry || typeof entry !== 'object') {
+            return null;
+        }
+        const clone = { ...entry };
+        const amount = Number(clone.amount) || 0;
+        const typeLabel = (clone.type || '').toLowerCase();
+        if (typeLabel.includes('pending-release')) {
+            const releaseAmount = Math.abs(amount);
+            computedPending = Math.max(0, computedPending - releaseAmount);
+            computedAvailable = Math.max(0, computedAvailable + releaseAmount);
+        } else if (typeLabel.includes('pending')) {
+            computedPending = Math.max(0, computedPending + amount);
+        } else {
+            computedAvailable = Math.max(0, computedAvailable + amount);
+        }
+        clone.balanceAfter = Math.max(0, Math.round(computedAvailable + computedPending));
+        return clone;
+    }).filter(Boolean);
+
+    const totalBalance = Math.max(0, Math.round(computedAvailable + computedPending));
+
+    account.financialHistory = normalizedHistory;
+    account.availableBalance = Math.max(0, Math.round(computedAvailable));
+    account.pendingBalance = Math.max(0, Math.round(computedPending));
+    account.balance = normalizedHistory.length ? totalBalance : 0;
     account.walletCurrency = typeof account.walletCurrency === 'string' && account.walletCurrency.trim()
         ? account.walletCurrency.trim().toUpperCase()
         : 'SAR';
-    account.walletUpdatedAt = latestEntry?.timestamp || account.walletUpdatedAt || new Date().toISOString();
+    account.walletUpdatedAt = normalizedHistory.length
+        ? normalizedHistory[normalizedHistory.length - 1].timestamp || account.walletUpdatedAt || new Date().toISOString()
+        : account.walletUpdatedAt || new Date().toISOString();
     account.balanceBreakdown = [
         {
             label: 'Available Balance',
@@ -6531,6 +6760,8 @@ function ensureIndividualAccountPoints(account) {
         return;
     }
 
+    const pointsTarget = resolveSeedPreference(account, 'pointsTransactions', 0, INDIVIDUAL_POINTS_MAX_TRANSACTIONS);
+    const hasTarget = Number.isFinite(pointsTarget);
     const idBase = (account.id || account.email || 'IND')
         .toString()
         .replace(/[^a-z0-9]/gi, '')
@@ -6591,7 +6822,7 @@ function ensureIndividualAccountPoints(account) {
             });
         });
 
-        const limitedHistory = rebuiltHistory.slice(-INDIVIDUAL_POINTS_MAX_TRANSACTIONS).map((entry, index) => ({
+        let limitedHistory = rebuiltHistory.slice(-INDIVIDUAL_POINTS_MAX_TRANSACTIONS).map((entry, index) => ({
             id: `points-${idBase}-${String(index + 1).padStart(3, '0')}`,
             label: entry.label,
             delta: entry.delta,
@@ -6600,27 +6831,38 @@ function ensureIndividualAccountPoints(account) {
             note: entry.note
         }));
 
+        if (hasTarget) {
+            if (pointsTarget === 0) {
+                limitedHistory = [];
+            } else if (limitedHistory.length > pointsTarget) {
+                limitedHistory = limitedHistory.slice(-pointsTarget);
+            }
+        }
+
         const latestEntry = limitedHistory[limitedHistory.length - 1] || null;
         account.pointsHistory = limitedHistory;
-        const derivedBalance = latestEntry ? latestEntry.balanceAfter : (rebuiltHistory.length ? rebuiltHistory[rebuiltHistory.length - 1].balanceAfter : 0);
-        if (!Number.isFinite(Number(account.pointsBalance))) {
-            account.pointsBalance = derivedBalance;
-        } else {
-            account.pointsBalance = Math.max(0, Math.round(Number(account.pointsBalance)));
-        }
+        const derivedBalance = latestEntry ? latestEntry.balanceAfter : 0;
+        account.pointsBalance = limitedHistory.length ? Math.max(0, Math.round(derivedBalance)) : 0;
         account.points = account.pointsBalance;
-        if (!account.pointsUpdatedAt && latestEntry) {
-            account.pointsUpdatedAt = latestEntry.timestamp;
-        }
-        if (!account.pointsUpdatedAt) {
-            account.pointsUpdatedAt = new Date().toISOString();
-        }
+        account.pointsUpdatedAt = limitedHistory.length
+            ? (latestEntry?.timestamp || account.pointsUpdatedAt || new Date().toISOString())
+            : account.pointsUpdatedAt || new Date().toISOString();
+        return;
+    }
+
+    if (hasTarget && pointsTarget === 0) {
+        account.pointsHistory = [];
+        account.pointsBalance = 0;
+        account.points = 0;
+        account.pointsUpdatedAt = account.pointsUpdatedAt || new Date().toISOString();
         return;
     }
 
     const rng = createDeterministicRandom(`${account.id || account.email || account.fullName || Date.now()}|points`);
-    const totalTransactions = INDIVIDUAL_POINTS_MIN_TRANSACTIONS
-        + Math.floor(rng() * (INDIVIDUAL_POINTS_MAX_TRANSACTIONS - INDIVIDUAL_POINTS_MIN_TRANSACTIONS + 1));
+    const totalTransactions = hasTarget
+        ? pointsTarget
+        : INDIVIDUAL_POINTS_MIN_TRANSACTIONS
+            + Math.floor(rng() * (INDIVIDUAL_POINTS_MAX_TRANSACTIONS - INDIVIDUAL_POINTS_MIN_TRANSACTIONS + 1));
     const events = [];
     let balance = 0;
     const now = Date.now();
@@ -6733,6 +6975,12 @@ function ensureIndividualAccountRatings(account) {
             purchases: [],
             sales: [],
             productAds: [],
+            salesProducts: [],
+            salesProductOffers: [],
+            purchaseOrders: [],
+            biddingOffers: [],
+            missedOpportunities: [],
+            negotiatedOffers: [],
             followUps: {},
             sellerRatings: [],
             buyerRatings: [],
@@ -6742,6 +6990,34 @@ function ensureIndividualAccountRatings(account) {
         if (!Array.isArray(account.marketplaceActivity.purchases)) account.marketplaceActivity.purchases = [];
         if (!Array.isArray(account.marketplaceActivity.sales)) account.marketplaceActivity.sales = [];
         if (!Array.isArray(account.marketplaceActivity.productAds)) account.marketplaceActivity.productAds = [];
+        if (!Array.isArray(account.marketplaceActivity.salesProducts)) {
+            const fallbackListings = Array.isArray(account.marketplaceActivity.productAds)
+                ? account.marketplaceActivity.productAds.slice()
+                : Array.isArray(account.marketplaceActivity.sales)
+                    ? account.marketplaceActivity.sales.slice()
+                    : [];
+            account.marketplaceActivity.salesProducts = fallbackListings;
+        }
+        if (!Array.isArray(account.marketplaceActivity.salesProductOffers)) {
+            const fallbackOffers = Array.isArray(account.marketplaceActivity.productOffers)
+                ? account.marketplaceActivity.productOffers.slice()
+                : [];
+            account.marketplaceActivity.salesProductOffers = fallbackOffers;
+        }
+        if (!Array.isArray(account.marketplaceActivity.purchaseOrders)) {
+            const fallbackOrders = Array.isArray(account.marketplaceActivity.purchases)
+                ? account.marketplaceActivity.purchases.slice()
+                : [];
+            account.marketplaceActivity.purchaseOrders = fallbackOrders;
+        }
+        if (!Array.isArray(account.marketplaceActivity.biddingOffers)) account.marketplaceActivity.biddingOffers = [];
+        if (!Array.isArray(account.marketplaceActivity.missedOpportunities)) account.marketplaceActivity.missedOpportunities = [];
+        if (!Array.isArray(account.marketplaceActivity.negotiatedOffers)) {
+            const fallbackNegotiations = Array.isArray(account.marketplaceActivity.purchaseNegotiations)
+                ? account.marketplaceActivity.purchaseNegotiations.slice()
+                : [];
+            account.marketplaceActivity.negotiatedOffers = fallbackNegotiations;
+        }
         if (!account.marketplaceActivity.followUps || typeof account.marketplaceActivity.followUps !== 'object') {
             account.marketplaceActivity.followUps = {};
         }
@@ -6846,59 +7122,76 @@ function ensureIndividualAccountSavedAddresses(account) {
     const preferredCity = account.address && account.address.city ? account.address.city : account.city || 'Riyadh';
     const baseTime = Date.parse(account.createdAt || account.signupCompletedAt || account.signupDate || '') || Date.now();
     const normalizedMobile = typeof account.mobile === 'string' && account.mobile.trim() ? account.mobile.trim() : '';
+    const desiredTotalRaw = resolveSeedPreference(account, 'savedAddresses', 0, 10);
+    const hasTarget = Number.isFinite(desiredTotalRaw);
+    const initialCount = mergedSaved.length;
+    const desiredTotal = hasTarget
+        ? Math.min(10, Math.max(0, desiredTotalRaw))
+        : Math.max(initialCount, REQUIRED_ADDITIONAL_SAVED_ADDRESS_COUNT);
 
-    for (let index = 0; index < REQUIRED_ADDITIONAL_SAVED_ADDRESS_COUNT; index += 1) {
-        const autoId = `${seedBase}-auto-address-${index + 1}`;
-        if (seenKeys.has(autoId.toLowerCase())) {
-            continue;
-        }
-        const addressRng = createDeterministicRandom(`${seedBase}|auto-address-${index + 1}`);
-        const cityCandidates = [preferredCity, ...SAVED_ADDRESS_CITY_OPTIONS];
-        const city = pickFromArray(addressRng, cityCandidates.filter(Boolean)) || preferredCity || 'Riyadh';
-        const districtCandidates = [account.address && account.address.district, ...SAVED_ADDRESS_DISTRICT_OPTIONS];
-        const district = pickFromArray(addressRng, districtCandidates.filter(Boolean)) || 'Central District';
-        const streetRoot = pickFromArray(addressRng, SAVED_ADDRESS_STREET_OPTIONS);
-        const streetName = streetRoot ? `${streetRoot} ${addressRng() > 0.5 ? 'Street' : 'Road'}` : 'Main Street';
-        const streetNumber = String(Math.floor(addressRng() * 600) + 50);
-        const buildingNumber = String(Math.floor(addressRng() * 40) + 10);
-        const apartmentNumber = String(Math.floor(addressRng() * 50) + 1);
-        const floorNumber = String(Math.floor(addressRng() * 15) + 1);
-        const zipCode = String(10000 + Math.floor(addressRng() * 90000));
-        const addedOffsetDays = 7 * (index + 1);
-        const addedAt = new Date(baseTime + addedOffsetDays * 86_400_000).toISOString();
-        let updatedAt = null;
-        if (addressRng() > 0.65) {
-            const updateOffsetDays = 10 + Math.floor(addressRng() * 60);
-            updatedAt = new Date(Date.parse(addedAt) + updateOffsetDays * 86_400_000).toISOString();
-        }
-        const phoneNumber = normalizedMobile || `+9665${String(Math.floor(addressRng() * 90000000) + 10000000)}`;
-        const label = pickFromArray(addressRng, SAVED_ADDRESS_LABEL_OPTIONS) || `Address ${index + 1}`;
+    if (!hasTarget || desiredTotal > mergedSaved.length) {
+        const targetCount = hasTarget ? desiredTotal : Math.max(desiredTotal, mergedSaved.length);
+        for (let index = 0; mergedSaved.length < targetCount && index < targetCount + REQUIRED_ADDITIONAL_SAVED_ADDRESS_COUNT; index += 1) {
+            const autoId = `${seedBase}-auto-address-${index + 1}`;
+            if (seenKeys.has(autoId.toLowerCase())) {
+                continue;
+            }
+            const addressRng = createDeterministicRandom(`${seedBase}|auto-address-${index + 1}`);
+            const cityCandidates = [preferredCity, ...SAVED_ADDRESS_CITY_OPTIONS];
+            const city = pickFromArray(addressRng, cityCandidates.filter(Boolean)) || preferredCity || 'Riyadh';
+            const districtCandidates = [account.address && account.address.district, ...SAVED_ADDRESS_DISTRICT_OPTIONS];
+            const district = pickFromArray(addressRng, districtCandidates.filter(Boolean)) || 'Central District';
+            const streetRoot = pickFromArray(addressRng, SAVED_ADDRESS_STREET_OPTIONS);
+            const streetName = streetRoot ? `${streetRoot} ${addressRng() > 0.5 ? 'Street' : 'Road'}` : 'Main Street';
+            const streetNumber = String(Math.floor(addressRng() * 600) + 50);
+            const buildingNumber = String(Math.floor(addressRng() * 40) + 10);
+            const apartmentNumber = String(Math.floor(addressRng() * 50) + 1);
+            const floorNumber = String(Math.floor(addressRng() * 15) + 1);
+            const zipCode = String(10000 + Math.floor(addressRng() * 90000));
+            const addedOffsetDays = 7 * (index + 1);
+            const addedAt = new Date(baseTime + addedOffsetDays * 86_400_000).toISOString();
+            let updatedAt = null;
+            if (addressRng() > 0.65) {
+                const updateOffsetDays = 10 + Math.floor(addressRng() * 60);
+                updatedAt = new Date(Date.parse(addedAt) + updateOffsetDays * 86_400_000).toISOString();
+            }
+            const phoneNumber = normalizedMobile || `+9665${String(Math.floor(addressRng() * 90000000) + 10000000)}`;
+            const label = pickFromArray(addressRng, SAVED_ADDRESS_LABEL_OPTIONS) || `Address ${index + 1}`;
 
-        const generatedEntry = {
-            id: autoId,
-            label,
-            nickname: label,
-            country: preferredCountry || DEFAULT_ADDRESS_COUNTRY,
-            region: preferredRegion || DEFAULT_ADDRESS_REGION,
-            city,
-            district,
-            streetName,
-            streetNumber,
-            zipCode,
-            apartment: apartmentNumber,
-            apartmentNo: apartmentNumber,
-            building: buildingNumber,
-            buildingNo: buildingNumber,
-            floor: floorNumber,
-            floorNo: floorNumber,
-            contactPhone: phoneNumber,
-            addedAt
-        };
-        if (updatedAt) {
-            generatedEntry.updatedAt = updatedAt;
-            generatedEntry.hasBeenUpdated = true;
+            const generatedEntry = {
+                id: autoId,
+                label,
+                nickname: label,
+                country: preferredCountry || DEFAULT_ADDRESS_COUNTRY,
+                region: preferredRegion || DEFAULT_ADDRESS_REGION,
+                city,
+                district,
+                streetName,
+                streetNumber,
+                zipCode,
+                apartment: apartmentNumber,
+                apartmentNo: apartmentNumber,
+                building: buildingNumber,
+                buildingNo: buildingNumber,
+                floor: floorNumber,
+                floorNo: floorNumber,
+                contactPhone: phoneNumber,
+                addedAt
+            };
+            if (updatedAt) {
+                generatedEntry.updatedAt = updatedAt;
+                generatedEntry.hasBeenUpdated = true;
+            }
+            pushUniqueAddress(generatedEntry);
         }
-        pushUniqueAddress(generatedEntry);
+    }
+
+    if (hasTarget) {
+        if (desiredTotal === 0) {
+            mergedSaved.length = 0;
+        } else if (mergedSaved.length > desiredTotal) {
+            mergedSaved.splice(desiredTotal);
+        }
     }
 
     if (mergedSaved.length) {
@@ -6979,9 +7272,255 @@ function ensureIndividualAccountSavedAddresses(account) {
     account.marketplaceActivity.savedAddresses = mergedSaved;
 }
 
+function generateIndividualMarketplaceSamples({ account, index = 0 }) {
+    const now = new Date();
+    const randomInt = (min, max) => {
+        const lower = Math.min(min, max);
+        const upper = Math.max(min, max);
+        return lower + Math.floor(Math.random() * (upper - lower + 1));
+    };
+    const randomFloat = (min, max) => {
+        const lower = Math.min(min, max);
+        const upper = Math.max(min, max);
+        const value = lower + Math.random() * (upper - lower);
+        return Math.round(value * 100) / 100;
+    };
+    const pick = list => list[randomInt(0, list.length - 1)];
+    const isoDaysAgo = days => {
+        const safeDays = Number.isFinite(days) ? Math.max(0, days) : 0;
+        return new Date(now.getTime() - safeDays * 86400000).toISOString();
+    };
+
+    const accountId = account && account.id ? String(account.id) : `IND-${String(index + 1).padStart(4, '0')}`;
+    const accountCity = account && account.city ? account.city : pick(['Riyadh', 'Jeddah', 'Dammam', 'Khobar', 'Madinah']);
+
+    const productCatalog = [
+        { title: 'Smart Ambient Lamp', category: 'Smart Home', basePrice: 289, seller: 'Smart Living Solutions' },
+        { title: 'Premium Yoga Mat', category: 'Sports & Outdoors', basePrice: 139, seller: 'Riyadh Fitness Hub' },
+        { title: 'Heritage Coffee Set', category: 'Home & Kitchen', basePrice: 199, seller: 'Najd Culinary Studio' },
+        { title: 'Wireless Noise-Cancelling Buds', category: 'Electronics', basePrice: 499, seller: 'Tech Innovations Co.' },
+        { title: 'Organic Grocery Bundle', category: 'Grocery', basePrice: 129, seller: 'GreenGrocer Market' },
+        { title: 'Luxury Date Gift Box', category: 'Gifts & Celebrations', basePrice: 169, seller: 'Desert Harvest Collective' }
+    ];
+    const buyerNames = ['Lina Al-Saqr', 'Yousef Al-Anazi', 'Huda Al-Amri', 'Omar Al-Jasser', 'Noor Al-Shehri'];
+    const saleChannels = ['ONRUF Marketplace', 'Direct Offer', 'Marketplace Messaging'];
+    const deliveryNotes = ['Express courier delivery', 'Seller-arranged pickup', 'Marketplace fulfillment', 'Third-party logistics'];
+    const listingStatuses = ['Active', 'Draft', 'Out of Stock'];
+    const offerStatuses = ['Accepted', 'Counter Sent', 'Pending', 'Declined'];
+    const biddingStatuses = ['Leading', 'Outbid', 'Watching'];
+    const negotiationStatuses = ['Accepted', 'Counter Sent', 'Declined'];
+    const missedStatuses = ['Expired', 'Sold Out', 'Closed'];
+
+    const unique = list => {
+        const seen = new Set();
+        const result = [];
+        list.forEach(item => {
+            if (!item) {
+                return;
+            }
+            const key = typeof item === 'string' ? item.trim() : JSON.stringify(item);
+            if (!key || seen.has(key)) {
+                return;
+            }
+            seen.add(key);
+            result.push(item);
+        });
+        return result;
+    };
+
+    const buildPurchase = indexValue => {
+        const product = pick(productCatalog);
+        const quantity = randomInt(1, 3);
+        const unitPrice = randomFloat(product.basePrice * 0.85, product.basePrice * 1.25);
+        const totalAmount = Math.round(unitPrice * quantity * 100) / 100;
+        return {
+            id: `PO-${accountId}-${indexValue}`,
+            title: product.title,
+            amount: totalAmount,
+            quantity,
+            status: pick(['Delivered', 'Completed', 'Processing', 'Awaiting Delivery']),
+            counterparty: product.seller,
+            channel: pick(['Marketplace Checkout', 'In-App Offer', 'Express Delivery']),
+            category: product.category,
+            city: accountCity,
+            timestamp: isoDaysAgo(randomInt(2, 45)),
+            note: pick(deliveryNotes)
+        };
+    };
+
+    const purchaseCount = randomInt(2, 4);
+    const purchases = Array.from({ length: purchaseCount }, (_, idx) => buildPurchase(idx + 1));
+
+    const sales = Array.from({ length: randomInt(1, 3) }, (_, idx) => {
+        const product = pick(productCatalog);
+        const quantity = randomInt(1, 2);
+        const saleAmount = Math.round(randomFloat(product.basePrice * 0.9, product.basePrice * 1.4) * quantity * 100) / 100;
+        const buyer = pick(buyerNames);
+        return {
+            id: `SO-${accountId}-${idx + 1}`,
+            title: product.title,
+            amount: saleAmount,
+            quantity,
+            status: pick(['Fulfilled', 'Shipped', 'Awaiting Pickup']),
+            customer: buyer,
+            counterparty: buyer,
+            channel: pick(saleChannels),
+            category: product.category,
+            city: accountCity,
+            timestamp: isoDaysAgo(randomInt(4, 50)),
+            note: 'Sample outbound sale'
+        };
+    });
+
+    const salesProducts = Array.from({ length: randomInt(2, 4) }, (_, idx) => {
+        const product = pick(productCatalog);
+        const listPrice = randomFloat(product.basePrice * 0.9, product.basePrice * 1.5);
+        const generatedAdId = normalizeProductAdIdentifier(randomInt(0, 9999));
+        return {
+            id: `LIST-${accountId}-${idx + 1}`,
+            productId: `PROD-${accountId}-${idx + 1}`,
+            productAdId: generatedAdId,
+            title: product.title,
+            category: product.category,
+            status: pick(listingStatuses),
+            price: Math.round(listPrice * 100) / 100,
+            publishedAt: isoDaysAgo(randomInt(1, 30)),
+            channel: pick(['Marketplace', 'Featured Placement']),
+            note: 'Auto-generated listing'
+        };
+    });
+
+    const productAds = salesProducts
+        .slice(0, randomInt(1, salesProducts.length))
+        .map((listing, idx) => {
+            const fallbackAdId = normalizeProductAdIdentifier(randomInt(0, 9999)) || '0000';
+            const resolvedAdId = normalizeProductAdIdentifier(listing.productAdId) || fallbackAdId;
+            listing.productAdId = resolvedAdId;
+            return {
+                id: resolvedAdId,
+                listingId: listing.id,
+                productId: listing.productId,
+                title: `${listing.title} Campaign`,
+                status: pick(['Active', 'Paused', 'Draft']),
+                budget: randomFloat(45, 180),
+                views: randomInt(120, 850),
+                clicks: randomInt(18, 160),
+                publishedAt: isoDaysAgo(randomInt(1, 25)),
+                channel: pick(['Marketplace Spotlight', 'Discovery Feed']),
+                note: 'Generated promotion sample'
+            };
+        });
+
+    const salesProductOffers = salesProducts
+        .slice(0, randomInt(1, salesProducts.length))
+        .map((listing, idx) => {
+            const offerAmount = randomFloat(listing.price * 0.82, listing.price * 1.02);
+            const buyer = pick(buyerNames);
+            return {
+                id: `OFFER-${accountId}-${idx + 1}`,
+                title: listing.title,
+                amount: Math.round(offerAmount * 100) / 100,
+                status: pick(offerStatuses),
+                counterparty: buyer,
+                channel: 'Marketplace Messaging',
+                category: listing.category,
+                timestamp: isoDaysAgo(randomInt(1, 18)),
+                note: 'Offer negotiated via chat'
+            };
+        });
+
+    const purchaseOrders = purchases.map((entry, idx) => ({
+        ...entry,
+        id: `ORD-${accountId}-${idx + 1}`,
+        orderId: `ORD-${accountId}-${idx + 1}`,
+        status: pick(['Delivered', 'Awaiting Shipment', 'In Transit']),
+        note: 'Order record generated from sample purchase'
+    }));
+
+    const biddingOffers = Array.from({ length: randomInt(1, 2) }, (_, idx) => {
+        const product = pick(productCatalog);
+        return {
+            id: `BID-${accountId}-${idx + 1}`,
+            title: product.title,
+            amount: randomFloat(product.basePrice * 0.75, product.basePrice * 1.2),
+            status: pick(biddingStatuses),
+            counterparty: pick(buyerNames),
+            timestamp: isoDaysAgo(randomInt(3, 20)),
+            note: 'Live auction participation'
+        };
+    });
+
+    const negotiatedOffers = Array.from({ length: randomInt(1, 2) }, (_, idx) => {
+        const product = pick(productCatalog);
+        return {
+            id: `NEG-${accountId}-${idx + 1}`,
+            title: product.title,
+            amount: randomFloat(product.basePrice * 0.95, product.basePrice * 1.35),
+            status: pick(negotiationStatuses),
+            counterparty: pick(buyerNames),
+            timestamp: isoDaysAgo(randomInt(5, 28)),
+            note: 'Offer negotiated with buyer'
+        };
+    });
+
+    const missedOpportunities = Array.from({ length: randomInt(1, 2) }, (_, idx) => {
+        const product = pick(productCatalog);
+        return {
+            id: `MISS-${accountId}-${idx + 1}`,
+            title: product.title,
+            amount: randomFloat(product.basePrice * 0.8, product.basePrice * 1.1),
+            status: pick(missedStatuses),
+            counterparty: product.seller,
+            timestamp: isoDaysAgo(randomInt(7, 40)),
+            note: 'Opportunity closed before action'
+        };
+    });
+
+    const followUps = {
+        favoriteCategories: unique([
+            ...salesProducts.map(item => item.category),
+            ...purchases.map(item => item.category)
+        ]).slice(0, 4),
+        favoriteSellers: unique([
+            ...purchases.map(item => item.counterparty),
+            ...productAds.map(item => item.title.replace(/ Campaign$/, ''))
+        ]).slice(0, 4),
+        favoriteSearches: unique([
+            'Smart home deals',
+            'Limited time bundles',
+            'Marketplace promotions'
+        ])
+    };
+
+    const additionalSummaryMetrics = [
+        { label: 'Watchlist Items', value: randomInt(3, 9) },
+        { label: 'Open Chats', value: randomInt(1, 4) }
+    ];
+
+    return {
+        purchases,
+        sales,
+        productAds,
+        salesProducts,
+        salesProductOffers,
+        purchaseOrders,
+        biddingOffers,
+        missedOpportunities,
+        negotiatedOffers,
+        followUps,
+        additionalSummaryMetrics
+    };
+}
+
 function normalizeIndividualAccountPayload(account, index = 0) {
     if (!account || typeof account !== 'object') {
         return null;
+    }
+    const seedProfile = sanitizeSeedProfile(account.seedProfile);
+    if (seedProfile) {
+        account.seedProfile = seedProfile;
+    } else if (account.seedProfile) {
+        delete account.seedProfile;
     }
     const fallbackId = `IND-${String(index + 1).padStart(4, '0')}`;
     const id = typeof account.id === 'string' && account.id.trim() ? account.id.trim() : fallbackId;
@@ -7171,6 +7710,62 @@ function normalizeIndividualAccountPayload(account, index = 0) {
         }
         return merged;
     };
+    const resolveCollectionKey = entry => {
+        if (entry === null || entry === undefined) {
+            return '';
+        }
+        if (typeof entry !== 'object') {
+            return String(entry);
+        }
+        const keyCandidates = [
+            ['id', entry.id],
+            ['entryId', entry.entryId],
+            ['recordId', entry.recordId],
+            ['orderId', entry.orderId],
+            ['offerId', entry.offerId],
+            ['listingId', entry.listingId],
+            ['reference', entry.reference],
+            ['productId', entry.productId],
+            ['bidId', entry.bidId]
+        ];
+        for (const [label, value] of keyCandidates) {
+            if (typeof value === 'string' && value.trim()) {
+                return `${label}:${value.trim().toLowerCase()}`;
+            }
+            if (Number.isFinite(value)) {
+                return `${label}:${value}`;
+            }
+        }
+        try {
+            return JSON.stringify(entry);
+        } catch (error) {
+            return '';
+        }
+    };
+    const mergeCollectionsUnique = function () {
+        const merged = [];
+        const seen = new Set();
+        for (let i = 0; i < arguments.length; i += 1) {
+            const collection = arguments[i];
+            if (!Array.isArray(collection)) {
+                continue;
+            }
+            collection.forEach(item => {
+                if (item === null || item === undefined) {
+                    return;
+                }
+                const key = resolveCollectionKey(item);
+                if (key && seen.has(key)) {
+                    return;
+                }
+                if (key) {
+                    seen.add(key);
+                }
+                merged.push(item);
+            });
+        }
+        return merged;
+    };
     const accountFollowUpsSource = account.followUps && typeof account.followUps === 'object' ? account.followUps : {};
     const activityFollowUpsSource = marketplaceActivitySource.followUps && typeof marketplaceActivitySource.followUps === 'object'
         ? marketplaceActivitySource.followUps
@@ -7196,21 +7791,35 @@ function normalizeIndividualAccountPayload(account, index = 0) {
     };
     copyFollowUpsMeta(activityFollowUpsSource);
     copyFollowUpsMeta(accountFollowUpsSource);
-    const favoriteCategories = mergeFavoriteCollections(
+    let favoriteCategories = mergeFavoriteCollections(
         account.favoriteCategories,
         accountFollowUpsSource.favoriteCategories,
         activityFollowUpsSource.favoriteCategories
     );
-    const favoriteSellers = mergeFavoriteCollections(
+    let favoriteSellers = mergeFavoriteCollections(
         account.favoriteSellers,
         accountFollowUpsSource.favoriteSellers,
         activityFollowUpsSource.favoriteSellers
     );
-    const favoriteSearches = mergeFavoriteCollections(
+    let favoriteSearches = mergeFavoriteCollections(
         account.favoriteSearches,
         accountFollowUpsSource.favoriteSearches,
         activityFollowUpsSource.favoriteSearches
     );
+    const clampFavoriteCollection = (collection, key) => {
+        const target = resolveSeedPreference(account, key, 0, (SEED_PROFILE_LIMITS[key] && Number.isFinite(SEED_PROFILE_LIMITS[key].max)) ? SEED_PROFILE_LIMITS[key].max : 10);
+        if (!Number.isFinite(target)) {
+            return Array.isArray(collection) ? collection.filter(Boolean) : [];
+        }
+        if (target <= 0) {
+            return [];
+        }
+        const normalized = Array.isArray(collection) ? collection.filter(Boolean) : [];
+        return normalized.slice(0, target);
+    };
+    favoriteCategories = clampFavoriteCollection(favoriteCategories, 'favoriteCategories');
+    favoriteSellers = clampFavoriteCollection(favoriteSellers, 'favoriteSellers');
+    favoriteSearches = clampFavoriteCollection(favoriteSearches, 'favoriteSearches');
     followUps.favoriteCategories = favoriteCategories;
     followUps.favoriteSellers = favoriteSellers;
     followUps.favoriteSearches = favoriteSearches;
@@ -7218,15 +7827,103 @@ function normalizeIndividualAccountPayload(account, index = 0) {
         ...cloneCollection(account.savedAddresses),
         ...cloneCollection(marketplaceActivitySource.savedAddresses)
     ];
+    const purchasesCollection = cloneCollection(marketplaceActivitySource.purchases);
+    const salesCollection = cloneCollection(marketplaceActivitySource.sales);
+    const productAdsCollection = cloneCollection(marketplaceActivitySource.productAds);
+    const salesProductsCollection = mergeCollectionsUnique(
+        cloneCollection(marketplaceActivitySource.salesProducts),
+        cloneCollection(marketplaceActivitySource.products),
+        cloneCollection(marketplaceActivitySource.productListings),
+        productAdsCollection,
+        salesCollection
+    );
+    const salesProductOffersCollection = mergeCollectionsUnique(
+        cloneCollection(marketplaceActivitySource.salesProductOffers),
+        cloneCollection(marketplaceActivitySource.salesOffers),
+        cloneCollection(marketplaceActivitySource.productOffers),
+        cloneCollection(marketplaceActivitySource.offerResponses),
+        cloneCollection(marketplaceActivitySource.offerInbox)
+    );
+    const purchaseOrdersCollection = mergeCollectionsUnique(
+        cloneCollection(marketplaceActivitySource.purchaseOrders),
+        purchasesCollection
+    );
+    const biddingOffersCollection = mergeCollectionsUnique(
+        cloneCollection(marketplaceActivitySource.biddingOffers),
+        cloneCollection(marketplaceActivitySource.auctionBids),
+        cloneCollection(marketplaceActivitySource.bidHistory),
+        cloneCollection(marketplaceActivitySource.bids)
+    );
+    const missedOpportunitiesCollection = mergeCollectionsUnique(
+        cloneCollection(marketplaceActivitySource.missedOpportunities),
+        cloneCollection(marketplaceActivitySource.missedDeals),
+        cloneCollection(marketplaceActivitySource.lostListings),
+        cloneCollection(marketplaceActivitySource.lostDeals)
+    );
+    const negotiatedOffersCollection = mergeCollectionsUnique(
+        cloneCollection(marketplaceActivitySource.negotiatedOffers),
+        cloneCollection(marketplaceActivitySource.purchaseNegotiations),
+        cloneCollection(marketplaceActivitySource.offerHistory),
+        cloneCollection(marketplaceActivitySource.negotiationOffers)
+    );
     const marketplaceActivity = {
-        purchases: cloneCollection(marketplaceActivitySource.purchases),
-        sales: cloneCollection(marketplaceActivitySource.sales),
-        productAds: cloneCollection(marketplaceActivitySource.productAds),
+        purchases: purchasesCollection,
+        sales: salesCollection,
+        productAds: productAdsCollection,
+        salesProducts: salesProductsCollection,
+        salesProductOffers: salesProductOffersCollection,
+        purchaseOrders: purchaseOrdersCollection,
+        biddingOffers: biddingOffersCollection,
+        missedOpportunities: missedOpportunitiesCollection,
+        negotiatedOffers: negotiatedOffersCollection,
         followUps,
         sellerRatings: cloneCollection(marketplaceActivitySource.sellerRatings),
         buyerRatings: cloneCollection(marketplaceActivitySource.buyerRatings),
         savedAddresses: savedAddressesCombined
     };
+
+    const marketplaceArrays = [
+        'purchases',
+        'sales',
+        'productAds',
+        'salesProducts',
+        'salesProductOffers',
+        'purchaseOrders',
+        'biddingOffers',
+        'missedOpportunities',
+        'negotiatedOffers'
+    ];
+    const marketplaceHasData = marketplaceArrays.some(key => Array.isArray(marketplaceActivity[key]) && marketplaceActivity[key].length);
+    if (!marketplaceHasData) {
+        const samples = generateIndividualMarketplaceSamples({ account: { id, city, firstName, lastName }, index });
+        marketplaceArrays.forEach(key => {
+            if (!Array.isArray(marketplaceActivity[key]) || !marketplaceActivity[key].length) {
+                marketplaceActivity[key] = Array.isArray(samples[key]) ? samples[key] : [];
+            }
+        });
+        if ((!marketplaceActivity.additionalSummaryMetrics || !marketplaceActivity.additionalSummaryMetrics.length)
+            && Array.isArray(samples.additionalSummaryMetrics)
+            && samples.additionalSummaryMetrics.length) {
+            marketplaceActivity.additionalSummaryMetrics = samples.additionalSummaryMetrics;
+        }
+        if (samples.followUps && typeof samples.followUps === 'object') {
+            const mergedFollowUps = marketplaceActivity.followUps && typeof marketplaceActivity.followUps === 'object'
+                ? { ...marketplaceActivity.followUps }
+                : {};
+            Object.keys(samples.followUps).forEach(key => {
+                const preference = resolveSeedPreference(account, key, 0, (SEED_PROFILE_LIMITS[key] && Number.isFinite(SEED_PROFILE_LIMITS[key].max)) ? SEED_PROFILE_LIMITS[key].max : 10);
+                if (Number.isFinite(preference) && preference <= 0) {
+                    mergedFollowUps[key] = [];
+                    return;
+                }
+                if (!Array.isArray(mergedFollowUps[key]) || !mergedFollowUps[key].length) {
+                    mergedFollowUps[key] = samples.followUps[key];
+                }
+            });
+            marketplaceActivity.followUps = mergedFollowUps;
+        }
+    }
+
     const balanceBreakdown = Array.isArray(account.balanceBreakdown)
         ? account.balanceBreakdown.map((entry, entryIndex) => {
             if (!entry || typeof entry !== 'object') return null;
@@ -7373,6 +8070,9 @@ function normalizeIndividualAccountPayload(account, index = 0) {
         invitationOwner,
         notes
     };
+    if (seedProfile) {
+        normalizedAccount.seedProfile = seedProfile;
+    }
     ensureIndividualAccountWallet(normalizedAccount);
     ensureIndividualAccountPoints(normalizedAccount);
     ensureIndividualAccountRatings(normalizedAccount);
@@ -7406,14 +8106,14 @@ function appendIndividualAccountLogEntry(account, entry) {
 function loadIndividualAccountsFromStorage() {
     try {
         const raw = localStorage.getItem(INDIVIDUAL_ACCOUNTS_STORAGE_KEY);
-        if (!raw) return null;
+        if (!raw) return [];
         const parsed = JSON.parse(raw);
-        if (!Array.isArray(parsed) || !parsed.length) return null;
+        if (!Array.isArray(parsed)) return [];
         const normalized = parsed.map((entry, index) => normalizeIndividualAccountPayload(entry, index)).filter(Boolean);
-        return normalized.length ? normalized : null;
+        return Array.isArray(normalized) ? normalized : [];
     } catch (error) {
         console.warn('Unable to load individual accounts:', error);
-        return null;
+        return [];
     }
 }
 
@@ -7494,12 +8194,29 @@ function normalizeBusinessAccountPayload(account, index = 0) {
     const fallbackId = `BUS-${String(index + 1).padStart(4, '0')}`;
     const id = typeof account.id === 'string' && account.id.trim() ? account.id.trim() : fallbackId;
     const companyName = typeof account.companyName === 'string' && account.companyName.trim() ? account.companyName.trim() : `Business ${index + 1}`;
+    const companyNameEnglish = typeof account.companyNameEnglish === 'string' && account.companyNameEnglish.trim()
+        ? account.companyNameEnglish.trim()
+        : account.application && typeof account.application.companyNameEnglish === 'string' && account.application.companyNameEnglish.trim()
+            ? account.application.companyNameEnglish.trim()
+            : companyName;
+    const companyNameArabic = typeof account.companyNameArabic === 'string' && account.companyNameArabic.trim()
+        ? account.companyNameArabic.trim()
+        : account.application && typeof account.application.companyNameArabic === 'string' && account.application.companyNameArabic.trim()
+            ? account.application.companyNameArabic.trim()
+            : '';
     const contactName = typeof account.contactName === 'string' && account.contactName.trim() ? account.contactName.trim() : '';
+    const username = typeof account.username === 'string' && account.username.trim()
+        ? account.username.trim()
+        : account.application && typeof account.application.username === 'string' && account.application.username.trim()
+            ? account.application.username.trim()
+            : '';
     const emailRaw = typeof account.email === 'string' && account.email.trim() ? account.email.trim() : '';
     const email = emailRaw ? (normalizeEmail(emailRaw) || emailRaw.toLowerCase()) : '';
     const phone = typeof account.phone === 'string' && account.phone.trim() ? account.phone.trim() : '';
     const city = typeof account.city === 'string' && account.city.trim() ? account.city.trim() : 'Riyadh';
     const submittedAt = normalizeIsoTimestamp(account.submittedAt, new Date().toISOString());
+    const createdAt = normalizeIsoTimestamp(account.createdAt, submittedAt);
+    const updatedAt = normalizeIsoTimestamp(account.updatedAt, createdAt);
     const approvedAt = normalizeIsoTimestamp(account.approvedAt, null);
     const statusCandidate = typeof account.status === 'string' && account.status.trim() ? account.status.trim().toLowerCase() : 'pending';
     const allowedStatuses = new Set(['pending', 'docs-requested', 'active', 'inactive', 'suspended', 'cancelled', 'rejected']);
@@ -7669,14 +8386,44 @@ function normalizeBusinessAccountPayload(account, index = 0) {
             ? account.publishingListPresetNote.trim()
             : '';
 
+    const socialsClone = { ...socials };
+    const certificatesClone = certificates.slice();
+    const addressClone = { ...address };
+    const application = {
+        companyNameEnglish,
+        companyNameArabic,
+        username,
+        email,
+        phone,
+        documentType: registrationDocumentType,
+        registrationNumber,
+        detailRegistrationNumber,
+        expiryDate,
+        vatNumber,
+        website,
+        maroofUrl,
+        tradeExperience15Years,
+        socials: socialsClone,
+        uploadedCertificates: certificatesClone,
+        address: addressClone,
+        primaryIndividualId: primaryIndividualId || null,
+        logoDataUrl,
+        logoFileName
+    };
+
     return {
         id,
         companyName,
+        companyNameEnglish,
+        companyNameArabic,
         contactName,
+        username,
         email,
         phone,
         city,
         submittedAt,
+        createdAt,
+        updatedAt,
         approvedAt,
         status,
         packageId,
@@ -7700,21 +8447,22 @@ function normalizeBusinessAccountPayload(account, index = 0) {
         logoDataUrl,
         primaryIndividualId: primaryIndividualId || null,
         defaultPublishingListType,
-        defaultPublishingListNote
+        defaultPublishingListNote,
+        application
     };
 }
 
 function loadBusinessAccountsFromStorage() {
     try {
         const raw = localStorage.getItem(BUSINESS_ACCOUNTS_STORAGE_KEY);
-        if (!raw) return null;
+        if (!raw) return [];
         const parsed = JSON.parse(raw);
-        if (!Array.isArray(parsed) || !parsed.length) return null;
+        if (!Array.isArray(parsed)) return [];
         const normalized = parsed.map((entry, index) => normalizeBusinessAccountPayload(entry, index)).filter(Boolean);
-        return normalized.length ? normalized : null;
+        return Array.isArray(normalized) ? normalized : [];
     } catch (error) {
         console.warn('Unable to load business accounts:', error);
-        return null;
+        return [];
     }
 }
 
@@ -8899,64 +9647,54 @@ function enrichIndividualAccountsWithSampleFavorites() {
         return copy;
     };
 
+    const maxFavoriteCount = 10;
+    const buildFavorites = (current, target, sampleList, cloneFn, rotationBase) => {
+        const boundedTarget = Math.max(0, Math.min(maxFavoriteCount, target));
+        if (!boundedTarget) {
+            return [];
+        }
+        const result = Array.isArray(current) ? current.slice(0, boundedTarget) : [];
+        if (!Array.isArray(sampleList) || !sampleList.length) {
+            return result;
+        }
+        let fillIndex = 0;
+        while (result.length < boundedTarget) {
+            const sampleIndex = (rotationBase + fillIndex) % sampleList.length;
+            result.push(cloneFn(sampleList[sampleIndex], result.length));
+            fillIndex += 1;
+        }
+        return result;
+    };
+
     individualAccounts.forEach((account, index) => {
         if (!account || typeof account !== 'object') {
             return;
         }
 
-        const existingCategoryCount = Array.isArray(account.favoriteCategories) ? account.favoriteCategories.length : 0;
-        const existingSellerCount = Array.isArray(account.favoriteSellers) ? account.favoriteSellers.length : 0;
-        const existingSearchCount = Array.isArray(account.favoriteSearches) ? account.favoriteSearches.length : 0;
+        const categoryTargetRaw = resolveSeedPreference(account, 'favoriteCategories', 0, maxFavoriteCount);
+        const sellerTargetRaw = resolveSeedPreference(account, 'favoriteSellers', 0, maxFavoriteCount);
+        const searchTargetRaw = resolveSeedPreference(account, 'favoriteSearches', 0, maxFavoriteCount);
 
-        const needsCategories = existingCategoryCount < desiredFavoriteCount;
-        const needsSellers = existingSellerCount < desiredFavoriteCount;
-        const needsSearches = existingSearchCount < desiredFavoriteCount;
+        const categoryTarget = Number.isFinite(categoryTargetRaw) ? categoryTargetRaw : desiredFavoriteCount;
+        const sellerTarget = Number.isFinite(sellerTargetRaw) ? sellerTargetRaw : desiredFavoriteCount;
+        const searchTarget = Number.isFinite(searchTargetRaw) ? searchTargetRaw : desiredFavoriteCount;
 
-        if (!needsCategories && !needsSellers && !needsSearches) {
-            return;
-        }
+        const rotationOffset = index % Math.max(sampleCategories.length, 1);
 
-        const rotationOffset = index % desiredFavoriteCount;
+        const categories = buildFavorites(account.favoriteCategories, categoryTarget, sampleCategories, cloneCategory, rotationOffset);
+        const sellers = buildFavorites(account.favoriteSellers, sellerTarget, sampleSellers, cloneSeller, rotationOffset);
+        const searches = buildFavorites(account.favoriteSearches, searchTarget, sampleSearches, cloneSearch, rotationOffset);
 
-        if (needsCategories) {
-            const categories = [];
-            for (let i = 0; i < desiredFavoriteCount; i += 1) {
-                const sampleIndex = (rotationOffset + i) % sampleCategories.length;
-                categories.push(cloneCategory(sampleCategories[sampleIndex], i));
-            }
-            account.favoriteCategories = categories;
-        }
-
-        if (needsSellers) {
-            const sellers = [];
-            for (let i = 0; i < desiredFavoriteCount; i += 1) {
-                const sampleIndex = (rotationOffset + i) % sampleSellers.length;
-                sellers.push(cloneSeller(sampleSellers[sampleIndex], i));
-            }
-            account.favoriteSellers = sellers;
-        }
-
-        if (needsSearches) {
-            const searches = [];
-            for (let i = 0; i < desiredFavoriteCount; i += 1) {
-                const sampleIndex = (rotationOffset + i) % sampleSearches.length;
-                searches.push(cloneSearch(sampleSearches[sampleIndex], i));
-            }
-            account.favoriteSearches = searches;
-        }
+        account.favoriteCategories = categories;
+        account.favoriteSellers = sellers;
+        account.favoriteSearches = searches;
 
         if (!account.followUps || typeof account.followUps !== 'object') {
             account.followUps = {};
         }
-        if (needsCategories) {
-            account.followUps.favoriteCategories = account.favoriteCategories;
-        }
-        if (needsSellers) {
-            account.followUps.favoriteSellers = account.favoriteSellers;
-        }
-        if (needsSearches) {
-            account.followUps.favoriteSearches = account.favoriteSearches;
-        }
+        account.followUps.favoriteCategories = categories;
+        account.followUps.favoriteSellers = sellers;
+        account.followUps.favoriteSearches = searches;
 
         if (!account.marketplaceActivity || typeof account.marketplaceActivity !== 'object') {
             account.marketplaceActivity = {};
@@ -8964,15 +9702,9 @@ function enrichIndividualAccountsWithSampleFavorites() {
         if (!account.marketplaceActivity.followUps || typeof account.marketplaceActivity.followUps !== 'object') {
             account.marketplaceActivity.followUps = {};
         }
-        if (needsCategories) {
-            account.marketplaceActivity.followUps.favoriteCategories = account.favoriteCategories;
-        }
-        if (needsSellers) {
-            account.marketplaceActivity.followUps.favoriteSellers = account.favoriteSellers;
-        }
-        if (needsSearches) {
-            account.marketplaceActivity.followUps.favoriteSearches = account.favoriteSearches;
-        }
+        account.marketplaceActivity.followUps.favoriteCategories = categories;
+        account.marketplaceActivity.followUps.favoriteSellers = sellers;
+        account.marketplaceActivity.followUps.favoriteSearches = searches;
     });
 
     saveIndividualAccountsToStorage();
@@ -9091,28 +9823,17 @@ function initializeApp() {
     }
 
     const storedIndividualAccounts = loadIndividualAccountsFromStorage();
-    if (storedIndividualAccounts && storedIndividualAccounts.length) {
-        individualAccounts = storedIndividualAccounts;
-        enrichIndividualAccountsWithSampleFavorites();
-    } else {
-        individualAccounts = defaultIndividualAccounts
-            .map((account, index) => normalizeIndividualAccountPayload(account, index))
-            .filter(Boolean);
-        enrichIndividualAccountsWithSampleFavorites();
-        saveIndividualAccountsToStorage();
-    }
+    individualAccounts = Array.isArray(storedIndividualAccounts)
+        ? storedIndividualAccounts
+        : [];
+    enrichIndividualAccountsWithSampleFavorites();
 
     individualSignupRecords = loadIndividualSignupRecordsFromStorage();
 
     const storedBusinessAccounts = loadBusinessAccountsFromStorage();
-    if (storedBusinessAccounts && storedBusinessAccounts.length) {
-        businessAccounts = storedBusinessAccounts;
-    } else {
-        businessAccounts = defaultBusinessAccounts
-            .map((account, index) => normalizeBusinessAccountPayload(account, index))
-            .filter(Boolean);
-        saveBusinessAccountsToStorage();
-    }
+    businessAccounts = Array.isArray(storedBusinessAccounts)
+        ? storedBusinessAccounts
+        : [];
 
     const storedBusinessPackages = loadBusinessPackagesFromStorage();
     if (storedBusinessPackages && storedBusinessPackages.length) {
@@ -9237,6 +9958,7 @@ function initializeApp() {
     }
 
     setupCategoryConfirmOverlay();
+    setupCategorySortOverlay();
     setupSpecificationConfirmOverlay();
     setupRoleConfirmOverlay();
     setupRolePromptOverlay();
@@ -9277,18 +9999,6 @@ function setupEventListeners() {
             navigateToSection(sectionId);
         });
     });
-
-    const openOnrufBtn = document.getElementById('openOnrufPlatformBtn');
-    if (openOnrufBtn && openOnrufBtn.dataset.bound !== 'true') {
-        openOnrufBtn.addEventListener('click', () => {
-            const targetUrl = 'ONRUF/onruf-platform.html';
-            const newWindow = window.open(targetUrl, '_blank', 'noopener');
-            if (newWindow) {
-                newWindow.opener = null;
-            }
-        });
-        openOnrufBtn.dataset.bound = 'true';
-    }
 
     const financeSearchInput = document.getElementById('financeTransactionsSearchInput');
     if (financeSearchInput && financeSearchInput.dataset.bound !== 'true') {
@@ -9674,6 +10384,11 @@ function setupEventListeners() {
     const bulkArchiveBtn = document.getElementById('categoryBulkArchiveBtn');
     if (bulkArchiveBtn) {
         bulkArchiveBtn.addEventListener('click', () => handleCategoryBulkAction('archive'));
+    }
+
+    const bulkSortBtn = document.getElementById('categoryBulkSortBtn');
+    if (bulkSortBtn) {
+        bulkSortBtn.addEventListener('click', () => openCategorySortOverlay());
     }
 
     const bulkModifyBtn = document.getElementById('categoryBulkModifyBtn');
@@ -10152,6 +10867,12 @@ function setupEventListeners() {
         businessAccountsResetBtn.dataset.bound = 'true';
     }
 
+    const businessAccountsSeedBtn = document.getElementById('businessAccountsSeedAccountBtn');
+    if (businessAccountsSeedBtn && businessAccountsSeedBtn.dataset.bound !== 'true') {
+        businessAccountsSeedBtn.addEventListener('click', handleBusinessAccountsSeedRequest);
+        businessAccountsSeedBtn.dataset.bound = 'true';
+    }
+
     const businessAccountsActionToolbar = document.getElementById('businessAccountsActionToolbar');
     if (businessAccountsActionToolbar && businessAccountsActionToolbar.dataset.bound !== 'true') {
         businessAccountsActionToolbar.addEventListener('click', handleBusinessAccountsToolbarClick);
@@ -10174,6 +10895,12 @@ function setupEventListeners() {
         businessAccountDetailOverlay.dataset.bound = 'true';
     }
 
+    const businessAccountDetailContent = document.getElementById('businessAccountDetailContent');
+    if (businessAccountDetailContent && businessAccountDetailContent.dataset.bound !== 'true') {
+        businessAccountDetailContent.addEventListener('click', handleBusinessAccountDetailContentClick);
+        businessAccountDetailContent.dataset.bound = 'true';
+    }
+
     const businessAccountDetailCloseBtn = document.getElementById('businessAccountDetailCloseBtn');
     if (businessAccountDetailCloseBtn && businessAccountDetailCloseBtn.dataset.bound !== 'true') {
         businessAccountDetailCloseBtn.addEventListener('click', closeBusinessAccountDetailDrawer);
@@ -10190,6 +10917,24 @@ function setupEventListeners() {
     if (businessAccountDecisionConfirmBtn && businessAccountDecisionConfirmBtn.dataset.bound !== 'true') {
         businessAccountDecisionConfirmBtn.addEventListener('click', confirmBusinessAccountDecision);
         businessAccountDecisionConfirmBtn.dataset.bound = 'true';
+    }
+
+    const businessRequestDecisionCancelBtn = document.getElementById('businessRequestDecisionCancelBtn');
+    if (businessRequestDecisionCancelBtn && businessRequestDecisionCancelBtn.dataset.bound !== 'true') {
+        businessRequestDecisionCancelBtn.addEventListener('click', closeBusinessRequestDecisionOverlay);
+        businessRequestDecisionCancelBtn.dataset.bound = 'true';
+    }
+
+    const businessRequestDecisionConfirmBtn = document.getElementById('businessRequestDecisionConfirmBtn');
+    if (businessRequestDecisionConfirmBtn && businessRequestDecisionConfirmBtn.dataset.bound !== 'true') {
+        businessRequestDecisionConfirmBtn.addEventListener('click', confirmBusinessRequestDecision);
+        businessRequestDecisionConfirmBtn.dataset.bound = 'true';
+    }
+
+    const businessRequestIndividualCloseBtn = document.getElementById('businessRequestIndividualCloseBtn');
+    if (businessRequestIndividualCloseBtn && businessRequestIndividualCloseBtn.dataset.bound !== 'true') {
+        businessRequestIndividualCloseBtn.addEventListener('click', closeBusinessRequestIndividualOverlay);
+        businessRequestIndividualCloseBtn.dataset.bound = 'true';
     }
 
     const businessPackageForm = document.getElementById('businessPackageForm');
@@ -10656,6 +11401,8 @@ function setupEventListeners() {
         individualAccountLogOverlay.dataset.bound = 'true';
     }
     const businessAccountDecisionOverlay = document.getElementById('businessAccountDecisionOverlay');
+    const businessRequestDecisionOverlay = document.getElementById('businessRequestDecisionOverlay');
+    const businessRequestIndividualOverlay = document.getElementById('businessRequestIndividualOverlay');
     if (businessAccountDecisionOverlay && businessAccountDecisionOverlay.dataset.bound !== 'true') {
         businessAccountDecisionOverlay.addEventListener('click', event => {
             if (event.target === businessAccountDecisionOverlay) {
@@ -10663,6 +11410,22 @@ function setupEventListeners() {
             }
         });
         businessAccountDecisionOverlay.dataset.bound = 'true';
+    }
+    if (businessRequestDecisionOverlay && businessRequestDecisionOverlay.dataset.bound !== 'true') {
+        businessRequestDecisionOverlay.addEventListener('click', event => {
+            if (event.target === businessRequestDecisionOverlay) {
+                closeBusinessRequestDecisionOverlay();
+            }
+        });
+        businessRequestDecisionOverlay.dataset.bound = 'true';
+    }
+    if (businessRequestIndividualOverlay && businessRequestIndividualOverlay.dataset.bound !== 'true') {
+        businessRequestIndividualOverlay.addEventListener('click', event => {
+            if (event.target === businessRequestIndividualOverlay) {
+                closeBusinessRequestIndividualOverlay();
+            }
+        });
+        businessRequestIndividualOverlay.dataset.bound = 'true';
     }
     document.addEventListener('keydown', event => {
         if (event.key !== 'Escape') {
@@ -10698,6 +11461,15 @@ function setupEventListeners() {
         }
         if (businessAccountDecisionOverlay && !businessAccountDecisionOverlay.classList.contains('hidden')) {
             closeBusinessAccountDecisionOverlay();
+            return;
+        }
+        if (businessRequestDecisionOverlay && !businessRequestDecisionOverlay.classList.contains('hidden')) {
+            closeBusinessRequestDecisionOverlay();
+            return;
+        }
+        if (businessRequestIndividualOverlay && !businessRequestIndividualOverlay.classList.contains('hidden')) {
+            closeBusinessRequestIndividualOverlay();
+            return;
         }
     });
 
@@ -13355,7 +14127,53 @@ function compareCategoryCodesNatural(codeA, codeB) {
     return codeA.localeCompare(codeB, undefined, { sensitivity: 'base' });
 }
 
+function resolveCategorySortValue(category) {
+    if (!category || typeof category !== 'object') {
+        return null;
+    }
+    const candidates = [
+        category.sortOrder,
+        category.sort,
+        category.order,
+        category.orderIndex,
+        category.displayOrder,
+        category.sequence,
+        category.position
+    ];
+    for (const candidate of candidates) {
+        if (candidate === null || candidate === undefined) {
+            continue;
+        }
+        if (typeof candidate === 'number') {
+            if (Number.isFinite(candidate)) {
+                return candidate;
+            }
+            continue;
+        }
+        if (typeof candidate === 'string') {
+            const trimmed = candidate.trim();
+            if (!trimmed) {
+                continue;
+            }
+            const parsed = Number(trimmed);
+            if (Number.isFinite(parsed)) {
+                return parsed;
+            }
+        }
+    }
+    return null;
+}
+
 function compareCategoriesForTree(a, b) {
+    const sortA = resolveCategorySortValue(a);
+    const sortB = resolveCategorySortValue(b);
+    if (sortA !== null || sortB !== null) {
+        if (sortA === null) return 1;
+        if (sortB === null) return -1;
+        if (sortA !== sortB) {
+            return sortA - sortB;
+        }
+    }
     const codeA = typeof a.categoryCode === 'string' ? a.categoryCode.trim() : '';
     const codeB = typeof b.categoryCode === 'string' ? b.categoryCode.trim() : '';
     if (codeA || codeB) {
@@ -15800,11 +16618,6 @@ function parseCategoryXlsxPreview(arrayBuffer, rowLimit) {
 
     const rows = previewSource.map(row => header.map((_, index) => normalizeCell(Array.isArray(row) ? row[index] : '')));
 
-    const missingRequired = getMissingCategoryImportColumns(header);
-    if (missingRequired.length) {
-        errors.push(`Missing required column${missingRequired.length > 1 ? 's' : ''}: ${missingRequired.join(', ')}`);
-    }
-
     return {
         header,
         rows,
@@ -17187,6 +18000,489 @@ function positionCategoryRelatedDrawer(categoryId) {
 
     const clamped = Math.max(minTop, Math.min(desiredOffset, maxTop));
     drawer.style.top = `${Math.round(clamped)}px`;
+}
+
+function setupCategorySortOverlay() {
+    if (typeof document === 'undefined') {
+        return;
+    }
+    if (!categorySortElements.overlay) {
+        categorySortElements.overlay = document.getElementById('categorySortOverlay');
+        categorySortElements.tree = document.getElementById('categorySortTree');
+        categorySortElements.list = document.getElementById('categorySortList');
+        categorySortElements.title = document.getElementById('categorySortGroupTitle');
+        categorySortElements.hint = document.getElementById('categorySortGroupHint');
+        categorySortElements.closeBtn = document.getElementById('categorySortCloseBtn');
+        categorySortElements.cancelBtn = document.getElementById('categorySortCancelBtn');
+        categorySortElements.saveBtn = document.getElementById('categorySortSaveBtn');
+        categorySortElements.saveLabel = document.getElementById('categorySortSaveLabel');
+    }
+    if (!categorySortElements.overlay) {
+        return;
+    }
+    if (!categorySortElements.overlay.dataset.bound) {
+        categorySortElements.overlay.addEventListener('click', event => {
+            if (event.target === categorySortElements.overlay && !categorySortState.isSaving) {
+                closeCategorySortOverlay();
+            }
+        });
+        categorySortElements.overlay.dataset.bound = 'true';
+    }
+    if (categorySortElements.tree && !categorySortElements.tree.dataset.bound) {
+        categorySortElements.tree.addEventListener('click', handleCategorySortTreeClick);
+        categorySortElements.tree.dataset.bound = 'true';
+    }
+    if (categorySortElements.list && !categorySortElements.list.dataset.bound) {
+        categorySortElements.list.addEventListener('click', handleCategorySortListClick);
+        categorySortElements.list.addEventListener('change', handleCategorySortListChange);
+        categorySortElements.list.dataset.bound = 'true';
+    }
+    if (categorySortElements.closeBtn && !categorySortElements.closeBtn.dataset.bound) {
+        categorySortElements.closeBtn.addEventListener('click', () => closeCategorySortOverlay());
+        categorySortElements.closeBtn.dataset.bound = 'true';
+    }
+    if (categorySortElements.cancelBtn && !categorySortElements.cancelBtn.dataset.bound) {
+        categorySortElements.cancelBtn.addEventListener('click', () => closeCategorySortOverlay());
+        categorySortElements.cancelBtn.dataset.bound = 'true';
+    }
+    if (categorySortElements.saveBtn && !categorySortElements.saveBtn.dataset.bound) {
+        categorySortElements.saveBtn.addEventListener('click', submitCategorySortChanges);
+        categorySortElements.saveBtn.dataset.bound = 'true';
+    }
+}
+
+function resetCategorySortState() {
+    categorySortState.activeParentId = CATEGORY_TREE_ROOT_ID;
+    categorySortState.orderByParent = new Map();
+    categorySortState.initialSequence = new Map();
+    categorySortState.isSaving = false;
+    if (categorySortElements.list) {
+        categorySortElements.list.innerHTML = '';
+    }
+    if (categorySortElements.tree) {
+        categorySortElements.tree.innerHTML = '';
+    }
+}
+
+function determineCategorySortDefaultParent() {
+    if (state && state.categorySelectedIds instanceof Set && state.categorySelectedIds.size === 1) {
+        const [selectedId] = state.categorySelectedIds;
+        if (selectedId) {
+            const parentId = categoryParentLookup.get(selectedId) || getCategoryParentId(categoryLookupById.get(selectedId));
+            if (parentId) {
+                return parentId;
+            }
+        }
+    }
+    if (state && state.categoryViewBranchId) {
+        return state.categoryViewBranchId;
+    }
+    return CATEGORY_TREE_ROOT_ID;
+}
+
+function buildCategorySortState(defaultParentId = CATEGORY_TREE_ROOT_ID) {
+    categorySortState.orderByParent = new Map();
+    categorySortState.initialSequence = new Map();
+
+    if (!(categoryChildrenLookup instanceof Map) || !categoryChildrenLookup.size) {
+        rebuildCategoryCaches();
+    }
+
+    const parents = new Set([CATEGORY_TREE_ROOT_ID]);
+    if (categoryChildrenLookup instanceof Map) {
+        categoryChildrenLookup.forEach((children, parentId) => {
+            parents.add(parentId);
+        });
+    }
+
+    parents.forEach(parentId => {
+        const children = categoryChildrenLookup instanceof Map ? categoryChildrenLookup.get(parentId) || [] : [];
+        const sorted = children.length ? children.slice().sort(compareCategoriesForTree) : [];
+        const entries = sorted.map((category, index) => ({
+            id: category.id,
+            code: category.categoryCode || category.id,
+            name: getCategoryDisplayName(category),
+            sortOrder: index + 1,
+            initialIndex: index
+        }));
+        categorySortState.orderByParent.set(parentId, entries);
+        categorySortState.initialSequence.set(parentId, entries.map(entry => entry.id));
+    });
+
+    categorySortState.activeParentId = categorySortState.orderByParent.has(defaultParentId)
+        ? defaultParentId
+        : CATEGORY_TREE_ROOT_ID;
+}
+
+function renderCategorySortTree() {
+    if (!categorySortElements.tree) {
+        return;
+    }
+
+    const activeParentId = categorySortState.activeParentId || CATEGORY_TREE_ROOT_ID;
+
+    const buildBranch = (parentId, depth) => {
+        const children = categoryChildrenLookup instanceof Map ? categoryChildrenLookup.get(parentId) || [] : [];
+        if (!children.length) {
+            return '';
+        }
+        return children
+            .slice()
+            .sort(compareCategoriesForTree)
+            .map(child => {
+                const childId = child.id;
+                const childHasChildren = (categoryChildrenLookup instanceof Map ? categoryChildrenLookup.get(childId) || [] : []).length > 0;
+                const isSelected = activeParentId === childId;
+                const padding = (depth * 16) + 16;
+                const count = categorySortState.orderByParent.has(childId)
+                    ? categorySortState.orderByParent.get(childId).length
+                    : (categoryChildrenLookup instanceof Map ? (categoryChildrenLookup.get(childId) || []).length : 0);
+                return `
+                    <li>
+                        <button type="button" data-sort-parent-id="${escapeAttribute(childId)}" class="${isSelected ? 'is-selected' : ''}" style="padding-left:${padding}px;">
+                            <span class="category-sort-tree-label">${escapeHtml(getCategoryDisplayName(child))}</span>
+                            <span class="category-sort-tree-count">${count}</span>
+                        </button>
+                        ${childHasChildren ? `<ul class="category-sort-tree-list">${buildBranch(childId, depth + 1)}</ul>` : ''}
+                    </li>
+                `;
+            })
+            .join('');
+    };
+
+    const rootEntries = categorySortState.orderByParent.get(CATEGORY_TREE_ROOT_ID) || [];
+    const rootSelected = activeParentId === CATEGORY_TREE_ROOT_ID || !activeParentId;
+    const treeMarkup = `
+        <ul class="category-sort-tree-list">
+            <li>
+                <button type="button" data-sort-parent-id="${CATEGORY_TREE_ROOT_ID}" class="${rootSelected ? 'is-selected' : ''}">
+                    <span class="category-sort-tree-label">Top-level categories</span>
+                    <span class="category-sort-tree-count">${rootEntries.length}</span>
+                </button>
+            </li>
+            ${buildBranch(CATEGORY_TREE_ROOT_ID, 1)}
+        </ul>
+    `;
+    categorySortElements.tree.innerHTML = treeMarkup;
+}
+
+function renderCategorySortGroup(parentId) {
+    if (!categorySortElements.list) {
+        return;
+    }
+
+    const entries = categorySortState.orderByParent.get(parentId) || [];
+    const parentCategory = parentId === CATEGORY_TREE_ROOT_ID ? null : categoryLookupById.get(parentId);
+
+    if (categorySortElements.title) {
+        categorySortElements.title.textContent = parentCategory
+            ? `Subcategories of ${getCategoryDisplayName(parentCategory)}`
+            : 'Top-level categories';
+    }
+
+    if (!entries.length) {
+        if (categorySortElements.hint) {
+            categorySortElements.hint.textContent = parentCategory
+                ? 'This category has no subcategories yet.'
+                : 'No categories available to sort.';
+        }
+        categorySortElements.list.innerHTML = '<div class="category-sort-placeholder">No categories available to reorder in this level.</div>';
+        return;
+    }
+
+    if (categorySortElements.hint) {
+        categorySortElements.hint.textContent = 'Change the position number or use the arrows to adjust the order.';
+    }
+
+    const listMarkup = entries.map((entry, index) => {
+        const category = categoryLookupById.get(entry.id);
+        const name = category ? getCategoryDisplayName(category) : entry.id;
+        const code = category ? category.categoryCode || category.id : entry.code || entry.id;
+        const safeId = escapeAttribute(entry.id);
+        const safeName = escapeHtml(name);
+        const safeLabel = escapeAttribute(name);
+        const upDisabled = index === 0 ? 'disabled' : '';
+        const downDisabled = index === entries.length - 1 ? 'disabled' : '';
+        return `
+            <div class="category-sort-row" data-category-sort-row="${safeId}">
+                <span class="category-sort-handle" aria-hidden="true"><i class="fas fa-grip-vertical"></i></span>
+                <div class="category-sort-info">
+                    <div class="category-sort-name">${safeName}</div>
+                    <div class="category-sort-meta">${escapeHtml(code)}</div>
+                </div>
+                <input type="number" class="category-sort-input" min="1" max="${entries.length}" value="${index + 1}" data-category-sort-input="${safeId}" aria-label="Position for ${safeLabel}">
+                <div class="category-sort-actions">
+                    <button type="button" class="category-sort-action-btn" data-category-sort-move="up" data-category-sort-id="${safeId}" ${upDisabled} aria-label="Move ${safeLabel} up">
+                        <i class="fas fa-arrow-up"></i>
+                    </button>
+                    <button type="button" class="category-sort-action-btn" data-category-sort-move="down" data-category-sort-id="${safeId}" ${downDisabled} aria-label="Move ${safeLabel} down">
+                        <i class="fas fa-arrow-down"></i>
+                    </button>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    categorySortElements.list.innerHTML = listMarkup;
+}
+
+function focusCategorySortTreeNode(parentId) {
+    if (!categorySortElements.tree) {
+        return;
+    }
+    const safeId = (typeof CSS !== 'undefined' && typeof CSS.escape === 'function')
+        ? CSS.escape(parentId)
+        : parentId;
+    const target = categorySortElements.tree.querySelector(`button[data-sort-parent-id="${safeId}"]`);
+    if (target) {
+        requestAnimationFrame(() => {
+            target.focus();
+        });
+    }
+}
+
+function focusCategorySortInput(categoryId) {
+    if (!categorySortElements.list) {
+        return;
+    }
+    const safeId = (typeof CSS !== 'undefined' && typeof CSS.escape === 'function')
+        ? CSS.escape(categoryId)
+        : categoryId;
+    const input = categorySortElements.list.querySelector(`input[data-category-sort-input="${safeId}"]`);
+    if (input) {
+        requestAnimationFrame(() => {
+            input.focus();
+            input.select();
+        });
+    }
+}
+
+function handleCategorySortTreeClick(event) {
+    if (categorySortState.isSaving) {
+        event.preventDefault();
+        return;
+    }
+    const target = event.target.closest('button[data-sort-parent-id]');
+    if (!target) {
+        return;
+    }
+    event.preventDefault();
+    const parentId = target.dataset.sortParentId || CATEGORY_TREE_ROOT_ID;
+    if (categorySortState.activeParentId === parentId) {
+        target.focus();
+        return;
+    }
+    categorySortState.activeParentId = parentId;
+    renderCategorySortTree();
+    renderCategorySortGroup(parentId);
+    focusCategorySortTreeNode(parentId);
+}
+
+function handleCategorySortListClick(event) {
+    if (categorySortState.isSaving) {
+        event.preventDefault();
+        return;
+    }
+    const button = event.target.closest('button[data-category-sort-move]');
+    if (!button) {
+        return;
+    }
+    event.preventDefault();
+    const categoryId = button.dataset.categorySortId;
+    const direction = button.dataset.categorySortMove;
+    if (!categoryId || !direction) {
+        return;
+    }
+    const parentId = categorySortState.activeParentId || CATEGORY_TREE_ROOT_ID;
+    const entries = categorySortState.orderByParent.get(parentId) || [];
+    const currentIndex = entries.findIndex(entry => entry.id === categoryId);
+    if (currentIndex === -1) {
+        return;
+    }
+    const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+    adjustCategorySortPosition(categoryId, targetIndex);
+    renderCategorySortGroup(parentId);
+    focusCategorySortInput(categoryId);
+}
+
+function handleCategorySortListChange(event) {
+    if (categorySortState.isSaving) {
+        return;
+    }
+    const input = event.target.closest('input[data-category-sort-input]');
+    if (!input) {
+        return;
+    }
+    const categoryId = input.dataset.categorySortInput;
+    if (!categoryId) {
+        return;
+    }
+    const parentId = categorySortState.activeParentId || CATEGORY_TREE_ROOT_ID;
+    const entries = categorySortState.orderByParent.get(parentId) || [];
+    const currentIndex = entries.findIndex(entry => entry.id === categoryId);
+    if (currentIndex === -1) {
+        return;
+    }
+    const parsed = Number.parseInt(input.value, 10);
+    const clampedTarget = Number.isFinite(parsed) ? Math.max(0, Math.min(entries.length - 1, parsed - 1)) : currentIndex;
+    adjustCategorySortPosition(categoryId, clampedTarget);
+    renderCategorySortGroup(parentId);
+    focusCategorySortInput(categoryId);
+}
+
+function adjustCategorySortPosition(categoryId, targetIndex) {
+    const parentId = categorySortState.activeParentId || CATEGORY_TREE_ROOT_ID;
+    const entries = categorySortState.orderByParent.get(parentId);
+    if (!entries || !entries.length) {
+        return -1;
+    }
+    const currentIndex = entries.findIndex(entry => entry.id === categoryId);
+    if (currentIndex === -1) {
+        return -1;
+    }
+    const clampedIndex = Math.max(0, Math.min(entries.length - 1, targetIndex));
+    if (clampedIndex === currentIndex) {
+        reindexCategorySortEntries(entries);
+        return clampedIndex;
+    }
+    const [entry] = entries.splice(currentIndex, 1);
+    entries.splice(clampedIndex, 0, entry);
+    reindexCategorySortEntries(entries);
+    return clampedIndex;
+}
+
+function reindexCategorySortEntries(entries) {
+    entries.forEach((entry, index) => {
+        entry.sortOrder = index + 1;
+    });
+}
+
+function openCategorySortOverlay() {
+    setupCategorySortOverlay();
+    if (!categorySortElements.overlay) {
+        return;
+    }
+    if (!(categoryChildrenLookup instanceof Map) || !categoryChildrenLookup.size) {
+        rebuildCategoryCaches();
+    }
+    const defaultParent = determineCategorySortDefaultParent();
+    buildCategorySortState(defaultParent);
+    categorySortState.isSaving = false;
+
+    categorySortElements.overlay.classList.remove('hidden');
+    categorySortElements.overlay.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('body-locked');
+    document.addEventListener('keydown', handleCategorySortKeydown);
+
+    renderCategorySortTree();
+    renderCategorySortGroup(categorySortState.activeParentId);
+    requestAnimationFrame(() => {
+        focusCategorySortTreeNode(categorySortState.activeParentId);
+    });
+}
+
+function closeCategorySortOverlay() {
+    if (!categorySortElements.overlay || categorySortState.isSaving) {
+        return;
+    }
+    categorySortElements.overlay.classList.add('hidden');
+    categorySortElements.overlay.setAttribute('aria-hidden', 'true');
+    document.body.classList.remove('body-locked');
+    document.removeEventListener('keydown', handleCategorySortKeydown);
+    resetCategorySortState();
+}
+
+function handleCategorySortKeydown(event) {
+    if (event.key === 'Escape' && !categorySortState.isSaving) {
+        closeCategorySortOverlay();
+    }
+}
+
+function setCategorySortSaving(isSaving) {
+    categorySortState.isSaving = Boolean(isSaving);
+    const disabled = categorySortState.isSaving;
+    if (categorySortElements.saveBtn) {
+        categorySortElements.saveBtn.disabled = disabled;
+    }
+    if (categorySortElements.cancelBtn) {
+        categorySortElements.cancelBtn.disabled = disabled;
+    }
+    if (categorySortElements.closeBtn) {
+        categorySortElements.closeBtn.disabled = disabled;
+    }
+    if (categorySortElements.saveLabel) {
+        categorySortElements.saveLabel.textContent = disabled ? 'Saving...' : 'Save Order';
+    }
+}
+
+function submitCategorySortChanges() {
+    if (categorySortState.isSaving) {
+        return;
+    }
+    setCategorySortSaving(true);
+    try {
+        const result = applyCategorySortUpdates();
+        setCategorySortSaving(false);
+        closeCategorySortOverlay();
+        const changedCount = result && Number.isFinite(result.changedCount) ? result.changedCount : 0;
+        if (changedCount > 0) {
+            showNotification('success', `Updated ordering for ${changedCount} categor${changedCount === 1 ? 'y' : 'ies'}.`, 4400, 'categoryNotificationArea');
+        } else {
+            showNotification('info', 'No ordering changes detected.', 3600, 'categoryNotificationArea');
+        }
+    } catch (error) {
+        setCategorySortSaving(false);
+        console.error('Failed to apply category sorting:', error);
+        showNotification('error', 'Unable to save the new category order. Please try again.', 4600, 'categoryNotificationArea');
+    }
+}
+
+function applyCategorySortUpdates() {
+    if (!(categorySortState.orderByParent instanceof Map) || !categorySortState.orderByParent.size) {
+        return { changedCount: 0 };
+    }
+
+    let changedCount = 0;
+
+    categorySortState.orderByParent.forEach((entries, parentId) => {
+        const initialSequence = categorySortState.initialSequence.get(parentId) || [];
+        const currentSequence = entries.map(entry => entry.id);
+        const orderChanged = currentSequence.length !== initialSequence.length
+            || currentSequence.some((id, index) => id !== initialSequence[index]);
+
+        if (!orderChanged) {
+            return;
+        }
+
+        entries.forEach((entry, index) => {
+            const category = categoryLookupById.get(entry.id);
+            if (!category) {
+                return;
+            }
+            const nextOrder = index + 1;
+            const currentOrder = resolveCategorySortValue(category);
+            if (currentOrder !== nextOrder) {
+                changedCount += 1;
+            }
+            category.sortOrder = nextOrder;
+            category.sort = nextOrder;
+            category.order = nextOrder;
+            category.orderIndex = nextOrder;
+            category.displayOrder = nextOrder;
+            category.sequence = nextOrder;
+            category.position = nextOrder;
+        });
+    });
+
+    if (changedCount > 0) {
+        saveCategoriesToStorage();
+        refreshCategoryDirectoryView({ rebuildCaches: true, keepScroll: true });
+        if (state.activeCategoryDetailId) {
+            renderCategoryRelatedDrawer(state.activeCategoryDetailId);
+        }
+    }
+
+    return { changedCount };
 }
 
 function highlightCategoryRow(categoryId) {
@@ -25257,7 +26553,7 @@ function renderIndividualAccountsTable(page = state.currentIndividualAccountsPag
     const visible = filtered.slice(startIndex, startIndex + perPage);
 
     if (!visible.length) {
-        tbody.innerHTML = '<tr><td colspan="8">No individual accounts match the current filters.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8">There is no Data Available</td></tr>';
     } else {
         let index = startIndex + 1;
         tbody.innerHTML = visible.map(account => {
@@ -25543,6 +26839,23 @@ function resolveIndividualAccountDisplayName(account) {
         }
     }
     return 'Individual Account';
+}
+
+function resolveIndividualAccountDetailSubtitle(account) {
+    if (!account || typeof account !== 'object') {
+        return 'Choose an account from the directory to review balances, ads, and permissions.';
+    }
+    const statusDisplay = getIndividualAccountStatusLabel(account.status) || 'Inactive';
+    const automationIdentifier = resolveIndividualAccountAutomationIdentifier(account);
+    const automationDetails = automationIdentifier ? findAutomationListEntryForAccount(automationIdentifier) : null;
+    const publishingListLabel = automationDetails && automationDetails.listType
+        ? (PUBLISHING_LIST_LABELS[automationDetails.listType] || formatKeyLabel(automationDetails.listType))
+        : '';
+    const subtitleParts = [statusDisplay];
+    if (publishingListLabel) {
+        subtitleParts.push(publishingListLabel);
+    }
+    return subtitleParts.filter(Boolean).join(' • ');
 }
 
 function resolveIndividualAccountAutomationIdentifier(account) {
@@ -26936,7 +28249,7 @@ function renderIndividualAccountDetail(account, { forceOpen = false } = {}) {
     if (!account) {
         titleEl.textContent = 'Select an account';
         if (subtitleEl) {
-            subtitleEl.textContent = 'Choose an account from the directory to review balances, ads, and permissions.';
+            subtitleEl.textContent = resolveIndividualAccountDetailSubtitle(null);
         }
         body.innerHTML = '<p class="empty-state">Account insights, financial history, and support tooling will appear here.</p>';
         renderIndividualAccountQuickActions(null);
@@ -27433,11 +28746,13 @@ function renderIndividualAccountDetail(account, { forceOpen = false } = {}) {
         const balanceTypeLabel = resolveWalletBalanceTypeLabel(entry.type);
         const amountLabel = formatWalletTransactionAmount(entry.amount);
         const timestampLabel = formatDateForDisplay(entry.timestamp, { includeTime: true }) || 'Unknown date';
-        const timestampMarkup = timestampLabel ? ` &bull; ${escapeHtml(timestampLabel)}` : '';
-        const balanceDescriptionLine = entry.note
-            ? `<div class="helper-text">${escapeHtml(balanceTypeLabel)} &bull; ${escapeHtml(entry.note)}</div>`
-            : `<div class="helper-text">${escapeHtml(balanceTypeLabel)}</div>`;
-        return `<li><div><strong>${escapeHtml(label)}</strong></div>${balanceDescriptionLine}<div class="helper-text">${escapeHtml(amountLabel)}${timestampMarkup}</div></li>`;
+        const metaParts = [amountLabel, balanceTypeLabel];
+        if (timestampLabel) {
+            metaParts.push(timestampLabel);
+        }
+        const amountLine = `<div class="helper-text">${metaParts.map(part => escapeHtml(part || '')).filter(Boolean).join(' &bull; ')}</div>`;
+        const noteLine = entry.note ? `<div class="helper-text">${escapeHtml(entry.note)}</div>` : '';
+        return `<li><div><strong>${escapeHtml(label)}</strong></div>${amountLine}${noteLine}</li>`;
     };
 
     const sortedFinancialHistory = financialHistory
@@ -27458,14 +28773,12 @@ function renderIndividualAccountDetail(account, { forceOpen = false } = {}) {
         : 0;
     const walletVisibleTransactions = sortedFinancialHistory.slice(0, walletVisibleCount);
     const walletHasMoreTransactions = walletVisibleCount < sortedFinancialHistory.length;
-    const walletRecentMarkup = sortedFinancialHistory.length
-        ? ''
-        : '<p class="helper-text">No financial transactions recorded.</p>';
+    const walletRecentMarkup = '';
     const walletMoreButtonMarkup = '';
     const walletTransactionsRemainingMarkup = '';
     const walletFullHistoryMarkup = walletVisibleTransactions.length
         ? `<ul class="detail-list">${walletVisibleTransactions.map(renderFinancialTransactionItem).join('')}</ul>`
-        : '<p class="helper-text">No financial transactions recorded.</p>';
+        : '<p class="helper-text">There is no Data Available</p>';
     const walletLoadMoreMarkup = walletHasMoreTransactions
         ? `<div class="detail-subsection detail-load-more"><button type="button" class="btn btn-outline" data-action="load-more-wallet-transactions"${account.id ? ` data-account-id="${escapeAttribute(String(account.id))}"` : ''} style="
     margin: auto;">More</button></div>`
@@ -27528,7 +28841,7 @@ function renderIndividualAccountDetail(account, { forceOpen = false } = {}) {
 
     const favoriteCategoriesMarkup = renderFavoriteCollection(
         favoriteCategoriesRaw,
-        'No favorite categories saved.',
+        'There is no Data Available',
         'category',
         {
             visibleCount: favoriteCategoryVisibleCount,
@@ -27539,7 +28852,7 @@ function renderIndividualAccountDetail(account, { forceOpen = false } = {}) {
     const favoriteCategoriesCountLabel = `#${favoriteCategoriesRaw.length} ${favoriteCategoriesRaw.length === 1 ? 'Category' : 'Categories'}`;
     const favoriteSellersMarkup = renderFavoriteCollection(
         favoriteSellersRaw,
-        'No favorite sellers saved.',
+        'There is no Data Available',
         'seller',
         {
             visibleCount: favoriteSellerVisibleCount,
@@ -27550,7 +28863,7 @@ function renderIndividualAccountDetail(account, { forceOpen = false } = {}) {
     const favoriteSellersCountLabel = `#${favoriteSellersRaw.length} ${favoriteSellersRaw.length === 1 ? 'Seller' : 'Sellers'}`;
     const favoriteSearchesMarkup = renderFavoriteCollection(
         favoriteSearchesRaw,
-        'No favorite searches saved.',
+        'There is no Data Available',
         'search',
         {
             visibleCount: favoriteSearchVisibleCount,
@@ -27634,7 +28947,7 @@ function renderIndividualAccountDetail(account, { forceOpen = false } = {}) {
     const pointsRecentMarkup = '';
     const pointsFullHistoryMarkup = pointsVisibleTransactions.length
         ? `<ul class="detail-list">${pointsVisibleTransactions.map(renderPointsHistoryEntry).join('')}</ul>`
-        : '<p class="helper-text">No points activity recorded.</p>';
+        : '<p class="helper-text">There is no Data Available</p>';
     const pointsLoadMoreMarkup = pointsHasMoreTransactions
         ? `<div class="detail-subsection detail-load-more"><button type="button" class="btn btn-outline" data-action="load-more-points-transactions"${account.id ? ` data-account-id="${escapeAttribute(String(account.id))}"` : ''} style="margin: auto;">More</button></div>`
         : '';
@@ -27680,7 +28993,7 @@ function renderIndividualAccountDetail(account, { forceOpen = false } = {}) {
     const paymentCardItems = visiblePaymentCards.map(renderPaymentCardItem).filter(Boolean);
     const paymentCardsMarkup = paymentCardItems.length
         ? `<ul class="detail-list">${paymentCardItems.join('')}</ul>`
-        : '<p class="helper-text">No saved payment methods on file.</p>';
+        : '<p class="helper-text">There is no Data Available</p>';
     const paymentMethodsLoadMoreMarkup = paymentHasMoreMethods
         ? `<div class="detail-subsection detail-load-more"><button type="button" class="btn btn-outline" data-action="load-more-payment-methods"${account && account.id ? ` data-account-id="${escapeAttribute(String(account.id))}"` : ''} style="margin: auto;">More</button></div>`
         : '';
@@ -27708,7 +29021,7 @@ function renderIndividualAccountDetail(account, { forceOpen = false } = {}) {
     const savedAddressItems = visibleSavedAddresses.map(renderSavedAddressItem).filter(Boolean);
     const savedAddressesMarkup = savedAddressItems.length
         ? `<ul class="detail-list">${savedAddressItems.join('')}</ul>`
-        : '<p class="helper-text">No saved addresses found.</p>';
+        : '<p class="helper-text">There is no Data Available</p>';
     const savedAddressesCountLabel = sortedSavedAddresses.length
         ? `#${sortedSavedAddresses.length} Address${sortedSavedAddresses.length === 1 ? '' : 'es'}`
         : '#0 Addresses';
@@ -27767,17 +29080,7 @@ function renderIndividualAccountDetail(account, { forceOpen = false } = {}) {
     const pointsBalanceLabel = Number.isFinite(pointsBalanceValue) ? pointsBalanceValue.toLocaleString('en-US') : '0';
 
     if (subtitleEl) {
-        const statusDisplay = getIndividualAccountStatusLabel(account.status) || 'Inactive';
-        const automationIdentifier = resolveIndividualAccountAutomationIdentifier(account);
-        const automationDetails = automationIdentifier ? findAutomationListEntryForAccount(automationIdentifier) : null;
-        const publishingListLabel = automationDetails && automationDetails.listType
-            ? (PUBLISHING_LIST_LABELS[automationDetails.listType] || formatKeyLabel(automationDetails.listType))
-            : '';
-        const subtitleParts = [statusDisplay];
-        if (publishingListLabel) {
-            subtitleParts.push(publishingListLabel);
-        }
-        subtitleEl.textContent = subtitleParts.join(' • ');
+        subtitleEl.textContent = resolveIndividualAccountDetailSubtitle(account);
     }
 
     body.innerHTML = `
@@ -27874,7 +29177,7 @@ function renderIndividualAccountDetail(account, { forceOpen = false } = {}) {
                 <button type="button" class="btn btn-outline detail-back-btn" data-action="close-wallet-transactions" aria-controls="individualAccountDetailMain">Back to Account Details</button>
                 <div class="detail-subpage-title">
                     <h4>Wallet Transactions <span class="detail-count-label">${escapeHtml(walletTransactionCountLabel)}</span></h4>
-                    <p class="helper-text">Full wallet activity for ${escapeHtml(displayName)}.</p>
+                    <p class="helper-text">Full Wallet Activity for ${escapeHtml(displayName)}.</p>
                 </div>
             </div>
             <div class="detail-subpage-body">
@@ -27889,7 +29192,7 @@ function renderIndividualAccountDetail(account, { forceOpen = false } = {}) {
                 <button type="button" class="btn btn-outline detail-back-btn" data-action="close-points-transactions" aria-controls="individualAccountDetailMain">Back to Account Details</button>
                 <div class="detail-subpage-title">
                     <h4>Points Transactions <span class="detail-count-label">${escapeHtml(pointsTransactionCountLabel)}</span></h4>
-                    <p class="helper-text">Comprehensive Points history for ${escapeHtml(displayName)}.</p>
+                    <p class="helper-text">Comprehensive Points History for ${escapeHtml(displayName)}.</p>
                 </div>
             </div>
             <div class="detail-subpage-body">
@@ -28104,6 +29407,11 @@ function handleIndividualAccountsSeedRequest() {
             }
             return `${normalizedPrefix}-${Date.now().toString(36).toUpperCase().padStart(length, '0').slice(-length)}`;
         };
+        const randomInRange = (min, max) => {
+            const lower = Math.min(min, max);
+            const upper = Math.max(min, max);
+            return lower + Math.floor(Math.random() * (upper - lower + 1));
+        };
 
         const now = new Date();
         const nowIso = now.toISOString();
@@ -28112,13 +29420,111 @@ function handleIndividualAccountsSeedRequest() {
         businessAccounts = ensureArray(businessAccounts);
         individualSignupRecords = ensureArray(individualSignupRecords);
 
+        const hasNonEmptyArray = collection => Array.isArray(collection) && collection.length > 0;
+
+        const hasZeroFinancialArtifacts = account => {
+            if (!account || typeof account !== 'object') {
+                return false;
+            }
+            const hasWalletHistory = hasNonEmptyArray(account.financialHistory);
+            const hasPointsHistory = hasNonEmptyArray(account.pointsHistory);
+            const hasPaymentMethods = hasNonEmptyArray(account.paymentCards) || hasNonEmptyArray(account.paymentMethods);
+            const hasSavedAddresses = hasNonEmptyArray(account.savedAddresses)
+                || hasNonEmptyArray(account.marketplaceActivity?.savedAddresses);
+            const hasFollowUps = [
+                account.followUps?.favoriteCategories,
+                account.followUps?.favoriteSellers,
+                account.followUps?.favoriteSearches,
+                account.marketplaceActivity?.followUps?.favoriteCategories,
+                account.marketplaceActivity?.followUps?.favoriteSellers,
+                account.marketplaceActivity?.followUps?.favoriteSearches
+            ].some(hasNonEmptyArray);
+            const hasFavorites = [
+                account.favoriteCategories,
+                account.favoriteSellers,
+                account.favoriteSearches
+            ].some(hasNonEmptyArray);
+
+            return !(
+                hasWalletHistory
+                || hasPointsHistory
+                || hasPaymentMethods
+                || hasSavedAddresses
+                || hasFollowUps
+                || hasFavorites
+            );
+        };
+
+        const hasLoginHistory = account => {
+            if (!account || typeof account !== 'object') {
+                return false;
+            }
+            const candidateStrings = [
+                account.lastActiveAt,
+                account.lastLoginAt,
+                account.lastLogin
+            ];
+            if (candidateStrings.some(value => typeof value === 'string' && value.trim())) {
+                return true;
+            }
+            if (Array.isArray(account.activityLog)) {
+                return account.activityLog.some(entry => entry && entry.action === 'login');
+            }
+            return false;
+        };
+
+        const zeroArtifactStats = individualAccounts.reduce((accumulator, account) => {
+            if (!hasZeroFinancialArtifacts(account)) {
+                return accumulator;
+            }
+            if (hasLoginHistory(account)) {
+                accumulator.loggedWithZero = true;
+            } else {
+                accumulator.neverLoggedZero = true;
+            }
+            return accumulator;
+        }, { loggedWithZero: false, neverLoggedZero: false });
+
+        const accountVariants = [
+            { loginHistory: false, zeroFinancialArtifacts: false },
+            { loginHistory: true, zeroFinancialArtifacts: false },
+            { loginHistory: false, zeroFinancialArtifacts: true },
+            { loginHistory: true, zeroFinancialArtifacts: true }
+        ];
+        const rotationVariant = accountVariants[individualAccounts.length % accountVariants.length];
+        let variant = { ...rotationVariant };
+        // Ensure the seeded dataset always contains zero-artifact accounts both with and without prior logins.
+        if (!zeroArtifactStats.neverLoggedZero) {
+            variant = { loginHistory: false, zeroFinancialArtifacts: true };
+        } else if (!zeroArtifactStats.loggedWithZero) {
+            variant = { loginHistory: true, zeroFinancialArtifacts: true };
+        }
+        if (!variant.loginHistory) {
+            // Never-logged-in profiles must stay clean so testing mirrors the expected empty wallet/page states.
+            variant.zeroFinancialArtifacts = true;
+        }
+        const shouldIncludeLoginHistory = Boolean(variant.loginHistory);
+        const suppressFinancialArtifacts = Boolean(variant.zeroFinancialArtifacts);
+
+        const creationDaysAgo = randomInRange(45, 240);
+        const createdAtDate = new Date(now.getTime() - creationDaysAgo * 86_400_000);
+        const createdAtIso = createdAtDate.toISOString();
+
+        let lastActiveAtIso = null;
+        if (shouldIncludeLoginHistory) {
+            const maxLoginDaysAgo = Math.max(1, Math.min(creationDaysAgo - 1, 45));
+            const loginDaysAgo = Math.max(1, randomInRange(1, maxLoginDaysAgo));
+            const loginHoursOffset = randomInRange(1, 18);
+            const candidateLogin = new Date(now.getTime() - loginDaysAgo * 86_400_000 - loginHoursOffset * 3_600_000);
+            const adjustedLogin = candidateLogin <= createdAtDate
+                ? new Date(createdAtDate.getTime() + 6 * 3_600_000)
+                : candidateLogin;
+            lastActiveAtIso = adjustedLogin.toISOString();
+        }
+
         const existingIndividualIds = new Set(individualAccounts
             .map(account => (account && typeof account.id === 'string') ? account.id.trim().toUpperCase() : '')
             .filter(Boolean));
-        const existingBusinessIds = new Set(businessAccounts
-            .map(account => (account && typeof account.id === 'string') ? account.id.trim().toUpperCase() : '')
-            .filter(Boolean));
-
         const individualId = generateSequentialIdentifier(existingIndividualIds, 'IND');
         const numericSeedMatch = individualId.match(/(\d+)$/);
         const numericSeed = numericSeedMatch ? Number.parseInt(numericSeedMatch[1], 10) : Math.floor(Math.random() * 10000);
@@ -28249,6 +29655,25 @@ function handleIndividualAccountsSeedRequest() {
             { label: 'Pending Balance', amount: 0, type: 'pending' }
         ];
         const autoPostingEnabled = numericSeed % 2 === 0;
+        const populatedSeedProfile = {
+            walletTransactions: randomInRange(6, INDIVIDUAL_WALLET_MAX_TRANSACTIONS),
+            pointsTransactions: randomInRange(6, INDIVIDUAL_POINTS_MAX_TRANSACTIONS),
+            paymentMethods: randomInRange(2, 6),
+            savedAddresses: randomInRange(2, 6),
+            favoriteCategories: randomInRange(2, 6),
+            favoriteSellers: randomInRange(2, 5),
+            favoriteSearches: randomInRange(2, 5)
+        };
+        const emptySeedProfile = {
+            walletTransactions: 0,
+            pointsTransactions: 0,
+            paymentMethods: 0,
+            savedAddresses: 0,
+            favoriteCategories: 0,
+            favoriteSellers: 0,
+            favoriteSearches: 0
+        };
+        const seedProfile = suppressFinancialArtifacts ? emptySeedProfile : populatedSeedProfile;
 
         const baseAccount = {
             id: individualId,
@@ -28263,8 +29688,8 @@ function handleIndividualAccountsSeedRequest() {
             balanceBreakdown,
             adsCount: numericSeed % 3,
             pendingAds: numericSeed % 2,
-            createdAt: nowIso,
-            lastActiveAt: null,
+            createdAt: createdAtIso,
+            lastActiveAt: lastActiveAtIso,
             username,
             gender,
             dateOfBirth: dateOfBirthIso,
@@ -28283,119 +29708,40 @@ function handleIndividualAccountsSeedRequest() {
             },
             invitation,
             invitationCode,
-            businessAssociations: []
+            businessAssociations: [],
+            seedProfile
         };
 
-        const businessTemplates = [
-            { suffix: 'Trading', packageId: 'PKG-START', autoRenew: false, financialStatus: 'pending' },
-            { suffix: 'Logistics', packageId: 'PKG-GROWTH', autoRenew: true, financialStatus: 'pending' }
-        ];
-        const businessAssociationRng = createDeterministicRandom(`${individualId}|business-association`);
-        const desiredBusinessAccountCount = Math.min(
-            businessTemplates.length,
-            Math.floor(businessAssociationRng() * 3)
-        );
-        const selectedBusinessTemplates = desiredBusinessAccountCount
-            ? businessTemplates
-                .map(template => ({ template, order: businessAssociationRng() }))
-                .sort((a, b) => a.order - b.order)
-                .slice(0, desiredBusinessAccountCount)
-                .map(entry => entry.template)
-            : [];
-        const newBusinessAccounts = [];
-        const businessAssociations = [];
-
-        selectedBusinessTemplates.forEach((template, index) => {
-            const businessId = generateSequentialIdentifier(existingBusinessIds, 'BUS');
-            const submittedAt = new Date(now.getTime() - index * 3600000).toISOString();
-            const approvedAt = null;
-            const companySlug = createSlug(`${lastName} ${template.suffix}`) || `business-${index + 1}`;
-            const businessEmail = `${companySlug}@seed.onruf.com`;
-            const registrationNumber = `CR-${String(numericSeed).padStart(4, '0')}${index + 1}`;
-            const detailRegistrationNumber = `DR-${String(numericSeed).padStart(4, '0')}${index + 1}`;
-            const vatNumber = `31${String(numericSeed).padStart(6, '0')}${index + 1}`;
-
-            const businessStatus = 'pending';
-            const requestedDocuments = ['Commercial Registration Copy', 'Tax Certificate'];
-            const invoices = [];
-
-            const businessRaw = {
-                id: businessId,
-                companyName: `${lastName} ${template.suffix}`,
-                contactName: fullName,
-                email: businessEmail,
-                phone: mobile,
-                city,
-                submittedAt,
-                approvedAt,
-                status: businessStatus,
-                packageId: template.packageId,
-                requestedDocuments,
-                invoices,
-                autoRenew: template.autoRenew,
-                financialStatus: template.financialStatus,
-                registrationNumber,
-                detailRegistrationNumber,
-                registrationDocumentType: 'commercial-registration',
-                expiryDate: new Date(now.getTime() + 180 * 86400000).toISOString(),
-                vatNumber,
-                maroofUrl: '',
-                website: `https://www.${companySlug}.com`,
-                socials: {
-                    instagram: `https://instagram.com/${companySlug}`,
-                    linkedin: `https://linkedin.com/company/${companySlug}`
-                },
-                certificates: [],
-                address: {
-                    country: DEFAULT_ADDRESS_COUNTRY,
-                    region,
-                    city,
-                    district: '',
-                    street: '',
-                    streetNumber: '',
-                    streetName: '',
-                    zipCode: '',
-                    zip: ''
-                },
-                history: [
-                    {
-                        id: `${businessId}-seeded`,
-                        action: 'request-submitted',
-                        timestamp: submittedAt,
-                        actor: fullName,
-                        context: 'Seeded sample business application.'
-                    }
-                ]
+        if (suppressFinancialArtifacts) {
+            baseAccount.financialHistory = [];
+            baseAccount.pointsHistory = [];
+            baseAccount.savedAddresses = [];
+            baseAccount.favoriteCategories = [];
+            baseAccount.favoriteSellers = [];
+            baseAccount.favoriteSearches = [];
+            baseAccount.followUps = {
+                favoriteCategories: [],
+                favoriteSellers: [],
+                favoriteSearches: []
             };
-
-            const normalizedBusiness = normalizeBusinessAccountPayload(
-                businessRaw,
-                businessAccounts.length + newBusinessAccounts.length
-            );
-            normalizedBusiness.primaryIndividualId = individualId;
-            normalizedBusiness.defaultPublishingListType = 'trusted';
-            normalizedBusiness.defaultPublishingListNote = 'Auto-added to Trusted Accounts list.';
-            appendBusinessAccountHistory(normalizedBusiness, 'linked-individual', `Linked to ${fullName}.`);
-            newBusinessAccounts.push(normalizedBusiness);
-
-            businessAssociations.push({
-                businessId: normalizedBusiness.id,
-                businessAccountId: normalizedBusiness.id,
-                companyName: normalizedBusiness.companyName,
-                relationship: index === 0 ? 'Owner' : 'Authorized Representative',
-                linkedAt: nowIso
-            });
-        });
-
-        baseAccount.businessAssociations = businessAssociations;
+        }
 
         const normalizedAccount = normalizeIndividualAccountPayload(baseAccount, individualAccounts.length);
+        if (lastActiveAtIso) {
+            appendIndividualAccountLogEntry(normalizedAccount, {
+                action: 'login',
+                label: 'Signed in from ONRUF mobile',
+                timestamp: lastActiveAtIso,
+                actor: normalizedAccount.fullName || normalizedAccount.username || '',
+                context: 'Login history generated for seeded account.'
+            });
+        }
         appendIndividualAccountLogEntry(normalizedAccount, {
             action: 'account-seeded',
             label: 'Seeded sample account',
             timestamp: nowIso,
             actor: resolveProductAdModeratorLabel(),
-            context: `Account seeded with ${newBusinessAccounts.length} linked business account${newBusinessAccounts.length === 1 ? '' : 's'}.`
+            context: 'Account seeded for testing.'
         });
 
         individualAccounts.push(normalizedAccount);
@@ -28404,17 +29750,7 @@ function handleIndividualAccountsSeedRequest() {
 
         ensureIndividualAccountTrusted(normalizedAccount);
 
-        newBusinessAccounts.forEach(business => {
-            const existingIndex = businessAccounts.findIndex(entry => entry && entry.id === business.id);
-            if (existingIndex === -1) {
-                businessAccounts.push(business);
-            } else {
-                businessAccounts[existingIndex] = business;
-            }
-        });
-
         enrichIndividualAccountsWithSampleFavorites();
-        saveBusinessAccountsToStorage();
 
         const normalizedEmail = normalizeEmail(normalizedAccount.email);
         individualSignupRecords = individualSignupRecords
@@ -28457,12 +29793,10 @@ function handleIndividualAccountsSeedRequest() {
         state.activeIndividualAccountId = updatedAccount.id;
         state.currentIndividualAccountsPage = 1;
         renderIndividualAccountsTable(1);
-        renderIndividualAccountDetail(updatedAccount, { forceOpen: true });
+        renderIndividualAccountDetail(updatedAccount);
         renderIndividualAccountSupportRequests();
+        showNotification('success', 'Individual Account successfully Seeded');
 
-        state.currentBusinessAccountsPage = 1;
-        renderBusinessAccountsTable(1);
-        refreshBusinessRequestsWorkspace();
 
     } catch (error) {
         console.warn('Unable to seed individual account:', error);
@@ -29266,27 +30600,215 @@ function handleIndividualAccountsToolbarClick(event) {
     }
 }
 
-function renderIndividualAccountMarketplaceOverlay(account) {
-    const overlay = document.getElementById('individualAccountMarketplaceOverlay');
-    const titleEl = document.getElementById('individualAccountMarketplaceTitle');
-    const subtitleEl = document.getElementById('individualAccountMarketplaceSubtitle');
-    const contentEl = document.getElementById('individualAccountMarketplaceContent');
+function normalizeProductAdIdentifier(raw) {
+    if (raw === null || raw === undefined) {
+        return '';
+    }
+    const digits = String(raw).replace(/[^0-9]/g, '');
+    if (!digits) {
+        return '';
+    }
+    const trimmed = digits.slice(-4);
+    return trimmed.padStart(4, '0');
+}
+
+function resolveProductAdRecordByIdentifier(identifier) {
+    const raw = identifier === null || identifier === undefined ? '' : String(identifier);
+    const trimmed = raw.trim();
+    if (!trimmed) {
+        return null;
+    }
+    const normalized = trimmed.toLowerCase();
+    const normalizedDigits = normalizeProductAdIdentifier(trimmed);
+    const catalog = typeof productAds !== 'undefined' && Array.isArray(productAds) ? productAds : [];
+    for (const entry of catalog) {
+        if (!entry || typeof entry !== 'object') {
+            continue;
+        }
+        const keys = [
+            entry.id,
+            entry.productId,
+            entry.listingId,
+            entry.campaignId,
+            entry.reference,
+            entry.externalId,
+            entry.internalId
+        ];
+        for (const keyValue of keys) {
+            if (keyValue === null || keyValue === undefined) {
+                continue;
+            }
+            const valueText = String(keyValue).trim();
+            if (!valueText) {
+                continue;
+            }
+            if (valueText.toLowerCase() === normalized) {
+                return entry;
+            }
+            const candidateDigits = normalizeProductAdIdentifier(valueText);
+            if (normalizedDigits && candidateDigits === normalizedDigits) {
+                return entry;
+            }
+        }
+    }
+    return null;
+}
+
+// Allow moderators to navigate to ad history or capture identifiers directly from the overlay.
+function bindMarketplaceEntryIdentifierClicks(root) {
+    if (!root || typeof root.querySelectorAll !== 'function') {
+        return;
+    }
+    const targets = root.querySelectorAll('[data-marketplace-product-ad-id]');
+    targets.forEach(node => {
+        if (!(node instanceof HTMLElement)) {
+            return;
+        }
+        if (node.dataset.bound === 'true') {
+            return;
+        }
+        node.dataset.bound = 'true';
+        node.addEventListener('click', event => {
+            event.preventDefault();
+            event.stopPropagation();
+            const reference = node.getAttribute('data-marketplace-product-ad-id');
+            if (!reference) {
+                return;
+            }
+            const adRecord = resolveProductAdRecordByIdentifier(reference);
+            if (adRecord && adRecord.id) {
+                openProductAdHistoryDrawer(adRecord.id);
+                return;
+            }
+            const normalizedReference = reference.trim();
+            if (!normalizedReference) {
+                return;
+            }
+            const canCopy = typeof navigator !== 'undefined'
+                && navigator.clipboard
+                && typeof navigator.clipboard.writeText === 'function';
+            if (canCopy) {
+                navigator.clipboard.writeText(normalizedReference)
+                    .then(() => {
+                        showNotification('success', `Product ad ID ${normalizedReference} copied to clipboard.`);
+                    })
+                    .catch(() => {
+                        showNotification('info', `Product ad ID ${normalizedReference}`);
+                    });
+            } else {
+                showNotification('info', `Product ad ID ${normalizedReference}`);
+            }
+        });
+    });
+}
+
+function renderGenericMarketplaceOverlay(targetElements, account, options = {}) {
+    const { overlay, titleEl, subtitleEl, contentEl } = targetElements || {};
     if (!titleEl || !contentEl) return;
 
+    const {
+        titleText = 'Marketplace Activity',
+        emptyTitleText = titleText,
+        emptySubtitle = 'Select an account to surface marketplace orders, listings, and saved items.',
+        emptyMessage = 'Select an account from the directory to review marketplace activity.',
+        resolveDisplayName = resolveIndividualAccountDisplayName,
+        buildSubtitle = (accountRef, displayLabel) => `Recent marketplace movements for ${displayLabel}.`,
+        additionalSummaryMetrics = []
+    } = options;
+
     if (!account) {
-        titleEl.textContent = 'Marketplace Activity';
+        const resolvedEmptyTitle = typeof emptyTitleText === 'function'
+            ? emptyTitleText(account)
+            : emptyTitleText;
+        titleEl.textContent = resolvedEmptyTitle;
         if (subtitleEl) {
-            subtitleEl.textContent = 'Select an account to surface marketplace orders, listings, and saved items.';
+            const emptySubtitleText = typeof emptySubtitle === 'function'
+                ? emptySubtitle(account)
+                : emptySubtitle;
+            subtitleEl.textContent = emptySubtitleText;
         }
-        contentEl.innerHTML = '<p class="empty-state">Select an account from the directory to review marketplace activity.</p>';
+        contentEl.innerHTML = `<p class="empty-state">${escapeHtml(emptyMessage)}</p>`;
+        if (overlay) {
+            overlay.setAttribute('aria-hidden', overlay.classList.contains('hidden') ? 'true' : 'false');
+        }
         return;
     }
 
-    const displayName = resolveIndividualAccountDisplayName(account);
+    const displayName = typeof resolveDisplayName === 'function'
+        ? resolveDisplayName(account)
+        : resolveIndividualAccountDisplayName(account);
+    const resolvedTitleText = typeof titleText === 'function'
+        ? titleText(account, displayName)
+        : titleText;
+    const subtitleText = typeof buildSubtitle === 'function'
+        ? buildSubtitle(account, displayName)
+        : buildSubtitle;
+
+    titleEl.textContent = resolvedTitleText;
+    if (subtitleEl) {
+        subtitleEl.textContent = subtitleText || '';
+    }
+
     const activity = account.marketplaceActivity && typeof account.marketplaceActivity === 'object' ? account.marketplaceActivity : {};
     const purchases = Array.isArray(activity.purchases) ? activity.purchases.slice() : [];
     const sales = Array.isArray(activity.sales) ? activity.sales.slice() : [];
     const productAds = Array.isArray(activity.productAds) ? activity.productAds.slice() : [];
+    const salesProducts = Array.isArray(activity.salesProducts) ? activity.salesProducts.slice() : [];
+    const salesProductOffers = Array.isArray(activity.salesProductOffers) ? activity.salesProductOffers.slice() : [];
+    const purchaseOrders = Array.isArray(activity.purchaseOrders) ? activity.purchaseOrders.slice() : [];
+    const biddingOffers = Array.isArray(activity.biddingOffers) ? activity.biddingOffers.slice() : [];
+    const missedOpportunities = Array.isArray(activity.missedOpportunities) ? activity.missedOpportunities.slice() : [];
+    const negotiatedOffers = Array.isArray(activity.negotiatedOffers) ? activity.negotiatedOffers.slice() : [];
+    if (!salesProducts.length) {
+        salesProducts.push(...productAds);
+        if (!salesProducts.length) {
+            salesProducts.push(...sales);
+        }
+    }
+    if (!salesProductOffers.length) {
+        if (Array.isArray(activity.productOffers)) {
+            salesProductOffers.push(...activity.productOffers);
+        }
+        if (!salesProductOffers.length && Array.isArray(activity.salesOffers)) {
+            salesProductOffers.push(...activity.salesOffers);
+        }
+    }
+    if (!purchaseOrders.length) {
+        purchaseOrders.push(...purchases);
+    }
+    if (!biddingOffers.length) {
+        if (Array.isArray(activity.auctionBids)) {
+            biddingOffers.push(...activity.auctionBids);
+        }
+        if (Array.isArray(activity.bidHistory)) {
+            biddingOffers.push(...activity.bidHistory);
+        }
+        if (!biddingOffers.length && Array.isArray(activity.bids)) {
+            biddingOffers.push(...activity.bids);
+        }
+    }
+    if (!missedOpportunities.length) {
+        if (Array.isArray(activity.missedDeals)) {
+            missedOpportunities.push(...activity.missedDeals);
+        }
+        if (Array.isArray(activity.lostListings)) {
+            missedOpportunities.push(...activity.lostListings);
+        }
+        if (!missedOpportunities.length && Array.isArray(activity.lostDeals)) {
+            missedOpportunities.push(...activity.lostDeals);
+        }
+    }
+    if (!negotiatedOffers.length) {
+        if (Array.isArray(activity.purchaseNegotiations)) {
+            negotiatedOffers.push(...activity.purchaseNegotiations);
+        }
+        if (Array.isArray(activity.offerHistory)) {
+            negotiatedOffers.push(...activity.offerHistory);
+        }
+        if (!negotiatedOffers.length && Array.isArray(activity.negotiationOffers)) {
+            negotiatedOffers.push(...activity.negotiationOffers);
+        }
+    }
     const sellerRatingsSource = Array.isArray(account.sellerRatings)
         ? account.sellerRatings
         : Array.isArray(activity.sellerRatings) ? activity.sellerRatings : [];
@@ -29386,7 +30908,142 @@ function renderIndividualAccountMarketplaceOverlay(account) {
             return valueB - valueA;
         });
 
-    const renderMarketplaceEntry = entry => {
+    // Bucket marketplace listings so the Sales view can split them into lifecycle groups.
+    const categorizeSalesProduct = entry => {
+        if (!entry || typeof entry !== 'object') {
+            return 'forSale';
+        }
+        if (entry.isArchived === true || entry.archived === true) {
+            return 'archived';
+        }
+        if (entry.isSold === true || entry.sold === true) {
+            return 'sold';
+        }
+        if (entry.isUnsold === true || entry.unsold === true) {
+            return 'unsold';
+        }
+
+        const textSegments = [];
+        const registerSegment = value => {
+            if (typeof value === 'string' && value.trim()) {
+                textSegments.push(value.trim().toLowerCase());
+            }
+        };
+
+        registerSegment(entry.status);
+        registerSegment(entry.state);
+        registerSegment(entry.stage);
+        registerSegment(entry.lifecycle);
+        registerSegment(entry.outcome);
+        registerSegment(entry.progress);
+        registerSegment(entry.result);
+        registerSegment(entry.inventoryStatus);
+        registerSegment(entry.stockStatus);
+        registerSegment(entry.availability);
+        registerSegment(entry.visibility);
+        registerSegment(entry.fulfillmentStatus);
+
+        const combined = textSegments.join(' ');
+        const containsAny = keywords => keywords.some(keyword => combined.includes(keyword));
+
+        if (containsAny(['archiv', 'retired', 'removed', 'shelved', 'decommissioned', 'hidden', 'suspend'])) {
+            return 'archived';
+        }
+        if (containsAny(['sold', 'fulfilled', 'delivered', 'completed', 'closed won', 'closed-won', 'ordered', 'shipped'])) {
+            return 'sold';
+        }
+        if (containsAny(['expired', 'cancel', 'declin', 'reject', 'lost', 'void', 'out of stock', 'out-of-stock', 'no stock', 'inactive', 'unsold', 'terminated'])) {
+            return 'unsold';
+        }
+
+        return 'forSale';
+    };
+
+    const salesProductBuckets = {
+        forSale: [],
+        sold: [],
+        unsold: [],
+        archived: []
+    };
+
+    const salesProductBucketKeys = {
+        forSale: new Set(),
+        sold: new Set(),
+        unsold: new Set(),
+        archived: new Set()
+    };
+
+    const buildSalesProductKey = entry => {
+        if (!entry || typeof entry !== 'object') {
+            return null;
+        }
+        if (typeof entry.id === 'string' && entry.id.trim()) {
+            return `id:${entry.id.trim()}`;
+        }
+        if (typeof entry.reference === 'string' && entry.reference.trim()) {
+            return `ref:${entry.reference.trim()}`;
+        }
+        if (typeof entry.productId === 'string' && entry.productId.trim()) {
+            return `product:${entry.productId.trim()}`;
+        }
+        return null;
+    };
+
+    const pushSalesProductToBucket = (bucketName, entry) => {
+        if (!entry || typeof entry !== 'object') {
+            return;
+        }
+        if (!salesProductBuckets[bucketName] || !salesProductBucketKeys[bucketName]) {
+            return;
+        }
+        const key = buildSalesProductKey(entry);
+        if (key && salesProductBucketKeys[bucketName].has(key)) {
+            return;
+        }
+        if (key) {
+            salesProductBucketKeys[bucketName].add(key);
+        }
+        salesProductBuckets[bucketName].push(entry);
+    };
+
+    salesProducts.forEach(entry => {
+        const bucket = categorizeSalesProduct(entry);
+        pushSalesProductToBucket(bucket, entry);
+    });
+
+    const appendToBucket = (entries, bucketName) => {
+        if (!Array.isArray(entries)) {
+            return;
+        }
+        entries.forEach(entry => {
+            if (entry === null || entry === undefined) {
+                return;
+            }
+            pushSalesProductToBucket(bucketName, entry);
+        });
+    };
+
+    appendToBucket(activity.forSaleListings, 'forSale');
+    appendToBucket(activity.activeListings, 'forSale');
+    appendToBucket(activity.liveListings, 'forSale');
+    appendToBucket(activity.soldListings, 'sold');
+    appendToBucket(activity.completedListings, 'sold');
+    appendToBucket(activity.archivedListings, 'archived');
+    appendToBucket(activity.removedListings, 'archived');
+    appendToBucket(activity.unsoldListings, 'unsold');
+    appendToBucket(activity.expiredListings, 'unsold');
+
+    if (!salesProductBuckets.sold.length && Array.isArray(sales) && sales.length) {
+        sales.forEach(entry => {
+            if (!entry || typeof entry !== 'object') {
+                return;
+            }
+            pushSalesProductToBucket('sold', { ...entry, status: entry.status || 'Sold' });
+        });
+    }
+
+    const renderMarketplaceEntry = (entry, options = {}) => {
+        const { hideDetails = false, resolveIdentifier } = options || {};
         if (!entry || typeof entry !== 'object') {
             return '<li><div><strong>Marketplace item</strong></div></li>';
         }
@@ -29410,6 +31067,19 @@ function renderIndividualAccountMarketplaceOverlay(account) {
         }
         if (!title) {
             title = 'Marketplace item';
+        }
+        let identifierMarkup = '';
+        if (typeof resolveIdentifier === 'function') {
+            const identifierRaw = resolveIdentifier(entry);
+            if (identifierRaw !== null && identifierRaw !== undefined) {
+                const identifierText = normalizeProductAdIdentifier(identifierRaw);
+                if (identifierText) {
+                    identifierMarkup = ` <button type="button" class="marketplace-entry-identifier" data-marketplace-product-ad-id="${escapeAttribute(identifierText)}">#${escapeHtml(identifierText)}</button>`;
+                }
+            }
+        }
+        if (hideDetails) {
+            return `<li><div><strong>${escapeHtml(title)}</strong>${identifierMarkup}</div></li>`;
         }
         const detailLines = [];
         const amount = extractAmount(entry);
@@ -29448,7 +31118,7 @@ function renderIndividualAccountMarketplaceOverlay(account) {
         if (noteCandidate) {
             detailLines.push(`<div class="helper-text">${escapeHtml(String(noteCandidate))}</div>`);
         }
-        return `<li><div><strong>${escapeHtml(title)}</strong></div>${detailLines.join('')}</li>`;
+        return `<li><div><strong>${escapeHtml(title)}</strong>${identifierMarkup}</div>${detailLines.join('')}</li>`;
     };
 
     const computeRatingSummary = entries => {
@@ -29585,38 +31255,98 @@ function renderIndividualAccountMarketplaceOverlay(account) {
         [account.buyerRating, account.buyerScore, account.averageBuyerRating, activity.buyerRating, activity.buyerScore, activity.averageBuyerRating]
     );
 
-    const purchaseVolume = sumAmounts(purchases);
-    const salesVolume = sumAmounts(sales);
-    const combinedActivity = sortByTimestampDesc([...purchases, ...sales, ...productAds]);
+    const purchaseVolumeSource = purchaseOrders.length ? purchaseOrders : purchases;
+    const salesVolumeSource = sales.length ? sales : salesProducts;
+    const purchaseVolume = sumAmounts(purchaseVolumeSource);
+    const salesVolume = sumAmounts(salesVolumeSource);
+    const combinedActivity = sortByTimestampDesc([
+        ...purchaseOrders,
+        ...sales,
+        ...salesProducts,
+        ...salesProductOffers,
+        ...biddingOffers,
+        ...negotiatedOffers,
+        ...missedOpportunities,
+        ...productAds
+    ]);
     const latestActivityMeta = combinedActivity.length ? getTimestampMeta(combinedActivity[0]) : null;
 
     const renderSummaryMetric = (label, value) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`;
 
-    titleEl.textContent = 'Marketplace Activity';
-    if (subtitleEl) {
-        subtitleEl.textContent = `Recent marketplace movements for ${displayName}.`;
-    }
-
+    const formatCount = entries => (Array.isArray(entries) && entries.length ? entries.length.toLocaleString('en-US') : '0');
     const summaryMetrics = [
-        renderSummaryMetric('Completed Purchases', purchases.length ? purchases.length.toLocaleString('en-US') : '0'),
+        renderSummaryMetric('Product Listings', formatCount(salesProducts)),
+        renderSummaryMetric('Purchase Orders', formatCount(purchaseOrders)),
         renderSummaryMetric('Purchase Volume', purchaseVolume ? formatCurrency(purchaseVolume) : (purchaseVolume === 0 ? formatCurrency(0) : '—')),
-        renderSummaryMetric('Sales Orders', sales.length ? sales.length.toLocaleString('en-US') : '0'),
-        renderSummaryMetric('Sales Volume', salesVolume ? formatCurrency(salesVolume) : (salesVolume === 0 ? formatCurrency(0) : '—')),
-        renderSummaryMetric('Product Ads', productAds.length ? productAds.length.toLocaleString('en-US') : '0'),
-        renderSummaryMetric('Latest Activity', latestActivityMeta && latestActivityMeta.label ? latestActivityMeta.label : '—')
+        renderSummaryMetric('Sales Orders', formatCount(sales)),
+        renderSummaryMetric('Sales Volume', salesVolume ? formatCurrency(salesVolume) : (salesVolume === 0 ? formatCurrency(0) : '—'))
     ];
 
-    const purchasesMarkup = purchases.length
-        ? `<ul class="detail-list">${sortByTimestampDesc(purchases).slice(0, 10).map(renderMarketplaceEntry).join('')}</ul>`
-        : '<p class="helper-text">No purchases recorded.</p>';
+    if (Array.isArray(additionalSummaryMetrics) && additionalSummaryMetrics.length) {
+        additionalSummaryMetrics.forEach(metric => {
+            if (!metric || typeof metric !== 'object') {
+                return;
+            }
+            const { label, value } = metric;
+            if (typeof label !== 'string' || !label.trim()) {
+                return;
+            }
+            const resolvedValue = value === null || value === undefined || value === ''
+                ? '—'
+                : String(value);
+            summaryMetrics.push(renderSummaryMetric(label, resolvedValue));
+        });
+    }
 
-    const salesMarkup = sales.length
-        ? `<ul class="detail-list">${sortByTimestampDesc(sales).slice(0, 10).map(renderMarketplaceEntry).join('')}</ul>`
-        : '<p class="helper-text">No sales activity recorded.</p>';
+    const buildCollectionMarkup = (entries, emptyMessage, options = {}) => {
+        const collection = Array.isArray(entries) ? entries.filter(item => item !== null && item !== undefined) : [];
+        if (!collection.length) {
+            return `<p class="helper-text">${escapeHtml(emptyMessage)}</p>`;
+        }
+        return `<ul class="detail-list">${sortByTimestampDesc(collection).slice(0, 10).map(item => renderMarketplaceEntry(item, options)).join('')}</ul>`;
+    };
 
-    const productAdsMarkup = productAds.length
-        ? `<ul class="detail-list">${sortByTimestampDesc(productAds).slice(0, 10).map(renderMarketplaceEntry).join('')}</ul>`
-        : '<p class="helper-text">No product ad activity recorded.</p>';
+    const formatBucketHeading = (label, entries) => {
+        const count = Array.isArray(entries) ? entries.length : 0;
+        return count ? `${label} (${count.toLocaleString('en-US')})` : label;
+    };
+
+    const resolveSalesProductIdentifier = entry => {
+        if (!entry || typeof entry !== 'object') {
+            return '';
+        }
+        const candidates = [
+            entry.productAdId,
+            entry.productId,
+            entry.listingId,
+            entry.listingNumber,
+            entry.adId,
+            entry.campaignId,
+            entry.internalId,
+            entry.reference,
+            entry.id
+        ];
+        for (const candidate of candidates) {
+            if (candidate === null || candidate === undefined) {
+                continue;
+            }
+            const normalized = normalizeProductAdIdentifier(candidate);
+            if (normalized) {
+                return normalized;
+            }
+        }
+        return '';
+    };
+
+    const salesProductsForSaleMarkup = buildCollectionMarkup(salesProductBuckets.forSale, 'No active listings recorded.', { hideDetails: true, resolveIdentifier: resolveSalesProductIdentifier });
+    const salesProductsSoldMarkup = buildCollectionMarkup(salesProductBuckets.sold, 'No sold listings recorded.', { hideDetails: true, resolveIdentifier: resolveSalesProductIdentifier });
+    const salesProductsUnsoldMarkup = buildCollectionMarkup(salesProductBuckets.unsold, 'No unsold listings recorded.', { hideDetails: true, resolveIdentifier: resolveSalesProductIdentifier });
+    const salesProductsArchivedMarkup = buildCollectionMarkup(salesProductBuckets.archived, 'No archived listings recorded.', { hideDetails: true, resolveIdentifier: resolveSalesProductIdentifier });
+    const salesProductOffersMarkup = buildCollectionMarkup(salesProductOffers, 'No product offers recorded.');
+    const purchaseOrdersMarkup = buildCollectionMarkup(purchaseOrders, 'No purchase orders recorded.');
+    const biddingOffersMarkup = buildCollectionMarkup(biddingOffers, 'No bidding offers recorded.');
+    const missedOpportunitiesMarkup = buildCollectionMarkup(missedOpportunities, 'No missed opportunities recorded.');
+    const negotiatedOffersMarkup = buildCollectionMarkup(negotiatedOffers, 'No negotiated offers recorded.');
 
     const sellerRatingFaceMarkup = buildRatingFaceMarkup(Number.isFinite(sellerSummary.average) ? sellerSummary.average : null, 'Seller rating');
     const buyerRatingFaceMarkup = buildRatingFaceMarkup(Number.isFinite(buyerSummary.average) ? buyerSummary.average : null, 'Buyer rating');
@@ -29651,22 +31381,52 @@ function renderIndividualAccountMarketplaceOverlay(account) {
 
     contentEl.innerHTML = `
         <section class="detail-section">
-            <h4>Marketplace Overview</h4>
+            <h4>Overview</h4>
             <div class="detail-grid">
                 ${summaryMetrics.join('')}
             </div>
         </section>
         <section class="detail-section">
-            <h4>Recent Purchases</h4>
-            ${purchasesMarkup}
+            <h4>Sales</h4>
+            <div class="detail-subsection">
+                <h5>${escapeHtml(formatBucketHeading('For Sale', salesProductBuckets.forSale))}</h5>
+                ${salesProductsForSaleMarkup}
+            </div>
+            <div class="detail-subsection">
+                <h5>${escapeHtml(formatBucketHeading('Sold', salesProductBuckets.sold))}</h5>
+                ${salesProductsSoldMarkup}
+            </div>
+            <div class="detail-subsection">
+                <h5>${escapeHtml(formatBucketHeading('Unsold', salesProductBuckets.unsold))}</h5>
+                ${salesProductsUnsoldMarkup}
+            </div>
+            <div class="detail-subsection">
+                <h5>${escapeHtml(formatBucketHeading('Archived', salesProductBuckets.archived))}</h5>
+                ${salesProductsArchivedMarkup}
+            </div>
+            <div class="detail-subsection">
+                <h5>Product Offers</h5>
+                ${salesProductOffersMarkup}
+            </div>
         </section>
         <section class="detail-section">
-            <h4>Recent Sales</h4>
-            ${salesMarkup}
-        </section>
-        <section class="detail-section">
-            <h4>Product Ads</h4>
-            ${productAdsMarkup}
+            <h4>Purchases</h4>
+            <div class="detail-subsection">
+                <h5>Purchase Orders</h5>
+                ${purchaseOrdersMarkup}
+            </div>
+            <div class="detail-subsection">
+                <h5>Bidding Offers</h5>
+                ${biddingOffersMarkup}
+            </div>
+            <div class="detail-subsection">
+                <h5>Missed Opportunities</h5>
+                ${missedOpportunitiesMarkup}
+            </div>
+            <div class="detail-subsection">
+                <h5>Negotiated Offers</h5>
+                ${negotiatedOffersMarkup}
+            </div>
         </section>
         <section class="detail-section">
             <h4>Marketplace Ratings</h4>
@@ -29695,9 +31455,294 @@ function renderIndividualAccountMarketplaceOverlay(account) {
         </section>
     `;
 
+    bindMarketplaceEntryIdentifierClicks(contentEl);
+
     if (overlay) {
         overlay.setAttribute('aria-hidden', overlay.classList.contains('hidden') ? 'true' : 'false');
     }
+}
+
+function renderIndividualAccountMarketplaceOverlay(account) {
+    const overlay = document.getElementById('individualAccountMarketplaceOverlay');
+    const titleEl = document.getElementById('individualAccountMarketplaceTitle');
+    const subtitleEl = document.getElementById('individualAccountMarketplaceSubtitle');
+    const contentEl = document.getElementById('individualAccountMarketplaceContent');
+    renderGenericMarketplaceOverlay(
+        { overlay, titleEl, subtitleEl, contentEl },
+        account,
+        {
+            titleText: (accountRef, displayLabel) => displayLabel,
+            emptyTitleText: 'Select an account',
+            emptySubtitle: resolveIndividualAccountDetailSubtitle(null),
+            emptyMessage: 'Select an account from the directory to review marketplace activity.',
+            resolveDisplayName: resolveIndividualAccountDisplayName,
+            buildSubtitle: accountRef => resolveIndividualAccountDetailSubtitle(accountRef)
+        }
+    );
+}
+
+function resolveBusinessPackageLabel(packageId) {
+    if (!packageId) {
+        return '—';
+    }
+    const collection = Array.isArray(businessPackages) ? businessPackages : [];
+    const match = collection.find(entry => entry && entry.id === packageId);
+    if (match && typeof match.name === 'string' && match.name.trim()) {
+        return match.name.trim();
+    }
+    return packageId;
+}
+
+function buildBusinessMarketplaceOverlayContext(businessAccount) {
+    if (!businessAccount || typeof businessAccount !== 'object') {
+        return null;
+    }
+
+    const { individual: linkedIndividual, association } = resolveBusinessAccountPrimaryIndividual(businessAccount);
+    const linkedIndividualAccount = linkedIndividual && typeof linkedIndividual === 'object' ? linkedIndividual : null;
+    const associationRelationship = association && typeof association.relationship === 'string'
+        ? association.relationship.trim()
+        : '';
+
+    const businessNameCandidates = [
+        businessAccount.companyNameEnglish,
+        businessAccount.companyName,
+        businessAccount.companyNameArabic,
+        businessAccount.id
+    ];
+    const normalizeLabel = value => (typeof value === 'string' ? value.trim() : '');
+    const businessDisplayName = businessNameCandidates
+        .map(normalizeLabel)
+        .find(candidate => candidate) || 'Business Account';
+
+    const individualName = linkedIndividualAccount
+        ? resolveIndividualAccountDisplayName(linkedIndividualAccount)
+        : '';
+
+    const activitySources = [];
+    if (businessAccount.marketplaceActivity && typeof businessAccount.marketplaceActivity === 'object') {
+        activitySources.push(businessAccount.marketplaceActivity);
+    }
+    if (linkedIndividualAccount && linkedIndividualAccount.marketplaceActivity && typeof linkedIndividualAccount.marketplaceActivity === 'object') {
+        activitySources.push(linkedIndividualAccount.marketplaceActivity);
+    }
+
+    const cloneEntry = entry => {
+        if (!entry || typeof entry !== 'object') {
+            return entry;
+        }
+        try {
+            return JSON.parse(JSON.stringify(entry));
+        } catch (error) {
+            return { ...entry };
+        }
+    };
+
+    const collectEntries = (...keys) => {
+        const aggregated = [];
+        const uniqueKey = item => {
+            if (!item || typeof item !== 'object') {
+                return null;
+            }
+            const reference = typeof item.id === 'string' && item.id.trim()
+                ? `id:${item.id.trim()}`
+                : (typeof item.reference === 'string' && item.reference.trim()
+                    ? `ref:${item.reference.trim()}`
+                    : null);
+            return reference;
+        };
+        const seen = new Set();
+        activitySources.forEach(source => {
+            if (!source) return;
+            keys.forEach(key => {
+                const collection = Array.isArray(source[key]) ? source[key] : [];
+                collection.forEach(item => {
+                    if (item === null || item === undefined) {
+                        return;
+                    }
+                    const dedupeKey = uniqueKey(item);
+                    if (dedupeKey && seen.has(dedupeKey)) {
+                        return;
+                    }
+                    if (dedupeKey) {
+                        seen.add(dedupeKey);
+                    }
+                    aggregated.push(cloneEntry(item));
+                });
+            });
+        });
+        return aggregated;
+    };
+
+    const aggregatedActivity = {
+        purchases: collectEntries('purchases', 'purchaseHistory', 'orders'),
+        sales: collectEntries('sales', 'salesOrders'),
+        productAds: collectEntries('productAds', 'listings', 'ads'),
+        productOffers: collectEntries('productOffers', 'offers'),
+        salesProducts: collectEntries('salesProducts', 'products', 'listings'),
+        salesProductOffers: collectEntries('salesProductOffers', 'productOffers', 'offers'),
+        purchaseOrders: collectEntries('purchaseOrders', 'purchases', 'orders'),
+        biddingOffers: collectEntries('biddingOffers', 'auctionBids', 'bidHistory', 'bids'),
+        missedOpportunities: collectEntries('missedOpportunities', 'missedDeals', 'lostListings', 'lostDeals'),
+        negotiatedOffers: collectEntries('negotiatedOffers', 'purchaseNegotiations', 'offerHistory', 'negotiationOffers'),
+        sellerRatings: collectEntries('sellerRatings', 'sellerReviews'),
+        buyerRatings: collectEntries('buyerRatings', 'buyerReviews')
+    };
+
+    const ratingsFromSources = (paths, fallbackValue = []) => {
+        const aggregated = [];
+        const appendFromSource = (source, key) => {
+            if (source && typeof source === 'object' && Array.isArray(source[key])) {
+                aggregated.push(...source[key]);
+            }
+        };
+        paths.forEach(path => {
+            appendFromSource(businessAccount, path);
+            appendFromSource(businessAccount.marketplaceActivity, path);
+            if (linkedIndividualAccount) {
+                appendFromSource(linkedIndividualAccount, path);
+                appendFromSource(linkedIndividualAccount.marketplaceActivity, path);
+            }
+        });
+        return aggregated.length ? aggregated : fallbackValue;
+    };
+
+    const parseNumericValue = value => {
+        if (typeof value === 'number') {
+            return Number.isFinite(value) ? value : null;
+        }
+        if (typeof value === 'string') {
+            const trimmed = value.trim();
+            if (!trimmed) {
+                return null;
+            }
+            const numeric = Number(trimmed.replace(/[^0-9.+-]/g, ''));
+            return Number.isFinite(numeric) ? numeric : null;
+        }
+        return null;
+    };
+
+    const pickFirstNumeric = candidates => {
+        for (const candidate of candidates) {
+            const parsed = parseNumericValue(candidate);
+            if (parsed !== null) {
+                return parsed;
+            }
+        }
+        return null;
+    };
+
+    const aggregatedSellerRatings = ratingsFromSources(['sellerRatings', 'sellerReviews'], aggregatedActivity.sellerRatings);
+    const aggregatedBuyerRatings = ratingsFromSources(['buyerRatings', 'buyerReviews'], aggregatedActivity.buyerRatings);
+
+    const sellerRating = pickFirstNumeric([
+        businessAccount.sellerRating,
+        businessAccount.sellerScore,
+        businessAccount.averageSellerRating,
+        businessAccount.marketplaceActivity && businessAccount.marketplaceActivity.sellerRating,
+        linkedIndividualAccount && linkedIndividualAccount.sellerRating,
+        linkedIndividualAccount && linkedIndividualAccount.sellerScore,
+        linkedIndividualAccount && linkedIndividualAccount.averageSellerRating,
+        linkedIndividualAccount && linkedIndividualAccount.marketplaceActivity && linkedIndividualAccount.marketplaceActivity.sellerRating
+    ]);
+
+    const buyerRating = pickFirstNumeric([
+        businessAccount.buyerRating,
+        businessAccount.buyerScore,
+        businessAccount.averageBuyerRating,
+        businessAccount.marketplaceActivity && businessAccount.marketplaceActivity.buyerRating,
+        linkedIndividualAccount && linkedIndividualAccount.buyerRating,
+        linkedIndividualAccount && linkedIndividualAccount.buyerScore,
+        linkedIndividualAccount && linkedIndividualAccount.averageBuyerRating,
+        linkedIndividualAccount && linkedIndividualAccount.marketplaceActivity && linkedIndividualAccount.marketplaceActivity.buyerRating
+    ]);
+
+    const aggregatedAccount = {
+        id: linkedIndividualAccount && linkedIndividualAccount.id !== undefined && linkedIndividualAccount.id !== null
+            ? linkedIndividualAccount.id
+            : businessAccount.id,
+        accountId: businessAccount.id,
+        fullName: businessDisplayName,
+        contactName: businessAccount.contactName || (individualName || ''),
+        email: businessAccount.email || (linkedIndividualAccount && linkedIndividualAccount.email ? linkedIndividualAccount.email : ''),
+        phone: businessAccount.phone || (linkedIndividualAccount && linkedIndividualAccount.mobile ? linkedIndividualAccount.mobile : ''),
+        marketplaceActivity: aggregatedActivity,
+        sellerRatings: aggregatedSellerRatings.slice(),
+        buyerRatings: aggregatedBuyerRatings.slice(),
+        sellerRating,
+        sellerScore: sellerRating,
+        averageSellerRating: sellerRating,
+        buyerRating,
+        buyerScore: buyerRating,
+        averageBuyerRating: buyerRating,
+        marketplaceDisplayName: businessDisplayName,
+        linkedIndividualName: individualName,
+        linkedIndividualId: linkedIndividualAccount && linkedIndividualAccount.id !== undefined && linkedIndividualAccount.id !== null
+            ? linkedIndividualAccount.id
+            : null,
+        associationRelationship
+    };
+
+    const additionalSummaryMetrics = [];
+    if (businessAccount.id) {
+        additionalSummaryMetrics.push({ label: 'Business ID', value: businessAccount.id });
+    }
+    if (businessAccount.status) {
+        additionalSummaryMetrics.push({ label: 'Status', value: formatKeyLabel(businessAccount.status) });
+    }
+    if (businessAccount.packageId) {
+        additionalSummaryMetrics.push({ label: 'Package', value: resolveBusinessPackageLabel(businessAccount.packageId) });
+    }
+    if (individualName) {
+        const relationshipLabel = associationRelationship ? formatKeyLabel(associationRelationship) : '';
+        const linkedLabel = relationshipLabel ? `${individualName} • ${relationshipLabel}` : individualName;
+        additionalSummaryMetrics.push({ label: 'Linked Individual', value: linkedLabel });
+    }
+
+    return {
+        account: aggregatedAccount,
+        options: {
+            titleText: 'Business Marketplace Activity',
+            emptySubtitle: 'Select a business account to surface marketplace insights.',
+            emptyMessage: 'Select a business account to review marketplace activity.',
+            resolveDisplayName: accountRef => (accountRef && accountRef.marketplaceDisplayName) || businessDisplayName,
+            buildSubtitle: () => {
+                const linkedPart = individualName ? `Linked individual: ${individualName}` : '';
+                const statusPart = businessAccount.status ? `Status: ${formatKeyLabel(businessAccount.status)}` : '';
+                const parts = [linkedPart, statusPart].filter(Boolean);
+                return parts.length
+                    ? `${businessDisplayName}. ${parts.join(' • ')}`
+                    : `${businessDisplayName}.`;
+            },
+            additionalSummaryMetrics
+        }
+    };
+}
+
+function renderBusinessAccountMarketplaceOverlay(context) {
+    const overlay = document.getElementById('businessAccountMarketplaceOverlay');
+    const titleEl = document.getElementById('businessAccountMarketplaceTitle');
+    const subtitleEl = document.getElementById('businessAccountMarketplaceSubtitle');
+    const contentEl = document.getElementById('businessAccountMarketplaceContent');
+    if (!context) {
+        renderGenericMarketplaceOverlay(
+            { overlay, titleEl, subtitleEl, contentEl },
+            null,
+            {
+                titleText: 'Business Marketplace Activity',
+                emptySubtitle: 'Select a business account to surface marketplace insights.',
+                emptyMessage: 'Select a business account to review marketplace activity.',
+                resolveDisplayName: resolveIndividualAccountDisplayName
+            }
+        );
+        return;
+    }
+
+    renderGenericMarketplaceOverlay(
+        { overlay, titleEl, subtitleEl, contentEl },
+        context.account,
+        context.options
+    );
 }
 
 function openIndividualAccountMarketplaceOverlay(accountId) {
@@ -29751,6 +31796,91 @@ function closeIndividualAccountMarketplaceOverlay() {
 
     const returnFocus = state.individualMarketplaceOverlayReturnFocus;
     state.individualMarketplaceOverlayReturnFocus = null;
+    if (returnFocus instanceof HTMLElement && document.contains(returnFocus)) {
+        const restoreFn = () => {
+            try {
+                returnFocus.focus({ preventScroll: true });
+            } catch (error) {
+                returnFocus.focus();
+            }
+        };
+        if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+            window.requestAnimationFrame(restoreFn);
+        } else {
+            setTimeout(restoreFn, 0);
+        }
+    }
+}
+
+function openBusinessAccountMarketplaceOverlay(businessAccountId) {
+    const overlay = document.getElementById('businessAccountMarketplaceOverlay');
+    if (!overlay) {
+        showNotification('warning', 'Marketplace overlay unavailable for business accounts.');
+        return;
+    }
+
+    const account = (businessAccounts || []).find(entry => entry && entry.id === businessAccountId) || null;
+    if (!account) {
+        showNotification('warning', 'Unable to locate marketplace details for the selected business.');
+        renderBusinessAccountMarketplaceOverlay(null);
+        state.businessMarketplaceOverlayBusinessId = null;
+        state.businessMarketplaceOverlayIndividualId = null;
+        return;
+    }
+
+    const context = buildBusinessMarketplaceOverlayContext(account);
+    if (!context) {
+        showNotification('warning', 'Marketplace activity unavailable for the selected business.');
+        renderBusinessAccountMarketplaceOverlay(null);
+        state.businessMarketplaceOverlayBusinessId = null;
+        state.businessMarketplaceOverlayIndividualId = null;
+        return;
+    }
+
+    state.businessMarketplaceOverlayBusinessId = account.id;
+    state.businessMarketplaceOverlayIndividualId = context.account && context.account.linkedIndividualId
+        ? context.account.linkedIndividualId
+        : null;
+    state.businessMarketplaceOverlayReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+
+    renderBusinessAccountMarketplaceOverlay(context);
+
+    overlay.classList.remove('hidden');
+    overlay.setAttribute('aria-hidden', 'false');
+
+    const modal = overlay.querySelector('.role-detail-modal');
+    if (modal) {
+        if (!modal.hasAttribute('tabindex')) {
+            modal.setAttribute('tabindex', '-1');
+        }
+        const focusTarget = modal;
+        const focusFn = () => {
+            try {
+                focusTarget.focus({ preventScroll: true });
+            } catch (error) {
+                focusTarget.focus();
+            }
+        };
+        if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+            window.requestAnimationFrame(focusFn);
+        } else {
+            setTimeout(focusFn, 0);
+        }
+    }
+}
+
+function closeBusinessAccountMarketplaceOverlay() {
+    const overlay = document.getElementById('businessAccountMarketplaceOverlay');
+    if (overlay) {
+        overlay.classList.add('hidden');
+        overlay.setAttribute('aria-hidden', 'true');
+    }
+
+    state.businessMarketplaceOverlayBusinessId = null;
+    state.businessMarketplaceOverlayIndividualId = null;
+
+    const returnFocus = state.businessMarketplaceOverlayReturnFocus;
+    state.businessMarketplaceOverlayReturnFocus = null;
     if (returnFocus instanceof HTMLElement && document.contains(returnFocus)) {
         const restoreFn = () => {
             try {
@@ -30281,6 +32411,61 @@ function exportIndividualAccounts() {
     showNotification('success', 'Individual accounts exported successfully.');
 }
 
+function formatExternalLink(raw) {
+    if (typeof raw !== 'string') {
+        return '';
+    }
+    const trimmed = raw.trim();
+    if (!trimmed) {
+        return '';
+    }
+    if (/^[a-z]+:\/\//i.test(trimmed)) {
+        return trimmed;
+    }
+    return `https://${trimmed}`;
+}
+
+function buildMapsSearchLink(raw) {
+    if (typeof raw !== 'string') {
+        return '';
+    }
+    const trimmed = raw.trim();
+    if (!trimmed) {
+        return '';
+    }
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(trimmed)}`;
+}
+
+function buildBusinessReviewChip({ text, href, type }) {
+    const normalizedText = typeof text === 'string' ? text.trim() : '';
+    const isEmpty = !normalizedText || normalizedText === '—';
+    const iconMap = {
+        phone: 'fas fa-phone',
+        address: 'fas fa-location-dot',
+        email: 'fas fa-envelope',
+        website: 'fas fa-globe',
+        maroof: 'fas fa-store'
+    };
+    const iconClass = iconMap[type] || '';
+    const iconMarkup = iconClass ? `<i class="${iconClass}" aria-hidden="true"></i>` : '';
+
+    if (isEmpty) {
+        return `<span class="business-review-chip business-review-chip--empty">${iconMarkup}<span>—</span></span>`;
+    }
+
+    const contentMarkup = `<span>${escapeHtml(normalizedText)}</span>`;
+    if (href) {
+        const safeHref = escapeAttribute(href);
+        const attrParts = [`href="${safeHref}"`];
+        if (/^https?:/i.test(href)) {
+            attrParts.push('target="_blank"', 'rel="noopener"');
+        }
+        return `<a class="business-review-chip business-review-chip--link" ${attrParts.join(' ')}>${iconMarkup}${contentMarkup}</a>`;
+    }
+
+    return `<span class="business-review-chip">${iconMarkup}${contentMarkup}</span>`;
+}
+
 function renderIndividualAccountBusinessOverlay(account) {
     const content = document.getElementById('individualAccountBusinessContent');
     const title = document.getElementById('individualAccountBusinessTitle');
@@ -30304,27 +32489,14 @@ function renderIndividualAccountBusinessOverlay(account) {
         const readable = normalized.replace(/[-_]+/g, ' ');
         return readable.replace(/\b\w/g, character => character.toUpperCase());
     };
-    const formatExternalLink = raw => {
-        if (typeof raw !== 'string') {
-            return '';
-        }
-        const trimmed = raw.trim();
-        if (!trimmed) {
-            return '';
-        }
-        if (/^[a-z]+:\/\//i.test(trimmed)) {
-            return trimmed;
-        }
-        return `https://${trimmed}`;
-    };
     const safeText = value => (typeof value === 'string' && value.trim() ? value.trim() : '');
 
     if (!account) {
         if (title) {
-            title.textContent = 'Linked Business Accounts';
+            title.textContent = 'Select an account';
         }
         if (subtitle) {
-            subtitle.textContent = 'Review associated business accounts for this individual.';
+            subtitle.textContent = resolveIndividualAccountDetailSubtitle(null);
         }
         content.innerHTML = '<p class="empty-state">No business associations detected for this account.</p>';
         return;
@@ -30332,12 +32504,10 @@ function renderIndividualAccountBusinessOverlay(account) {
 
     const associations = Array.isArray(account.businessAssociations) ? account.businessAssociations : [];
     if (title) {
-        title.textContent = account.fullName || account.email || account.id || 'Linked Business Accounts';
+        title.textContent = resolveIndividualAccountDisplayName(account);
     }
     if (subtitle) {
-        subtitle.textContent = associations.length
-            ? `${associations.length} Business ${associations.length === 1 ? 'Account' : 'Accounts'}.`
-            : 'No business accounts are linked to this individual.';
+        subtitle.textContent = resolveIndividualAccountDetailSubtitle(account);
     }
 
     if (!associations.length) {
@@ -30369,6 +32539,7 @@ function renderIndividualAccountBusinessOverlay(account) {
     const listMarkup = sortedAssociations.map((association, index) => {
         const business = businessMap.get(association.businessId) || null;
         const companyName = association.companyName || (business && business.companyName) || association.businessId || 'Business Account';
+        const companyNameArabic = association.companyNameArabic || (business && business.companyNameArabic) || '';
         const linkedAtLabel = association.linkedAt ? formatDateForDisplay(association.linkedAt, { includeTime: true }) : null;
         const normalizedStatus = business && typeof business.status === 'string' ? business.status.trim().toLowerCase() : '';
         let statusChipClass = 'neutral';
@@ -30408,15 +32579,31 @@ function renderIndividualAccountBusinessOverlay(account) {
         const tradeExperienceLabel = business && typeof business.tradeExperience15Years === 'boolean'
             ? (business.tradeExperience15Years ? 'Yes' : 'No')
             : '—';
-        const maroofUrl = business && typeof business.maroofUrl === 'string' && business.maroofUrl.trim() ? business.maroofUrl.trim() : '';
+        const phoneCandidates = business
+            ? [business.phone, business.contactPhone, business.mobile, business.telephone, business.whatsapp]
+            : [];
+        let phoneValue = '';
+        for (const candidate of phoneCandidates) {
+            if (typeof candidate === 'string' && candidate.trim()) {
+                phoneValue = candidate.trim();
+                break;
+            }
+        }
+        const sanitizedPhone = phoneValue ? phoneValue.replace(/\s+/g, ' ') : '';
+        const phoneHref = phoneValue ? `tel:${phoneValue.replace(/\s+/g, '')}` : '';
+        const phoneChip = buildBusinessReviewChip({ text: sanitizedPhone || phoneValue, href: phoneHref, type: 'phone' });
+        const businessIdLabel = business && business.id ? business.id : association.businessId || '—';
+        const submittedLabel = business && business.submittedAt
+            ? formatDateForDisplay(business.submittedAt, { includeTime: true }) || '—'
+            : '—';
+        const emailValue = business && typeof business.email === 'string' && business.email.trim() ? business.email.trim() : '';
+        const emailChip = buildBusinessReviewChip({ text: emailValue, href: emailValue ? `mailto:${emailValue}` : '', type: 'email' });
         const websiteRaw = business && typeof business.website === 'string' && business.website.trim() ? business.website.trim() : '';
         const websiteHref = websiteRaw ? formatExternalLink(websiteRaw) : '';
-        const websiteDisplay = websiteRaw
-            ? `<a href="${escapeAttribute(websiteHref)}" target="_blank" rel="noopener">${escapeHtml(websiteRaw)}</a>`
-            : '—';
-        const maroofDisplay = maroofUrl
-            ? `<a href="${escapeAttribute(maroofUrl)}" target="_blank" rel="noopener">${escapeHtml(maroofUrl)}</a>`
-            : '—';
+        const websiteChip = buildBusinessReviewChip({ text: websiteRaw, href: websiteHref, type: 'website' });
+        const maroofRaw = business && typeof business.maroofUrl === 'string' && business.maroofUrl.trim() ? business.maroofUrl.trim() : '';
+        const maroofHref = maroofRaw ? formatExternalLink(maroofRaw) : '';
+        const maroofChip = buildBusinessReviewChip({ text: maroofRaw, href: maroofHref, type: 'maroof' });
         const socialLinks = [];
         const appendSocialLinks = source => {
             if (!source || typeof source !== 'object') {
@@ -30449,22 +32636,29 @@ function renderIndividualAccountBusinessOverlay(account) {
         if (association && typeof association.socials === 'object') {
             appendSocialLinks(association.socials);
         }
-        const mediaCount = socialLinks.length;
-        const mediaMarkup = mediaCount
+        const socialMarkup = socialLinks.length
             ? socialLinks
-                .map(link => `<span class="media-link-entry">${escapeHtml(link.label)}: <a href="${escapeAttribute(link.href)}" target="_blank" rel="noopener">${escapeHtml(link.display)}</a></span>`)
-                .join(', ')
+                .map(link => {
+                    if (!link.href) {
+                        return `<span class="helper-chip neutral">${escapeHtml(link.label)}</span>`;
+                    }
+                    const titleAttr = link.display ? ` title="${escapeAttribute(link.display)}"` : '';
+                    return `<a class="helper-chip neutral" href="${escapeAttribute(link.href)}" target="_blank" rel="noopener"${titleAttr}>${escapeHtml(link.label)}</a>`;
+                })
+                .join(' ')
             : '—';
-        const certificateNames = business && Array.isArray(business.certificates)
-            ? business.certificates.filter(name => typeof name === 'string' && name.trim()).map(name => name.trim())
-            : [];
-        const certificatesDisplay = certificateNames.length
-            ? certificateNames.map(name => escapeHtml(name)).join(', ')
+        const certificateEntries = resolveBusinessRequestCertificates(business);
+        const certificatesMarkup = certificateEntries.length
+            ? certificateEntries
+                .map((entry, certificateIndex) => `<button type="button" class="helper-chip neutral helper-chip-button" data-action="preview-business-certificate" data-certificate-index="${escapeAttribute(String(certificateIndex))}">${escapeHtml(entry.label)}</button>`)
+                .join(' ')
             : '—';
         const addressParts = [];
         if (business && business.address && typeof business.address === 'object') {
             const addressInfo = business.address;
-            const streetValues = [safeText(addressInfo.streetNumber), safeText(addressInfo.streetName), safeText(addressInfo.street)]
+            const streetNumberPart = safeText(addressInfo.streetNumber);
+            const streetNamePart = safeText(addressInfo.streetName || addressInfo.street);
+            const streetLine = [streetNumberPart, streetNamePart]
                 .filter(Boolean)
                 .join(' ')
                 .trim();
@@ -30472,13 +32666,25 @@ function renderIndividualAccountBusinessOverlay(account) {
             const regionPart = safeText(addressInfo.region);
             const cityPart = safeText(addressInfo.city) || (business && safeText(business.city));
             const districtPart = safeText(addressInfo.district);
-            const streetPart = streetValues;
             const zipPart = safeText(addressInfo.zipCode) || safeText(addressInfo.zip) || safeText(addressInfo.postalCode);
-            const formatted = [countryPart, regionPart, cityPart, districtPart, streetPart, zipPart]
-                .filter(Boolean)
-                .join(', ');
-            if (formatted) {
-                addressParts.push(formatted);
+            const uniqueSegments = [];
+            const pushSegment = value => {
+                if (!value) {
+                    return;
+                }
+                const normalized = value.replace(/\s+/g, ' ').trim();
+                if (!normalized) {
+                    return;
+                }
+                const normalizedKey = normalized.toLowerCase();
+                if (uniqueSegments.some(segment => segment.key === normalizedKey)) {
+                    return;
+                }
+                uniqueSegments.push({ key: normalizedKey, display: normalized });
+            };
+            [countryPart, regionPart, cityPart, districtPart, streetLine, zipPart].forEach(pushSegment);
+            if (uniqueSegments.length) {
+                addressParts.push(uniqueSegments.map(segment => segment.display).join(', '));
             }
         }
         const fallbackAddress = business && business.city ? business.city : '';
@@ -30486,23 +32692,28 @@ function renderIndividualAccountBusinessOverlay(account) {
             addressParts.push(fallbackAddress);
         }
         const addressLabel = addressParts.length ? addressParts.join('; ') : '—';
+        const addressHref = addressLabel && addressLabel !== '—' ? buildMapsSearchLink(addressLabel) : '';
+        const addressChip = buildBusinessReviewChip({ text: addressLabel, href: addressHref, type: 'address' });
 
         const detailGridMarkup = business
             ? `
                 <div class="detail-grid">
+                    <div><dt>Submitted</dt><dd>${escapeHtml(submittedLabel)}</dd></div>
+                    <div><dt>ID</dt><dd>${escapeHtml(businessIdLabel)}</dd></div>
                     <div><dt>Username</dt><dd>${escapeHtml(business.contactName || '—')}</dd></div>
-                    <div><dt>Email</dt><dd>${escapeHtml(business.email || '—')}</dd></div>
-                    <div><dt>Website</dt><dd>${websiteDisplay}</dd></div>
-                    <div><dt>Business Registration #</dt><dd>${escapeHtml(registrationNumber)}</dd></div>
                     <div><dt>Registration Document Type</dt><dd>${escapeHtml(documentTypeLabel)}</dd></div>
+                    <div><dt>Business Registration #</dt><dd>${escapeHtml(registrationNumber)}</dd></div>
                     <div><dt>Detail Registration #</dt><dd>${escapeHtml(detailRegistrationNumber)}</dd></div>
                     <div><dt>Expiry Date</dt><dd>${escapeHtml(expiryDateLabel || '—')}</dd></div>
                     <div><dt>VAT Number</dt><dd>${escapeHtml(vatNumber)}</dd></div>
                     <div><dt>Trade for 15 years</dt><dd>${escapeHtml(tradeExperienceLabel)}</dd></div>
-                    <div><dt>Maroof profile</dt><dd>${maroofDisplay}</dd></div>
-                    <div class="detail-grid-full"><dt>Media</dt><dd>${mediaMarkup}</dd></div>
-                    <div class="detail-grid-full"><dt>Certificates</dt><dd>${certificatesDisplay}</dd></div>
-                    <div class="detail-grid-full"><dt>Address</dt><dd>${escapeHtml(addressLabel)}</dd></div>
+                    <div class="detail-grid-full business-review-field"><dt>Phone Number</dt><dd>${phoneChip}</dd></div>
+                    <div class="detail-grid-full business-review-field"><dt>Address</dt><dd>${addressChip}</dd></div>
+                    <div class="detail-grid-full business-review-field"><dt>Email</dt><dd>${emailChip}</dd></div>
+                    <div class="detail-grid-full business-review-field"><dt>Website</dt><dd>${websiteChip}</dd></div>
+                    <div class="detail-grid-full business-review-field"><dt>Maroof</dt><dd>${maroofChip}</dd></div>
+                    <div class="detail-grid-full"><dt>Social Media</dt><dd>${socialMarkup}</dd></div>
+                    <div class="detail-grid-full"><dt>Certificates</dt><dd>${certificatesMarkup}</dd></div>
                 </div>
             `
             : '<div class="helper-text">Business account record not found in the current dataset.</div>';
@@ -30512,8 +32723,8 @@ function renderIndividualAccountBusinessOverlay(account) {
                 <div class="business-association-row">
                     ${logoInlineMarkup}
                     <div class="business-association-summary">
-                        <strong>${escapeHtml(companyName)}</strong>
-                        <div class="helper-text">Business ID: ${escapeHtml(association.businessId || '—')}</div>
+                        <div><strong>${escapeHtml(companyName)}</strong></div>
+                        ${companyNameArabic ? `<div><strong>${escapeHtml(companyNameArabic)}</strong></div>` : ''}
                     </div>
                     <span class="helper-chip ${statusChipClass}">${escapeHtml(statusLabel)}</span>
                 </div>
@@ -31033,16 +33244,13 @@ function updateBusinessRequestsCountLabel() {
     if (label) {
         label.textContent = `#${reviewCount} Account${reviewCount === 1 ? '' : 's'}`;
     }
-    const reviewLabel = document.getElementById('businessRequestsReviewCountLabel');
-    if (reviewLabel) {
-        reviewLabel.textContent = `#${reviewCount} Pending`;
-    }
 }
 
 function ensureBusinessRequestsFiltersState() {
     const defaults = {
         search: '',
         period: 'today',
+        previousPeriod: 'today',
         startDate: null,
         endDate: null
     };
@@ -31095,6 +33303,48 @@ function formatRelativeTimeFromNow(value) {
     return future ? `in ${label}` : `${label} ago`;
 }
 
+function alignSampleBusinessRequestTimestamps(accounts, seedReference = null) {
+    if (!Array.isArray(accounts) || !accounts.length) {
+        return;
+    }
+    const pendingStatuses = new Set(['pending', 'docs-requested']);
+    const seedIds = Array.isArray(seedReference)
+        ? new Set(seedReference.map(entry => (entry && entry.id ? entry.id : null)).filter(Boolean))
+        : null;
+    const pendingSamples = accounts.filter(account => {
+        if (!account || typeof account !== 'object') {
+            return false;
+        }
+        const status = (account.status || '').toLowerCase();
+        if (!pendingStatuses.has(status)) {
+            return false;
+        }
+        if (seedIds && seedIds.size && account.id && !seedIds.has(account.id)) {
+            return false;
+        }
+        return true;
+    });
+    if (!pendingSamples.length) {
+        return;
+    }
+    const now = new Date();
+    now.setSeconds(0, 0);
+    const spacingMs = 90 * 60 * 1000;
+    pendingSamples.forEach((account, index) => {
+        const submissionDate = new Date(now.getTime() - index * spacingMs);
+        const iso = submissionDate.toISOString();
+        account.submittedAt = iso;
+        if (Array.isArray(account.history)) {
+            account.history = account.history.map(entry => {
+                if (entry && entry.action === 'request-submitted') {
+                    return { ...entry, timestamp: iso };
+                }
+                return entry;
+            });
+        }
+    });
+}
+
 function getPendingBusinessRequests() {
     const dataset = Array.isArray(businessAccounts) ? businessAccounts : [];
     const eligibleStatuses = new Set(['pending', 'docs-requested']);
@@ -31126,6 +33376,8 @@ function matchesBusinessRequestSearch(account, term) {
     const address = account && account.address ? account.address : {};
     const fields = [
         account?.companyName,
+        account?.companyNameEnglish,
+        account?.companyNameArabic,
         account?.contactName,
         account?.email,
         account?.phone,
@@ -31179,6 +33431,14 @@ function filterBusinessRequestsByPeriod(requests, filters) {
         rangeStart.setDate(rangeStart.getDate() - 29);
         rangeEnd = new Date(startOfToday.getTime() + 86400000);
     } else if (period === 'custom') {
+        const hasStart = Boolean(filters.startDate);
+        const hasEnd = Boolean(filters.endDate);
+        if (!hasStart && !hasEnd) {
+            const fallback = filters.previousPeriod && filters.previousPeriod !== 'custom'
+                ? filters.previousPeriod
+                : 'today';
+            return filterBusinessRequestsByPeriod(requests, { ...filters, period: fallback });
+        }
         if (filters.startDate) {
             const startMs = Date.parse(filters.startDate);
             if (Number.isFinite(startMs)) {
@@ -31226,9 +33486,17 @@ function buildBusinessRequestPeriodLabel(filters) {
         return 'Last 30 days';
     }
     if (period === 'all') {
-        return 'All pending';
+        return 'All Pending';
     }
     if (period === 'custom') {
+        const hasStart = Boolean(filters.startDate);
+        const hasEnd = Boolean(filters.endDate);
+        if (!hasStart && !hasEnd) {
+            const fallback = filters.previousPeriod && filters.previousPeriod !== 'custom'
+                ? filters.previousPeriod
+                : 'today';
+            return buildBusinessRequestPeriodLabel({ ...filters, period: fallback });
+        }
         const startLabel = filters.startDate ? formatDateForDisplay(filters.startDate) : 'Start';
         const endLabel = filters.endDate ? formatDateForDisplay(filters.endDate) : 'End';
         return `${startLabel || 'Start'} – ${endLabel || 'End'}`;
@@ -31251,46 +33519,159 @@ function renderBusinessRequestsSummary(dataset, filtered) {
         const time = iso ? Date.parse(iso) : 0;
         return time > latest.time ? { time, iso } : latest;
     }, { time: 0, iso: null });
-    const latestLabel = latestSubmission.iso
-        ? `${formatRelativeTimeFromNow(latestSubmission.iso)} • ${formatDateForDisplay(latestSubmission.iso, { includeTime: true }) || latestSubmission.iso}`
-        : 'No submissions logged yet';
+    const latestTimestampLabel = latestSubmission.iso
+        ? (formatDateForDisplay(latestSubmission.iso, { includeTime: true }) || latestSubmission.iso)
+        : '';
+    const latestValueMarkup = latestSubmission.iso
+        ? `<span class="caption caption-inline">${escapeHtml(latestTimestampLabel)}</span>`
+        : '—';
+    const latestCaptionMarkup = latestSubmission.iso
+        ? ''
+        : '<span class="caption">No submissions logged yet</span>';
+    const oldestSubmission = dataset.reduce((oldest, account) => {
+        const iso = normalizeIsoTimestamp(resolveBusinessRequestSubmissionDate(account), null);
+        const time = iso ? Date.parse(iso) : Number.POSITIVE_INFINITY;
+        return time < oldest.time ? { time, iso } : oldest;
+    }, { time: Number.POSITIVE_INFINITY, iso: null });
+    const oldestRelativeLabel = oldestSubmission.iso ? formatRelativeTimeFromNow(oldestSubmission.iso) : '—';
+    const oldestTimestampLabel = oldestSubmission.iso
+        ? (formatDateForDisplay(oldestSubmission.iso, { includeTime: true }) || oldestSubmission.iso)
+        : '';
+    const oldestValueMarkup = oldestSubmission.iso
+        ? `<span class="caption caption-inline">${escapeHtml(oldestTimestampLabel)}</span>`
+        : '—';
+    const oldestCaptionMarkup = oldestSubmission.iso
+        ? ''
+        : '<span class="caption">No submission history yet</span>';
     const docsCaptionMarkup = docsRequestedCount
-        ? `Awaiting a decision • <span class="helper-chip warning helper-chip-compact">${docsRequestedCount} need documents</span>`
-        : 'Awaiting a decision';
-    summary.innerHTML = `
+        ? `<span class="helper-chip warning helper-chip-compact">${docsRequestedCount} need documents</span>`
+        : null;
+
+    const cards = [];
+    cards.push(`
         <div class="business-requests-summary-card">
             <span class="label">Pending queue</span>
             <span class="value">#${totalPending}</span>
-            <span class="caption">${docsCaptionMarkup}</span>
+            ${docsCaptionMarkup ? `<span class="caption">${docsCaptionMarkup}</span>` : ''}
         </div>
+    `);
+    cards.push(`
         <div class="business-requests-summary-card">
             <span class="label">In view</span>
             <span class="value">#${filteredCount}</span>
-            <span class="caption">Matching current filters</span>
         </div>
+    `);
+    cards.push(`
         <div class="business-requests-summary-card">
             <span class="label">New today</span>
             <span class="value">#${todaysCount}</span>
-            <span class="caption">Arrived since midnight</span>
         </div>
+    `);
+    cards.push(`
         <div class="business-requests-summary-card">
             <span class="label">Latest submission</span>
-            <span class="value">${latestSubmission.iso ? formatRelativeTimeFromNow(latestSubmission.iso) : '—'}</span>
-            <span class="caption">${escapeHtml(latestLabel)}</span>
+            <span class="value">${latestValueMarkup}</span>
+            ${latestCaptionMarkup}
         </div>
-    `;
+    `);
+    cards.push(`
+        <div class="business-requests-summary-card">
+            <span class="label">Oldest pending</span>
+            <span class="value">${oldestValueMarkup}</span>
+            ${oldestCaptionMarkup}
+        </div>
+    `);
+
+    summary.innerHTML = cards.join('');
+}
+
+function sanitizeCertificateHref(value) {
+    if (typeof value !== 'string') {
+        return '';
+    }
+    const trimmed = value.trim();
+    if (!trimmed) {
+        return '';
+    }
+    if (/^(https?|data):/i.test(trimmed) || trimmed.startsWith('/')) {
+        return trimmed;
+    }
+    return '';
+}
+
+function resolveBusinessRequestCertificates(account) {
+    if (!account || typeof account !== 'object') {
+        return [];
+    }
+
+    const sources = [];
+    if (Array.isArray(account.certificates)) {
+        sources.push(...account.certificates);
+    }
+    if (account.application && Array.isArray(account.application.uploadedCertificates)) {
+        sources.push(...account.application.uploadedCertificates);
+    }
+    if (account.application && Array.isArray(account.application.certificates)) {
+        sources.push(...account.application.certificates);
+    }
+
+    const results = [];
+    const seen = new Set();
+
+    const pushEntry = (label, raw, href) => {
+        const safeLabel = label || raw || 'Certificate';
+        const safeRaw = raw || safeLabel;
+        const safeHref = sanitizeCertificateHref(href || '');
+        const signature = `${safeLabel}__${safeHref}`;
+        if (seen.has(signature)) {
+            return;
+        }
+        seen.add(signature);
+        results.push({
+            label: safeLabel,
+            raw: safeRaw,
+            href: safeHref
+        });
+    };
+
+    sources.forEach(entry => {
+        if (!entry) {
+            return;
+        }
+        if (typeof entry === 'string') {
+            const trimmed = entry.trim();
+            if (!trimmed) {
+                return;
+            }
+            const prefixMatch = trimmed.match(/^certificate:\s*(.+)$/i);
+            const rawValue = prefixMatch ? prefixMatch[1].trim() : trimmed;
+            const segments = rawValue.split(/[\\/]/);
+            const label = segments.length ? segments[segments.length - 1] : rawValue;
+            pushEntry(label, rawValue, rawValue);
+            return;
+        }
+        if (entry && typeof entry === 'object') {
+            const labelCandidate = ['label', 'name', 'filename', 'fileName', 'title'].map(key => entry[key]).find(value => typeof value === 'string' && value.trim());
+            const rawLabel = labelCandidate ? labelCandidate.trim() : '';
+            const hrefCandidate = ['url', 'href', 'link', 'downloadUrl', 'previewUrl', 'source'].map(key => entry[key]).find(value => typeof value === 'string' && value.trim());
+            pushEntry(rawLabel || 'Certificate', rawLabel, hrefCandidate ? hrefCandidate.trim() : '');
+        }
+    });
+
+    return results;
 }
 
 function renderBusinessRequestCard(account) {
     const requestId = account.id ? String(account.id) : '';
-    const safeCompany = account.companyName || requestId || 'Business Account';
+    const companyNameEnglish = account.companyNameEnglish
+        || account.application?.companyNameEnglish
+        || account.companyName
+        || requestId
+        || 'Business Account';
+    const safeCompany = companyNameEnglish;
+    const companyNameArabic = account.application?.companyNameArabic || account.companyNameArabic || '';
     const submissionIso = normalizeIsoTimestamp(resolveBusinessRequestSubmissionDate(account), null);
-    const submissionMeta = submissionIso
-        ? `${escapeHtml(formatRelativeTimeFromNow(submissionIso))} • ${escapeHtml(formatDateForDisplay(submissionIso, { includeTime: true }) || submissionIso)}`
-        : 'Submission timestamp unavailable';
     const normalizedStatus = typeof account.status === 'string' ? account.status.trim().toLowerCase() : '';
-    const statusClass = getBusinessAccountStatusClass(normalizedStatus || account.status);
-    const statusLabel = getBusinessAccountStatusLabel(account.status);
     const docsRequested = normalizedStatus === 'docs-requested';
     const statusSlug = (normalizedStatus || 'pending').replace(/[^a-z0-9-]/g, '-');
     const cardStateClasses = ['business-request-card'];
@@ -31317,6 +33698,58 @@ function renderBusinessRequestCard(account) {
         : '—';
     const address = account.address || account.application?.address || {};
     const cityLabel = address.city || account.city || '—';
+    const username = account.application?.username || account.username || '';
+    const businessRegistrationNumber = account.registrationNumber || account.application?.registrationNumber || '';
+    const detailRegistrationNumber = account.detailRegistrationNumber || account.application?.detailRegistrationNumber || '';
+    const websiteUrl = account.website || account.application?.website || '';
+    const maroofUrl = account.maroofUrl || account.application?.maroofUrl || '';
+    const tradeExperienceLabel = (account.tradeExperience15Years === true || account.application?.tradeExperience15Years === true) ? 'Yes' : 'No';
+    const submittedLabel = formatDateForDisplay(submissionIso, { includeTime: true }) || '—';
+    const addressParts = [];
+    const country = typeof address.country === 'string' && address.country.trim() ? address.country.trim() : '';
+    const region = typeof address.region === 'string' && address.region.trim() ? address.region.trim() : '';
+    const city = typeof address.city === 'string' && address.city.trim() ? address.city.trim() : '';
+    const district = typeof address.district === 'string' && address.district.trim() ? address.district.trim() : '';
+    const streetLine = [address.streetNumber, address.street || address.streetName]
+        .filter(part => typeof part === 'string' && part.trim())
+        .join(' ')
+        .trim();
+    const zipCandidate = [address.zipCode, address.postalCode, address.zip]
+        .find(value => typeof value === 'string' && value.trim());
+
+    if (country) {
+        addressParts.push(country);
+    }
+    if (region) {
+        addressParts.push(region);
+    }
+    if (city) {
+        addressParts.push(city);
+    }
+    if (district) {
+        addressParts.push(district);
+    }
+    if (streetLine) {
+        addressParts.push(streetLine);
+    }
+    if (zipCandidate) {
+        addressParts.push(zipCandidate.trim());
+    }
+    const addressLabel = addressParts.length ? addressParts.join(', ') : '';
+    const primaryPhoneRaw = typeof account.phone === 'string' && account.phone.trim()
+        ? account.phone.trim()
+        : (account.application && typeof account.application.phone === 'string' && account.application.phone.trim()
+            ? account.application.phone.trim()
+            : '');
+    const phoneMarkup = primaryPhoneRaw
+        ? `<a class="business-request-link" href="tel:${escapeAttribute(primaryPhoneRaw)}">${escapeHtml(primaryPhoneRaw)}</a>`
+        : '—';
+    const addressHref = addressLabel ? buildMapsSearchLink(addressLabel) : '';
+    const addressMarkup = addressLabel
+        ? (addressHref
+            ? `<a class="business-request-link" href="${escapeAttribute(addressHref)}" target="_blank" rel="noopener">${escapeHtml(addressLabel)}</a>`
+            : escapeHtml(addressLabel))
+        : '—';
     const socialsSource = {
         ...(account.socials || {}),
         ...(account.application && account.application.socials ? account.application.socials : {})
@@ -31330,91 +33763,122 @@ function renderBusinessRequestCard(account) {
         snapchat: 'Snapchat',
         tiktok: 'TikTok'
     };
+    const normalizeSocialLink = raw => {
+        if (typeof raw !== 'string') {
+            return '';
+        }
+        const trimmed = raw.trim();
+        if (!trimmed) {
+            return '';
+        }
+        if (/^[a-z][a-z0-9+.-]*:/i.test(trimmed)) {
+            return trimmed;
+        }
+        return `https://${trimmed}`;
+    };
     const socialEntries = Object.keys(socialsSource)
         .filter(key => typeof socialsSource[key] === 'string' && socialsSource[key].trim())
-        .map(key => ({ key, label: socialLabels[key] || formatKeyLabel(key), value: socialsSource[key].trim() }));
+        .map(key => {
+            const value = socialsSource[key].trim();
+            return {
+                key,
+                label: socialLabels[key] || formatKeyLabel(key),
+                value,
+                href: normalizeSocialLink(value)
+            };
+        });
     const socialMarkup = socialEntries.length
-        ? socialEntries.map(entry => `<span class="helper-chip neutral">${escapeHtml(entry.label)}</span>`).join(' ')
+        ? `<div class="business-request-social-links">${socialEntries.map(entry => {
+            if (!entry.href) {
+                return `<span class="helper-chip neutral">${escapeHtml(entry.label)}</span>`;
+            }
+            const titleAttr = entry.value ? ` title="${escapeAttribute(entry.value)}"` : '';
+            return `<a class="helper-chip neutral" href="${escapeAttribute(entry.href)}" target="_blank" rel="noopener"${titleAttr}>${escapeHtml(entry.label)}</a>`;
+        }).join('')}</div>`
         : '<span class="helper-text">No social links provided.</span>';
-    const documentRequests = Array.isArray(account.requestedDocuments)
-        ? account.requestedDocuments.filter(item => typeof item === 'string' && item.trim())
-        : [];
-    const documentsMarkup = documentRequests.length
-        ? `<ul class="detail-list">${documentRequests.map(item => `<li>${escapeHtml(item)}</li>`).join('')}</ul>`
-        : '<p class="helper-text">No additional documents requested.</p>';
+    const certificateEntries = resolveBusinessRequestCertificates(account);
+    const certificatesMarkup = certificateEntries.length
+        ? `<div class="business-request-certificates">${certificateEntries.map((entry, index) => `<button type="button" class="detail-link-button" data-request-action="preview-certificate" data-certificate-index="${escapeAttribute(String(index))}">${escapeHtml(entry.label)}</button>`).join('')}</div>`
+        : '<p class="helper-text">No certificates uploaded yet.</p>';
     const { individual: linkedIndividual, association: linkedAssociation } = resolveBusinessAccountPrimaryIndividual(account);
     const individualName = linkedIndividual ? (linkedIndividual.fullName || linkedIndividual.email || linkedIndividual.id) : '';
     const individualEmail = linkedIndividual && linkedIndividual.email ? linkedIndividual.email : '';
     const relationship = linkedAssociation && linkedAssociation.relationship ? linkedAssociation.relationship : '';
-    const individualSummary = linkedIndividual
-        ? `<div class="helper-text">${escapeHtml(individualName)}${individualEmail ? ` • ${escapeHtml(individualEmail)}` : ''}${relationship ? ` • ${escapeHtml(formatKeyLabel(relationship))}` : ''}</div>`
-        : '<p class="helper-text">No linked individual account detected.</p>';
+    const fallbackContactName = account.contactName || account.application?.contactName || '';
+    const fallbackContactEmail = account.email || account.application?.email || '';
+    const fallbackContactPhone = account.phone || account.application?.phone || '';
+    const fallbackSummaryParts = [fallbackContactName, fallbackContactEmail, fallbackContactPhone]
+        .map(part => (typeof part === 'string' ? part.trim() : ''))
+        .filter(Boolean);
+    const hasIndividualDetails = Boolean(linkedIndividual) || fallbackSummaryParts.length > 0;
+    const actionsMarkup = hasIndividualDetails
+        ? `<div class="business-request-actions">
+                <button type="button" class="btn btn-outline btn-compact business-request-individual-trigger" data-request-action="view-individual">
+                    <i class="fas fa-eye"></i>
+                    <span>View profile</span>
+                </button>
+            </div>`
+        : '';
+    const displayedIndividualId = linkedIndividual && linkedIndividual.id
+        ? String(linkedIndividual.id)
+        : account.primaryIndividualId || account.application?.primaryIndividualId || '';
     const dataAttributes = [`data-request-id="${escapeAttribute(requestId)}"`];
     if (statusSlug) {
         dataAttributes.push(`data-request-status="${escapeAttribute(statusSlug)}"`);
     }
-    if (linkedIndividual && linkedIndividual.id) {
-        dataAttributes.push(`data-individual-id="${escapeAttribute(String(linkedIndividual.id))}"`);
+    if (displayedIndividualId) {
+        dataAttributes.push(`data-individual-id="${escapeAttribute(String(displayedIndividualId))}"`);
     }
     const cardClassList = cardStateClasses.join(' ');
     const infoGrid = `
-        <dl class="info-grid">
-            <div><dt>Registration #</dt><dd>${account.registrationNumber ? escapeHtml(account.registrationNumber) : '—'}</dd></div>
-            <div><dt>VAT</dt><dd>${account.vatNumber ? escapeHtml(account.vatNumber) : '—'}</dd></div>
-            <div><dt>Document</dt><dd>${escapeHtml(documentType || '—')}</dd></div>
-            <div><dt>Expiry</dt><dd>${escapeHtml(expiryLabel || '—')}</dd></div>
-            <div><dt>City</dt><dd>${cityLabel ? escapeHtml(cityLabel) : '—'}</dd></div>
-            <div><dt>Submitted</dt><dd>${escapeHtml(formatDateForDisplay(submissionIso, { includeTime: true }) || '—')}</dd></div>
-        </dl>
-    `;
-    const actionsMarkup = `
-        <div class="business-request-actions">
-            <button type="button" class="btn btn-secondary" data-request-action="view-business">
-                <i class="fas fa-eye"></i>
-                <span>Inspect request</span>
-            </button>
-            <button type="button" class="btn btn-outline" data-request-action="view-individual"${linkedIndividual && linkedIndividual.id ? '' : ' disabled'}>
-                <i class="fas fa-user"></i>
-                <span>Individual details</span>
-            </button>
+        <div class="business-request-section">
+            <dl class="info-grid">
+                <div><dt>Submitted</dt><dd>${escapeHtml(submittedLabel)}</dd></div>
+                <div><dt>ID</dt><dd>${requestId ? escapeHtml(requestId) : '—'}</dd></div>
+                <div><dt>Username</dt><dd>${username ? escapeHtml(username) : '—'}</dd></div>
+                <div><dt>Registration Document Type</dt><dd>${escapeHtml(documentType || '—')}</dd></div>
+                <div><dt>Business Registration #</dt><dd>${businessRegistrationNumber ? escapeHtml(businessRegistrationNumber) : '—'}</dd></div>
+                <div><dt>Detail Registration #</dt><dd>${detailRegistrationNumber ? escapeHtml(detailRegistrationNumber) : '—'}</dd></div>
+                <div><dt>Expiry Date</dt><dd>${escapeHtml(expiryLabel || '—')}</dd></div>
+                <div><dt>VAT</dt><dd>${account.vatNumber ? escapeHtml(account.vatNumber) : '—'}</dd></div>
+                <div><dt>Trade for 15 Years</dt><dd>${tradeExperienceLabel}</dd></div>
+                <div class="field-span-2"><dt>Phone Number</dt><dd>${phoneMarkup}</dd></div>
+                <div class="field-span-2"><dt>Address</dt><dd>${addressMarkup}</dd></div>
+                <div class="field-span-2"><dt>Email</dt><dd>${account.email ? `<a class="business-request-link" href="mailto:${escapeAttribute(account.email)}">${escapeHtml(account.email)}</a>` : '—'}</dd></div>
+                <div class="field-span-2"><dt>Website</dt><dd>${websiteUrl ? `<a class="business-request-link" href="${escapeAttribute(formatExternalLink(websiteUrl))}" target="_blank" rel="noopener">${escapeHtml(websiteUrl)}</a>` : '—'}</dd></div>
+                <div class="field-span-2"><dt>Maroof</dt><dd>${maroofUrl ? `<a class="business-request-link" href="${escapeAttribute(formatExternalLink(maroofUrl))}" target="_blank" rel="noopener">${escapeHtml(maroofUrl)}</a>` : '—'}</dd></div>
+            </dl>
         </div>
     `;
     return `
-        <article class="${cardClassList}" ${dataAttributes.join(' ')} tabindex="0" aria-label="Business account request for ${escapeAttribute(safeCompany)}${statusLabel ? `, status ${escapeAttribute(statusLabel)}` : ''}">
+        <article class="${cardClassList}" ${dataAttributes.join(' ')} tabindex="0" aria-label="Business account request for ${escapeAttribute(safeCompany)}">
             <header class="card-header">
                 <div class="business-request-identity">
                     <div class="business-request-avatar">${avatarMarkup}</div>
                     <div class="business-request-meta">
                         <span class="company">${escapeHtml(safeCompany)}</span>
-                        <span class="context">${escapeHtml(submissionMeta)}</span>
-                        <span class="context">${account.email ? escapeHtml(account.email) : ''}${account.phone ? ` • ${escapeHtml(account.phone)}` : ''}</span>
+                        ${companyNameArabic ? `<span class="context">${escapeHtml(companyNameArabic)}</span>` : ''}
                     </div>
                 </div>
-                <span class="${statusClass}">${escapeHtml(statusLabel)}</span>
             </header>
             <div class="business-request-body">
                 ${infoGrid}
                 <div class="business-request-section">
-                    <h4>Social links</h4>
+                    <h4>Social Media</h4>
                     ${socialMarkup}
                 </div>
                 <div class="business-request-section">
-                    <h4>Requested documents</h4>
-                    ${documentsMarkup}
+                    <h4>Certificates</h4>
+                    ${certificatesMarkup}
                 </div>
                 <div class="business-request-section">
-                    <h4>Individual account</h4>
-                    ${individualSummary}
+                    <h4>Individual Account</h4>
                     ${actionsMarkup}
                 </div>
             </div>
             <footer class="business-request-footer">
-                <button type="button" class="btn btn-outline" data-request-action="request-docs">
-                    <i class="fas fa-file-circle-question"></i>
-                    <span>${docsRequested ? 'Update request' : 'Request documents'}</span>
-                </button>
                 <button type="button" class="btn btn-outline btn-reject" data-request-action="reject">
-                    <i class="fas fa-xmark"></i>
+                    <i class="fas fa-circle-xmark"></i>
                     <span>Reject</span>
                 </button>
                 <button type="button" class="btn btn-primary" data-request-action="approve">
@@ -31453,13 +33917,15 @@ function renderBusinessRequestsBoard() {
     if (startInput && startInput.value !== (filters.startDate || '')) {
         startInput.value = filters.startDate || '';
     }
+    if (startInput) {
+        startInput.disabled = filters.period !== 'custom';
+    }
     const endInput = document.getElementById('businessRequestsEndDate');
     if (endInput && endInput.value !== (filters.endDate || '')) {
         endInput.value = filters.endDate || '';
     }
-    const label = document.getElementById('businessRequestsActiveFilterLabel');
-    if (label) {
-        label.textContent = buildBusinessRequestPeriodLabel(filters);
+    if (endInput) {
+        endInput.disabled = filters.period !== 'custom';
     }
     updateBusinessRequestsPeriodChips();
     renderBusinessRequestsSummary(dataset, filtered);
@@ -31478,11 +33944,18 @@ function renderBusinessRequestsBoard() {
 function setBusinessRequestPeriod(period) {
     const filters = ensureBusinessRequestsFiltersState();
     const normalized = typeof period === 'string' ? period : 'today';
-    filters.period = normalized;
-    if (normalized !== 'custom') {
+    const currentPeriod = typeof filters.period === 'string' ? filters.period : 'today';
+    if (normalized === 'custom') {
+        const fallback = currentPeriod === 'custom'
+            ? (filters.previousPeriod && filters.previousPeriod !== 'custom' ? filters.previousPeriod : 'today')
+            : currentPeriod;
+        filters.previousPeriod = fallback === 'custom' ? 'today' : fallback;
+    } else {
+        filters.previousPeriod = normalized;
         filters.startDate = null;
         filters.endDate = null;
     }
+    filters.period = normalized;
     state.businessRequestsFilters = filters;
     renderBusinessRequestsBoard();
 }
@@ -31500,10 +33973,17 @@ function handleBusinessRequestDateChange() {
     const endInput = document.getElementById('businessRequestsEndDate');
     filters.startDate = startInput && startInput.value ? startInput.value : null;
     filters.endDate = endInput && endInput.value ? endInput.value : null;
-    if (!filters.startDate && !filters.endDate) {
-        filters.period = 'all';
-    } else {
+    const hasRange = Boolean(filters.startDate || filters.endDate);
+    if (hasRange) {
         filters.period = 'custom';
+        if (!filters.previousPeriod || filters.previousPeriod === 'custom') {
+            filters.previousPeriod = 'today';
+        }
+    } else {
+        const fallback = filters.previousPeriod && filters.previousPeriod !== 'custom'
+            ? filters.previousPeriod
+            : 'today';
+        filters.period = fallback;
     }
     state.businessRequestsFilters = filters;
     renderBusinessRequestsBoard();
@@ -31513,6 +33993,7 @@ function resetBusinessRequestsFilters() {
     state.businessRequestsFilters = {
         search: '',
         period: 'today',
+        previousPeriod: 'today',
         startDate: null,
         endDate: null
     };
@@ -31533,7 +34014,11 @@ function handleBusinessRequestsGridClick(event) {
         return;
     }
     const action = button.dataset.requestAction;
-    const account = (businessAccounts || []).find(entry => entry && entry.id === accountId);
+    const matchById = entry => entry && (entry.id !== undefined && entry.id !== null) && String(entry.id) === accountId;
+    let account = (businessAccounts || []).find(matchById);
+    if (!account) {
+        account = getPendingBusinessRequests().find(matchById) || null;
+    }
     if (!account) {
         showNotification('warning', 'Unable to locate the selected business request.');
         return;
@@ -31543,19 +34028,757 @@ function handleBusinessRequestsGridClick(event) {
         openBusinessAccountDetail(account.id);
         return;
     }
-    if (action === 'view-individual') {
-        const { individual } = resolveBusinessAccountPrimaryIndividual(account);
-        if (!individual || !individual.id) {
-            showNotification('info', 'This request is not linked to an individual account yet.');
+    if (action === 'preview-certificate') {
+        const certificateIndexValue = typeof button.dataset.certificateIndex === 'string' ? button.dataset.certificateIndex : '';
+        const certificateIndex = certificateIndexValue ? Number(certificateIndexValue) : NaN;
+        const certificates = resolveBusinessRequestCertificates(account);
+        if (!Number.isInteger(certificateIndex) || certificateIndex < 0 || certificateIndex >= certificates.length) {
+            showNotification('warning', 'Unable to preview this certificate.');
             return;
         }
-        openIndividualAccountDetail(individual.id, { forceOpen: true });
+        openBusinessRequestCertificatePreview(account, certificates[certificateIndex]);
         return;
     }
-    if (['approve', 'request-docs', 'reject'].includes(action)) {
+    if (action === 'request-docs') {
         openBusinessAccountDecisionOverlay(account.id, action);
         return;
     }
+    if (action === 'view-individual') {
+        const individualIdAttr = card.dataset && typeof card.dataset.individualId === 'string'
+            ? card.dataset.individualId.trim()
+            : '';
+        openBusinessRequestIndividualOverlay(account, { individualId: individualIdAttr });
+        return;
+    }
+    if (action === 'approve' || action === 'reject') {
+        handleBusinessRequestInlineDecision(account, action);
+        return;
+    }
+}
+
+function handleBusinessRequestInlineDecision(account, action) {
+    if (!account) {
+        showNotification('warning', 'Unable to locate the business request.');
+        return;
+    }
+
+    const normalized = typeof action === 'string' ? action.trim().toLowerCase() : '';
+    if (!['approve', 'reject'].includes(normalized)) {
+        return;
+    }
+
+
+    const overlay = document.getElementById('businessRequestDecisionOverlay');
+    const titleEl = document.getElementById('businessRequestDecisionTitle');
+    const messageEl = document.getElementById('businessRequestDecisionMessage');
+    const noteLabelEl = document.getElementById('businessRequestDecisionNoteLabel');
+    const noteInputEl = document.getElementById('businessRequestDecisionNoteInput');
+    const confirmBtn = document.getElementById('businessRequestDecisionConfirmBtn');
+    const companyLabel = [
+        account.companyName,
+        account.companyNameEnglish,
+        account.application?.companyNameEnglish,
+        account.application?.companyNameArabic,
+        account.contactName,
+        account.id
+    ].map(value => {
+        if (typeof value === 'string') {
+            return value.trim();
+        }
+        if (value === null || value === undefined) {
+            return '';
+        }
+        return String(value).trim();
+    }).find(Boolean) || 'this business request';
+
+    const overlayAvailable = overlay && titleEl && messageEl && noteLabelEl && noteInputEl && confirmBtn;
+
+    if (!overlayAvailable) {
+        const confirmationMessage = normalized === 'approve'
+            ? `Approve ${companyLabel}?`
+            : `Reject ${companyLabel}?`;
+
+        if (!window.confirm(confirmationMessage)) {
+            return;
+        }
+
+        const promptMessage = normalized === 'approve'
+            ? 'Add an approval note (optional):'
+            : 'Add a rejection note (optional):';
+        const noteInput = window.prompt(promptMessage, '') || '';
+        const note = noteInput.trim();
+
+        const result = applyBusinessAccountDecision(account, normalized, note);
+        if (!result || typeof result !== 'object') {
+            showNotification('warning', 'Unable to update the business request.');
+            return;
+        }
+
+        if (!result.success) {
+            showNotification(result.severity || 'warning', result.message || 'Unable to update the business request.');
+            return;
+        }
+
+        showNotification(result.severity || 'success', result.message || 'Business request updated.');
+        return;
+    }
+
+    openBusinessRequestDecisionOverlay({ account, action: normalized, companyLabel });
+}
+
+function openBusinessRequestDecisionOverlay({ account, action, companyLabel }) {
+    if (!account || !account.id || !action) {
+        showNotification('warning', 'Unable to locate the business request.');
+        return;
+    }
+
+    const normalizedAction = action.trim().toLowerCase();
+    const overlay = document.getElementById('businessRequestDecisionOverlay');
+    const titleEl = document.getElementById('businessRequestDecisionTitle');
+    const messageEl = document.getElementById('businessRequestDecisionMessage');
+    const noteLabelEl = document.getElementById('businessRequestDecisionNoteLabel');
+    const noteInputEl = document.getElementById('businessRequestDecisionNoteInput');
+    const confirmBtn = document.getElementById('businessRequestDecisionConfirmBtn');
+
+    if (!overlay || !titleEl || !messageEl || !noteLabelEl || !noteInputEl || !confirmBtn) {
+        showNotification('warning', 'Confirmation overlay unavailable.');
+        return;
+    }
+
+    const resolvedLabel = companyLabel || account.companyName || account.contactName || account.id || 'this business request';
+    const isApproval = normalizedAction === 'approve';
+
+    const title = isApproval ? 'Approve Business Account Request' : 'Reject Business Account Request';
+    const summaryCompanyName = [
+        account.companyNameEnglish,
+        account.companyName,
+        account.application?.companyNameEnglish,
+        account.application?.companyNameArabic,
+        account.id
+    ].map(value => {
+        if (typeof value === 'string') {
+            return value.trim();
+        }
+        if (value === null || value === undefined) {
+            return '';
+        }
+        return String(value).trim();
+    }).find(Boolean) || 'Business Account';
+    const message = summaryCompanyName;
+    const noteLabel = isApproval ? 'Approval note (optional)' : 'Rejection note (optional)';
+    const notePlaceholder = isApproval
+        ? 'Share why this business is being approved'
+        : 'Explain why this application is being rejected';
+    const confirmIcon = isApproval ? 'fa-circle-check' : 'fa-ban';
+    const confirmLabel = isApproval ? 'Approve' : 'Reject';
+
+    titleEl.textContent = title;
+    messageEl.textContent = message;
+    noteLabelEl.textContent = noteLabel;
+    noteInputEl.placeholder = notePlaceholder;
+    noteInputEl.value = '';
+    confirmBtn.innerHTML = `<i class="fas ${confirmIcon}"></i> ${confirmLabel}`;
+
+    state.businessRequestDecisionContext = {
+        id: account.id,
+        action: normalizedAction
+    };
+
+    overlay.classList.remove('hidden');
+    noteInputEl.focus();
+}
+
+function formatIndividualAddressForDisplay(address) {
+        if (!address || typeof address !== 'object') {
+            return '';
+        }
+        const parts = [];
+        ['country', 'region', 'city', 'district'].forEach(key => {
+            const value = typeof address[key] === 'string' ? address[key].trim() : '';
+            if (value) {
+                parts.push(value);
+            }
+        });
+        const streetLine = [address.streetNumber, address.streetName || address.street]
+            .map(entry => (typeof entry === 'string' ? entry.trim() : ''))
+            .filter(Boolean)
+            .join(' ')
+            .trim();
+        if (streetLine) {
+            parts.push(streetLine);
+        }
+        const zipValue = typeof address.zipCode === 'string' && address.zipCode.trim()
+            ? address.zipCode.trim()
+            : typeof address.zip === 'string' && address.zip.trim()
+                ? address.zip.trim()
+                : '';
+        if (zipValue) {
+            parts.push(zipValue);
+        }
+        return parts.join(', ');
+    }
+
+function openBusinessRequestIndividualOverlay(account, { individualId: explicitIndividualId = '' } = {}) {
+    const overlay = document.getElementById('businessRequestIndividualOverlay');
+    const subtitleEl = document.getElementById('businessRequestIndividualSubtitle');
+    const summaryEl = document.getElementById('businessRequestIndividualSummary');
+    const detailsEl = document.getElementById('businessRequestIndividualDetails');
+    const closeBtn = document.getElementById('businessRequestIndividualCloseBtn');
+        if (!overlay || !detailsEl) {
+            showNotification('warning', 'Profile overlay unavailable.');
+            return;
+        }
+
+        if (subtitleEl) {
+            subtitleEl.textContent = '';
+            subtitleEl.classList.add('hidden');
+        }
+
+        const companyLabel = account?.companyName
+            || account?.application?.companyNameEnglish
+            || account?.application?.companyNameArabic
+            || account?.id
+            || 'Business Account';
+
+        const individuals = Array.isArray(individualAccounts) ? individualAccounts : [];
+        let { individual, association } = resolveBusinessAccountPrimaryIndividual(account);
+
+        const normalizedExplicitId = typeof explicitIndividualId === 'string' ? explicitIndividualId.trim() : '';
+        if (!individual && normalizedExplicitId) {
+            const fallbackCandidate = individuals.find(candidate => {
+                if (!candidate) return false;
+                const candidateId = candidate.id !== undefined && candidate.id !== null ? String(candidate.id).trim() : '';
+                return candidateId && candidateId === normalizedExplicitId;
+            }) || null;
+            if (fallbackCandidate) {
+                individual = fallbackCandidate;
+                const associations = Array.isArray(fallbackCandidate.businessAssociations) ? fallbackCandidate.businessAssociations : [];
+                association = associations.find(entry => entry && (entry.businessId === account.id || entry.businessAccountId === account.id)) || association;
+            }
+        }
+
+        if (!individual) {
+            const fallbackName = account?.contactName || account?.application?.contactName || '';
+            const fallbackEmail = account?.email || account?.application?.email || '';
+            const fallbackPhone = account?.phone || account?.application?.phone || '';
+            const fallbackHasDetails = [fallbackName, fallbackEmail, fallbackPhone].some(value => typeof value === 'string' && value.trim());
+            if (fallbackHasDetails) {
+                const fallbackIdentifier = normalizedExplicitId
+                    || (account && account.primaryIndividualId ? String(account.primaryIndividualId).trim() : '')
+                    || (account && account.application && account.application.primaryIndividualId ? String(account.application.primaryIndividualId).trim() : '')
+                    || (account && account.contactId ? String(account.contactId).trim() : '');
+                individual = {
+                    id: fallbackIdentifier || null,
+                    fullName: fallbackName,
+                    email: fallbackEmail,
+                    mobile: fallbackPhone,
+                    gender: account?.application?.contactGender || '',
+                    dateOfBirth: account?.application?.contactDateOfBirth || '',
+                    address: account?.address || account?.application?.address || null,
+                    createdAt: account?.submittedAt || account?.createdAt || null,
+                    status: account?.status || 'pending',
+                    defaultPublishingListType: account?.defaultPublishingListType || account?.application?.defaultPublishingListType || '',
+                    defaultPublishingListNote: account?.defaultPublishingListNote || account?.application?.defaultPublishingListNote || ''
+                };
+                association = association || { relationship: 'primary-contact' };
+            }
+        }
+
+        if (!individual) {
+            if (summaryEl) {
+                summaryEl.innerHTML = '';
+                summaryEl.classList.add('hidden');
+            }
+            detailsEl.innerHTML = '<p class="helper-text">This business request is not linked to an individual account yet.</p>';
+            state.businessRequestIndividualContext = {
+                accountId: account && account.id ? account.id : null,
+                individualId: null
+            };
+            overlay.classList.remove('hidden');
+            if (closeBtn) {
+                closeBtn.focus();
+            }
+            return;
+        }
+
+        const displayName = resolveIndividualAccountDisplayName(individual);
+        let relationshipLabel = association && typeof association.relationship === 'string'
+            ? formatKeyLabel(association.relationship)
+            : '';
+        if (relationshipLabel && relationshipLabel.toLowerCase() === 'owner') {
+            relationshipLabel = '';
+        }
+        const email = typeof individual.email === 'string' && individual.email.trim() ? individual.email.trim() : '';
+        const usernameRaw = typeof individual.username === 'string' && individual.username.trim()
+            ? individual.username.trim()
+            : typeof individual.userName === 'string' && individual.userName.trim()
+                ? individual.userName.trim()
+                : '';
+        const username = usernameRaw || displayName;
+        const identifier = typeof individual.id === 'string' && individual.id.trim()
+            ? individual.id.trim()
+            : typeof individual.accountId === 'string' && individual.accountId.trim()
+                ? individual.accountId.trim()
+                : '';
+        const genderRaw = typeof individual.gender === 'string' && individual.gender.trim() ? individual.gender.trim() : '';
+        const genderLabel = genderRaw ? formatKeyLabel(genderRaw) : '—';
+        const phoneCandidates = [individual.mobile, individual.phone, account?.phone];
+        const phone = phoneCandidates.find(value => typeof value === 'string' && value.trim()) || '';
+        const dateOfBirthLabel = formatDateForDisplay(individual.dateOfBirth, { includeTime: false }) || '—';
+        const ageValue = calculateAgeFromDate(individual.dateOfBirth);
+        const ageLabel = Number.isFinite(ageValue) && ageValue !== null
+            ? `${ageValue} year${ageValue === 1 ? '' : 's'}`
+            : '—';
+        const addressLabel = formatIndividualAddressForDisplay(individual.address);
+        const memberSinceLabel = formatDateForDisplay(individual.createdAt, { includeTime: true }) || '—';
+        const statusLabel = getIndividualAccountStatusLabel(individual.status) || 'Inactive';
+
+        const automationIdentifier = resolveIndividualAccountAutomationIdentifier(individual);
+        const publishingEntry = automationIdentifier ? findAutomationListEntryForAccount(automationIdentifier) : null;
+        let publishingLabel = '—';
+        if (publishingEntry && publishingEntry.listType) {
+            publishingLabel = PUBLISHING_LIST_LABELS[publishingEntry.listType] || formatKeyLabel(publishingEntry.listType);
+        } else if (account && typeof account.defaultPublishingListType === 'string' && account.defaultPublishingListType.trim()) {
+            const listType = account.defaultPublishingListType.trim();
+            publishingLabel = PUBLISHING_LIST_LABELS[listType] || formatKeyLabel(listType);
+        } else if (individual && typeof individual.defaultPublishingListType === 'string' && individual.defaultPublishingListType.trim()) {
+            const listType = individual.defaultPublishingListType.trim();
+            publishingLabel = PUBLISHING_LIST_LABELS[listType] || formatKeyLabel(listType);
+        }
+
+        const profilePictureCandidates = [
+            individual.profilePicture,
+            individual.profilePhoto,
+            individual.photoDataUrl,
+            individual.photoDataURL,
+            individual.photoUrl,
+            individual.photo,
+            individual.avatar,
+            individual.avatarUrl,
+            account?.contactPhotoUrl,
+            account?.contactPhotoDataUrl,
+            account?.application?.contactPhotoUrl,
+            account?.application?.contactPhotoDataUrl,
+            account?.application?.contactAvatar
+        ];
+        const selectedProfilePicture = profilePictureCandidates.find(value => typeof value === 'string' && value.trim()) || '';
+        const sanitizedProfilePicture = selectedProfilePicture && !/^javascript:/i.test(selectedProfilePicture)
+            ? selectedProfilePicture.trim()
+            : '';
+        const fallbackGender = genderRaw || account?.contactGender || account?.application?.contactGender || '';
+        const defaultAvatarSrc = getUserAvatarUrl(fallbackGender);
+        const photoSrc = sanitizedProfilePicture || defaultAvatarSrc;
+        const photoAltName = displayName || 'Individual account';
+        const photoAlt = sanitizedProfilePicture
+            ? `${photoAltName} profile photo`
+            : `${photoAltName} default avatar`;
+        const photoMarkup = `<img src="${escapeAttribute(photoSrc)}" alt="${escapeAttribute(photoAlt)}">`;
+
+        const buildChip = (iconKey, rawValue) => {
+            if (rawValue === null || rawValue === undefined) {
+                return '';
+            }
+            const valueString = String(rawValue).trim();
+            if (!valueString) {
+                return '';
+            }
+            const iconClassMap = {
+                phone: 'fa-phone',
+                email: 'fa-envelope',
+                id: 'fa-id-badge',
+                username: 'fa-at'
+            };
+            const iconClass = iconClassMap[iconKey] || '';
+            const sanitizedIcon = iconClass.replace(/[^a-z0-9- ]/gi, '');
+            const iconMarkup = sanitizedIcon ? `<i class="fas ${sanitizedIcon}"></i>` : '';
+            return `<span class="business-request-individual-chip">${iconMarkup}${escapeHtml(valueString)}</span>`;
+        };
+
+        const buildFactChip = (iconKey, rawValue) => {
+            const normalizedValue = typeof rawValue === 'string'
+                ? rawValue.trim()
+                : String(rawValue ?? '').trim();
+            const displayValue = normalizedValue || '—';
+            const factIconClassMap = {
+                gender: 'fa-venus-mars',
+                birth: 'fa-calendar',
+                age: 'fa-hourglass-half',
+                address: 'fa-location-dot'
+            };
+            const iconClass = factIconClassMap[iconKey] || '';
+            const sanitizedIcon = iconClass.replace(/[^a-z0-9- ]/gi, '');
+            const iconMarkup = sanitizedIcon ? `<i class="fas ${sanitizedIcon}"></i>` : '';
+            return `<span class="business-request-individual-chip">${iconMarkup}${escapeHtml(displayValue)}</span>`;
+        };
+
+        const statusClassName = getIndividualAccountStatusClass(individual.status);
+        const statusBadgeMarkup = `<span class="${escapeAttribute(statusClassName)}">${escapeHtml(statusLabel)}</span>`;
+        const publishingChipMarkup = publishingLabel && publishingLabel !== '—'
+            ? `<span class="business-request-individual-chip business-request-individual-chip--muted"><i class="fas fa-bullhorn"></i>${escapeHtml(publishingLabel)}</span>`
+            : '';
+        const idChip = buildChip('id', identifier);
+        const usernameChip = buildChip('username', usernameRaw);
+        const emailChipMarkup = buildChip('email', email);
+        const phoneChipMarkup = buildChip('phone', phone);
+
+        const identityChips = [idChip, usernameChip].filter(Boolean).join('');
+        const contactChips = [emailChipMarkup, phoneChipMarkup].filter(Boolean).join('');
+        const statusChipRow = [statusBadgeMarkup, publishingChipMarkup].filter(Boolean).join('');
+
+        const joinedHelper = memberSinceLabel && memberSinceLabel !== '—'
+            ? `<div class="helper-text">Member Since ${escapeHtml(memberSinceLabel)}</div>`
+            : '';
+
+        const chipSections = [];
+        if (statusChipRow) {
+            chipSections.push(`<div class="business-request-individual-chip-row">${statusChipRow}</div>`);
+        }
+        if (identityChips) {
+            chipSections.push(`<div class="business-request-individual-chip-row">${identityChips}</div>`);
+        }
+        if (contactChips) {
+            chipSections.push(`<div class="business-request-individual-chip-row">${contactChips}</div>`);
+        }
+        const factChips = [
+            buildFactChip('gender', genderLabel),
+            buildFactChip('birth', dateOfBirthLabel),
+            buildFactChip('age', ageLabel),
+            buildFactChip('address', addressLabel)
+        ].filter(Boolean);
+        if (factChips.length) {
+            chipSections.push(`<div class="business-request-individual-chip-row">${factChips.join('')}</div>`);
+        }
+
+        const profileMarkup = `
+            <section class="business-request-individual-card">
+                <div class="business-request-individual-photo">
+                    <div class="business-request-individual-avatar">${photoMarkup}</div>
+                    <div class="business-request-individual-photo-meta">
+                        <div class="business-request-individual-name">${escapeHtml(displayName)}</div>
+                        ${relationshipLabel ? `<div class="helper-text">${escapeHtml(relationshipLabel)}</div>` : ''}
+                        ${joinedHelper}
+                    </div>
+                </div>
+                ${chipSections.join('')}
+            </section>
+        `;
+
+        if (summaryEl) {
+            summaryEl.innerHTML = '';
+            summaryEl.classList.add('hidden');
+        }
+
+        detailsEl.innerHTML = profileMarkup;
+
+        state.businessRequestIndividualContext = {
+            accountId: account && account.id ? account.id : null,
+            individualId: individual && individual.id ? individual.id : null
+        };
+
+        overlay.classList.remove('hidden');
+        if (closeBtn) {
+            closeBtn.focus();
+        }
+    }
+
+function closeBusinessRequestIndividualOverlay() {
+    const overlay = document.getElementById('businessRequestIndividualOverlay');
+    const subtitleEl = document.getElementById('businessRequestIndividualSubtitle');
+    const detailsEl = document.getElementById('businessRequestIndividualDetails');
+    const summaryEl = document.getElementById('businessRequestIndividualSummary');
+    if (overlay) {
+        overlay.classList.add('hidden');
+    }
+    if (subtitleEl) {
+        subtitleEl.textContent = '';
+        subtitleEl.classList.add('hidden');
+    }
+    if (detailsEl) {
+        detailsEl.innerHTML = '<p class="helper-text">Select a business request with a linked individual account to view profile details.</p>';
+    }
+    if (summaryEl) {
+        summaryEl.innerHTML = '';
+        summaryEl.classList.add('hidden');
+    }
+    state.businessRequestIndividualContext = null;
+}
+
+function closeBusinessRequestDecisionOverlay() {
+    const overlay = document.getElementById('businessRequestDecisionOverlay');
+    const noteInputEl = document.getElementById('businessRequestDecisionNoteInput');
+    if (overlay) {
+        overlay.classList.add('hidden');
+    }
+    if (noteInputEl) {
+        noteInputEl.value = '';
+    }
+    state.businessRequestDecisionContext = null;
+    state.activeBusinessRequestId = null;
+}
+
+function confirmBusinessRequestDecision() {
+    const context = state.businessRequestDecisionContext;
+    if (!context || !context.id || !context.action) {
+        closeBusinessRequestDecisionOverlay();
+        return;
+    }
+
+    const noteInputEl = document.getElementById('businessRequestDecisionNoteInput');
+    const note = noteInputEl ? noteInputEl.value.trim() : '';
+
+    const matchById = entry => entry && (entry.id !== undefined && entry.id !== null) && String(entry.id) === String(context.id);
+    let account = (businessAccounts || []).find(matchById);
+    if (!account) {
+        account = getPendingBusinessRequests().find(matchById) || null;
+    }
+
+    if (!account) {
+        showNotification('warning', 'Unable to locate the selected business request.');
+        closeBusinessRequestDecisionOverlay();
+        return;
+    }
+
+    const result = applyBusinessAccountDecision(account, context.action, note);
+    if (!result || typeof result !== 'object') {
+        showNotification('warning', 'Unable to update the business request.');
+        return;
+    }
+
+    if (!result.success) {
+        showNotification(result.severity || 'warning', result.message || 'Unable to update the business request.');
+        return;
+    }
+
+    showNotification(result.severity || 'success', result.message || 'Business request updated.');
+    closeBusinessRequestDecisionOverlay();
+}
+
+function openBusinessRequestCertificatePreview(account, certificate) {
+    if (!certificate) {
+        showNotification('warning', 'Unable to preview the selected certificate.');
+        return;
+    }
+
+    const previewWindow = window.open('', '_blank', 'noopener=yes,width=720,height=820');
+    if (!previewWindow) {
+        return;
+    }
+
+    const companyLabel = account && (account.companyName || account.application?.companyNameEnglish || account.id) ? (account.companyName || account.application?.companyNameEnglish || account.id) : 'Business Account';
+    const registrationNumber = account && (account.registrationNumber || account.application?.registrationNumber)
+        ? (account.registrationNumber || account.application?.registrationNumber)
+        : '—';
+    const detailRegistrationNumber = account && (account.detailRegistrationNumber || account.application?.detailRegistrationNumber)
+        ? (account.detailRegistrationNumber || account.application?.detailRegistrationNumber)
+        : '—';
+    const documentTypeRaw = account && (account.registrationDocumentType || account.application?.documentType)
+        ? (account.registrationDocumentType || account.application?.documentType)
+        : '';
+    const documentTypeLabel = documentTypeRaw ? formatKeyLabel(documentTypeRaw) : '—';
+    const submissionIso = normalizeIsoTimestamp(resolveBusinessRequestSubmissionDate(account), null);
+    const submittedLabel = submissionIso ? (formatDateForDisplay(submissionIso, { includeTime: true }) || submissionIso) : '—';
+    const generatedLabel = formatDateForDisplay(new Date().toISOString(), { includeTime: true }) || new Date().toUTCString();
+
+    const certificateLabel = certificate.label || certificate.raw || 'Certificate';
+    const certificateReference = certificate.raw || certificate.label || '—';
+    const certificateHref = certificate.href || '';
+
+    const summaryLines = [
+        'Business Certificate Preview',
+        '---------------------------',
+        `Certificate: ${certificateLabel || '—'}`,
+        `Business: ${companyLabel || '—'}`,
+        `Registration #: ${registrationNumber || '—'}`,
+        `Detail Registration #: ${detailRegistrationNumber || '—'}`,
+        `Document Type: ${documentTypeLabel || '—'}`,
+        `Submitted: ${submittedLabel || '—'}`,
+        certificateHref ? `Document URL: ${certificateHref}` : `Document Reference: ${certificateReference || '—'}`,
+        `Preview Generated: ${generatedLabel || '—'}`,
+        '',
+        'This preview reflects the sandbox dataset for the ONRUF Central Control Panel.',
+        'In production, the uploaded certificate file would open directly.'
+    ];
+
+    const summaryBlob = new Blob([summaryLines.join('\n')], { type: 'text/plain;charset=utf-8' });
+    const summaryUrl = URL.createObjectURL(summaryBlob);
+    const summaryFilenameBase = (certificateLabel || 'business-certificate')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '') || 'business-certificate';
+    const summaryFilename = `${summaryFilenameBase}-preview.txt`;
+
+    const safeCompany = escapeHtml(companyLabel || '—');
+    const safeCertificate = escapeHtml(certificateLabel || '—');
+    const safeRegistration = escapeHtml(registrationNumber || '—');
+    const safeDetailRegistration = escapeHtml(detailRegistrationNumber || '—');
+    const safeDocumentType = escapeHtml(documentTypeLabel || '—');
+    const safeSubmitted = escapeHtml(submittedLabel || '—');
+    const safeReference = escapeHtml(certificateReference || '—');
+    const safeGenerated = escapeHtml(generatedLabel || '—');
+    const documentLinkMarkup = certificateHref
+        ? `<a class="download-button secondary" href="${escapeAttribute(certificateHref)}" target="_blank" rel="noopener">Open document</a>`
+        : '<div class="preview-note">Document file is not bundled with this sandbox preview.</div>';
+
+    const html = `<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Certificate Preview</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        :root {
+            color-scheme: light dark;
+        }
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            margin: 0;
+            padding: 24px;
+            background: #f8fafc;
+            color: #0f172a;
+        }
+        body.dark-mode {
+            background: #0f172a;
+            color: #e2e8f0;
+        }
+        header {
+            margin-bottom: 24px;
+        }
+        h1 {
+            margin: 0 0 8px;
+            font-size: 1.75rem;
+        }
+        .subtitle {
+            margin: 0;
+            color: #475569;
+        }
+        body.dark-mode .subtitle {
+            color: #cbd5f5;
+        }
+        section {
+            background: #ffffff;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 10px 30px -12px rgba(15, 23, 42, 0.4);
+            margin-bottom: 16px;
+        }
+        body.dark-mode section {
+            background: #1e293b;
+            box-shadow: 0 12px 40px -18px rgba(15, 23, 42, 0.9);
+        }
+        dl {
+            margin: 0;
+            display: grid;
+            grid-template-columns: minmax(160px, 220px) 1fr;
+            gap: 12px 20px;
+        }
+        dt {
+            font-weight: 600;
+            color: #334155;
+        }
+        body.dark-mode dt {
+            color: #e2e8f0;
+        }
+        dd {
+            margin: 0;
+        }
+        .download-box {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+        .button-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+        .download-button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 10px 18px;
+            background: #4338ca;
+            color: #ffffff;
+            border-radius: 999px;
+            text-decoration: none;
+            font-weight: 600;
+        }
+        .download-button:hover {
+            background: #3730a3;
+        }
+        .download-button.secondary {
+            background: #0284c7;
+        }
+        .download-button.secondary:hover {
+            background: #0369a1;
+        }
+        .preview-note {
+            font-size: 0.9rem;
+            color: #475569;
+        }
+        body.dark-mode .preview-note {
+            color: #94a3b8;
+        }
+        footer {
+            margin-top: 24px;
+            font-size: 0.82rem;
+            color: #475569;
+        }
+        body.dark-mode footer {
+            color: #94a3b8;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Certificate Preview</h1>
+        <p class="subtitle">${safeCertificate}</p>
+    </header>
+    <section>
+        <dl>
+            <dt>Business</dt>
+            <dd>${safeCompany}</dd>
+            <dt>Registration #</dt>
+            <dd>${safeRegistration}</dd>
+            <dt>Detail Registration #</dt>
+            <dd>${safeDetailRegistration}</dd>
+            <dt>Document Type</dt>
+            <dd>${safeDocumentType}</dd>
+            <dt>Submitted</dt>
+            <dd>${safeSubmitted}</dd>
+            <dt>Reference</dt>
+            <dd>${safeReference}</dd>
+            <dt>Preview Generated</dt>
+            <dd>${safeGenerated}</dd>
+        </dl>
+    </section>
+    <section class="download-box">
+        <div>This preview provides a sandbox-friendly summary of the uploaded certificate. Use the download link below to save a text snapshot for audit trails.</div>
+        <div class="button-row">
+            <a class="download-button" href="${escapeAttribute(summaryUrl)}" download="${escapeAttribute(summaryFilename)}">Download summary</a>
+            ${documentLinkMarkup}
+        </div>
+    </section>
+    <footer>
+        In production environments, the ONRUF Central Control Panel would open the submitted certificate file directly.
+    </footer>
+    <script>
+        (function() {
+            if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+                document.body.classList.add('dark-mode');
+            }
+        }());
+    </script>
+</body>
+</html>`;
+
+    previewWindow.document.open();
+    previewWindow.document.write(html);
+    previewWindow.document.close();
+    previewWindow.document.title = `Certificate Preview - ${certificateLabel || companyLabel || 'Business Certificate'}`;
+
+    previewWindow.addEventListener('beforeunload', () => {
+        URL.revokeObjectURL(summaryUrl);
+    });
 }
 
 function refreshBusinessRequestsWorkspace() {
@@ -31693,9 +34916,12 @@ function renderBusinessAccountsTable(page = state.currentBusinessAccountsPage) {
 
             const { individual: linkedIndividual, association: linkedAssociation } = resolveBusinessAccountPrimaryIndividual(account);
 
-            const relationshipLabel = linkedAssociation && typeof linkedAssociation.relationship === 'string'
-                ? linkedAssociation.relationship.trim()
+            let relationshipLabel = linkedAssociation && typeof linkedAssociation.relationship === 'string'
+                ? formatKeyLabel(linkedAssociation.relationship)
                 : '';
+            if (relationshipLabel && relationshipLabel.toLowerCase() === 'owner') {
+                relationshipLabel = '';
+            }
             const individualDisplayName = linkedIndividual
                 ? (linkedIndividual.fullName || linkedIndividual.email || linkedIndividual.id || 'Individual Account')
                 : '';
@@ -31785,6 +35011,20 @@ function renderBusinessAccountsTable(page = state.currentBusinessAccountsPage) {
     syncBusinessAccountRowSelection();
 
     renderBusinessAccountsPagination(totalPages, filtered.length);
+    const seedButton = document.getElementById('businessAccountsSeedAccountBtn');
+    if (seedButton) {
+        const hasIndividuals = Array.isArray(individualAccounts)
+            && individualAccounts.some(entry => entry && entry.id);
+        if (hasIndividuals) {
+            seedButton.disabled = false;
+            seedButton.removeAttribute('aria-disabled');
+            seedButton.removeAttribute('title');
+        } else {
+            seedButton.disabled = true;
+            seedButton.setAttribute('aria-disabled', 'true');
+            seedButton.title = 'Seed an individual account before adding businesses.';
+        }
+    }
     updateBusinessAccountsActionToolbar();
 }
 
@@ -31896,10 +35136,18 @@ function updateBusinessAccountsActionToolbar() {
         marketplaceButton,
         activateButton,
         deactivateButton,
-        approveButton,
-        rejectButton,
         updateListButton
-    ].filter(Boolean);
+    ];
+
+    if (approveButton) {
+        actionableButtons.push(approveButton);
+    }
+
+    if (rejectButton) {
+        actionableButtons.push(rejectButton);
+    }
+
+    const enabledActionButtons = actionableButtons.filter(Boolean);
 
     if (detailLabel) {
         detailLabel.textContent = 'Account Details';
@@ -31912,7 +35160,7 @@ function updateBusinessAccountsActionToolbar() {
     }
 
     if (!account) {
-        actionableButtons.forEach(button => {
+        enabledActionButtons.forEach(button => {
             setButtonState(button, true);
         });
         if (updateListButton) {
@@ -31923,16 +35171,20 @@ function updateBusinessAccountsActionToolbar() {
     }
 
     const normalizedStatus = (account.status || '').toLowerCase();
-    updateDetailButtonLabel(normalizedStatus === 'pending' ? 'Review Request' : 'Account Details');
-    const isPendingReview = normalizedStatus === 'pending';
+    updateDetailButtonLabel(normalizedStatus === 'pending' ? 'Account Review' : 'Account Details');
     const pendingBlockedMessage = 'Approve or reject the application before changing activation state.';
 
     setButtonState(detailButton, false);
     const approveBlocked = normalizedStatus !== 'pending';
     const rejectBlocked = normalizedStatus !== 'pending';
 
-    setButtonState(approveButton, approveBlocked, approveBlocked ? 'Only pending review accounts can be approved.' : '');
-    setButtonState(rejectButton, rejectBlocked, rejectBlocked ? 'Only pending review accounts can be rejected.' : '');
+    if (approveButton) {
+        setButtonState(approveButton, approveBlocked, approveBlocked ? 'Only pending review accounts can be approved.' : '');
+    }
+
+    if (rejectButton) {
+        setButtonState(rejectButton, rejectBlocked, rejectBlocked ? 'Only pending review accounts can be rejected.' : '');
+    }
 
     const activateBlocked = normalizedStatus !== 'inactive';
     const deactivateBlocked = normalizedStatus !== 'active';
@@ -32056,9 +35308,45 @@ function renderBusinessAccountDetail(account) {
     if (overlay) {
         overlay.classList.remove('hidden');
     }
-    titleEl.textContent = account.companyName || account.id || 'Business Account';
+    const application = account.application && typeof account.application === 'object' ? account.application : {};
+    const englishCompanyName = account.companyName || application.companyNameEnglish || account.id || 'Business Account';
+    const arabicCompanyName = application.companyNameArabic || account.companyNameArabic || '';
+    const { individual: linkedIndividual, association: linkedAssociation } = resolveBusinessAccountPrimaryIndividual(account);
+    titleEl.textContent = englishCompanyName;
     if (subtitleEl) {
-        subtitleEl.textContent = `${getBusinessAccountStatusLabel(account.status)} · ${account.city || 'Unknown City'}`;
+        const statusDisplay = getBusinessAccountStatusLabel(account.status) || 'Inactive';
+        let publishingListLabel = '';
+        if (linkedIndividual) {
+            const automationIdentifier = resolveIndividualAccountAutomationIdentifier(linkedIndividual);
+            if (automationIdentifier) {
+                const automationDetails = findAutomationListEntryForAccount(automationIdentifier);
+                if (automationDetails && automationDetails.listType) {
+                    const listType = automationDetails.listType;
+                    publishingListLabel = (PUBLISHING_LIST_LABELS && PUBLISHING_LIST_LABELS[listType])
+                        ? PUBLISHING_LIST_LABELS[listType]
+                        : formatKeyLabel(listType);
+                }
+            }
+        }
+        if (!publishingListLabel) {
+            const fallbackListTypeRaw = account.defaultPublishingListType
+                || application.defaultPublishingListType
+                || '';
+            const fallbackListType = typeof fallbackListTypeRaw === 'string'
+                ? fallbackListTypeRaw.trim()
+                : '';
+            if (fallbackListType) {
+                publishingListLabel = (PUBLISHING_LIST_LABELS && PUBLISHING_LIST_LABELS[fallbackListType])
+                    ? PUBLISHING_LIST_LABELS[fallbackListType]
+                    : formatKeyLabel(fallbackListType);
+            }
+        }
+        const subtitleParts = [statusDisplay];
+        if (publishingListLabel) {
+            subtitleParts.push(publishingListLabel);
+        }
+        subtitleEl.textContent = subtitleParts.join(' • ');
+        subtitleEl.classList.toggle('hidden', subtitleParts.length === 0);
     }
 
     const packageDetails = businessPackages.find(pkg => pkg.id === account.packageId);
@@ -32066,49 +35354,670 @@ function renderBusinessAccountDetail(account) {
     const requestedDocs = Array.isArray(account.requestedDocuments) ? account.requestedDocuments : [];
     const history = Array.isArray(account.history) ? account.history : [];
 
-    const invoicesMarkup = invoices.length
-        ? invoices.map(invoice => {
-            const dueLabel = formatDateForDisplay(invoice.dueDate, { includeTime: false }) || 'No due date';
-            return `<li><strong>${escapeHtml(invoice.id)}</strong> · ${escapeHtml(formatCurrency(invoice.amount || 0))} · ${escapeHtml(invoice.status || 'pending')}<div class="helper-text">Due ${escapeHtml(dueLabel)}</div></li>`;
-        }).join('')
-        : '<li class="empty-state">No invoices on file.</li>';
+    const normalizeText = value => (typeof value === 'string' && value.trim() ? value.trim() : '');
+    const requestCompanyEnglish = normalizeText(application.companyNameEnglish) || normalizeText(account.companyName);
+    const requestCompanyArabic = normalizeText(application.companyNameArabic) || normalizeText(account.companyNameArabic);
+    const requestUsername = normalizeText(application.username) || normalizeText(account.username);
+    const documentTypeRaw = normalizeText(application.documentType) || normalizeText(account.registrationDocumentType);
+    const documentTypeLabel = documentTypeRaw ? formatKeyLabel(documentTypeRaw) : '—';
+    const registrationNumber = normalizeText(application.registrationNumber) || normalizeText(account.registrationNumber);
+    const detailRegistrationNumber = normalizeText(application.detailRegistrationNumber) || normalizeText(account.detailRegistrationNumber);
+    const vatNumber = normalizeText(application.vatNumber) || normalizeText(account.vatNumber);
+    const websiteUrlRaw = normalizeText(application.website) || normalizeText(account.website);
+    const maroofUrlRaw = normalizeText(application.maroofUrl) || normalizeText(account.maroofUrl);
+    const websiteHref = websiteUrlRaw ? formatExternalLink(websiteUrlRaw) : '';
+    const maroofHref = maroofUrlRaw ? formatExternalLink(maroofUrlRaw) : '';
+    const websiteDisplay = websiteUrlRaw ? `<a class="business-request-link" href="${escapeAttribute(websiteHref)}" target="_blank" rel="noopener">${escapeHtml(websiteUrlRaw)}</a>` : '—';
+    const maroofDisplay = maroofUrlRaw ? `<a class="business-request-link" href="${escapeAttribute(maroofHref)}" target="_blank" rel="noopener">${escapeHtml(maroofUrlRaw)}</a>` : '—';
+    const tradeExperienceLabel = (account.tradeExperience15Years === true || application.tradeExperience15Years === true) ? 'Yes' : 'No';
 
-    const docsMarkup = requestedDocs.length
-        ? requestedDocs.map(doc => `<li><i class="fas fa-file-circle-question"></i> ${escapeHtml(doc)}</li>`).join('')
-        : '<li class="empty-state">No outstanding document requests.</li>';
+    const country = normalizeText(account.address && account.address.country) || normalizeText(application.address && application.address.country);
+    const region = normalizeText(account.address && account.address.region) || normalizeText(application.address && application.address.region);
+    const city = normalizeText(account.address && account.address.city) || normalizeText(application.address && application.address.city) || normalizeText(account.city);
+    const district = normalizeText(account.address && account.address.district) || normalizeText(application.address && application.address.district);
+    const streetNumber = normalizeText(account.address && account.address.streetNumber) || normalizeText(application.address && application.address.streetNumber);
+    const streetName = normalizeText(account.address && (account.address.street || account.address.streetName)) || normalizeText(application.address && (application.address.street || application.address.streetName));
+    const zipValue = normalizeText(account.address && (account.address.zipCode || account.address.postalCode || account.address.zip))
+        || normalizeText(application.address && (application.address.zipCode || application.address.postalCode || application.address.zip));
+    const streetLine = [streetNumber, streetName].filter(Boolean).join(' ').trim();
+    const addressParts = [country, region, city, district, streetLine, zipValue].filter(Boolean);
+    const addressLabel = addressParts.length ? addressParts.join(', ') : city || '—';
+    const hasAddressLabel = Boolean(addressLabel && addressLabel !== '—');
+    const addressHref = hasAddressLabel ? buildMapsSearchLink(addressLabel) : '';
+    const addressDisplay = hasAddressLabel && addressHref
+        ? `<a class="business-request-link" href="${escapeAttribute(addressHref)}" target="_blank" rel="noopener">${escapeHtml(addressLabel)}</a>`
+        : (addressLabel ? escapeHtml(addressLabel) : '—');
 
-    const historyMarkup = history.length
-        ? history.map(entry => {
-            const label = formatProductAdHistoryAction(entry.action);
-            const timeLabel = formatDateForDisplay(entry.timestamp, { includeTime: true }) || 'Unknown time';
-            return `<li><strong>${escapeHtml(label)}</strong> · ${escapeHtml(entry.actor || 'System')}<div class="helper-text">${escapeHtml(timeLabel)}</div>${entry.context ? `<div class="helper-text">${escapeHtml(entry.context)}</div>` : ''}</li>`;
-        }).join('')
-        : '<li class="empty-state">No activity logged yet.</li>';
+    const socialSources = {
+        ...(typeof account.socials === 'object' && account.socials ? account.socials : {}),
+        ...(typeof application.socials === 'object' && application.socials ? application.socials : {})
+    };
+    const socialLabels = {
+        facebook: 'Facebook',
+        instagram: 'Instagram',
+        twitter: 'Twitter',
+        youtube: 'YouTube',
+        linkedin: 'LinkedIn',
+        snapchat: 'Snapchat',
+        tiktok: 'TikTok'
+    };
+    const normalizeSocialLink = raw => {
+        if (typeof raw !== 'string') {
+            return '';
+        }
+        const trimmed = raw.trim();
+        if (!trimmed) {
+            return '';
+        }
+        if (/^[a-z][a-z0-9+.-]*:/i.test(trimmed)) {
+            return trimmed;
+        }
+        return `https://${trimmed}`;
+    };
+    const socialEntries = Object.keys(socialSources)
+        .filter(key => typeof socialSources[key] === 'string' && socialSources[key].trim())
+        .map(key => {
+            const value = socialSources[key].trim();
+            return {
+                key,
+                label: socialLabels[key] || formatKeyLabel(key),
+                value,
+                href: normalizeSocialLink(value)
+            };
+        });
+    const socialMarkup = socialEntries.length
+        ? socialEntries.map(entry => {
+            if (!entry.href) {
+                return `<span class="helper-chip neutral">${escapeHtml(entry.label)}</span>`;
+            }
+            const titleAttr = entry.value ? ` title="${escapeAttribute(entry.value)}"` : '';
+            return `<a class="helper-chip neutral" href="${escapeAttribute(entry.href)}" target="_blank" rel="noopener"${titleAttr}>${escapeHtml(entry.label)}</a>`;
+        }).join(' ')
+        : '—';
 
-    content.innerHTML = `
+    const certificateEntries = resolveBusinessRequestCertificates(account);
+    const certificatesMarkup = certificateEntries.length
+        ? certificateEntries.map((entry, index) => `<button type="button" class="helper-chip neutral helper-chip-button" data-action="preview-business-certificate" data-certificate-index="${escapeAttribute(String(index))}">${escapeHtml(entry.label)}</button>`).join(' ')
+        : '—';
+
+    const normalizedStatus = typeof account.status === 'string' ? account.status.trim().toLowerCase() : '';
+    const isReviewMode = normalizedStatus === 'pending' || normalizedStatus === 'docs-requested';
+    const statusLabel = getBusinessAccountStatusLabel(account.status);
+    const financialStatusRaw = normalizeText(account.financialStatus || '');
+    const financialStatusLabel = financialStatusRaw ? formatKeyLabel(financialStatusRaw) : '—';
+    const approvedLabel = formatDateForDisplay(account.approvedAt, { includeTime: true }) || '—';
+
+    const historySortedByTimestamp = history.slice().sort((a, b) => {
+        const timeA = a && a.timestamp ? Date.parse(a.timestamp) : 0;
+        const timeB = b && b.timestamp ? Date.parse(b.timestamp) : 0;
+        return timeB - timeA;
+    });
+    const latestHistoryEntry = historySortedByTimestamp.length ? historySortedByTimestamp[0] : null;
+    const lastActivityParts = [];
+    if (latestHistoryEntry) {
+        const actionLabel = formatProductAdHistoryAction(latestHistoryEntry.action);
+        if (actionLabel) {
+            lastActivityParts.push(actionLabel);
+        }
+        if (latestHistoryEntry.actor) {
+            lastActivityParts.push(latestHistoryEntry.actor);
+        }
+        lastActivityParts.push(formatDateForDisplay(latestHistoryEntry.timestamp, { includeTime: true }) || 'Unknown time');
+    }
+    const lastActivityLabel = lastActivityParts.length ? lastActivityParts.join(' · ') : '—';
+
+    const lastDocsHistoryEntry = historySortedByTimestamp.find(entry => entry && entry.action === 'docs-requested');
+    const lastDocsRequestedLabel = lastDocsHistoryEntry
+        ? formatDateForDisplay(lastDocsHistoryEntry.timestamp, { includeTime: true }) || 'Unknown time'
+        : '—';
+
+    const docsOutstandingCount = requestedDocs.filter(doc => typeof doc === 'string' && doc.trim()).length;
+
+    const openInvoiceStatuses = new Set(['pending', 'due', 'overdue', 'unpaid', 'sent', 'issued', 'open', 'outstanding']);
+    const settledInvoiceStatuses = new Set(['paid', 'settled', 'closed', 'completed']);
+    const openInvoicesCount = invoices.filter(invoice => openInvoiceStatuses.has(((invoice && invoice.status) || '').toString().trim().toLowerCase())).length;
+    const settledInvoicesCount = invoices.filter(invoice => settledInvoiceStatuses.has(((invoice && invoice.status) || '').toString().trim().toLowerCase())).length;
+    const invoicesTotalCount = invoices.length;
+
+    const latestInvoiceEntry = invoices.slice().sort((a, b) => {
+        const dateA = Date.parse(a && (a.dueDate || a.createdAt)) || 0;
+        const dateB = Date.parse(b && (b.dueDate || b.createdAt)) || 0;
+        return dateB - dateA;
+    })[0] || null;
+    const latestInvoiceParts = [];
+    if (latestInvoiceEntry) {
+        if (latestInvoiceEntry.id) {
+            latestInvoiceParts.push(String(latestInvoiceEntry.id));
+        }
+        if (latestInvoiceEntry.status) {
+            latestInvoiceParts.push(formatKeyLabel(String(latestInvoiceEntry.status)));
+        }
+        const invoiceDateLabel = formatDateForDisplay(latestInvoiceEntry.dueDate || latestInvoiceEntry.createdAt, { includeTime: false }) || 'No date';
+        latestInvoiceParts.push(invoiceDateLabel);
+    }
+    const latestInvoiceLabel = latestInvoiceParts.length ? latestInvoiceParts.join(' · ') : '—';
+
+    const linkedIndividualName = linkedIndividual
+        ? (linkedIndividual.fullName || linkedIndividual.email || linkedIndividual.id || '')
+        : '';
+    const linkedIndividualStatusLabel = linkedIndividual ? getIndividualAccountStatusLabel(linkedIndividual.status) : '—';
+    const linkedIndividualEmailMarkup = linkedIndividual && linkedIndividual.email
+        ? `<a class="business-request-link" href="mailto:${escapeAttribute(linkedIndividual.email)}">${escapeHtml(linkedIndividual.email)}</a>`
+        : '—';
+    const linkedIndividualPhoneRaw = linkedIndividual && linkedIndividual.mobile ? linkedIndividual.mobile : '';
+    const linkedIndividualPhoneMarkup = linkedIndividualPhoneRaw
+        ? `<a class="business-request-link" href="tel:${escapeAttribute(linkedIndividualPhoneRaw)}">${escapeHtml(linkedIndividualPhoneRaw)}</a>`
+        : '—';
+    const linkedIndividualCreatedLabel = linkedIndividual
+        ? formatDateForDisplay(linkedIndividual.createdAt, { includeTime: true }) || '—'
+        : '—';
+    const linkedIndividualLastActiveLabel = linkedIndividual
+        ? formatDateForDisplay(linkedIndividual.lastActiveAt, { includeTime: true }) || '—'
+        : '—';
+    const linkedIndividualPointsLabel = linkedIndividual && typeof linkedIndividual.pointsBalance === 'number'
+        ? String(linkedIndividual.pointsBalance)
+        : '—';
+    const linkedRelationshipLabel = linkedAssociation && typeof linkedAssociation.relationship === 'string' && linkedAssociation.relationship.trim()
+        ? formatKeyLabel(linkedAssociation.relationship)
+        : '—';
+    const linkedRelationshipSinceLabel = linkedAssociation && linkedAssociation.linkedAt
+        ? formatDateForDisplay(linkedAssociation.linkedAt, { includeTime: true }) || '—'
+        : '—';
+    const submittedLabel = formatDateForDisplay(account.submittedAt, { includeTime: true }) || '—';
+    const primaryIndividualSnapshot = linkedIndividualName
+        ? `${linkedIndividualName}${linkedRelationshipLabel && linkedRelationshipLabel !== '—' ? ` · ${linkedRelationshipLabel}` : ''}`
+        : '—';
+    const requestIdDisplay = normalizeText(account.id) || '—';
+    const requestPhoneRaw = normalizeText(account.phone) || normalizeText(application.phone);
+    const requestPhoneDisplay = requestPhoneRaw
+        ? `<a class="business-request-link" href="tel:${escapeAttribute(requestPhoneRaw)}">${escapeHtml(requestPhoneRaw)}</a>`
+        : '—';
+    const requestEmailRaw = normalizeText(account.email) || normalizeText(application.email);
+    const requestEmailDisplay = requestEmailRaw
+        ? `<a class="business-request-link" href="mailto:${escapeAttribute(requestEmailRaw)}">${escapeHtml(requestEmailRaw)}</a>`
+        : '—';
+
+    const sanitizedPhone = requestPhoneRaw ? requestPhoneRaw.replace(/\s+/g, ' ') : '';
+    const phoneHref = requestPhoneRaw ? `tel:${requestPhoneRaw.replace(/\s+/g, '')}` : '';
+    const reviewPhoneChip = buildBusinessReviewChip({ text: sanitizedPhone, href: phoneHref, type: 'phone' });
+    const reviewAddressChip = buildBusinessReviewChip({ text: addressLabel, href: addressHref, type: 'address' });
+    const reviewEmailChip = buildBusinessReviewChip({ text: requestEmailRaw, href: requestEmailRaw ? `mailto:${requestEmailRaw}` : '', type: 'email' });
+    const reviewWebsiteChip = buildBusinessReviewChip({ text: websiteUrlRaw, href: websiteHref, type: 'website' });
+    const reviewMaroofChip = buildBusinessReviewChip({ text: maroofUrlRaw, href: maroofHref, type: 'maroof' });
+
+    const requestExpirySource = normalizeText(application.expiryDate) || normalizeText(account.expiryDate);
+    const requestExpiryLabel = requestExpirySource
+        ? (formatDateForDisplay(requestExpirySource, { includeTime: false }) || '—')
+        : '—';
+    const openInvoicesCountLabel = String(openInvoicesCount);
+    const settledInvoicesCountLabel = String(settledInvoicesCount);
+    const invoicesTotalCountLabel = String(invoicesTotalCount);
+    const docsOutstandingCountLabel = String(docsOutstandingCount);
+    const latestInvoiceDisplay = latestInvoiceLabel;
+    const lastDocsRequestedDisplay = lastDocsRequestedLabel;
+    const lastActivityDisplay = lastActivityLabel;
+    const financialStatusDisplay = financialStatusLabel || '—';
+    const tradeExperienceDisplay = tradeExperienceLabel || '—';
+    const linkedIndividualNameDisplay = linkedIndividualName || '—';
+    const linkedIndividualPointsDisplay = linkedIndividualPointsLabel;
+    const linkedIndividualCreatedDisplay = linkedIndividualCreatedLabel;
+    const linkedIndividualLastActiveDisplay = linkedIndividualLastActiveLabel;
+    const linkedRelationshipSinceDisplay = linkedRelationshipSinceLabel;
+
+    const contactFullName = normalizeText(account.contactName)
+        || normalizeText(application.contactName)
+        || linkedIndividualName
+        || englishCompanyName;
+    const computeInitials = value => {
+        if (!value) {
+            return 'NA';
+        }
+        const trimmed = String(value).trim();
+        if (!trimmed) {
+            return 'NA';
+        }
+        const parts = trimmed.split(/\s+/).filter(Boolean);
+        if (!parts.length) {
+            return trimmed.slice(0, 2).toUpperCase();
+        }
+        if (parts.length === 1) {
+            return parts[0].slice(0, 2).toUpperCase();
+        }
+        return `${parts[0][0] || ''}${parts[parts.length - 1][0] || ''}`.toUpperCase() || 'NA';
+    };
+    const contactInitials = computeInitials(contactFullName || englishCompanyName);
+    const contactAvatarMarkup = `<span>${escapeHtml(contactInitials)}</span>`;
+    const contactAvatarAlt = contactFullName
+        ? `${contactFullName} contact avatar`
+        : `${englishCompanyName} contact avatar`;
+    const contactPhoneMarkup = requestPhoneDisplay || '—';
+    const contactEmailMarkup = requestEmailDisplay || '—';
+    const contactCountryLabel = country || '—';
+    const contactRegionLabel = region || '—';
+    const contactCityLabel = city || '—';
+    const contactDistrictLabel = district || '—';
+    const addressSecondary = [district, streetLine, zipValue].filter(Boolean).join(', ');
+
+    const memberSinceLabel = formatDateForDisplay(account.createdAt, { includeTime: true }) || '—';
+    const lastUpdatedLabel = formatDateForDisplay(account.updatedAt, { includeTime: true }) || '—';
+    const autoRenewLabel = account.autoRenew ? 'Enabled' : 'Disabled';
+    const packageNameLabel = packageDetails ? packageDetails.name : '—';
+    const accountUsernameLabel = normalizeText(account.username) || requestUsername || '—';
+    const accountStatusLabel = statusLabel || '—';
+
+    const parseInvoiceAmount = invoice => {
+        if (!invoice || typeof invoice !== 'object') {
+            return 0;
+        }
+        const candidate = invoice.amount ?? invoice.total ?? invoice.grandTotal ?? invoice.balance ?? 0;
+        const numeric = Number.parseFloat(candidate);
+        return Number.isFinite(numeric) ? numeric : 0;
+    };
+
+    const walletCurrencyCode = (() => {
+        for (const invoice of invoices) {
+            const currencyCandidate = normalizeText(invoice && (invoice.currency || invoice.currencyCode || invoice.currency_id));
+            if (currencyCandidate) {
+                return currencyCandidate.toUpperCase();
+            }
+        }
+        return 'SAR';
+    })();
+
+    const walletTotalAmount = invoices.reduce((sum, invoice) => sum + parseInvoiceAmount(invoice), 0);
+    const walletSettledAmount = invoices
+        .filter(invoice => settledInvoiceStatuses.has(((invoice && invoice.status) || '').toString().trim().toLowerCase()))
+        .reduce((sum, invoice) => sum + parseInvoiceAmount(invoice), 0);
+    const walletPendingAmount = invoices
+        .filter(invoice => openInvoiceStatuses.has(((invoice && invoice.status) || '').toString().trim().toLowerCase()))
+        .reduce((sum, invoice) => sum + parseInvoiceAmount(invoice), 0);
+    const walletAvailableAmount = walletSettledAmount;
+    const walletTotalLabel = formatCurrency(walletTotalAmount, walletCurrencyCode);
+    const walletAvailableLabel = formatCurrency(walletAvailableAmount, walletCurrencyCode);
+    const walletPendingLabel = formatCurrency(walletPendingAmount, walletCurrencyCode);
+    const walletCurrencyLabel = walletCurrencyCode;
+    const walletUpdatedLabel = latestInvoiceEntry
+        ? (formatDateForDisplay(latestInvoiceEntry.dueDate || latestInvoiceEntry.createdAt, { includeTime: true }) || '—')
+        : '—';
+
+    const renderWalletTransaction = invoice => {
+        if (!invoice || typeof invoice !== 'object') {
+            return '<li><div><strong>Invoice</strong></div></li>';
+        }
+        const label = invoice.id || invoice.reference || 'Invoice';
+        const amountLabel = formatCurrency(parseInvoiceAmount(invoice), walletCurrencyCode);
+        const statusLabelLocal = invoice.status ? formatKeyLabel(String(invoice.status)) : 'Pending';
+        const dueLabel = formatDateForDisplay(invoice.dueDate || invoice.createdAt, { includeTime: true }) || '';
+        const noteParts = [];
+        if (amountLabel) {
+            noteParts.push(`Amount: ${escapeHtml(amountLabel)}`);
+        }
+        if (statusLabelLocal) {
+            noteParts.push(`Status: ${escapeHtml(statusLabelLocal)}`);
+        }
+        if (dueLabel) {
+            noteParts.push(`Recorded ${escapeHtml(dueLabel)}`);
+        }
+        const noteLine = noteParts.length ? `<div class="helper-text">${noteParts.join(' • ')}</div>` : '';
+        return `<li><div><strong>${escapeHtml(String(label))}</strong></div>${noteLine}</li>`;
+    };
+
+    const sortedWalletTransactions = invoices
+        .slice()
+        .sort((a, b) => Date.parse((b && (b.dueDate || b.createdAt)) || '') - Date.parse((a && (a.dueDate || a.createdAt)) || ''));
+    const walletVisibleTransactions = sortedWalletTransactions.slice(0, 5);
+    const walletRecentMarkup = walletVisibleTransactions.length
+        ? `<ul class="detail-list">${walletVisibleTransactions.map(renderWalletTransaction).join('')}</ul>`
+        : '<p class="helper-text">No wallet transactions recorded for this business account.</p>';
+
+    const linkedPointsHistory = linkedIndividual && Array.isArray(linkedIndividual.pointsHistory)
+        ? linkedIndividual.pointsHistory.slice()
+        : [];
+    const renderBusinessPointsEntry = entry => {
+        if (!entry || typeof entry !== 'object') {
+            return '<li><div><strong>Points Activity</strong></div></li>';
+        }
+        const label = typeof entry.label === 'string' && entry.label.trim() ? entry.label.trim() : 'Points Activity';
+        const deltaNumeric = Number.parseFloat(entry.delta);
+        const deltaLabel = Number.isFinite(deltaNumeric)
+            ? (deltaNumeric > 0 ? `+${deltaNumeric.toLocaleString('en-US')}` : deltaNumeric.toLocaleString('en-US'))
+            : null;
+        const timestampLabel = entry.timestamp
+            ? (formatDateForDisplay(entry.timestamp, { includeTime: true }) || '')
+            : '';
+        const balanceLabel = Number.isFinite(entry.balanceAfter)
+            ? entry.balanceAfter.toLocaleString('en-US')
+            : '';
+        const noteLine = entry.note ? `<div class="helper-text">${escapeHtml(String(entry.note))}</div>` : '';
+        const metaParts = [];
+        if (deltaLabel) {
+            metaParts.push(`Delta: ${escapeHtml(deltaLabel)}`);
+        }
+        if (timestampLabel) {
+            metaParts.push(`${escapeHtml(timestampLabel)}`);
+        }
+        const metaLine = metaParts.length ? `<div class="helper-text">${metaParts.join(' • ')}</div>` : '';
+        const balanceLine = balanceLabel ? `<div class="helper-text">Balance: ${escapeHtml(balanceLabel)}</div>` : '';
+        return `<li><div><strong>${escapeHtml(label)}</strong></div>${noteLine}${metaLine}${balanceLine}</li>`;
+    };
+    const pointsVisibleTransactions = linkedPointsHistory
+        .sort((a, b) => Date.parse(b?.timestamp || '') - Date.parse(a?.timestamp || ''))
+        .slice(0, 5);
+    const pointsTransactionsMarkup = pointsVisibleTransactions.length
+        ? `<ul class="detail-list">${pointsVisibleTransactions.map(renderBusinessPointsEntry).join('')}</ul>`
+        : `<p class="helper-text">${linkedIndividual ? 'There is no Data Available' : 'Link an individual account to view loyalty points activity.'}</p>`;
+    const pointsBalanceValue = linkedIndividual && Number.isFinite(linkedIndividual.pointsBalance)
+        ? linkedIndividual.pointsBalance
+        : null;
+    const pointsBalanceLabel = pointsBalanceValue !== null ? pointsBalanceValue.toLocaleString('en-US') : '—';
+    const pointsInvitationCode = linkedIndividual && typeof linkedIndividual.invitationCode === 'string' && linkedIndividual.invitationCode.trim()
+        ? linkedIndividual.invitationCode.trim()
+        : '—';
+    const pointsUpdatedLabel = linkedIndividual && linkedIndividual.pointsUpdatedAt
+        ? (formatDateForDisplay(linkedIndividual.pointsUpdatedAt, { includeTime: true }) || '—')
+        : '—';
+
+    const resolvePaymentTimestamp = entry => {
+        if (!entry || typeof entry !== 'object') {
+            return 0;
+        }
+        const candidates = [entry.updatedAt, entry.modifiedAt, entry.lastUpdated, entry.addedAt, entry.createdAt];
+        for (const candidate of candidates) {
+            const parsed = Date.parse(candidate || '');
+            if (Number.isFinite(parsed)) {
+                return parsed;
+            }
+        }
+        return 0;
+    };
+
+    const renderBusinessPaymentMethod = method => {
+        if (!method || typeof method !== 'object') {
+            return '<li><div><strong>Payment Method</strong></div></li>';
+        }
+        const typeRaw = typeof method.type === 'string' && method.type.trim() ? method.type.trim() : '';
+        const normalizedType = typeRaw.toLowerCase().replace(/\s+/g, '-');
+        const bankName = typeof method.bankName === 'string' && method.bankName.trim() ? method.bankName.trim() : '';
+        const accountNumberRaw = typeof method.bankAccountNumber === 'string' && method.bankAccountNumber.trim()
+            ? method.bankAccountNumber.trim()
+            : typeof method.accountNumber === 'string' && method.accountNumber.trim()
+                ? method.accountNumber.trim()
+                : '';
+        const ibanRaw = typeof method.iban === 'string' && method.iban.trim() ? method.iban.trim() : '';
+        const swiftRaw = typeof method.swiftCode === 'string' && method.swiftCode.trim()
+            ? method.swiftCode.trim()
+            : typeof method.swift === 'string' && method.swift.trim()
+                ? method.swift.trim()
+                : '';
+        const holderCandidate = typeof method.holderName === 'string' && method.holderName.trim()
+            ? method.holderName.trim()
+            : typeof method.accountHolder === 'string' && method.accountHolder.trim()
+                ? method.accountHolder.trim()
+                : '';
+        const addedAtRaw = method.addedAt || method.createdAt || null;
+        const updatedAtRaw = method.updatedAt || method.modifiedAt || method.lastUpdated || null;
+        const addedAtLabel = addedAtRaw ? (formatDateForDisplay(addedAtRaw, { includeTime: true }) || addedAtRaw) : '';
+        const updatedAtLabel = updatedAtRaw ? (formatDateForDisplay(updatedAtRaw, { includeTime: true }) || updatedAtRaw) : '';
+        const isDefault = method.isDefault === true
+            || (typeof method.isDefault === 'string' && method.isDefault.trim().toLowerCase() === 'true');
+        const titleParts = [];
+        const details = [];
+        const isBankAccount = normalizedType === 'bank-account' || Boolean(bankName || accountNumberRaw || ibanRaw);
+        if (isBankAccount) {
+            const primaryLabel = bankName ? `Bank Account • ${bankName}` : 'Bank Account';
+            titleParts.push(primaryLabel);
+            if (holderCandidate) {
+                details.push(`<div class="helper-text">Account Holder: ${escapeHtml(holderCandidate)}</div>`);
+            }
+            if (accountNumberRaw) {
+                details.push(`<div class="helper-text">Account #: ${escapeHtml(accountNumberRaw)}</div>`);
+            }
+            if (ibanRaw) {
+                details.push(`<div class="helper-text">IBAN: ${escapeHtml(ibanRaw.toUpperCase())}</div>`);
+            }
+            if (swiftRaw) {
+                details.push(`<div class="helper-text">SWIFT: ${escapeHtml(swiftRaw.toUpperCase())}</div>`);
+            }
+        } else {
+            const brandCandidate = typeof method.brand === 'string' && method.brand.trim() ? method.brand.trim() : '';
+            const brandLabel = brandCandidate ? formatKeyLabel(brandCandidate) : 'Card';
+            titleParts.push(`Bank Card • ${brandLabel}`);
+            const lastFour = typeof method.last4 === 'string' && method.last4.trim()
+                ? method.last4.trim().slice(-4)
+                : Number.isFinite(method.last4)
+                    ? String(method.last4).slice(-4)
+                    : '';
+            const maskedNumber = lastFour ? `•••• •••• •••• ${lastFour}` : '';
+            const expiryMonth = typeof method.expiryMonth === 'string' && method.expiryMonth.trim() ? method.expiryMonth.trim() : '';
+            const expiryYear = typeof method.expiryYear === 'string' && method.expiryYear.trim() ? method.expiryYear.trim() : '';
+            const expiryLabel = expiryMonth || expiryYear ? `${expiryMonth || '??'} / ${expiryYear || '??'}` : '';
+            if (holderCandidate) {
+                details.push(`<div class="helper-text">Cardholder: ${escapeHtml(holderCandidate)}</div>`);
+            }
+            if (maskedNumber) {
+                details.push(`<div class="helper-text">Card Number: ${escapeHtml(maskedNumber)}</div>`);
+            }
+            if (expiryLabel) {
+                details.push(`<div class="helper-text">Expires ${escapeHtml(expiryLabel)}</div>`);
+            }
+        }
+        if (addedAtLabel) {
+            details.push(`<div class="helper-text">Added ${escapeHtml(String(addedAtLabel))}</div>`);
+        }
+        if (updatedAtLabel && updatedAtLabel !== addedAtLabel) {
+            details.push(`<div class="helper-text">Last updated ${escapeHtml(String(updatedAtLabel))}</div>`);
+        }
+        const title = titleParts.filter(Boolean).join(' • ') || 'Payment Method';
+        const headerParts = [`<strong>${escapeHtml(title)}</strong>`];
+        if (isDefault) {
+            headerParts.push('<span class="helper-chip success">Default</span>');
+        }
+        return `<li><div class="payment-method-header">${headerParts.join(' ')}</div>${details.join('')}</li>`;
+    };
+
+    const linkedPaymentCards = linkedIndividual && Array.isArray(linkedIndividual.paymentCards)
+        ? linkedIndividual.paymentCards.slice()
+        : [];
+    const sortedPaymentCards = linkedPaymentCards
+        .slice()
+        .sort((a, b) => resolvePaymentTimestamp(b) - resolvePaymentTimestamp(a));
+    const visiblePaymentCards = sortedPaymentCards.slice(0, 5);
+    const paymentCardItems = visiblePaymentCards.map(renderBusinessPaymentMethod).filter(Boolean);
+    const paymentMethodsCountLabel = sortedPaymentCards.length
+        ? `#${sortedPaymentCards.length} Method${sortedPaymentCards.length === 1 ? '' : 's'}`
+        : '#0 Methods';
+    const paymentMethodsMarkup = paymentCardItems.length
+        ? `<ul class="detail-list">${paymentCardItems.join('')}</ul>`
+        : `<p class="helper-text">${linkedIndividual ? 'No saved payment methods found for the linked individual.' : 'Link an individual account to surface saved payment methods.'}</p>`;
+
+    const linkedSavedAddressesSource = linkedIndividual && Array.isArray(linkedIndividual.savedAddresses)
+        ? linkedIndividual.savedAddresses.slice()
+        : [];
+    const renderBusinessSavedAddressItem = entry => {
+        if (!entry || typeof entry !== 'object') {
+            return '<li><div><strong>Saved Address</strong></div></li>';
+        }
+        const title = entry.label || entry.nickname || entry.id || 'Saved Address';
+        const headerParts = [`<strong>${escapeHtml(String(title))}</strong>`];
+        if (resolveSavedAddressIsDefault(entry)) {
+            headerParts.push('<span class="helper-chip success">Default</span>');
+        }
+        const primaryParts = [entry.country, entry.region, entry.city].filter(Boolean).map(value => String(value).trim()).filter(Boolean);
+        const streetParts = [
+            resolveSavedAddressField(entry, ['streetNumber', 'buildingNumber', 'streetNo']),
+            resolveSavedAddressField(entry, ['streetName', 'street', 'avenue'])
+        ].filter(Boolean).join(' ');
+        const secondaryParts = [
+            entry.district,
+            streetParts,
+            entry.zipCode || entry.postalCode
+        ].filter(Boolean).map(value => String(value).trim()).filter(Boolean);
+        const detailLines = [];
+        if (primaryParts.length) {
+            detailLines.push(`<div class="helper-text">${escapeHtml(primaryParts.join(', '))}</div>`);
+        }
+        if (secondaryParts.length) {
+            detailLines.push(`<div class="helper-text">${escapeHtml(secondaryParts.join(', '))}</div>`);
+        }
+        const phoneValue = resolveSavedAddressField(entry, ['contactPhone', 'phone', 'phoneNumber', 'mobile']);
+        if (phoneValue) {
+            detailLines.push(`<div class="helper-text">Phone Number: ${escapeHtml(phoneValue)}</div>`);
+        }
+        const addedInfo = resolveSavedAddressAddedTimestamp(entry);
+        const updatedInfo = resolveSavedAddressUpdatedTimestamp(entry);
+        const addedLabel = addedInfo.raw ? (formatDateForDisplay(addedInfo.raw, { includeTime: true }) || addedInfo.raw) : '';
+        const updatedLabel = updatedInfo.raw ? (formatDateForDisplay(updatedInfo.raw, { includeTime: true }) || updatedInfo.raw) : '';
+        if (addedLabel) {
+            detailLines.push(`<div class="helper-text">Added ${escapeHtml(String(addedLabel))}</div>`);
+        }
+        if (updatedLabel && (!addedLabel || addedLabel !== updatedLabel)) {
+            detailLines.push(`<div class="helper-text">Last updated ${escapeHtml(String(updatedLabel))}</div>`);
+        }
+        return `<li><div>${headerParts.join(' ')}</div>${detailLines.join('')}</li>`;
+    };
+
+    const sortedSavedAddresses = linkedSavedAddressesSource
+        .slice()
+        .sort((a, b) => resolveSavedAddressAddedTimestamp(b).time - resolveSavedAddressAddedTimestamp(a).time);
+    const visibleSavedAddresses = sortedSavedAddresses.slice(0, 5);
+    const savedAddressItems = visibleSavedAddresses.map(renderBusinessSavedAddressItem).filter(Boolean);
+    const savedAddressesMarkup = savedAddressItems.length
+        ? `<ul class="detail-list">${savedAddressItems.join('')}</ul>`
+        : `<p class="helper-text">${linkedIndividual ? 'No saved addresses found for the linked individual.' : 'Link an individual account to manage saved addresses.'}</p>`;
+    const savedAddressesCountLabel = sortedSavedAddresses.length
+        ? `#${sortedSavedAddresses.length} Address${sortedSavedAddresses.length === 1 ? '' : 'es'}`
+        : '#0 Addresses';
+
+    const businessUserInfoSectionMarkup = `
         <section class="detail-section">
-            <h4>Contact &amp; Package</h4>
-            <div class="detail-grid">
-                <div><dt>Email</dt><dd>${escapeHtml(account.email || '—')}</dd></div>
-                <div><dt>Phone</dt><dd>${escapeHtml(account.phone || '—')}</dd></div>
-                <div><dt>Submitted</dt><dd>${escapeHtml(formatDateForDisplay(account.submittedAt, { includeTime: true }) || '—')}</dd></div>
-                <div><dt>Approved</dt><dd>${escapeHtml(formatDateForDisplay(account.approvedAt, { includeTime: true }) || '—')}</dd></div>
-                <div><dt>Package</dt><dd>${escapeHtml(packageDetails ? packageDetails.name : '—')}</dd></div>
+            <h4>User Info</h4>
+            <div class="account-profile-row">
+                <div class="account-avatar-card">
+                    <div class="account-avatar" aria-label="${escapeAttribute(contactAvatarAlt)}">
+                        ${contactAvatarMarkup}
+                    </div>
+                </div>
+                <div class="detail-grid">
+                    <div><dt>Primary Contact</dt><dd>${contactFullName ? escapeHtml(contactFullName) : '—'}</dd></div>
+                    <div><dt>Phone Number</dt><dd>${contactPhoneMarkup}</dd></div>
+                    <div><dt>Email</dt><dd>${contactEmailMarkup}</dd></div>
+                    <div><dt>Country</dt><dd>${contactCountryLabel ? escapeHtml(contactCountryLabel) : '—'}</dd></div>
+                    <div><dt>Region</dt><dd>${contactRegionLabel ? escapeHtml(contactRegionLabel) : '—'}</dd></div>
+                    <div><dt>City</dt><dd>${contactCityLabel ? escapeHtml(contactCityLabel) : '—'}</dd></div>
+                    <div><dt>District</dt><dd>${contactDistrictLabel ? escapeHtml(contactDistrictLabel) : '—'}</dd></div>
+                    <div class="detail-grid-full">
+                        <dt>Address</dt>
+                        <dd>${addressDisplay}</dd>
+                        ${addressSecondary ? `<div class="helper-text">${escapeHtml(addressSecondary)}</div>` : ''}
+                    </div>
+                </div>
             </div>
         </section>
+    `;
+
+    const businessAccountInfoSectionMarkup = `
         <section class="detail-section">
-            <h4>Requested Documents</h4>
-            <ul class="detail-list">${docsMarkup}</ul>
-        </section>
-        <section class="detail-section">
-            <h4>Invoices</h4>
-            <ul class="detail-list">${invoicesMarkup}</ul>
-        </section>
-        <section class="detail-section">
-            <h4>History</h4>
-            <ul class="detail-list">${historyMarkup}</ul>
+            <h4>Account Info</h4>
+            <div class="detail-grid">
+                <div><dt>Business ID</dt><dd>${account.id ? escapeHtml(account.id) : '—'}</dd></div>
+                <div><dt>Company (English)</dt><dd>${englishCompanyName ? escapeHtml(englishCompanyName) : '—'}</dd></div>
+                <div><dt>Company (Arabic)</dt><dd>${arabicCompanyName ? escapeHtml(arabicCompanyName) : '—'}</dd></div>
+                <div><dt>Username</dt><dd>${accountUsernameLabel ? escapeHtml(accountUsernameLabel) : '—'}</dd></div>
+                <div><dt>Package</dt><dd>${packageNameLabel ? escapeHtml(packageNameLabel) : '—'}</dd></div>
+                <div><dt>Auto Renew</dt><dd>${escapeHtml(autoRenewLabel)}</dd></div>
+                <div><dt>Status</dt><dd>${accountStatusLabel ? escapeHtml(accountStatusLabel) : '—'}</dd></div>
+                <div><dt>Financial Status</dt><dd>${financialStatusDisplay ? escapeHtml(financialStatusDisplay) : '—'}</dd></div>
+                <div><dt>Member Since</dt><dd>${memberSinceLabel !== '—' ? escapeHtml(memberSinceLabel) : '—'}</dd></div>
+                <div><dt>Last Updated</dt><dd>${lastUpdatedLabel !== '—' ? escapeHtml(lastUpdatedLabel) : '—'}</dd></div>
+                <div><dt>Approved On</dt><dd>${approvedLabel !== '—' ? escapeHtml(approvedLabel) : '—'}</dd></div>
+                <div class="detail-grid-full"><dt>Primary Individual</dt><dd>${primaryIndividualSnapshot ? escapeHtml(primaryIndividualSnapshot) : '—'}</dd></div>
+            </div>
         </section>
     `;
+
+    const businessWalletSectionMarkup = `
+        <section class="detail-section">
+            <h4>My Wallet</h4>
+            <div class="detail-grid">
+                <div><dt>Total Balance</dt><dd>${escapeHtml(walletTotalLabel)}</dd></div>
+                <div><dt>Available Balance</dt><dd>${escapeHtml(walletAvailableLabel)}</dd></div>
+                <div><dt>Pending Balance</dt><dd>${escapeHtml(walletPendingLabel)}</dd></div>
+                <div><dt>Currency</dt><dd>${escapeHtml(walletCurrencyLabel)}</dd></div>
+                <div><dt>Last Updated</dt><dd>${walletUpdatedLabel !== '—' ? escapeHtml(walletUpdatedLabel) : '—'}</dd></div>
+            </div>
+            <div class="detail-subsection">
+                <h5>Recent Transactions</h5>
+                ${walletRecentMarkup}
+            </div>
+        </section>
+    `;
+
+    const businessPointsSectionMarkup = `
+        <section class="detail-section">
+            <h4>My Points</h4>
+            <div class="detail-grid">
+                <div><dt>Current Balance</dt><dd>${pointsBalanceLabel !== '—' ? escapeHtml(pointsBalanceLabel) : '—'}</dd></div>
+                <div><dt>Invitation Code</dt><dd>${pointsInvitationCode !== '—' ? escapeHtml(pointsInvitationCode) : '—'}</dd></div>
+                <div><dt>Last Updated</dt><dd>${pointsUpdatedLabel !== '—' ? escapeHtml(pointsUpdatedLabel) : '—'}</dd></div>
+            </div>
+            <div class="detail-subsection">
+                <h5>Recent Transactions</h5>
+                ${pointsTransactionsMarkup}
+            </div>
+        </section>
+    `;
+
+    const businessPaymentMethodsSectionMarkup = `
+        <section class="detail-section">
+            <h4>Payment Methods <span class="detail-count-label">${escapeHtml(paymentMethodsCountLabel)}</span></h4>
+            ${paymentMethodsMarkup}
+        </section>
+    `;
+
+    const businessSavedAddressesSectionMarkup = `
+        <section class="detail-section">
+            <h4>Saved Addresses <span class="detail-count-label">${escapeHtml(savedAddressesCountLabel)}</span></h4>
+            ${savedAddressesMarkup}
+        </section>
+    `;
+
+    const requestDataSectionMarkup = `
+        <section class="detail-section business-review-section">
+            <div class="detail-grid">
+                <div><dt>Submitted</dt><dd>${escapeHtml(submittedLabel)}</dd></div>
+                <div><dt>ID</dt><dd>${escapeHtml(requestIdDisplay)}</dd></div>
+                <div><dt>Username</dt><dd>${requestUsername ? escapeHtml(requestUsername) : '—'}</dd></div>
+                <div><dt>Registration Document Type</dt><dd>${escapeHtml(documentTypeLabel)}</dd></div>
+                <div><dt>Business Registration #</dt><dd>${registrationNumber ? escapeHtml(registrationNumber) : '—'}</dd></div>
+                <div><dt>Detail Registration #</dt><dd>${detailRegistrationNumber ? escapeHtml(detailRegistrationNumber) : '—'}</dd></div>
+                <div><dt>Expiry Date</dt><dd>${escapeHtml(requestExpiryLabel)}</dd></div>
+                <div><dt>VAT Number</dt><dd>${vatNumber ? escapeHtml(vatNumber) : '—'}</dd></div>
+                <div><dt>Trade for 15 Years</dt><dd>${escapeHtml(tradeExperienceLabel)}</dd></div>
+                <div class="detail-grid-full business-review-field"><dt>Phone Number</dt><dd>${reviewPhoneChip}</dd></div>
+                <div class="detail-grid-full business-review-field"><dt>Address</dt><dd>${reviewAddressChip}</dd></div>
+                <div class="detail-grid-full business-review-field"><dt>Email</dt><dd>${reviewEmailChip}</dd></div>
+                <div class="detail-grid-full business-review-field"><dt>Website</dt><dd>${reviewWebsiteChip}</dd></div>
+                <div class="detail-grid-full business-review-field"><dt>Maroof</dt><dd>${reviewMaroofChip}</dd></div>
+                <div class="detail-grid-full"><dt>Social Media</dt><dd>${socialMarkup}</dd></div>
+                <div class="detail-grid-full"><dt>Certificates</dt><dd>${certificatesMarkup}</dd></div>
+            </div>
+        </section>
+    `;
+
+    const detailSections = [
+        businessUserInfoSectionMarkup,
+        businessAccountInfoSectionMarkup,
+        businessWalletSectionMarkup,
+        businessPointsSectionMarkup,
+        businessPaymentMethodsSectionMarkup,
+        businessSavedAddressesSectionMarkup
+    ];
+
+    const sections = isReviewMode
+        ? [requestDataSectionMarkup]
+        : detailSections;
+
+    content.innerHTML = sections.join('');
     if (typeof content.scrollTop === 'number') {
         content.scrollTop = 0;
     }
@@ -32377,12 +36286,7 @@ function handleBusinessAccountsToolbarClick(event) {
     }
 
     if (action === 'marketplace') {
-        const { individual } = resolveBusinessAccountPrimaryIndividual(account);
-        if (!individual || !individual.id) {
-            showNotification('warning', 'No linked individual account available for marketplace insights.');
-            return;
-        }
-        openIndividualAccountMarketplaceOverlay(individual.id);
+        openBusinessAccountMarketplaceOverlay(account.id);
         return;
     }
 
@@ -32425,6 +36329,352 @@ function handleBusinessAccountsToolbarClick(event) {
     }
 }
 
+function handleBusinessAccountDetailContentClick(event) {
+    const trigger = event.target.closest('button[data-action="preview-business-certificate"]');
+    if (!trigger) {
+        return;
+    }
+
+    event.preventDefault();
+
+    const indexValue = typeof trigger.dataset.certificateIndex === 'string'
+        ? trigger.dataset.certificateIndex
+        : '';
+    const certificateIndex = indexValue ? Number(indexValue) : NaN;
+    if (!Number.isInteger(certificateIndex) || certificateIndex < 0) {
+        showNotification('warning', 'Unable to preview this certificate.');
+        return;
+    }
+
+    const activeIdRaw = state.activeBusinessAccountId !== null && state.activeBusinessAccountId !== undefined
+        ? String(state.activeBusinessAccountId)
+        : '';
+    if (!activeIdRaw) {
+        showNotification('warning', 'No business account is currently selected.');
+        return;
+    }
+
+    let account = (businessAccounts || []).find(entry => entry && String(entry.id) === activeIdRaw);
+    if (!account && typeof getPendingBusinessRequests === 'function') {
+        account = getPendingBusinessRequests().find(entry => entry && String(entry.id) === activeIdRaw) || null;
+    }
+    if (!account) {
+        showNotification('warning', 'Unable to locate the selected business account.');
+        return;
+    }
+
+    const certificates = resolveBusinessRequestCertificates(account);
+    if (!Array.isArray(certificates) || certificateIndex >= certificates.length) {
+        showNotification('warning', 'Unable to preview this certificate.');
+        return;
+    }
+
+    openBusinessRequestCertificatePreview(account, certificates[certificateIndex]);
+}
+
+function handleBusinessAccountsSeedRequest() {
+    const ensureArray = value => (Array.isArray(value) ? value : []);
+    individualAccounts = ensureArray(individualAccounts);
+    if (!individualAccounts.length) {
+        showNotification('warning', 'Register an individual account before seeding business accounts.');
+        return;
+    }
+
+    const eligibleIndividuals = individualAccounts.filter(account => account && account.id);
+    if (!eligibleIndividuals.length) {
+        showNotification('warning', 'Register an individual account before seeding business accounts.');
+        return;
+    }
+
+    businessAccounts = ensureArray(businessAccounts);
+
+    const selectRandom = collection => {
+        if (!Array.isArray(collection) || !collection.length) {
+            return null;
+        }
+        const index = Math.floor(Math.random() * collection.length);
+        return collection[index] || null;
+    };
+
+    const createSlug = value => {
+        if (typeof value !== 'string') {
+            return '';
+        }
+        const normalized = typeof value.normalize === 'function' ? value.normalize('NFKD') : value;
+        return normalized
+            .trim()
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-+|-+$/g, '');
+    };
+
+    const generateSequentialIdentifier = (usedIds, prefix) => {
+        const normalizedPrefix = `${String(prefix || '').toUpperCase()}-`;
+        const pattern = new RegExp(`^${normalizedPrefix.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&')}(\\d+)$`, 'i');
+        let maxValue = 0;
+        usedIds.forEach(value => {
+            const match = String(value || '').toUpperCase().match(pattern);
+            if (match) {
+                const parsed = Number.parseInt(match[1], 10);
+                if (Number.isFinite(parsed) && parsed > maxValue) {
+                    maxValue = parsed;
+                }
+            }
+        });
+        let candidate = maxValue + 1;
+        for (let attempt = 0; attempt < 500; attempt += 1) {
+            const candidateId = `${normalizedPrefix}${String(candidate).padStart(4, '0')}`;
+            const normalizedCandidate = candidateId.toUpperCase();
+            if (!usedIds.has(normalizedCandidate)) {
+                usedIds.add(normalizedCandidate);
+                return normalizedCandidate;
+            }
+            candidate += 1;
+        }
+        const fallback = `${normalizedPrefix}${Date.now().toString()}`.toUpperCase();
+        usedIds.add(fallback);
+        return fallback;
+    };
+
+    const existingBusinessIds = new Set(businessAccounts
+        .map(account => (account && typeof account.id === 'string') ? account.id.trim().toUpperCase() : '')
+        .filter(Boolean));
+
+    const businessId = generateSequentialIdentifier(existingBusinessIds, 'BUS');
+    const individual = selectRandom(eligibleIndividuals);
+    if (!individual) {
+        showNotification('warning', 'Unable to locate an individual account to link.');
+        return;
+    }
+
+    const individualNameCandidates = [
+        typeof individual.fullName === 'string' && individual.fullName.trim() ? individual.fullName.trim() : '',
+        `${typeof individual.firstName === 'string' ? individual.firstName.trim() : ''} ${typeof individual.lastName === 'string' ? individual.lastName.trim() : ''}`.trim(),
+        typeof individual.email === 'string' && individual.email.trim() ? individual.email.trim() : '',
+        typeof individual.mobile === 'string' && individual.mobile.trim() ? individual.mobile.trim() : ''
+    ].filter(Boolean);
+    const individualName = individualNameCandidates[0] || String(individual.id);
+
+    const now = new Date();
+    const nowIso = now.toISOString();
+    const submittedAt = nowIso;
+
+    const companyPrefixes = ['Alfa', 'Nova', 'Prime', 'Vision', 'Sky', 'Vertex', 'Cedar', 'Atlas'];
+    const companySuffixes = ['Trading', 'Holdings', 'Logistics', 'Solutions', 'Ventures', 'Group', 'Industries', 'Partners'];
+    const arabicPrefixMap = {
+        Alfa: 'ألفا',
+        Nova: 'نوفا',
+        Prime: 'برايم',
+        Vision: 'فيجن',
+        Sky: 'سكاي',
+        Vertex: 'فيرتكس',
+        Cedar: 'سيدار',
+        Atlas: 'أطلس',
+        Onruf: 'أونروف'
+    };
+    const arabicSuffixMap = {
+        Trading: 'للتجارة',
+        Holdings: 'القابضة',
+        Logistics: 'للوجستيات',
+        Solutions: 'للحلول',
+        Ventures: 'للاستثمارات',
+        Group: 'المجموعة',
+        Industries: 'للصناعات',
+        Partners: 'للشركاء'
+    };
+    const companyPrefix = selectRandom(companyPrefixes) || 'Onruf';
+    const companySuffix = selectRandom(companySuffixes) || 'Ventures';
+    const generatedCompanyName = `${companyPrefix} ${companySuffix}`.trim();
+    const companyNameEnglish = generatedCompanyName || `Business ${businessId}`;
+    const prefixArabic = arabicPrefixMap[companyPrefix] || arabicPrefixMap.Onruf;
+    const suffixArabic = arabicSuffixMap[companySuffix] || 'للأعمال';
+    const companyNameArabic = `شركة ${prefixArabic} ${suffixArabic}`.replace(/\s+/g, ' ').trim();
+
+    const slugBase = createSlug(companyNameEnglish) || createSlug(individualName);
+    const slug = slugBase || `business-${businessId.toLowerCase()}`;
+    const email = `${slug}@seed.onruf.com`;
+    const phone = typeof individual.mobile === 'string' && individual.mobile.trim()
+        ? individual.mobile.trim()
+        : `+9665${String(Math.floor(1_000_000 + Math.random() * 9_000_000))}`;
+    const city = typeof individual.city === 'string' && individual.city.trim()
+        ? individual.city.trim()
+        : (individual.address && typeof individual.address.city === 'string' && individual.address.city.trim()
+            ? individual.address.city.trim()
+            : 'Riyadh');
+    const registrationDocumentType = selectRandom(['commercial-registration', 'professional-license', 'franchise-license']) || 'commercial-registration';
+    const registrationNumber = `CR-${Math.floor(100000 + Math.random() * 900000)}`;
+    const detailRegistrationNumber = `DR-${Math.floor(100000 + Math.random() * 900000)}`;
+    const expiryDate = new Date(now.getTime() + (120 + Math.floor(Math.random() * 240)) * 86400000).toISOString();
+    const vatNumber = `31${String(Math.floor(100000000 + Math.random() * 900000000))}`;
+    const tradeExperience15Years = Math.random() < 0.5;
+
+    const addressSource = individual.address && typeof individual.address === 'object' ? individual.address : {};
+    const country = typeof addressSource.country === 'string' && addressSource.country.trim()
+        ? addressSource.country.trim()
+        : (typeof DEFAULT_ADDRESS_COUNTRY === 'string' && DEFAULT_ADDRESS_COUNTRY ? DEFAULT_ADDRESS_COUNTRY : 'Saudi Arabia');
+    const region = typeof addressSource.region === 'string' && addressSource.region.trim()
+        ? addressSource.region.trim()
+        : (typeof DEFAULT_ADDRESS_REGION === 'string' && DEFAULT_ADDRESS_REGION ? DEFAULT_ADDRESS_REGION : '');
+    const district = typeof addressSource.district === 'string' && addressSource.district.trim() ? addressSource.district.trim() : '';
+    const streetName = typeof addressSource.streetName === 'string' && addressSource.streetName.trim()
+        ? addressSource.streetName.trim()
+        : (typeof addressSource.street === 'string' && addressSource.street.trim() ? addressSource.street.trim() : '');
+    const streetNumber = typeof addressSource.streetNumber === 'string' && addressSource.streetNumber.trim()
+        ? addressSource.streetNumber.trim()
+        : '';
+    const zipCode = typeof addressSource.zipCode === 'string' && addressSource.zipCode.trim()
+        ? addressSource.zipCode.trim()
+        : (typeof addressSource.postalCode === 'string' && addressSource.postalCode.trim()
+            ? addressSource.postalCode.trim()
+            : '');
+
+    const socials = {
+        instagram: `https://instagram.com/${slug}`,
+        linkedin: `https://linkedin.com/company/${slug}`,
+        twitter: `https://twitter.com/${slug}`
+    };
+
+    const logoPalette = [
+        { background: '#4338ca', foreground: '#ffffff' },
+        { background: '#0f172a', foreground: '#f8fafc' },
+        { background: '#0284c7', foreground: '#ffffff' },
+        { background: '#16a34a', foreground: '#ffffff' },
+        { background: '#b91c1c', foreground: '#ffffff' }
+    ];
+    const selectedPalette = selectRandom(logoPalette) || logoPalette[0];
+    const initials = companyNameEnglish
+        .split(/\s+/)
+        .filter(Boolean)
+        .map(word => word.charAt(0).toUpperCase())
+        .join('')
+        .slice(0, 2)
+        || businessId.slice(-2);
+    const svgMarkup = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128"><rect width="128" height="128" rx="24" fill="${selectedPalette.background}"/><text x="50%" y="52%" text-anchor="middle" dominant-baseline="central" font-family="Inter, 'Segoe UI', sans-serif" font-size="48" font-weight="600" fill="${selectedPalette.foreground}">${initials}</text></svg>`;
+    const logoDataUrl = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgMarkup)}`;
+    const logoFileName = `${(slug || businessId.toLowerCase()).replace(/[^a-z0-9-]+/g, '-') || 'business'}-logo.svg`;
+
+    const certificates = ['Commercial Registration Certificate', 'Tax Registration Certificate'];
+    const requestedDocuments = ['Commercial Registration Copy', 'Tax Certificate'];
+
+    const packageOptions = Array.isArray(businessPackages) ? businessPackages.filter(pkg => pkg && pkg.id) : [];
+    const selectedPackage = packageOptions.length ? selectRandom(packageOptions) : null;
+
+    const payload = {
+        id: businessId,
+        username: slug,
+        companyName: companyNameEnglish,
+        contactName: individualName,
+        email,
+        phone,
+        city,
+        submittedAt,
+        status: 'pending',
+        createdAt: nowIso,
+        packageId: selectedPackage ? selectedPackage.id : '',
+        requestedDocuments,
+        autoRenew: selectedPackage ? Boolean(selectedPackage.autoRenew) : false,
+        financialStatus: 'pending',
+        registrationNumber,
+        detailRegistrationNumber,
+        registrationDocumentType,
+        expiryDate,
+        vatNumber,
+        tradeExperience15Years,
+        companyNameEnglish,
+        companyNameArabic,
+        address: {
+            country,
+            region,
+            city,
+            district,
+            street: streetName,
+            streetName,
+            streetNumber,
+            zipCode,
+            zip: zipCode
+        },
+        website: `https://www.${slug}.com`,
+        maroofUrl: `https://maroof.sa/${slug}`,
+        socials,
+        certificates,
+        logoDataUrl,
+        logoFileName,
+        history: [
+            {
+                id: `${businessId}-seeded`,
+                action: 'request-submitted',
+                timestamp: submittedAt,
+                actor: individualName,
+                context: 'Seeded via Business Accounts toolbar.'
+            }
+        ],
+        primaryIndividualId: individual.id
+    };
+
+    payload.application = {
+        companyNameEnglish,
+        companyNameArabic,
+        username: slug,
+        documentType: registrationDocumentType,
+        registrationNumber,
+        detailRegistrationNumber,
+        expiryDate,
+        vatNumber,
+        tradeExperience15Years,
+        website: payload.website,
+        maroofUrl: payload.maroofUrl,
+        socials: { ...socials },
+        uploadedCertificates: certificates.slice(),
+        address: { ...payload.address },
+        primaryIndividualId: individual.id,
+        email,
+        phone,
+        logoDataUrl,
+        logoFileName
+    };
+
+    const normalized = normalizeBusinessAccountPayload(payload, businessAccounts.length);
+    normalized.primaryIndividualId = individual.id;
+    normalized.username = slug;
+    appendBusinessAccountHistory(normalized, 'linked-individual', `Linked to ${individualName}.`);
+    businessAccounts.unshift(normalized);
+
+    if (!Array.isArray(individual.businessAssociations)) {
+        individual.businessAssociations = [];
+    }
+    if (!individual.businessAssociations.some(assoc => assoc && assoc.businessId === normalized.id)) {
+        individual.businessAssociations.push({
+            businessId: normalized.id,
+            businessAccountId: normalized.id,
+            companyName: normalized.companyName,
+            relationship: 'Owner',
+            linkedAt: nowIso
+        });
+    }
+
+    appendIndividualAccountLogEntry(individual, {
+        action: 'business-linked',
+        label: 'Business account seeded',
+        timestamp: nowIso,
+        actor: resolveProductAdModeratorLabel(),
+        context: `Seeded ${normalized.companyName} and linked as Owner.`
+    });
+
+    saveBusinessAccountsToStorage();
+    saveIndividualAccountsToStorage();
+
+    state.activeBusinessAccountId = normalized.id;
+    state.currentBusinessAccountsPage = 1;
+    renderBusinessAccountsTable(1);
+
+    const currentIndividualPage = state.currentIndividualAccountsPage || 1;
+    renderIndividualAccountsTable(currentIndividualPage);
+
+    refreshBusinessRequestsWorkspace();
+
+    showNotification('success', 'Business Account successfully Seeded');
+}
+
 async function handleBusinessAccountsDeleteAllRequest() {
     const totalAccounts = Array.isArray(businessAccounts) ? businessAccounts.length : 0;
     if (!totalAccounts) {
@@ -32459,6 +36709,7 @@ function deleteAllBusinessAccounts({ refresh = true } = {}) {
 
     state.activeBusinessAccountId = null;
     state.businessDecisionContext = null;
+    state.businessRequestDecisionContext = null;
     state.currentBusinessAccountsPage = 1;
     state.businessAccountsFilters = {
         search: '',

@@ -2,70 +2,65 @@
 
 ## Project layout
 
-- `index.html` – main HTML shell that references external assets.
-- `assets/css/onruf-central-control-panel.css` – global styling extracted from the original inline `<style>` block.
-- `assets/js/onruf-central-control-panel.js` – application logic originally housed in the inline `<script>` block.
+- `index.html` – admin shell that boots the control panel UI.
+- `login.html` / `complete-registration.html` – auth flows that reuse the same storage keys as the admin UI.
+- `assets/css/onruf-central-control-panel.css` – styling extracted from the original inline sheet.
+- `assets/js/onruf-central-control-panel.js` – ~38k LOC powering every admin workflow.
+- `assets/js/onruf-auth.js` – login, OTP, and registration logic that shares seed data and storage config with the admin bundle.
 
-## Getting started
+## Running the UI
 
-Open `index.html` in a modern browser. The page now pulls styling and behaviour from the files in `assets/`, so keep the relative directory structure intact when hosting or sharing the project.
+1. Open `index.html` (admin) or `login.html` (auth) directly in a modern browser. Keep the `assets/` directory structure intact—there is no bundler or build step.
+2. Sign in with the default credentials after the seed reset completes:
+	 - Email: `superadmin@onruf.com`
+	 - Password: `Admin@123`
+3. For real invitation emails, start the optional Node service located in `server/`:
+	 ```powershell
+	 cd "server"
+	 npm install
+	 npm start
+	 ```
+	 The service serves the static files on `http://localhost:4000` and exposes `/api/invitations/send` for `deliverInvitationEmail()`.
+4. If the UI is hosted elsewhere, configure the API endpoint before loading the scripts:
+	 ```html
+	 <script>
+		 window.__ONRUF_CONFIG__ = {
+			 invitationServiceUrl: 'https://your-api-host.example.com/api/invitations/send'
+		 };
+	 </script>
+	 <script src="assets/js/onruf-central-control-panel.js" defer></script>
+	 ```
 
-### Invitation email service
+### Test harness for invitations
 
-To deliver real invitation emails to pending users, start the bundled Node.js service:
-
-1. Open a terminal and move into the server directory:
-	```powershell
-	cd "server"
-	```
-2. Install the dependencies:
-	```powershell
-	npm install
-	```
-3. Copy `.env.example` to `.env` and fill in the Outlook SMTP credentials:
-	- Host: `smtp.office365.com`
-	- Port: `587`
-	- Username / From address: `onruf@outlook.com`
-	- Password: use the secret supplied by operations (store it only in your private `.env`).
-4. Launch the service and host the UI from the same origin:
-	```powershell
-	npm start
-	```
-
-The service runs on `http://localhost:4000` by default and serves the static UI alongside the `/api/invitations/send` endpoint. With the server running, open `http://localhost:4000/index.html` and sign in using the default credentials. When you add or resend an invitation, the backend queues a real email through your SMTP provider.
-
-If you must host the UI elsewhere, expose the API URL via a global config before loading the main script:
-
-```html
-<script>
-  window.__ONRUF_CONFIG__ = {
-	 invitationServiceUrl: 'https://your-api-host.example.com/api/invitations/send'
-  };
-</script>
-<script src="assets/js/onruf-central-control-panel.js" defer></script>
-```
-
-### Verify delivery with the test harness
-
-After starting the server you can trigger a manual test email:
+After starting the Node service you can issue a manual test email:
 
 ```powershell
 cd "server"
 npm run test:send your.email@example.com
 ```
 
-The script sends a sample request to the local API (override the endpoint with `TEST_INVITE_ENDPOINT` if needed) and logs the response or any errors.
+Override the endpoint via `TEST_INVITE_ENDPOINT` if you are targeting a remote API.
 
-### Default credentials
+## State & storage
 
-After the initial seed reset completes, the environment provides a super-administrator account you can use to sign in immediately:
+- Both bundles cache datasets under `localStorage` keys prefixed with `onruf_` and persist sessions in `sessionStorage.onruf_active_session_v1`.
+- Seed resets run through `ensureSeedDataReset()` (control panel) and `ensureSeedDataReset()` (auth). When schemas or seed shapes change, bump the shared `DATA_RESET_VERSION` constants in both bundles along with `CATEGORY_RESET_VERSION` in `assets/js/onruf-central-control-panel.js`.
+- To force reseeding, clear site storage (DevTools → Application → Storage) or manually remove the relevant keys.
 
-- **Email:** `superadmin@onruf.com`
-- **Password:** `Admin@123`
+## Development patterns
 
-Once signed in you can update the profile or create additional users through the control panel.
+- The admin bundle orchestrates everything through a global `state` object (see `assets/js/onruf-central-control-panel.js` around line 2137). Update `state` first, then call the matching `render*` helper.
+- Persist mutations with the sequence `normalize*Payload()` → mutate in-memory arrays → `save*ToStorage()` → refresh any derived collections on `state` → `render*/sync*()`.
+- Event listeners guard on `dataset.bound === 'true'`; when re-rendering interactive blocks, clear that flag before rebinding to avoid duplicate handlers.
+- Shared overlay helpers (`setup*Overlay`, `open*Overlay`, `applyRequiredFieldIndicators()`) manage focus and required-field visuals. Reuse them when adding dialogs.
 
-## Data persistence
+## Troubleshooting tips
 
-- Roles you create, edit, or toggle are saved locally in the browser via `localStorage`. Refreshing the page will retain your latest role directory.
-- To revert to the seeded demo roles, clear the site data for the page (e.g. via DevTools → Application → Storage).
+- If lists or badges fall out of sync, confirm the cached collections on `state` were rebuilt before invoking the renderer.
+- After updating seed data, verify that `ensureSeedDataReset()` ran by checking `localStorage.onruf_data_reset_version`.
+- Password issues usually trace back to missing `hashPassword()` calls in the auth bundle—stored hashes are Base64 representations of the UTF-8 password.
+
+## Reverting to demo data
+
+- Clear the browser storage for the app origin to return to the seeded datasets and re-enable the default super-admin account.

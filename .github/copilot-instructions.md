@@ -1,48 +1,35 @@
 # ONRUF Central Control Panel – AI Agent Playbook
 
-## Architecture & Entrypoints
-- Static admin shell `index.html`, auth shells `login.html`/`complete-registration.html`, and consumer mirrors under `ONRUF/` load vanilla assets; preserve current `<script>`/`<link>` order, `defer`, and data-* hooks.
-- `assets/js/onruf-central-control-panel.js` (~26k LOC) owns all admin behaviour; `assets/js/onruf-auth.js` powers auth screens; consumer pages read the same storage-backed models.
-- No bundler or build step—test changes by opening the HTML files directly or serving them alongside the optional invitation service.
+## Quick Map
+- Static shells `index.html`, `login.html`, and `complete-registration.html` load vanilla assets; keep the current `<link>`/`<script defer>` ordering because the JS bootstraps on `DOMContentLoaded`.
+- `assets/js/onruf-central-control-panel.js` (~38k LOC) owns every admin workflow; `assets/js/onruf-auth.js` powers sign-in/registration and shares the same storage keys.
+- There is no bundler or build: open the HTML files directly, or optionally serve them with the Node invitation service described in `README.md`.
 
-## Global State & Storage
-- The global `state` (line ~2094) caches pagination, filters, decision contexts, and `registrationFlow`; adjust state before invoking `render*` helpers.
-- Persistence lives in `localStorage` (`onruf_*_v1`) and `sessionStorage.onruf_active_session_v1`; seeds hydrate through `ensureSeedDataReset()` and `ensureCategoryDatasetCleared()`.
-- Keep `DATA_RESET_VERSION` (`assets/js/onruf-central-control-panel.js`: `20251105...`) in sync with `assets/js/onruf-auth.js` (`20251029...`) plus `CATEGORY_RESET_VERSION` when altering schemas to avoid stale caches.
+## State & Persistence
+- Global `state` (see `assets/js/onruf-central-control-panel.js` around line 2137) tracks current section, pagination, filters, and active overlays; mutate state before calling any `render*` helper.
+- All datasets live in `localStorage` (`onruf_*_v1`) with soft caches reset by `ensureSeedDataReset()` / `ensureCategoryDatasetCleared()`; sessions persist in `sessionStorage.onruf_active_session_v1`.
+- When schema or seed shapes change, bump `DATA_RESET_VERSION` in both JS bundles and `CATEGORY_RESET_VERSION`, then clear site storage so seed loaders rerun.
 
-## Mutation & Rendering Pattern
-- Follow `normalize*Payload()` → `save*ToStorage()` → update `state` caches → `render*/sync*()`; skipping steps desynchronizes overlays, tables, or storage.
-- Renderers expect cached collections (e.g. `state.specificationFilteredList`, `state.productAdDecisionContext`, `state.financeAuditTrail`); rebuild them ahead of `render*` calls.
-- Event binding depends on `setupEventListeners()` guards (`dataset.bound === 'true'`); respect the flag to prevent duplicate listeners after re-renders.
-- Dialogs/overlays reuse shared helpers (`setup*Overlay`, `open*Overlay`, `applyRequiredFieldIndicators()`); lean on them for focus management and aria wiring.
+## Mutation Workflow
+- Follow the pattern `normalize*Payload()` → in-memory array update → `save*ToStorage()` → rebuild any cached collections on `state` → `render*/sync*()`; skipping steps desynchronizes DOM tables from storage.
+- Renderers assume the cached lists exist (e.g. `state.specificationFilteredList`, `state.productAdDecisionContext`, `state.financeAuditTrail`); rebuild them before re-rendering.
+- Event binding relies on the `dataset.bound === 'true'` guard inside `setupEventListeners()`; only attach new listeners after clearing that flag.
+- Overlays/dialogs share helpers such as `setup*Overlay`, `open*Overlay`, `closeOverlay`, and `applyRequiredFieldIndicators()` for focus management and required-field styling.
 
-## Auth, Sessions & Invitations
-- `assets/js/onruf-auth.js` seeds users (`DEFAULT_USERS_SEED`), enforces `PASSWORD_POLICY_REGEX`, and stores invitation metadata on each user record.
-- `deliverInvitationEmail()` honours `window.__ONRUF_CONFIG__.invitationServiceUrl`; when running via `file://`, expect `status: 'skipped'` outcomes.
-- OTP/token flows persist in `authState.pendingPersonalData` and `state.registrationFlow`; update both when adjusting registration steps.
-- Passwords store as Base64; call `hashPassword()` before writing and `verifyPassword()` when authenticating.
+## Auth & Invitations
+- `assets/js/onruf-auth.js` seeds users via `DEFAULT_USERS_SEED`, enforces `PASSWORD_POLICY_REGEX`, and hashes new passwords with `hashPassword()` (Base64 of UTF-8) before persistence.
+- Invitation flows call `deliverInvitationEmail()` which respects `window.__ONRUF_CONFIG__.invitationServiceUrl`; running from `file://` returns `{ status: 'skipped' }`.
+- Registration and OTP steps keep progress in `authState.pendingPersonalData` and mirror critical fields into `state.registrationFlow`; update both when altering the onboarding sequence.
+- Default credentials (`superadmin@onruf.com` / `Admin@123`) are reseeded during `ensureSeedDataReset()` and reactivated if their status drifts from `Active`.
 
-## Catalog & Specifications
-- Category tools enforce `CATEGORY_MAX_DEPTH`, fee label maps, and export definitions; run `syncCategorySpecificationCounts({ persistCategories: true, persistSpecifications: true, refreshView: true })` after changes.
-- Category pickers rely on `buildCategoryModalHierarchy()`/`renderCategoryModalTree()`; pass `disableEntry` to keep business constraints intact.
-- Specification builders require Arabic and English labels and category linkage; initialize selectors via `initializeSpecificationCategoriesPicker()` first.
+## Domain Modules
+- Category tools enforce `CATEGORY_MAX_DEPTH` and rely on `buildCategoryModalHierarchy()` plus `renderCategoryModalTree()`; run `syncCategorySpecificationCounts({ persistCategories: true, persistSpecifications: true, refreshView: true })` after modifying category/spec data.
+- Specification builders require both Arabic and English labels and must call `initializeSpecificationCategoriesPicker()` before enabling the submit CTA.
+- Product ads use `normalizeProductAdPayload()` and `saveProductAdsToStorage()`; moderation overlays read/write `state.productAdDecisionContext`, so populate it before opening action panels.
+- Finance dashboards draw from `state.financeFilters` and `state.financeAuditTrail`; update both ahead of `renderFinanceTransactionsTable()`, `renderFinanceInsights()`, and related summaries.
 
-## Product Ads & Automations
-- Ads normalize with `normalizeProductAdPayload()` and persist via `saveProductAdsToStorage()`; refresh grids with `renderProductAdsTable(page)`.
-- Automation lists use `normalizeAutomationEntry()` + `renderProductAdAutomationLists()` so schedule chips stay consistent.
-- Moderation overlays read `state.productAdDecisionContext`; populate it before opening action panels.
-
-## Accounts & Finance
-- Individual account views honour `state.individualAccountsFilters`; detail overlays pull from `renderIndividualAccountsTable(page)` outputs.
-- Business approvals require `state.businessDecisionContext` before `renderBusinessAccountsTable()` so buttons operate on the active member.
-- Finance dashboards consume `state.financeFilters` and `state.financeAuditTrail`; update both before calling `renderFinanceTransactionsTable()`, `renderFinanceInsights()`, and related helpers.
-
-## Consumer Mirror
-- `ONRUF/assets/js/*.js` (e.g. `onruf-platform.js`) read the same `onruf_*_v1` payloads; update consumer normalizers (`normalizeAdPayload()`, fallbacks) whenever admin schemas change.
-- Extend admin exporters and consumer fallbacks in tandem so storefront views keep rendering newly added fields.
-
-## Developer Workflow
-- Daily testing: open `index.html`/`login.html` directly or serve via the invitation service sketched in `README.md`; there is no bundler.
-- To point at another invite API, define `window.__ONRUF_CONFIG__` before script tags as shown in `README.md`.
-- After changing seed data or schemas, bump the reset versions, clear site storage, and confirm `ensureSeedDataReset()` reruns.
-- CSS under `assets/css/*.css` expects hooks like `.status-badge`, `.tree-node`, `.user-chip`, `.period-btn`; extend existing selectors instead of replacing them.
+## Working Effectively
+- To add new UI sections, extend the sidebar markup and expand `navigateToSection()` plus the relevant `render*` routine; keep aria hooks and dataset flags consistent.
+- CSS expects existing utility classes like `.status-badge`, `.tree-node`, `.user-chip`, `.period-btn`; prefer extending selectors over replacing them.
+- When wiring new buttons/toggles, reuse shared helpers (`attachPasswordToggle`, `setupSharedToggles`, overlay initializers) instead of hand-rolling DOM logic.
+- Use the optional Node invitation service if you need to test real emails (`README.md` has the setup); otherwise local workflows are served by static files and localStorage state.

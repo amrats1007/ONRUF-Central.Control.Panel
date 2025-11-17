@@ -33,14 +33,6 @@
                     <span class="menu-text">Categories and Specifications</span>
                 </a>
             </nav>
-            <div class="sidebar-footer">
-                <div class="sidebar-launch" role="group" aria-label="Open ONRUF platform">
-                    <button type="button" class="sidebar-launch-btn" id="openOnrufPlatformBtn" aria-label="Open ONRUF platform">
-                        <span class="sidebar-launch-label">OnRuf</span>
-                        <i class="fas fa-external-link-alt" aria-hidden="true"></i>
-                    </button>
-                </div>
-            </div>
         </aside>
 
         <main class="main-content">
@@ -655,9 +647,8 @@
                         <button class="sub-app-btn" data-target="onruf-users-business" data-label="Business Accounts Management">
                             <span>Business Accounts Management</span>
                         </button>
-                        <button class="sub-app-btn" data-target="onruf-users-business-requests" data-label="Business Requests Review">
-                            <span>Business Requests Review</span>
-                            <span class="count" id="businessRequestsReviewCountLabel">#0 Pending</span>
+                        <button class="sub-app-btn" data-target="onruf-users-business-requests" data-label="Business Accounts Requests Review">
+                            <span>Business Accounts Requests Review</span>
                         </button>
                         <button class="sub-app-btn" data-target="onruf-users-automation" data-label="Automation Policies">
                             <span>Automation Policies</span>
@@ -934,14 +925,6 @@
                                     <i class="fas fa-power-off"></i>
                                     Deactivate
                                 </button>
-                                <button type="button" class="btn btn-outline business-action-btn business-action-approve" data-action="approve" disabled>
-                                    <i class="fas fa-circle-check"></i>
-                                    Approve
-                                </button>
-                                <button type="button" class="btn btn-outline business-action-btn business-action-reject" data-action="reject" disabled>
-                                    <i class="fas fa-circle-xmark"></i>
-                                    Reject
-                                </button>
                                 <button type="button" class="btn btn-secondary btn-compact" id="businessAccountsActionUpdateListBtn" data-action="update-list" disabled>
                                     <i class="fas fa-list-check"></i>
                                     Update list
@@ -956,6 +939,10 @@
                                 </button>
                             </div>
                             <div class="quick-action-group quick-action-group-secondary">
+                                <button type="button" class="btn btn-primary" id="businessAccountsSeedAccountBtn" data-action="seed">
+                                    <i class="fas fa-seedling"></i>
+                                    Seed Account
+                                </button>
                                 <button type="button" class="btn btn-outline" id="exportBusinessAccountsBtn">
                                     <i class="fas fa-file-export"></i>
                                     Export
@@ -992,9 +979,11 @@
                         <div id="businessAccountDetailOverlay" class="role-detail-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="businessAccountDetailTitle">
                             <div class="role-detail-modal" role="document">
                                 <header>
-                                    <div>
-                                        <h3 id="businessAccountDetailTitle">No business selected</h3>
-                                        <p class="section-subtitle" id="businessAccountDetailSubtitle">Open an application to review requested documents, invoices, and history.</p>
+                                    <div class="business-account-detail-header">
+                                        <div class="business-account-detail-heading">
+                                            <h3 id="businessAccountDetailTitle">No business selected</h3>
+                                            <p class="section-subtitle" id="businessAccountDetailSubtitle">Open an application to review requested documents, invoices, and history.</p>
+                                        </div>
                                     </div>
                                     <button type="button" class="modal-close-btn" id="businessAccountDetailCloseBtn" aria-label="Close business summary">
                                         <i class="fas fa-xmark"></i>
@@ -1029,36 +1018,36 @@
 
                     <div id="onruf-users-business-requests" class="sub-app">
                         <section class="business-requests-shell" aria-labelledby="businessRequestsModuleTitleText">
-                            <div class="users-header">
+                            <div class="users-header" style="margin-bottom: 0;">
                                 <div class="header-stack">
                                     <h2 class="module-title" id="businessRequestsModuleTitle">
-                                        <span id="businessRequestsModuleTitleText">Business Account Requests</span>
-                                        <span class="count-badge" id="businessRequestsActiveFilterLabel">Today</span>
+                                        <span id="businessRequestsModuleTitleText">Business Accounts Requests</span>
                                     </h2>
-                                    <p class="helper-text">Inspect pending business account onboarding submissions, review the linked individual profile, and approve or reject in seconds.</p>
                                 </div>
                             </div>
 
                             <div class="business-requests-toolbar" id="businessRequestsToolbar">
-                                <div class="business-requests-search">
-                                    <i class="fas fa-search"></i>
-                                    <input type="search" id="businessRequestsSearchInput" placeholder="Search by company, contact, registration number, VAT, or city" autocomplete="off" />
-                                </div>
                                 <div class="business-requests-filters">
                                     <div class="business-requests-period" id="businessRequestsPeriodChips" role="group" aria-label="Request time period filters">
                                         <button type="button" class="chip" data-business-request-period="today">Today</button>
                                         <button type="button" class="chip" data-business-request-period="7days">Last 7 days</button>
                                         <button type="button" class="chip" data-business-request-period="30days">Last 30 days</button>
-                                        <button type="button" class="chip" data-business-request-period="all">All pending</button>
+                                        <button type="button" class="chip" data-business-request-period="all">All Pending</button>
                                         <button type="button" class="chip" data-business-request-period="custom">Custom</button>
+                                        <div class="business-requests-dates" aria-label="Custom date range">
+                                            <label class="filter-control" for="businessRequestsStartDate">From
+                                                <input type="date" id="businessRequestsStartDate" disabled />
+                                            </label>
+                                            <label class="filter-control" for="businessRequestsEndDate">To
+                                                <input type="date" id="businessRequestsEndDate" disabled />
+                                            </label>
+                                        </div>
                                     </div>
-                                    <div class="business-requests-dates" aria-label="Custom date range">
-                                        <label class="filter-control" for="businessRequestsStartDate">From
-                                            <input type="date" id="businessRequestsStartDate" />
-                                        </label>
-                                        <label class="filter-control" for="businessRequestsEndDate">To
-                                            <input type="date" id="businessRequestsEndDate" />
-                                        </label>
+                                    <div class="business-requests-controls">
+                                        <div class="business-requests-search">
+                                            <i class="fas fa-search"></i>
+                                            <input type="search" id="businessRequestsSearchInput" placeholder="Search by Company Name, Email, Phone, City, or ID" autocomplete="off" />
+                                        </div>
                                         <button type="button" class="btn btn-outline btn-compact" id="businessRequestsResetBtn">
                                             <i class="fas fa-rotate-left"></i>
                                             Reset
@@ -1073,6 +1062,43 @@
                                 <div class="empty-state" id="businessRequestsEmptyState">Pending business account requests will appear here.</div>
                             </div>
                         </section>
+                        <div id="businessRequestDecisionOverlay" class="confirm-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="businessRequestDecisionTitle">
+                            <div class="confirm-dialog" role="document">
+                                <h3 id="businessRequestDecisionTitle">Review Request</h3>
+                                <p class="helper-text" id="businessRequestDecisionMessage">Confirm the decision for this business application.</p>
+                                <label class="form-label" id="businessRequestDecisionNoteLabel" for="businessRequestDecisionNoteInput">Decision note (optional)</label>
+                                <textarea id="businessRequestDecisionNoteInput" class="form-input" placeholder="Share the context behind this decision"></textarea>
+                                <div class="confirm-actions">
+                                    <button type="button" class="btn btn-outline" id="businessRequestDecisionCancelBtn">
+                                        <i class="fas fa-xmark"></i>
+                                        Cancel
+                                    </button>
+                                    <button type="button" class="btn btn-primary" id="businessRequestDecisionConfirmBtn">
+                                        <i class="fas fa-circle-check"></i>
+                                        Confirm
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="businessRequestIndividualOverlay" class="role-detail-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="businessRequestIndividualTitle">
+                            <div class="role-detail-modal business-request-individual-dialog" role="document">
+                                <header class="business-request-individual-header">
+                                    <div>
+                                        <h3 id="businessRequestIndividualTitle">Individual Account Details</h3>
+                                        <p class="helper-text" id="businessRequestIndividualSubtitle">Review the primary member details linked to this business request.</p>
+                                    </div>
+                                    <button type="button" class="modal-close-btn" id="businessRequestIndividualCloseBtn" aria-label="Close individual profile overlay">
+                                        <i class="fas fa-xmark"></i>
+                                    </button>
+                                </header>
+                                <div class="role-detail-content business-request-individual-content">
+                                    <div class="business-request-individual-summary hidden" id="businessRequestIndividualSummary"></div>
+                                    <div class="business-request-individual-details" id="businessRequestIndividualDetails">
+                                        <p class="helper-text">Select a business request with a linked individual account to view profile details.</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     <div id="onruf-users-automation" class="sub-app">
@@ -1427,6 +1453,10 @@
                                         </div>
                                     </div>
                                     <div class="category-bulk-actions">
+                                        <button type="button" class="btn btn-outline" id="categoryBulkSortBtn">
+                                            <i class="fas fa-arrow-up-wide-short"></i>
+                                            Sort
+                                        </button>
                                         <button type="button" class="btn btn-outline" id="categoryBulkModifyBtn" disabled>
                                             <i class="fas fa-pen"></i>
                                             Modify
@@ -1481,6 +1511,40 @@
                                 <div id="categorySpecificationContent" class="spec-detail-content">
                                     <p class="spec-detail-placeholder">Use the specifications column to review the specifications assigned to a category.</p>
                                 </div>
+                            </div>
+                        </div>
+
+                        <div id="categorySortOverlay" class="confirm-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="categorySortTitle" aria-hidden="true">
+                            <div class="confirm-dialog category-sort-dialog" role="document">
+                                <header class="category-sort-header">
+                                    <div>
+                                        <h3 id="categorySortTitle">Sort Categories</h3>
+                                        <p class="category-sort-subtitle">Select a category group to adjust the display order. Update the position numbers or use the arrows to reorder.</p>
+                                    </div>
+                                    <button type="button" class="modal-close-btn" id="categorySortCloseBtn" aria-label="Close sort dialog">
+                                        <i class="fas fa-xmark"></i>
+                                    </button>
+                                </header>
+                                <div class="category-sort-body">
+                                    <aside class="category-sort-tree" id="categorySortTree" aria-label="Category tree"></aside>
+                                    <section class="category-sort-panel" aria-live="polite">
+                                        <header>
+                                            <h4 id="categorySortGroupTitle">Top-level categories</h4>
+                                            <p id="categorySortGroupHint">Select a category to review its subcategories.</p>
+                                        </header>
+                                        <div id="categorySortList" class="category-sort-list" role="list"></div>
+                                    </section>
+                                </div>
+                                <footer class="category-sort-footer">
+                                    <button type="button" class="btn btn-outline" id="categorySortCancelBtn">
+                                        <i class="fas fa-arrow-left"></i>
+                                        Cancel
+                                    </button>
+                                    <button type="button" class="btn btn-primary" id="categorySortSaveBtn">
+                                        <i class="fas fa-floppy-disk"></i>
+                                        <span id="categorySortSaveLabel">Save Order</span>
+                                    </button>
+                                </footer>
                             </div>
                         </div>
 
@@ -1578,7 +1642,7 @@
                                                 <h2>Assign Category</h2>
                                             </div>
                                             <div class="category-modal-body">
-                                                <div id="categoryModalList" class="category-modal-tree"></div>
+                                                <div id="categoryModalTree" class="category-modal-tree"></div>
                                             </div>
                                             <div class="category-modal-footer">
                                                 <button type="button" class="btn btn-outline" data-category-modal-cancel>Cancel</button>
