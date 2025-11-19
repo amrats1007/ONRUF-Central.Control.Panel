@@ -1393,6 +1393,12 @@ body.dark-mode #individualPublishingStatus {
     overflow-y: auto;
 }
 
+#specificationImportOverlay .import-dialog {
+    margin: 0 auto;
+    max-height: calc(100vh - 80px);
+    overflow-y: auto;
+}
+
 .import-dialog-header {
     display: flex;
     align-items: flex-start;
@@ -6828,15 +6834,6 @@ body.dark-mode .category-explorer-page-btn[disabled] {
 
 body.dark-mode .category-explorer-page-indicator {
     color: var(--text-dark);
-}
-
-.category-explorer-page-summary {
-    font-size: 12px;
-    color: var(--muted-light);
-}
-
-body.dark-mode .category-explorer-page-summary {
-    color: var(--muted-dark);
 }
 
 .category-sort-explorer .category-explorer-footer {

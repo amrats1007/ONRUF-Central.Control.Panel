@@ -15047,8 +15047,6 @@ function renderCategoryTree() {
     if (paginationContainer) {
         const shouldShowPagination = !searchTerm && pageSize > 0 && totalTopLevel > pageSize;
         if (shouldShowPagination) {
-            const displayStart = totalTopLevel ? startIndex + 1 : 0;
-            const displayEnd = totalTopLevel ? endIndex : 0;
             const paginationMarkup = `
                 <div class="category-explorer-pagination">
                     <button type="button" class="category-explorer-page-btn" data-category-tree-page="prev" ${currentPage === 1 ? 'disabled' : ''} aria-label="Go to previous page">
@@ -15061,7 +15059,6 @@ function renderCategoryTree() {
                         <i class="fas fa-chevron-right" aria-hidden="true"></i>
                     </button>
                 </div>
-                <div class="category-explorer-page-summary">Showing ${displayStart}-${displayEnd} of ${totalTopLevel} categories</div>
             `;
             paginationContainer.innerHTML = paginationMarkup;
             paginationContainer.classList.add('is-visible');
@@ -16376,7 +16373,7 @@ function submitSpecificationImport() {
         }
 
         const summaryMessage = summaryParts.length
-            ? `Imported ${summaryParts.join(', ')} from ${fileName}.`
+            ? 'Specifications Imported Successfully'
             : `Import completed. No changes detected in ${fileName}.`;
         const summaryTone = summaryParts.length ? 'success' : 'info';
         showNotification(summaryTone, summaryMessage, 4600, 'specificationNotificationArea');
@@ -18160,7 +18157,7 @@ async function submitCategoryImport() {
             }
             const fileLabel = fileName || 'your file';
             const summaryMessage = outcomeParts.length
-                ? `Imported ${outcomeParts.join(', ')} from ${fileLabel}.`
+                ? 'Categories Imported Successfully'
                 : `Import completed. No changes detected in ${fileLabel}.`;
             const summaryTone = outcomeParts.length ? 'success' : 'info';
             showNotification(summaryTone, summaryMessage, 4600, 'categoryNotificationArea');
@@ -18880,12 +18877,26 @@ function handleCategorySortTreeClick(event) {
     }
     event.preventDefault();
     const parentId = row.dataset.sortParentId || CATEGORY_TREE_ROOT_ID;
-    if (categorySortState.activeParentId !== parentId) {
-        categorySortState.activeParentId = parentId;
-        ensureCategorySortExpanded(parentId);
+    const previouslyActiveId = categorySortState.activeParentId;
+    const collapseExpandedBranch = targetId => {
+        if (!targetId || targetId === CATEGORY_TREE_ROOT_ID) {
+            return;
+        }
+        collapseCategorySortBranch(targetId);
+    };
+
+    if (previouslyActiveId === parentId) {
+        collapseExpandedBranch(parentId);
         renderCategorySortTree();
-        renderCategorySortGroup(parentId);
+        focusCategorySortTreeNode(parentId);
+        return;
     }
+
+    collapseExpandedBranch(previouslyActiveId);
+    categorySortState.activeParentId = parentId;
+    ensureCategorySortExpanded(parentId);
+    renderCategorySortTree();
+    renderCategorySortGroup(parentId);
     focusCategorySortTreeNode(parentId);
 }
 
@@ -19355,6 +19366,12 @@ function clearCategorySortDragIndicator() {
 }
 
 function openCategorySortOverlay() {
+    const hasCategories = Array.isArray(categories) && categories.length > 0;
+    if (!hasCategories) {
+        showNotification('info', 'No Categories are Registered in the System', 4200, 'categoryNotificationArea');
+        return;
+    }
+
     setupCategorySortOverlay();
     if (!categorySortElements.overlay) {
         return;
