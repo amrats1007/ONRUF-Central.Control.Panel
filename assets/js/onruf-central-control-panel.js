@@ -132,9 +132,24 @@ function buildCategoryModalHierarchy(items) {
         }
     });
 
+    const sortNodes = (a, b) => {
+        if (!a || !b) {
+            return 0;
+        }
+        const entryA = a.entry;
+        const entryB = b.entry;
+        if (entryA && entryB) {
+            const result = compareCategoriesForTree(entryA, entryB);
+            if (result !== 0) {
+                return result;
+            }
+        }
+        return getLabel(entryA).localeCompare(getLabel(entryB), 'en', { sensitivity: 'base' });
+    };
+
     nodesByKey.forEach(node => {
         if (node.children.length) {
-            node.children.sort((a, b) => getLabel(a.entry).localeCompare(getLabel(b.entry), 'en', { sensitivity: 'base' }));
+            node.children.sort(sortNodes);
         }
     });
 
@@ -162,7 +177,7 @@ function buildCategoryModalHierarchy(items) {
         }
     });
 
-    roots.sort((a, b) => getLabel(a.entry).localeCompare(getLabel(b.entry), 'en', { sensitivity: 'base' }));
+    roots.sort(sortNodes);
 
     return { roots, nodesByKey, canonicalize };
 }
@@ -2134,6 +2149,8 @@ function enforceAdPublishingFeeTypeConstraints() {
         typeSelect.value = 'fixed';
     }
 }
+const CATEGORY_EXPLORER_DEFAULT_PAGE_SIZE = 25;
+
 const state = {
     currentSection: 'dashboard',
     currentRolePage: 1,
@@ -2173,6 +2190,8 @@ const state = {
     activeCategorySpecificationId: null,
     permissionCatalog: [],
     categorySearchTerm: '',
+    categoryExplorerPage: 1,
+    categoryExplorerPageSize: CATEGORY_EXPLORER_DEFAULT_PAGE_SIZE,
     specificationSearchTerm: '',
     specificationFilters: {
         status: 'all',
@@ -2333,7 +2352,8 @@ const CATEGORY_EXPORT_COLUMNS = [
     { id: 'auctionClosingPeriods', label: 'Default Auction Closing Periods', value: category => formatCategoryAuctionPeriods(category.auctionClosingPeriods) },
     { id: 'minimumBid', label: 'Minimum Bid (Value, Seller Can Modify?)', value: category => formatCategoryMinimumBid(category.minimumBidValue, category.minimumBidSellerCanModify) },
     { id: 'showAtHome', label: 'Show on Home Page?', value: category => formatCategoryBooleanLabel(category.showAtHome) },
-    { id: 'isRealEstate', label: 'Is Real Estate?', value: category => formatCategoryBooleanLabel(category.isRealEstate) }
+    { id: 'isRealEstate', label: 'Is Real Estate?', value: category => formatCategoryBooleanLabel(category.isRealEstate) },
+    { id: 'isService', label: 'Is Service?', value: category => formatCategoryBooleanLabel(category.isService) }
 ];
 
 const SPECIFICATION_EXPORT_COLUMNS = [
@@ -2444,6 +2464,71 @@ function formatCategoryAuctionPeriods(entries) {
     return summary || '';
 }
 
+function normalizeMinimumBidSellerScope(value, fallback = 'no') {
+    if (value === null || value === undefined) {
+        return fallback;
+    }
+    if (typeof value === 'boolean') {
+        return value ? 'yes' : 'no';
+    }
+    if (typeof value === 'number') {
+        return Number.isFinite(value) && value !== 0 ? 'yes' : 'no';
+    }
+    const text = String(value).trim();
+    if (!text) {
+        return fallback;
+    }
+    const normalized = text.toLowerCase();
+    if (/(individual|personal)/.test(normalized)) {
+        return 'individual-only';
+    }
+    if (/(business|company|companies|corporate|merchant|merchants)/.test(normalized)) {
+        return 'business-only';
+    }
+    if (normalized === '1') {
+        return 'yes';
+    }
+    if (normalized === '0') {
+        return 'no';
+    }
+    if (/(yes|y|true|allow|allowed|enabled|all|any|everyone)/.test(normalized)) {
+        return 'yes';
+    }
+    if (/(no|n|false|deny|denied|disabled|none|never|not allowed|disallow)/.test(normalized)) {
+        return 'no';
+    }
+    return fallback;
+}
+
+function formatMinimumBidSellerScopeLabel(value) {
+    const normalized = normalizeMinimumBidSellerScope(value, '');
+    switch (normalized) {
+        case 'yes':
+            return 'Yes';
+        case 'no':
+            return 'No';
+        case 'individual-only':
+            return 'Individual Accounts Only';
+        case 'business-only':
+            return 'Business Accounts Only';
+        default:
+            return normalized ? formatCategoryTokenLabel(normalized) : '';
+    }
+}
+
+function formatCategoryMinimumBid(amount, sellerScope) {
+    const rawAmountLabel = formatCategoryNumericValue(amount);
+    const amountLabel = rawAmountLabel && rawAmountLabel !== '0' ? rawAmountLabel : '';
+    const scopeLabel = formatMinimumBidSellerScopeLabel(sellerScope);
+    if (amountLabel && scopeLabel) {
+        return `${amountLabel} (${scopeLabel})`;
+    }
+    if (amountLabel) {
+        return amountLabel;
+    }
+    return scopeLabel;
+}
+
 // TODO: Point to the API route that accepts category import uploads.
 const CATEGORY_IMPORT_ENDPOINT = '';
 
@@ -2516,6 +2601,7 @@ function buildCategoryImportColumnIndex(header) {
 }
 
 const CATEGORY_IMPORT_ALLOWED_STATUSES = new Set(['active', 'inactive']);
+const CATEGORY_SORT_OVERRIDES_STORAGE_KEY = 'onruf_category_sort_overrides_v1';
 
 const categoryImportState = {
     file: null,
@@ -2550,7 +2636,11 @@ const categorySortState = {
     activeParentId: CATEGORY_TREE_ROOT_ID,
     orderByParent: new Map(),
     initialSequence: new Map(),
-    isSaving: false
+    defaultSequence: new Map(),
+    overrides: new Map(),
+    isSaving: false,
+    searchTerm: '',
+    expandedIds: new Set([CATEGORY_TREE_ROOT_ID])
 };
 
 const categorySortElements = {
@@ -2559,11 +2649,136 @@ const categorySortElements = {
     list: null,
     title: null,
     hint: null,
-    closeBtn: null,
+    searchInput: null,
+    expandBtn: null,
+    collapseBtn: null,
     cancelBtn: null,
     saveBtn: null,
     saveLabel: null
 };
+
+const categorySortDragState = {
+    draggingId: null,
+    dropTargetId: null,
+    dropPosition: null
+};
+
+function loadCategorySortOverrides() {
+    if (typeof localStorage === 'undefined') {
+        return new Map();
+    }
+    try {
+        const raw = localStorage.getItem(CATEGORY_SORT_OVERRIDES_STORAGE_KEY);
+        if (!raw) {
+            return new Map();
+        }
+        const parsed = JSON.parse(raw);
+        if (!parsed || typeof parsed !== 'object') {
+            return new Map();
+        }
+        const overrides = new Map();
+        Object.entries(parsed).forEach(([parentId, sequence]) => {
+            if (typeof parentId !== 'string') {
+                return;
+            }
+            const normalizedId = parentId.trim();
+            if (!normalizedId) {
+                return;
+            }
+            if (!Array.isArray(sequence) || !sequence.length) {
+                return;
+            }
+            const cleaned = sequence
+                .map(item => (typeof item === 'string' ? item.trim() : ''))
+                .filter(Boolean);
+            if (cleaned.length) {
+                overrides.set(normalizedId, cleaned);
+            }
+        });
+        return overrides;
+    } catch (error) {
+        console.warn('Failed to load category sort overrides:', error);
+        return new Map();
+    }
+}
+
+function saveCategorySortOverrides(overrides) {
+    if (typeof localStorage === 'undefined') {
+        return;
+    }
+    try {
+        if (!(overrides instanceof Map) || overrides.size === 0) {
+            localStorage.removeItem(CATEGORY_SORT_OVERRIDES_STORAGE_KEY);
+            return;
+        }
+        const payload = {};
+        overrides.forEach((sequence, parentId) => {
+            if (typeof parentId !== 'string') {
+                return;
+            }
+            const normalizedId = parentId.trim();
+            if (!normalizedId) {
+                return;
+            }
+            if (!Array.isArray(sequence) || !sequence.length) {
+                return;
+            }
+            const cleaned = sequence
+                .map(item => (typeof item === 'string' ? item.trim() : ''))
+                .filter(Boolean);
+            if (cleaned.length) {
+                payload[normalizedId] = cleaned;
+            }
+        });
+        if (Object.keys(payload).length) {
+            localStorage.setItem(CATEGORY_SORT_OVERRIDES_STORAGE_KEY, JSON.stringify(payload));
+        } else {
+            localStorage.removeItem(CATEGORY_SORT_OVERRIDES_STORAGE_KEY);
+        }
+    } catch (error) {
+        console.error('Failed to save category sort overrides:', error);
+    }
+}
+
+function applyCategorySortOverride(entries, sequence) {
+    if (!Array.isArray(entries) || !entries.length) {
+        return [];
+    }
+    const clones = entries.map(entry => ({ ...entry }));
+    if (!Array.isArray(sequence) || !sequence.length) {
+        clones.forEach((entry, index) => {
+            entry.sortOrder = index + 1;
+        });
+        return clones;
+    }
+    const lookup = new Map(clones.map(entry => [entry.id, entry]));
+    const seen = new Set();
+    const ordered = [];
+
+    sequence.forEach(item => {
+        const id = typeof item === 'string' ? item.trim() : '';
+        if (!id || seen.has(id)) {
+            return;
+        }
+        const entry = lookup.get(id);
+        if (entry) {
+            ordered.push(entry);
+            seen.add(id);
+        }
+    });
+
+    clones.forEach(entry => {
+        if (!seen.has(entry.id)) {
+            ordered.push(entry);
+        }
+    });
+
+    ordered.forEach((entry, index) => {
+        entry.sortOrder = index + 1;
+    });
+
+    return ordered;
+}
 
 const SPECIFICATION_IMPORT_CONFIG = {
     maxFileSizeBytes: 5 * 1024 * 1024,
@@ -2702,6 +2917,10 @@ state.categoryExplorerExpanded = new Set();
 state.categorySelectedIds = new Set();
 state.categoryVisibleColumns = [...CATEGORY_DEFAULT_VISIBLE_COLUMNS];
 state.categoryTreeSearchTerm = '';
+state.categoryExplorerPage = Number.isFinite(state.categoryExplorerPage) && state.categoryExplorerPage > 0 ? state.categoryExplorerPage : 1;
+state.categoryExplorerPageSize = Number.isFinite(state.categoryExplorerPageSize) && state.categoryExplorerPageSize > 0
+    ? state.categoryExplorerPageSize
+    : CATEGORY_EXPLORER_DEFAULT_PAGE_SIZE;
 state.categoryViewBranchId = CATEGORY_TREE_ROOT_ID;
 state.categoryDetailSearchTerm = '';
 state.categoryStatusFilter = 'all';
@@ -4640,7 +4859,7 @@ function normalizeCategoryPayload(category, index = 0) {
     const extraProductImageFee = parseNumber(category.extraProductImageFee);
     const extraProductVideoFee = parseNumber(category.extraProductVideoFee);
     let minimumBidValue = parseNumber(category.minimumBidValue);
-    let minimumBidSellerCanModify = toBoolean(category.minimumBidSellerCanModify);
+    let minimumBidSellerCanModify = normalizeMinimumBidSellerScope(category.minimumBidSellerCanModify, 'yes');
     const subtitleFee = parseNumber(category.subtitleFee);
     let auctionClosingPeriods = parseAuctionPeriods(category.auctionClosingPeriods, category.auctionClosingPeriodsUnit);
     let auctionClosingTimeFee = parseNumber(category.auctionClosingTimeFee);
@@ -4727,6 +4946,26 @@ function normalizeCategoryPayload(category, index = 0) {
     const supportsNegotiation = toBoolean(category.supportsNegotiation);
     const showAtHome = toBoolean(category.showAtHome);
     const isRealEstate = toBoolean(category.isRealEstate);
+    const isService = toBoolean(category.isService);
+
+    const normalizedIsHiddenString = typeof category.isHidden === 'string' ? category.isHidden.trim().toLowerCase() : '';
+    const normalizedHiddenFlag = typeof category.hidden === 'string' ? category.hidden.trim().toLowerCase() : '';
+    const normalizedHideFlag = typeof category.hide === 'string' ? category.hide.trim().toLowerCase() : '';
+    const normalizedVisibility = typeof category.visibility === 'string' ? category.visibility.trim().toLowerCase() : '';
+    const normalizedVisibilityState = typeof category.visibilityState === 'string' ? category.visibilityState.trim().toLowerCase() : '';
+    const normalizedVisibilityStatus = typeof category.visibilityStatus === 'string' ? category.visibilityStatus.trim().toLowerCase() : '';
+
+    const isHidden = Boolean(
+        toBoolean(category.isHidden)
+        || normalizedIsHiddenString === 'hidden'
+        || (typeof category.hidden === 'boolean' && category.hidden)
+        || ['hidden', 'true', '1', 'yes'].includes(normalizedHiddenFlag)
+        || (typeof category.hide === 'boolean' && category.hide)
+        || ['hidden', 'true', '1', 'yes'].includes(normalizedHideFlag)
+        || normalizedVisibility === 'hidden'
+        || normalizedVisibilityState === 'hidden'
+        || normalizedVisibilityStatus === 'hidden'
+    );
 
     if (!supportsFixedPrice) {
         fixedPriceSaleFee = 0;
@@ -4737,7 +4976,7 @@ function normalizeCategoryPayload(category, index = 0) {
     if (!supportsAuction) {
         auctionFee = 0;
         minimumBidValue = 0;
-        minimumBidSellerCanModify = false;
+        minimumBidSellerCanModify = 'no';
         auctionClosingPeriods = [];
         auctionClosingTimeFee = 0;
         auctionClosingPeriodsUnit = '';
@@ -4862,6 +5101,8 @@ function normalizeCategoryPayload(category, index = 0) {
         supportsNegotiation,
         showAtHome,
         isRealEstate,
+        isService,
+        isHidden,
         imageName,
         imageDataUrl
     };
@@ -9958,6 +10199,7 @@ function initializeApp() {
     }
 
     setupCategoryConfirmOverlay();
+    setupCategoryDeactivateModeOverlay();
     setupCategorySortOverlay();
     setupSpecificationConfirmOverlay();
     setupRoleConfirmOverlay();
@@ -11817,6 +12059,7 @@ function deleteAllCategories({ refresh = true } = {}) {
     state.activeCategorySpecificationId = null;
     state.categoryExplorerExpanded = new Set([CATEGORY_TREE_ROOT_ID]);
     state.categoryViewBranchId = CATEGORY_TREE_ROOT_ID;
+    state.categoryExplorerPage = 1;
 
     const specsChanged = syncCategorySpecificationCounts({
         persistCategories: true,
@@ -14555,6 +14798,7 @@ function renderCategoryBreadcrumbTrail() {
 
 function resetCategoryDirectoryFilters({ refresh = true } = {}) {
     state.categoryViewBranchId = CATEGORY_TREE_ROOT_ID;
+    state.categoryExplorerPage = 1;
     state.currentCategoryPage = 1;
     state.categoryStatusFilter = 'all';
     state.categoryDepthFilter = 'all';
@@ -14613,20 +14857,65 @@ function highlightSearchMatch(label, term) {
     return escapeHtml(label).replace(regex, '<mark>$1</mark>');
 }
 
+function getCategoryExplorerPageSize() {
+    const configured = Number.isFinite(state.categoryExplorerPageSize) && state.categoryExplorerPageSize > 0
+        ? state.categoryExplorerPageSize
+        : null;
+    return configured || CATEGORY_EXPLORER_DEFAULT_PAGE_SIZE;
+}
+
+function resolveTopLevelCategoryId(categoryId) {
+    if (!categoryId || categoryId === CATEGORY_TREE_ROOT_ID) {
+        return CATEGORY_TREE_ROOT_ID;
+    }
+    let currentId = categoryId;
+    const guard = new Set();
+    while (currentId && currentId !== CATEGORY_TREE_ROOT_ID && !guard.has(currentId)) {
+        guard.add(currentId);
+        const parentId = categoryParentLookup.get(currentId);
+        if (!parentId || parentId === CATEGORY_TREE_ROOT_ID) {
+            return currentId;
+        }
+        currentId = parentId;
+    }
+    return currentId && currentId !== CATEGORY_TREE_ROOT_ID ? currentId : CATEGORY_TREE_ROOT_ID;
+}
+
+function getCategoryExplorerTopLevelList() {
+    if (!(categoryChildrenLookup instanceof Map) || !categoryChildrenLookup.size) {
+        rebuildCategoryCaches();
+    }
+    const topLevel = categoryChildrenLookup instanceof Map ? categoryChildrenLookup.get(CATEGORY_TREE_ROOT_ID) || [] : [];
+    return topLevel.slice().sort(compareCategoriesForTree);
+}
+
 function renderCategoryTree() {
     const container = document.getElementById('categoryTreeContainer');
-    if (!container) return;
+    const paginationContainer = document.getElementById('categoryExplorerPagination');
+
+    if (paginationContainer) {
+        paginationContainer.innerHTML = '';
+        paginationContainer.classList.remove('is-visible');
+        paginationContainer.setAttribute('aria-hidden', 'true');
+    }
+
+    if (!container) {
+        return;
+    }
 
     if (!categoryLookupById.size) {
         rebuildCategoryCaches();
     }
 
-    const searchTerm = (state.categoryTreeSearchTerm || '').trim().toLowerCase();
+    const searchTermRaw = (state.categoryTreeSearchTerm || '').trim();
+    const searchTerm = searchTermRaw.toLowerCase();
     const matchedIds = new Set();
 
     if (searchTerm) {
         categories.forEach(category => {
-            if (!category) return;
+            if (!category) {
+                return;
+            }
             const haystack = [
                 category.categoryCode,
                 category.nameEnglish,
@@ -14645,24 +14934,79 @@ function renderCategoryTree() {
 
     matchedIds.forEach(id => ensureCategoryExplorerExpanded(id));
 
-    const buildMarkup = (parentId, depth) => {
-        const children = categoryChildrenLookup.get(parentId) || [];
-        if (!children.length) {
+    const topLevelAll = getCategoryExplorerTopLevelList();
+    const totalTopLevel = topLevelAll.length;
+    const pageSize = getCategoryExplorerPageSize();
+    let currentPage = Number.isFinite(state.categoryExplorerPage) && state.categoryExplorerPage > 0 ? state.categoryExplorerPage : 1;
+
+    if (!searchTerm && pageSize > 0 && totalTopLevel > pageSize) {
+        if (state.categoryViewBranchId && state.categoryViewBranchId !== CATEGORY_TREE_ROOT_ID) {
+            const activeTopLevelId = resolveTopLevelCategoryId(state.categoryViewBranchId);
+            if (activeTopLevelId && activeTopLevelId !== CATEGORY_TREE_ROOT_ID) {
+                const activeIndex = topLevelAll.findIndex(entry => entry.id === activeTopLevelId);
+                if (activeIndex !== -1) {
+                    const requiredPage = Math.floor(activeIndex / pageSize) + 1;
+                    if (requiredPage !== currentPage) {
+                        currentPage = requiredPage;
+                    }
+                }
+            }
+        }
+    }
+
+    const maxPages = !searchTerm && pageSize > 0
+        ? Math.max(1, Math.ceil(Math.max(totalTopLevel, 1) / pageSize))
+        : 1;
+
+    if (searchTerm) {
+        currentPage = 1;
+    } else {
+        if (!Number.isFinite(currentPage) || currentPage < 1) {
+            currentPage = 1;
+        }
+        if (currentPage > maxPages) {
+            currentPage = maxPages;
+        }
+    }
+
+    state.categoryExplorerPage = currentPage;
+
+    let startIndex = 0;
+    let endIndex = totalTopLevel;
+    let visibleTopLevel = topLevelAll;
+
+    if (!searchTerm && pageSize > 0 && totalTopLevel > pageSize) {
+        startIndex = (currentPage - 1) * pageSize;
+        if (startIndex >= totalTopLevel) {
+            startIndex = Math.max(0, (maxPages - 1) * pageSize);
+        }
+        endIndex = Math.min(totalTopLevel, startIndex + pageSize);
+        visibleTopLevel = topLevelAll.slice(startIndex, endIndex);
+    }
+
+    const buildBranch = (parentId, children, depth) => {
+        if (!Array.isArray(children) || !children.length) {
             return '';
         }
         return children.map(child => {
+            if (!child || typeof child !== 'object' || typeof child.id !== 'string') {
+                return '';
+            }
             const nodeId = child.id;
-            const hasChildren = (categoryChildrenLookup.get(nodeId) || []).length > 0;
+            const childChildren = categoryChildrenLookup instanceof Map ? categoryChildrenLookup.get(nodeId) || [] : [];
+            const hasChildren = childChildren.length > 0;
             const isExpanded = hasChildren && state.categoryExplorerExpanded.has(nodeId);
             const isSelected = state.categoryViewBranchId === nodeId;
-            const relativeDepth = depth + 1;
-            const descriptor = `${child.categoryCode ? `${child.categoryCode} · ` : ''}${child.nameEnglish || child.nameArabic || 'Untitled'}`;
             const statusGroup = getCategoryStatusFilterGroup(child.status);
             const isInactive = statusGroup === 'inactive';
-            const labelTextHtml = highlightSearchMatch(descriptor, searchTerm);
+            const descriptor = `${child.categoryCode ? `${child.categoryCode} · ` : ''}${child.nameEnglish || child.nameArabic || 'Untitled'}`;
+            const labelHtml = highlightSearchMatch(descriptor, searchTermRaw);
             const statusIndicatorHtml = isInactive
                 ? '<span class="tree-node-status" aria-hidden="true"><i class="fas fa-pause-circle"></i></span>'
                 : '';
+            const badgeCount = childChildren.length;
+            const badgeHtml = badgeCount ? `<span class="tree-node-badge">${badgeCount}</span>` : '';
+            const relativeDepth = depth + 1;
             const rowClasses = ['tree-node-row'];
             if (isSelected) {
                 rowClasses.push('is-selected');
@@ -14670,17 +15014,25 @@ function renderCategoryTree() {
             if (isInactive) {
                 rowClasses.push('is-inactive');
             }
-            const childMarkup = isExpanded ? `<div class="tree-node-children" role="group">${buildMarkup(nodeId, relativeDepth)}</div>` : '';
-            const badge = (categoryChildrenLookup.get(nodeId) || []).length;
-            const badgeHtml = badge ? `<span class="tree-node-badge">${badge}</span>` : '';
+            const childMarkup = hasChildren && isExpanded
+                ? `<div class="tree-node-children" role="group">${buildBranch(nodeId, childChildren, relativeDepth)}</div>`
+                : '';
+            const safeId = escapeAttribute(nodeId);
             const depthStyle = `style="--depth:${relativeDepth};"`;
+            const statusLabel = escapeAttribute(getCategoryStatusLabel(child.status));
+            const toggleIcon = hasChildren ? (isExpanded ? 'fa-chevron-down' : 'fa-chevron-right') : 'fa-circle';
+            const toggleClass = `tree-node-toggle${hasChildren ? '' : ' is-leaf'}`;
+            const toggleLabel = hasChildren ? (isExpanded ? 'Collapse' : 'Expand') : 'Leaf node';
+            const ariaExpanded = hasChildren ? String(isExpanded) : 'false';
+            const ariaSelected = isSelected ? 'true' : 'false';
+            const disabledAttr = isInactive ? ' aria-disabled="true"' : '';
             return `
-                <div class="tree-node" role="treeitem" aria-level="${relativeDepth}" aria-expanded="${hasChildren ? String(isExpanded) : 'false'}" data-category-node="${escapeAttribute(nodeId)}">
-                    <div class="${rowClasses.join(' ')}" data-category-select-node="${escapeAttribute(nodeId)}" ${depthStyle}${isInactive ? ' aria-disabled="true"' : ''}>
-                        <button type="button" class="tree-node-toggle${hasChildren ? '' : ' is-leaf'}" data-tree-toggle="${escapeAttribute(nodeId)}" aria-label="${hasChildren ? (isExpanded ? 'Collapse' : 'Expand') : 'Leaf node'}">
-                            <i class="fas ${hasChildren ? (isExpanded ? 'fa-chevron-down' : 'fa-chevron-right') : 'fa-circle'}"></i>
+                <div class="tree-node" role="treeitem" aria-level="${relativeDepth}" aria-expanded="${ariaExpanded}" aria-selected="${ariaSelected}" data-category-node="${safeId}">
+                    <div class="${rowClasses.join(' ')}" data-category-select-node="${safeId}" ${depthStyle}${disabledAttr}>
+                        <button type="button" class="${toggleClass}" data-tree-toggle="${safeId}" aria-label="${toggleLabel}">
+                            <i class="fas ${toggleIcon}"></i>
                         </button>
-                        <span class="tree-node-label" title="${escapeAttribute(getCategoryStatusLabel(child.status))}">${statusIndicatorHtml}<span class="tree-node-label-text">${labelTextHtml}</span></span>
+                        <span class="tree-node-label" title="${statusLabel}">${statusIndicatorHtml}<span class="tree-node-label-text">${labelHtml}</span></span>
                         ${badgeHtml}
                     </div>
                     ${childMarkup}
@@ -14689,8 +15041,95 @@ function renderCategoryTree() {
         }).join('');
     };
 
-    const markup = buildMarkup(CATEGORY_TREE_ROOT_ID, 0);
+    const markup = buildBranch(CATEGORY_TREE_ROOT_ID, visibleTopLevel, 0);
     container.innerHTML = markup || '<div class="tree-empty">There is no Data Available</div>';
+
+    if (paginationContainer) {
+        const shouldShowPagination = !searchTerm && pageSize > 0 && totalTopLevel > pageSize;
+        if (shouldShowPagination) {
+            const displayStart = totalTopLevel ? startIndex + 1 : 0;
+            const displayEnd = totalTopLevel ? endIndex : 0;
+            const paginationMarkup = `
+                <div class="category-explorer-pagination">
+                    <button type="button" class="category-explorer-page-btn" data-category-tree-page="prev" ${currentPage === 1 ? 'disabled' : ''} aria-label="Go to previous page">
+                        <i class="fas fa-chevron-left" aria-hidden="true"></i>
+                        <span>Prev</span>
+                    </button>
+                    <span class="category-explorer-page-indicator">Page ${currentPage} of ${maxPages}</span>
+                    <button type="button" class="category-explorer-page-btn" data-category-tree-page="next" ${currentPage >= maxPages ? 'disabled' : ''} aria-label="Go to next page">
+                        <span>Next</span>
+                        <i class="fas fa-chevron-right" aria-hidden="true"></i>
+                    </button>
+                </div>
+                <div class="category-explorer-page-summary">Showing ${displayStart}-${displayEnd} of ${totalTopLevel} categories</div>
+            `;
+            paginationContainer.innerHTML = paginationMarkup;
+            paginationContainer.classList.add('is-visible');
+            paginationContainer.setAttribute('aria-hidden', 'false');
+        } else {
+            paginationContainer.innerHTML = '';
+            paginationContainer.classList.remove('is-visible');
+            paginationContainer.setAttribute('aria-hidden', 'true');
+        }
+    }
+}
+
+function handleCategoryExplorerPageChange(action) {
+    const normalizedAction = typeof action === 'string' ? action.trim().toLowerCase() : '';
+    if (!normalizedAction) {
+        return;
+    }
+    const searchActive = (state.categoryTreeSearchTerm || '').trim().length > 0;
+    if (searchActive) {
+        return;
+    }
+
+    const pageSize = getCategoryExplorerPageSize();
+    if (pageSize <= 0) {
+        return;
+    }
+
+    const topLevelAll = getCategoryExplorerTopLevelList();
+    if (!topLevelAll.length) {
+        return;
+    }
+
+    const totalPages = Math.max(1, Math.ceil(topLevelAll.length / pageSize));
+    let nextPage = Number.isFinite(state.categoryExplorerPage) && state.categoryExplorerPage > 0
+        ? state.categoryExplorerPage
+        : 1;
+
+    if (normalizedAction === 'prev') {
+        nextPage -= 1;
+    } else if (normalizedAction === 'next') {
+        nextPage += 1;
+    } else {
+        const parsed = Number.parseInt(normalizedAction, 10);
+        if (Number.isFinite(parsed)) {
+            nextPage = parsed;
+        }
+    }
+
+    nextPage = Math.max(1, Math.min(totalPages, nextPage));
+    if (nextPage === state.categoryExplorerPage) {
+        return;
+    }
+
+    state.categoryExplorerPage = nextPage;
+    state.categoryExplorerExpanded = new Set([CATEGORY_TREE_ROOT_ID]);
+    state.categoryViewBranchId = CATEGORY_TREE_ROOT_ID;
+    state.categorySelectedIds.clear();
+    updateCategorySelectionSummary();
+    renderCategoryRelatedDrawer(null);
+
+    refreshCategoryDirectoryView({ rebuildCaches: false, resetScroll: true });
+
+    requestAnimationFrame(() => {
+        const firstNode = document.querySelector('#categoryTreeContainer [data-category-select-node]');
+        if (firstNode && typeof firstNode.focus === 'function') {
+            firstNode.focus();
+        }
+    });
 }
 
 function setCategoryExplorerCollapsed(collapsed) {
@@ -15121,18 +15560,51 @@ function formatCategoryActivityLabel(category) {
         return '';
     }
     const normalizedStatus = typeof category.status === 'string' ? category.status.trim().toLowerCase() : '';
+    const normalizeTimestamp = value => {
+        if (value == null) {
+            return '';
+        }
+        if (value instanceof Date && Number.isFinite(value.getTime())) {
+            return value.toISOString();
+        }
+        const text = String(value).trim();
+        return text;
+    };
+
+    const updatedCandidates = [category.updatedAt, category.modifiedAt, category.updatedOn, category.updated];
+    const updatedTimestamp = updatedCandidates
+        .map(normalizeTimestamp)
+        .find(entry => entry);
+    const createdTimestamp = normalizeTimestamp(category.createdAt);
+
+    const parseMillis = value => {
+        if (!value) {
+            return null;
+        }
+        const parsed = Date.parse(value);
+        return Number.isFinite(parsed) ? parsed : null;
+    };
+
+    const createdMs = parseMillis(createdTimestamp);
+    const updatedMs = parseMillis(updatedTimestamp);
+    const hasDistinctUpdate = Boolean(updatedTimestamp && (
+        !createdTimestamp
+        || (createdMs != null && updatedMs != null
+            ? updatedMs !== createdMs
+            : updatedTimestamp.toLowerCase() !== createdTimestamp.toLowerCase())
+    ));
+
     let prefix = 'Updated';
     if (normalizedStatus === 'inactive' || normalizedStatus === 'archived' || normalizedStatus === 'deactivated') {
         prefix = 'Deactivated';
-    } else if (normalizedStatus === 'active') {
-        const updatedAt = category.updatedAt || category.modifiedAt;
-        const createdAt = category.createdAt;
-        if (!updatedAt && createdAt) {
-            prefix = 'Created';
-        }
+    } else if (!hasDistinctUpdate && createdTimestamp) {
+        prefix = 'Created';
     }
 
-    const timestamp = category.updatedAt || category.modifiedAt || category.updatedOn || category.updated || category.createdAt;
+    const timestamp = hasDistinctUpdate ? updatedTimestamp : (createdTimestamp || updatedTimestamp);
+    if (!timestamp) {
+        return '';
+    }
     const formatted = formatDateForDisplay(timestamp, { includeTime: true });
     if (!formatted) {
         return '';
@@ -16952,7 +17424,8 @@ function downloadCategoryImportTemplate() {
         'Default Auction Closing Periods',
         'Minimum Bid (Value, Seller Can Modify?)',
         'Show on Home Page?',
-        'Is Real Estate?'
+        'Is Real Estate?',
+        'Is Service?'
     ];
     const sampleRows = [
         [
@@ -16978,8 +17451,9 @@ function downloadCategoryImportTemplate() {
             '0',
             '0',
             '48 (Hour), 72 (Hour)',
-            '1000 (Yes)',
+            '1000 (Individual Accounts Only)',
             'Yes',
+            'No',
             'No'
         ],
         [
@@ -17005,8 +17479,9 @@ function downloadCategoryImportTemplate() {
             '50',
             '25',
             '24 (Hour), 36 (Hour)',
-            '500 (No)',
+            '500 (Business Accounts Only)',
             'No',
+            'Yes',
             'Yes'
         ]
     ];
@@ -17158,18 +17633,7 @@ function parseCategoryImportBoolean(value) {
 
 function parseCategoryImportMinimumBid(value) {
     const amount = parseCategoryImportNumber(value);
-    let sellerCanModify = false;
-    if (typeof value === 'string') {
-        const normalized = value.trim().toLowerCase();
-        if (normalized) {
-            if (/(yes|y|true|allow)/.test(normalized)) {
-                sellerCanModify = true;
-            }
-            if (/(no|n|false|deny)/.test(normalized)) {
-                sellerCanModify = false;
-            }
-        }
-    }
+    const sellerCanModify = normalizeMinimumBidSellerScope(value, 'no');
     return {
         amount: Number.isFinite(amount) ? amount : 0,
         sellerCanModify
@@ -17377,6 +17841,7 @@ function buildCategoryImportRecord(cells, getIndex, lookup) {
     const minimumBidRaw = readCell('minimum bid (value, seller can modify?)');
     const showOnHomeRaw = readCell('show on home page?');
     const isRealEstateRaw = readCell('is real estate?');
+    const isServiceRaw = readCell('is service?');
 
     const parentCategory = parentRawText ? lookup.find(parentRawText) : null;
     const parentCategoryId = parentCategory && parentCategory.id ? parentCategory.id : '';
@@ -17391,7 +17856,7 @@ function buildCategoryImportRecord(cells, getIndex, lookup) {
     const negotiationFee = supportsNegotiation ? parseCategoryImportNumber(negotiationFeeRaw) : 0;
     const auctionFee = supportsAuction ? parseCategoryImportNumber(auctionFeeRaw) : 0;
     const auctionTimeFee = supportsAuction ? parseCategoryImportNumber(auctionTimeFeeRaw) : 0;
-    const minBid = supportsAuction ? parseCategoryImportMinimumBid(minimumBidRaw) : { amount: 0, sellerCanModify: false };
+    const minBid = supportsAuction ? parseCategoryImportMinimumBid(minimumBidRaw) : { amount: 0, sellerCanModify: 'no' };
     const auctionPeriods = supportsAuction ? parseCategoryImportAuctionPeriods(auctionPeriodsRaw) : [];
 
     const freeImagesCount = parseCategoryImportInteger(freeImagesRaw);
@@ -17401,6 +17866,7 @@ function buildCategoryImportRecord(cells, getIndex, lookup) {
     const subtitleFee = parseCategoryImportNumber(subtitleFeeRaw);
     const showAtHome = parseCategoryImportBoolean(showOnHomeRaw);
     const isRealEstate = parseCategoryImportBoolean(isRealEstateRaw);
+    const isService = parseCategoryImportBoolean(isServiceRaw);
 
     const presence = {
         nameArabic: hasValue(nameArabicText),
@@ -17427,7 +17893,8 @@ function buildCategoryImportRecord(cells, getIndex, lookup) {
         minimumBidValue: hasValue(toText(minimumBidRaw)),
         minimumBidSellerCanModify: hasValue(toText(minimumBidRaw)),
         showAtHome: hasValue(toText(showOnHomeRaw)),
-        isRealEstate: hasValue(toText(isRealEstateRaw))
+        isRealEstate: hasValue(toText(isRealEstateRaw)),
+        isService: hasValue(toText(isServiceRaw))
     };
 
     const fields = {
@@ -17462,6 +17929,7 @@ function buildCategoryImportRecord(cells, getIndex, lookup) {
         minimumBidSellerCanModify: minBid.sellerCanModify,
         showAtHome,
         isRealEstate,
+        isService,
         status: 'published',
         notifyOnStatusChange: true,
         syncAutomation: false,
@@ -17856,6 +18324,7 @@ function renderCategoryRelatedDrawer(categoryId) {
     const pathLabel = isTopLevelCategory ? '–' : normalizedPathLabel;
     const showAtHomeLabel = normalizeFlag(category.showAtHome) ? 'Yes' : 'No';
     const realEstateLabel = normalizeFlag(category.isRealEstate) ? 'Yes' : 'No';
+    const serviceLabel = normalizeFlag(category.isService) ? 'Yes' : 'No';
     const salesTypesLabel = buildCategorySalesTypesSummary(category);
     const rawImageSource = typeof category.imageDataUrl === 'string' ? category.imageDataUrl.trim() : '';
     const imageAltLabel = category.imageName || getCategoryDisplayName(category) || 'Category image';
@@ -17889,6 +18358,10 @@ function renderCategoryRelatedDrawer(categoryId) {
         <div class="related-section">
             <span class="related-label">Is Real Estate?</span>
             <span class="related-value">${escapeHtml(realEstateLabel)}</span>
+        </div>
+        <div class="related-section">
+            <span class="related-label">Is Service?</span>
+            <span class="related-value">${escapeHtml(serviceLabel)}</span>
         </div>
         <div class="related-section">
             <span class="related-label">Sibling Categories</span>
@@ -18012,7 +18485,9 @@ function setupCategorySortOverlay() {
         categorySortElements.list = document.getElementById('categorySortList');
         categorySortElements.title = document.getElementById('categorySortGroupTitle');
         categorySortElements.hint = document.getElementById('categorySortGroupHint');
-        categorySortElements.closeBtn = document.getElementById('categorySortCloseBtn');
+        categorySortElements.searchInput = document.getElementById('categorySortTreeSearchInput');
+        categorySortElements.expandBtn = document.getElementById('categorySortExpandAllBtn');
+        categorySortElements.collapseBtn = document.getElementById('categorySortCollapseAllBtn');
         categorySortElements.cancelBtn = document.getElementById('categorySortCancelBtn');
         categorySortElements.saveBtn = document.getElementById('categorySortSaveBtn');
         categorySortElements.saveLabel = document.getElementById('categorySortSaveLabel');
@@ -18030,16 +18505,32 @@ function setupCategorySortOverlay() {
     }
     if (categorySortElements.tree && !categorySortElements.tree.dataset.bound) {
         categorySortElements.tree.addEventListener('click', handleCategorySortTreeClick);
+        categorySortElements.tree.addEventListener('keydown', handleCategorySortTreeKeydown);
         categorySortElements.tree.dataset.bound = 'true';
     }
     if (categorySortElements.list && !categorySortElements.list.dataset.bound) {
         categorySortElements.list.addEventListener('click', handleCategorySortListClick);
         categorySortElements.list.addEventListener('change', handleCategorySortListChange);
+        categorySortElements.list.addEventListener('dragstart', handleCategorySortDragStart);
+        categorySortElements.list.addEventListener('dragend', handleCategorySortDragEnd);
+        categorySortElements.list.addEventListener('dragover', handleCategorySortDragOver);
+        categorySortElements.list.addEventListener('drop', handleCategorySortDrop);
+        categorySortElements.list.addEventListener('dragleave', handleCategorySortDragLeave);
         categorySortElements.list.dataset.bound = 'true';
     }
-    if (categorySortElements.closeBtn && !categorySortElements.closeBtn.dataset.bound) {
-        categorySortElements.closeBtn.addEventListener('click', () => closeCategorySortOverlay());
-        categorySortElements.closeBtn.dataset.bound = 'true';
+    if (categorySortElements.searchInput && !categorySortElements.searchInput.dataset.bound) {
+        const handler = event => handleCategorySortSearchInput(event.target.value);
+        categorySortElements.searchInput.addEventListener('input', handler);
+        categorySortElements.searchInput.addEventListener('search', handler);
+        categorySortElements.searchInput.dataset.bound = 'true';
+    }
+    if (categorySortElements.expandBtn && !categorySortElements.expandBtn.dataset.bound) {
+        categorySortElements.expandBtn.addEventListener('click', () => handleCategorySortExpandCollapse('expand'));
+        categorySortElements.expandBtn.dataset.bound = 'true';
+    }
+    if (categorySortElements.collapseBtn && !categorySortElements.collapseBtn.dataset.bound) {
+        categorySortElements.collapseBtn.addEventListener('click', () => handleCategorySortExpandCollapse('collapse'));
+        categorySortElements.collapseBtn.dataset.bound = 'true';
     }
     if (categorySortElements.cancelBtn && !categorySortElements.cancelBtn.dataset.bound) {
         categorySortElements.cancelBtn.addEventListener('click', () => closeCategorySortOverlay());
@@ -18055,12 +18546,19 @@ function resetCategorySortState() {
     categorySortState.activeParentId = CATEGORY_TREE_ROOT_ID;
     categorySortState.orderByParent = new Map();
     categorySortState.initialSequence = new Map();
+    categorySortState.defaultSequence = new Map();
+    categorySortState.overrides = new Map();
     categorySortState.isSaving = false;
+    categorySortState.searchTerm = '';
+    categorySortState.expandedIds = new Set([CATEGORY_TREE_ROOT_ID]);
     if (categorySortElements.list) {
         categorySortElements.list.innerHTML = '';
     }
     if (categorySortElements.tree) {
         categorySortElements.tree.innerHTML = '';
+    }
+    if (categorySortElements.searchInput) {
+        categorySortElements.searchInput.value = '';
     }
 }
 
@@ -18083,6 +18581,14 @@ function determineCategorySortDefaultParent() {
 function buildCategorySortState(defaultParentId = CATEGORY_TREE_ROOT_ID) {
     categorySortState.orderByParent = new Map();
     categorySortState.initialSequence = new Map();
+    categorySortState.defaultSequence = new Map();
+    categorySortState.searchTerm = '';
+    categorySortState.expandedIds = new Set([CATEGORY_TREE_ROOT_ID]);
+    const overrides = loadCategorySortOverrides();
+    categorySortState.overrides = overrides instanceof Map ? overrides : new Map();
+    if (categorySortElements.searchInput) {
+        categorySortElements.searchInput.value = '';
+    }
 
     if (!(categoryChildrenLookup instanceof Map) || !categoryChildrenLookup.size) {
         rebuildCategoryCaches();
@@ -18098,13 +18604,18 @@ function buildCategorySortState(defaultParentId = CATEGORY_TREE_ROOT_ID) {
     parents.forEach(parentId => {
         const children = categoryChildrenLookup instanceof Map ? categoryChildrenLookup.get(parentId) || [] : [];
         const sorted = children.length ? children.slice().sort(compareCategoriesForTree) : [];
-        const entries = sorted.map((category, index) => ({
+        const baseEntries = sorted.map((category, index) => ({
             id: category.id,
             code: category.categoryCode || category.id,
             name: getCategoryDisplayName(category),
             sortOrder: index + 1,
             initialIndex: index
         }));
+        const defaultSequence = baseEntries.map(entry => entry.id);
+        categorySortState.defaultSequence.set(parentId, defaultSequence);
+
+        const overrideSequence = categorySortState.overrides.get(parentId) || null;
+        const entries = applyCategorySortOverride(baseEntries, overrideSequence);
         categorySortState.orderByParent.set(parentId, entries);
         categorySortState.initialSequence.set(parentId, entries.map(entry => entry.id));
     });
@@ -18112,6 +18623,7 @@ function buildCategorySortState(defaultParentId = CATEGORY_TREE_ROOT_ID) {
     categorySortState.activeParentId = categorySortState.orderByParent.has(defaultParentId)
         ? defaultParentId
         : CATEGORY_TREE_ROOT_ID;
+    ensureCategorySortExpanded(categorySortState.activeParentId);
 }
 
 function renderCategorySortTree() {
@@ -18119,51 +18631,132 @@ function renderCategorySortTree() {
         return;
     }
 
-    const activeParentId = categorySortState.activeParentId || CATEGORY_TREE_ROOT_ID;
+    if (!(categoryChildrenLookup instanceof Map) || !categoryChildrenLookup.size) {
+        rebuildCategoryCaches();
+    }
 
-    const buildBranch = (parentId, depth) => {
-        const children = categoryChildrenLookup instanceof Map ? categoryChildrenLookup.get(parentId) || [] : [];
-        if (!children.length) {
+    if (!(categorySortState.expandedIds instanceof Set)) {
+        categorySortState.expandedIds = new Set([CATEGORY_TREE_ROOT_ID]);
+    }
+    categorySortState.expandedIds.add(CATEGORY_TREE_ROOT_ID);
+
+    const activeParentId = categorySortState.activeParentId || CATEGORY_TREE_ROOT_ID;
+    const searchTermRaw = typeof categorySortState.searchTerm === 'string' ? categorySortState.searchTerm.trim() : '';
+    const searchTerm = searchTermRaw.toLowerCase();
+    const matchedIds = new Set();
+
+    if (searchTerm) {
+        const pool = Array.isArray(categories) ? categories : [];
+        pool.forEach(category => {
+            if (!category || typeof category !== 'object' || !category.id) {
+                return;
+            }
+            const haystack = [
+                category.categoryCode,
+                category.nameEnglish,
+                category.nameArabic
+            ].filter(Boolean).join(' ').toLowerCase();
+            if (haystack.includes(searchTerm)) {
+                matchedIds.add(category.id);
+                collectCategoryAncestorIds(category.id).forEach(id => matchedIds.add(id));
+            }
+        });
+    }
+
+    matchedIds.forEach(id => ensureCategorySortExpanded(id));
+
+    const buildMarkup = (parentId, depth) => {
+        const entries = categorySortState.orderByParent instanceof Map && categorySortState.orderByParent.has(parentId)
+            ? categorySortState.orderByParent.get(parentId) || []
+            : [];
+
+        const fallbackChildren = entries.length
+            ? []
+            : (categoryChildrenLookup instanceof Map ? categoryChildrenLookup.get(parentId) || [] : []);
+
+        const items = entries.length
+            ? entries.map(entry => {
+                const category = categoryLookupById.get(entry.id);
+                return { category, entry };
+            })
+            : fallbackChildren.slice().sort(compareCategoriesForTree).map(category => ({
+                category,
+                entry: category
+                    ? {
+                        id: category.id,
+                        code: category.categoryCode || category.id,
+                        name: getCategoryDisplayName(category),
+                        sortOrder: resolveCategorySortValue(category) || 0
+                    }
+                    : null
+            }));
+
+        if (!items.length) {
             return '';
         }
-        return children
-            .slice()
-            .sort(compareCategoriesForTree)
-            .map(child => {
-                const childId = child.id;
-                const childHasChildren = (categoryChildrenLookup instanceof Map ? categoryChildrenLookup.get(childId) || [] : []).length > 0;
-                const isSelected = activeParentId === childId;
-                const padding = (depth * 16) + 16;
-                const count = categorySortState.orderByParent.has(childId)
-                    ? categorySortState.orderByParent.get(childId).length
-                    : (categoryChildrenLookup instanceof Map ? (categoryChildrenLookup.get(childId) || []).length : 0);
-                return `
-                    <li>
-                        <button type="button" data-sort-parent-id="${escapeAttribute(childId)}" class="${isSelected ? 'is-selected' : ''}" style="padding-left:${padding}px;">
-                            <span class="category-sort-tree-label">${escapeHtml(getCategoryDisplayName(child))}</span>
-                            <span class="category-sort-tree-count">${count}</span>
+
+        return items.map(({ category: child, entry }) => {
+            if ((!child || typeof child !== 'object') && (!entry || !entry.id)) {
+                return '';
+            }
+            const childId = (child && child.id) || (entry && entry.id);
+            if (!childId) {
+                return '';
+            }
+            const childEntries = categorySortState.orderByParent instanceof Map && categorySortState.orderByParent.has(childId)
+                ? categorySortState.orderByParent.get(childId) || []
+                : (categoryChildrenLookup instanceof Map ? categoryChildrenLookup.get(childId) || [] : []);
+            const hasChildren = Array.isArray(childEntries) && childEntries.length > 0;
+            const isExpanded = hasChildren && categorySortState.expandedIds.has(childId);
+            const isSelected = activeParentId === childId;
+            const categoryRecord = child || categoryLookupById.get(childId) || null;
+            const statusGroup = categoryRecord ? getCategoryStatusFilterGroup(categoryRecord.status) : 'active';
+            const isInactive = statusGroup === 'inactive';
+            const descriptor = categoryRecord
+                ? `${categoryRecord.categoryCode ? `${categoryRecord.categoryCode} · ` : ''}${categoryRecord.nameEnglish || categoryRecord.nameArabic || 'Untitled'}`
+                : `${entry && entry.code ? `${entry.code} · ` : ''}${entry && entry.name ? entry.name : 'Untitled'}`;
+            const labelHtml = searchTermRaw ? highlightSearchMatch(descriptor, searchTermRaw) : escapeHtml(descriptor);
+            const statusIndicatorHtml = isInactive
+                ? '<span class="tree-node-status" aria-hidden="true"><i class="fas fa-pause-circle"></i></span>'
+                : '';
+            const badgeCount = Array.isArray(childEntries) ? childEntries.length : 0;
+            const badgeHtml = badgeCount ? `<span class="tree-node-badge">${badgeCount}</span>` : '';
+            const relativeDepth = depth + 1;
+            const rowClasses = ['tree-node-row'];
+            if (isSelected) {
+                rowClasses.push('is-selected');
+            }
+            if (isInactive) {
+                rowClasses.push('is-inactive');
+            }
+            const childMarkup = hasChildren && isExpanded
+                ? `<div class="tree-node-children" role="group">${buildMarkup(childId, relativeDepth)}</div>`
+                : '';
+            const safeId = escapeAttribute(childId);
+            const depthStyle = `style="--depth:${relativeDepth};"`;
+            const statusLabel = escapeAttribute(getCategoryStatusLabel(categoryRecord ? categoryRecord.status : 'active'));
+            const toggleIcon = hasChildren ? (isExpanded ? 'fa-chevron-down' : 'fa-chevron-right') : 'fa-circle';
+            const toggleClass = `tree-node-toggle${hasChildren ? '' : ' is-leaf'}`;
+            const toggleLabel = hasChildren ? (isExpanded ? 'Collapse' : 'Expand') : 'Leaf node';
+            const ariaExpanded = hasChildren ? String(isExpanded) : 'false';
+            const ariaSelected = isSelected ? 'true' : 'false';
+            return `
+                <div class="tree-node" role="treeitem" aria-level="${relativeDepth}" aria-expanded="${ariaExpanded}" aria-selected="${ariaSelected}" data-sort-node="${safeId}">
+                    <div class="${rowClasses.join(' ')}" data-sort-parent-id="${safeId}" tabindex="0" ${depthStyle}>
+                        <button type="button" class="${toggleClass}" data-sort-toggle="${safeId}" aria-label="${toggleLabel}">
+                            <i class="fas ${toggleIcon}"></i>
                         </button>
-                        ${childHasChildren ? `<ul class="category-sort-tree-list">${buildBranch(childId, depth + 1)}</ul>` : ''}
-                    </li>
-                `;
-            })
-            .join('');
+                        <span class="tree-node-label" title="${statusLabel}">${statusIndicatorHtml}<span class="tree-node-label-text">${labelHtml}</span></span>
+                        ${badgeHtml}
+                    </div>
+                    ${childMarkup}
+                </div>
+            `;
+        }).join('');
     };
 
-    const rootEntries = categorySortState.orderByParent.get(CATEGORY_TREE_ROOT_ID) || [];
-    const rootSelected = activeParentId === CATEGORY_TREE_ROOT_ID || !activeParentId;
-    const treeMarkup = `
-        <ul class="category-sort-tree-list">
-            <li>
-                <button type="button" data-sort-parent-id="${CATEGORY_TREE_ROOT_ID}" class="${rootSelected ? 'is-selected' : ''}">
-                    <span class="category-sort-tree-label">Top-level categories</span>
-                    <span class="category-sort-tree-count">${rootEntries.length}</span>
-                </button>
-            </li>
-            ${buildBranch(CATEGORY_TREE_ROOT_ID, 1)}
-        </ul>
-    `;
-    categorySortElements.tree.innerHTML = treeMarkup;
+    const markup = buildMarkup(CATEGORY_TREE_ROOT_ID, 0);
+    categorySortElements.tree.innerHTML = markup || '<div class="tree-empty">There is no Data Available</div>';
 }
 
 function renderCategorySortGroup(parentId) {
@@ -18177,38 +18770,37 @@ function renderCategorySortGroup(parentId) {
     if (categorySortElements.title) {
         categorySortElements.title.textContent = parentCategory
             ? `Subcategories of ${getCategoryDisplayName(parentCategory)}`
-            : 'Top-level categories';
+            : 'Main Categories';
     }
 
     if (!entries.length) {
         if (categorySortElements.hint) {
-            categorySortElements.hint.textContent = parentCategory
-                ? 'This category has no subcategories yet.'
-                : 'No categories available to sort.';
+            categorySortElements.hint.textContent = '';
         }
-        categorySortElements.list.innerHTML = '<div class="category-sort-placeholder">No categories available to reorder in this level.</div>';
+        categorySortElements.list.innerHTML = '<div class="category-sort-placeholder">There is no Data Available</div>';
         return;
     }
 
     if (categorySortElements.hint) {
-        categorySortElements.hint.textContent = 'Change the position number or use the arrows to adjust the order.';
+        categorySortElements.hint.textContent = '';
     }
 
     const listMarkup = entries.map((entry, index) => {
         const category = categoryLookupById.get(entry.id);
         const name = category ? getCategoryDisplayName(category) : entry.id;
         const code = category ? category.categoryCode || category.id : entry.code || entry.id;
+        const hasCode = Boolean(code && code.toString().trim());
         const safeId = escapeAttribute(entry.id);
         const safeName = escapeHtml(name);
+        const safeCode = escapeHtml(code);
         const safeLabel = escapeAttribute(name);
         const upDisabled = index === 0 ? 'disabled' : '';
         const downDisabled = index === entries.length - 1 ? 'disabled' : '';
         return `
-            <div class="category-sort-row" data-category-sort-row="${safeId}">
+            <div class="category-sort-row" data-category-sort-row="${safeId}" draggable="true">
                 <span class="category-sort-handle" aria-hidden="true"><i class="fas fa-grip-vertical"></i></span>
                 <div class="category-sort-info">
-                    <div class="category-sort-name">${safeName}</div>
-                    <div class="category-sort-meta">${escapeHtml(code)}</div>
+                    <div class="category-sort-name">${hasCode ? `<span class="category-sort-code">${safeCode}</span>` : ''}${safeName}</div>
                 </div>
                 <input type="number" class="category-sort-input" min="1" max="${entries.length}" value="${index + 1}" data-category-sort-input="${safeId}" aria-label="Position for ${safeLabel}">
                 <div class="category-sort-actions">
@@ -18233,10 +18825,11 @@ function focusCategorySortTreeNode(parentId) {
     const safeId = (typeof CSS !== 'undefined' && typeof CSS.escape === 'function')
         ? CSS.escape(parentId)
         : parentId;
-    const target = categorySortElements.tree.querySelector(`button[data-sort-parent-id="${safeId}"]`);
-    if (target) {
+    const target = categorySortElements.tree.querySelector(`[data-sort-parent-id="${safeId}"]`);
+    const focusNode = target || categorySortElements.tree.querySelector('[data-sort-parent-id]');
+    if (focusNode && typeof focusNode.focus === 'function') {
         requestAnimationFrame(() => {
-            target.focus();
+            focusNode.focus();
         });
     }
 }
@@ -18262,20 +18855,213 @@ function handleCategorySortTreeClick(event) {
         event.preventDefault();
         return;
     }
-    const target = event.target.closest('button[data-sort-parent-id]');
-    if (!target) {
+    const toggleBtn = event.target.closest('[data-sort-toggle]');
+    if (toggleBtn) {
+        event.preventDefault();
+        const nodeId = toggleBtn.dataset.sortToggle;
+        if (!nodeId) {
+            return;
+        }
+        const children = categoryChildrenLookup instanceof Map ? categoryChildrenLookup.get(nodeId) || [] : [];
+        const isExpanded = categorySortState.expandedIds instanceof Set && categorySortState.expandedIds.has(nodeId);
+        if (isExpanded) {
+            collapseCategorySortBranch(nodeId);
+        } else if (children.length) {
+            ensureCategorySortExpanded(nodeId);
+        }
+        renderCategorySortTree();
+        focusCategorySortTreeNode(nodeId);
+        return;
+    }
+
+    const row = event.target.closest('[data-sort-parent-id]');
+    if (!row) {
         return;
     }
     event.preventDefault();
-    const parentId = target.dataset.sortParentId || CATEGORY_TREE_ROOT_ID;
-    if (categorySortState.activeParentId === parentId) {
-        target.focus();
+    const parentId = row.dataset.sortParentId || CATEGORY_TREE_ROOT_ID;
+    if (categorySortState.activeParentId !== parentId) {
+        categorySortState.activeParentId = parentId;
+        ensureCategorySortExpanded(parentId);
+        renderCategorySortTree();
+        renderCategorySortGroup(parentId);
+    }
+    focusCategorySortTreeNode(parentId);
+}
+
+function handleCategorySortTreeKeydown(event) {
+    if (categorySortState.isSaving) {
         return;
     }
-    categorySortState.activeParentId = parentId;
+    const toggleTarget = event.target.closest('[data-sort-toggle]');
+    if (toggleTarget && event.target === toggleTarget) {
+        const nodeId = toggleTarget.dataset.sortToggle;
+        if (!nodeId) {
+            return;
+        }
+        const children = categoryChildrenLookup instanceof Map ? categoryChildrenLookup.get(nodeId) || [] : [];
+        const isExpanded = categorySortState.expandedIds instanceof Set && categorySortState.expandedIds.has(nodeId);
+        switch (event.key) {
+            case 'Enter':
+            case ' ': // modern browsers
+            case 'Space':
+            case 'Spacebar': // legacy browsers
+            case 'ArrowRight':
+                if (children.length && !isExpanded) {
+                    event.preventDefault();
+                    ensureCategorySortExpanded(nodeId);
+                    renderCategorySortTree();
+                    focusCategorySortTreeNode(nodeId);
+                }
+                break;
+            case 'ArrowLeft':
+                if (isExpanded) {
+                    event.preventDefault();
+                    collapseCategorySortBranch(nodeId);
+                    renderCategorySortTree();
+                    focusCategorySortTreeNode(nodeId);
+                }
+                break;
+            default:
+                break;
+        }
+        return;
+    }
+    const row = event.target.closest('[data-sort-parent-id]');
+    if (!row) {
+        return;
+    }
+    const parentId = row.dataset.sortParentId || CATEGORY_TREE_ROOT_ID;
+    switch (event.key) {
+        case 'Enter':
+        case ' ': // modern browsers
+        case 'Space':
+        case 'Spacebar': // legacy browsers
+            event.preventDefault();
+            if (categorySortState.activeParentId !== parentId) {
+                categorySortState.activeParentId = parentId;
+                ensureCategorySortExpanded(parentId);
+                renderCategorySortTree();
+                renderCategorySortGroup(parentId);
+            }
+            focusCategorySortTreeNode(parentId);
+            break;
+        case 'ArrowRight': {
+            const children = categoryChildrenLookup instanceof Map ? categoryChildrenLookup.get(parentId) || [] : [];
+            const isExpanded = categorySortState.expandedIds instanceof Set && categorySortState.expandedIds.has(parentId);
+            if (children.length && !isExpanded) {
+                event.preventDefault();
+                ensureCategorySortExpanded(parentId);
+                renderCategorySortTree();
+                focusCategorySortTreeNode(parentId);
+            }
+            break;
+        }
+        case 'ArrowLeft': {
+            const isExpanded = categorySortState.expandedIds instanceof Set && categorySortState.expandedIds.has(parentId);
+            if (isExpanded && parentId !== CATEGORY_TREE_ROOT_ID) {
+                event.preventDefault();
+                collapseCategorySortBranch(parentId);
+                renderCategorySortTree();
+                focusCategorySortTreeNode(parentId);
+            }
+            break;
+        }
+        default:
+            break;
+    }
+}
+
+function handleCategorySortSearchInput(term) {
+    const normalized = typeof term === 'string' ? term.trim() : '';
+    categorySortState.searchTerm = normalized;
+    if (!normalized) {
+        categorySortState.expandedIds = new Set([CATEGORY_TREE_ROOT_ID]);
+        ensureCategorySortExpanded(categorySortState.activeParentId || CATEGORY_TREE_ROOT_ID);
+    }
     renderCategorySortTree();
-    renderCategorySortGroup(parentId);
-    focusCategorySortTreeNode(parentId);
+}
+
+function handleCategorySortExpandCollapse(action) {
+    if (categorySortState.isSaving) {
+        return;
+    }
+    if (action === 'expand') {
+        expandAllCategorySort();
+    } else if (action === 'collapse') {
+        collapseCategorySort();
+        if (categorySortState.activeParentId !== CATEGORY_TREE_ROOT_ID) {
+            categorySortState.activeParentId = CATEGORY_TREE_ROOT_ID;
+            renderCategorySortGroup(CATEGORY_TREE_ROOT_ID);
+        }
+    }
+    renderCategorySortTree();
+    focusCategorySortTreeNode(categorySortState.activeParentId || CATEGORY_TREE_ROOT_ID);
+}
+
+function ensureCategorySortExpanded(nodeId) {
+    if (!nodeId) {
+        return;
+    }
+    if (!(categorySortState.expandedIds instanceof Set)) {
+        categorySortState.expandedIds = new Set();
+    }
+    categorySortState.expandedIds.add(CATEGORY_TREE_ROOT_ID);
+    categorySortState.expandedIds.add(nodeId);
+    const ancestors = collectCategoryAncestorIds(nodeId) || [];
+    ancestors.forEach(id => {
+        if (id) {
+            categorySortState.expandedIds.add(id);
+        }
+    });
+}
+
+function collapseCategorySortBranch(nodeId) {
+    if (!(categorySortState.expandedIds instanceof Set)) {
+        return;
+    }
+    if (!nodeId || nodeId === CATEGORY_TREE_ROOT_ID) {
+        collapseCategorySort();
+        return;
+    }
+    const stack = [nodeId];
+    while (stack.length) {
+        const current = stack.pop();
+        if (!current || current === CATEGORY_TREE_ROOT_ID) {
+            continue;
+        }
+        categorySortState.expandedIds.delete(current);
+        if (categoryChildrenLookup instanceof Map) {
+            const children = categoryChildrenLookup.get(current) || [];
+            children.forEach(child => {
+                if (child && child.id) {
+                    stack.push(child.id);
+                }
+            });
+        }
+    }
+    categorySortState.expandedIds.add(CATEGORY_TREE_ROOT_ID);
+}
+
+function collapseCategorySort() {
+    categorySortState.expandedIds = new Set([CATEGORY_TREE_ROOT_ID]);
+}
+
+function expandAllCategorySort() {
+    const expanded = new Set([CATEGORY_TREE_ROOT_ID]);
+    if (categoryChildrenLookup instanceof Map) {
+        categoryChildrenLookup.forEach((children, parentId) => {
+            if (parentId) {
+                expanded.add(parentId);
+            }
+            (children || []).forEach(child => {
+                if (child && child.id) {
+                    expanded.add(child.id);
+                }
+            });
+        });
+    }
+    categorySortState.expandedIds = expanded;
 }
 
 function handleCategorySortListClick(event) {
@@ -18302,6 +19088,7 @@ function handleCategorySortListClick(event) {
     const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
     adjustCategorySortPosition(categoryId, targetIndex);
     renderCategorySortGroup(parentId);
+    renderCategorySortTree();
     focusCategorySortInput(categoryId);
 }
 
@@ -18327,6 +19114,7 @@ function handleCategorySortListChange(event) {
     const clampedTarget = Number.isFinite(parsed) ? Math.max(0, Math.min(entries.length - 1, parsed - 1)) : currentIndex;
     adjustCategorySortPosition(categoryId, clampedTarget);
     renderCategorySortGroup(parentId);
+    renderCategorySortTree();
     focusCategorySortInput(categoryId);
 }
 
@@ -18355,6 +19143,215 @@ function reindexCategorySortEntries(entries) {
     entries.forEach((entry, index) => {
         entry.sortOrder = index + 1;
     });
+}
+
+function resolveCategorySortRow(target) {
+    if (!target || typeof target.closest !== 'function') {
+        return null;
+    }
+    return target.closest('[data-category-sort-row]');
+}
+
+function handleCategorySortDragStart(event) {
+    if (categorySortState.isSaving) {
+        event.preventDefault();
+        return;
+    }
+    const row = resolveCategorySortRow(event.target);
+    const categoryId = row ? row.dataset.categorySortRow : '';
+    if (!row || !categoryId) {
+        event.preventDefault();
+        return;
+    }
+    categorySortDragState.draggingId = categoryId;
+    categorySortDragState.dropTargetId = null;
+    categorySortDragState.dropPosition = null;
+    row.classList.add('is-dragging');
+    if (event.dataTransfer) {
+        event.dataTransfer.effectAllowed = 'move';
+        event.dataTransfer.setData('text/plain', categoryId);
+    }
+}
+
+function handleCategorySortDragEnd(event) {
+    const row = resolveCategorySortRow(event.target);
+    if (row) {
+        row.classList.remove('is-dragging');
+    }
+    clearCategorySortDragIndicator();
+    categorySortDragState.draggingId = null;
+}
+
+function handleCategorySortDragOver(event) {
+    if (categorySortState.isSaving || !categorySortDragState.draggingId) {
+        return;
+    }
+    event.preventDefault();
+    if (event.dataTransfer) {
+        event.dataTransfer.dropEffect = 'move';
+    }
+    const list = categorySortElements.list;
+    if (!list) {
+        return;
+    }
+    const targetRow = resolveCategorySortRow(event.target);
+    if (targetRow && targetRow.dataset.categorySortRow === categorySortDragState.draggingId) {
+        clearCategorySortDragIndicator();
+        return;
+    }
+    if (targetRow) {
+        const rect = targetRow.getBoundingClientRect();
+        const position = event.clientY - rect.top < rect.height / 2 ? 'before' : 'after';
+        updateCategorySortDragIndicator(targetRow, position);
+        return;
+    }
+
+    const rows = Array.from(list.querySelectorAll('[data-category-sort-row]'));
+    if (!rows.length) {
+        clearCategorySortDragIndicator();
+        return;
+    }
+    const listRect = list.getBoundingClientRect();
+    const offset = event.clientY - listRect.top;
+    const position = offset < listRect.height / 2 ? 'before' : 'after';
+    const row = position === 'before' ? rows[0] : rows[rows.length - 1];
+    if (row.dataset.categorySortRow === categorySortDragState.draggingId) {
+        clearCategorySortDragIndicator();
+        return;
+    }
+    updateCategorySortDragIndicator(row, position);
+}
+
+function handleCategorySortDrop(event) {
+    if (categorySortState.isSaving || !categorySortDragState.draggingId) {
+        return;
+    }
+    event.preventDefault();
+    const parentId = categorySortState.activeParentId || CATEGORY_TREE_ROOT_ID;
+    const entries = categorySortState.orderByParent.get(parentId) || [];
+    if (!entries.length) {
+        clearCategorySortDragIndicator();
+        return;
+    }
+
+    let targetRow = resolveCategorySortRow(event.target);
+    let position = categorySortDragState.dropPosition;
+    let targetId = categorySortDragState.dropTargetId;
+
+    if (targetRow && targetRow.dataset.categorySortRow) {
+        targetId = targetRow.dataset.categorySortRow;
+        const rect = targetRow.getBoundingClientRect();
+        position = event.clientY - rect.top < rect.height / 2 ? 'before' : 'after';
+    } else if (!targetId) {
+        const list = categorySortElements.list;
+        if (list) {
+            const listRect = list.getBoundingClientRect();
+            const offset = event.clientY - listRect.top;
+            position = offset < listRect.height / 2 ? 'before' : 'after';
+            const rows = Array.from(list.querySelectorAll('[data-category-sort-row]'));
+            if (rows.length) {
+                const row = position === 'before' ? rows[0] : rows[rows.length - 1];
+                targetId = row.dataset.categorySortRow;
+            }
+        }
+    }
+
+    let didMove = false;
+    if (targetId && targetId !== categorySortDragState.draggingId) {
+        didMove = moveCategorySortRelative(categorySortDragState.draggingId, targetId, position || 'before');
+    } else if (!targetId) {
+        didMove = moveCategorySortToIndex(categorySortDragState.draggingId, entries.length);
+    }
+
+    clearCategorySortDragIndicator();
+    if (didMove) {
+        renderCategorySortGroup(parentId);
+        renderCategorySortTree();
+        focusCategorySortInput(categorySortDragState.draggingId);
+    }
+}
+
+function handleCategorySortDragLeave(event) {
+    if (!categorySortDragState.draggingId || !categorySortElements.list) {
+        return;
+    }
+    const related = event.relatedTarget;
+    if (related && categorySortElements.list.contains(related)) {
+        return;
+    }
+    clearCategorySortDragIndicator();
+}
+
+function moveCategorySortRelative(categoryId, targetId, position) {
+    const parentId = categorySortState.activeParentId || CATEGORY_TREE_ROOT_ID;
+    const entries = categorySortState.orderByParent.get(parentId);
+    if (!entries || !entries.length || categoryId === targetId) {
+        return false;
+    }
+    const currentIndex = entries.findIndex(entry => entry.id === categoryId);
+    if (currentIndex === -1) {
+        return false;
+    }
+    const [entry] = entries.splice(currentIndex, 1);
+    const targetIndex = entries.findIndex(entry => entry.id === targetId);
+    if (targetIndex === -1) {
+        entries.splice(Math.max(0, Math.min(entries.length, currentIndex)), 0, entry);
+        return false;
+    }
+    const insertionIndex = position === 'after' ? targetIndex + 1 : targetIndex;
+    const clampedIndex = Math.max(0, Math.min(entries.length, insertionIndex));
+    entries.splice(clampedIndex, 0, entry);
+    reindexCategorySortEntries(entries);
+    return currentIndex !== clampedIndex;
+}
+
+function moveCategorySortToIndex(categoryId, index) {
+    const parentId = categorySortState.activeParentId || CATEGORY_TREE_ROOT_ID;
+    const entries = categorySortState.orderByParent.get(parentId);
+    if (!entries || !entries.length) {
+        return false;
+    }
+    const currentIndex = entries.findIndex(entry => entry.id === categoryId);
+    if (currentIndex === -1) {
+        return false;
+    }
+    const [entry] = entries.splice(currentIndex, 1);
+    const clampedIndex = Math.max(0, Math.min(entries.length, Number.isFinite(index) ? index : entries.length));
+    entries.splice(clampedIndex, 0, entry);
+    reindexCategorySortEntries(entries);
+    return currentIndex !== clampedIndex;
+}
+
+function updateCategorySortDragIndicator(targetRow, position) {
+    if (!categorySortElements.list) {
+        return;
+    }
+    categorySortElements.list.querySelectorAll('.drop-before, .drop-after').forEach(row => {
+        row.classList.remove('drop-before', 'drop-after');
+    });
+    categorySortDragState.dropTargetId = null;
+    categorySortDragState.dropPosition = null;
+    if (!targetRow || !position) {
+        return;
+    }
+    if (position === 'after') {
+        targetRow.classList.add('drop-after');
+    } else {
+        targetRow.classList.add('drop-before');
+    }
+    categorySortDragState.dropTargetId = targetRow.dataset.categorySortRow || null;
+    categorySortDragState.dropPosition = position;
+}
+
+function clearCategorySortDragIndicator() {
+    if (!categorySortElements.list) {
+        return;
+    }
+    categorySortElements.list.querySelectorAll('.drop-before, .drop-after').forEach(row => {
+        row.classList.remove('drop-before', 'drop-after');
+    });
+    categorySortDragState.dropTargetId = null;
+    categorySortDragState.dropPosition = null;
 }
 
 function openCategorySortOverlay() {
@@ -18407,11 +19404,8 @@ function setCategorySortSaving(isSaving) {
     if (categorySortElements.cancelBtn) {
         categorySortElements.cancelBtn.disabled = disabled;
     }
-    if (categorySortElements.closeBtn) {
-        categorySortElements.closeBtn.disabled = disabled;
-    }
     if (categorySortElements.saveLabel) {
-        categorySortElements.saveLabel.textContent = disabled ? 'Saving...' : 'Save Order';
+        categorySortElements.saveLabel.textContent = disabled ? 'Saving...' : 'Save';
     }
 }
 
@@ -18425,11 +19419,6 @@ function submitCategorySortChanges() {
         setCategorySortSaving(false);
         closeCategorySortOverlay();
         const changedCount = result && Number.isFinite(result.changedCount) ? result.changedCount : 0;
-        if (changedCount > 0) {
-            showNotification('success', `Updated ordering for ${changedCount} categor${changedCount === 1 ? 'y' : 'ies'}.`, 4400, 'categoryNotificationArea');
-        } else {
-            showNotification('info', 'No ordering changes detected.', 3600, 'categoryNotificationArea');
-        }
     } catch (error) {
         setCategorySortSaving(false);
         console.error('Failed to apply category sorting:', error);
@@ -18443,6 +19432,27 @@ function applyCategorySortUpdates() {
     }
 
     let changedCount = 0;
+    let overridesChanged = false;
+    let currentOverrides = categorySortState.overrides instanceof Map
+        ? new Map(categorySortState.overrides)
+        : loadCategorySortOverrides();
+    if (!(currentOverrides instanceof Map)) {
+        currentOverrides = new Map();
+    }
+
+    const sequencesEqual = (a, b) => {
+        const first = Array.isArray(a) ? a : [];
+        const second = Array.isArray(b) ? b : [];
+        if (first.length !== second.length) {
+            return false;
+        }
+        for (let index = 0; index < first.length; index += 1) {
+            if (first[index] !== second[index]) {
+                return false;
+            }
+        }
+        return true;
+    };
 
     categorySortState.orderByParent.forEach((entries, parentId) => {
         const initialSequence = categorySortState.initialSequence.get(parentId) || [];
@@ -18454,32 +19464,39 @@ function applyCategorySortUpdates() {
             return;
         }
 
-        entries.forEach((entry, index) => {
-            const category = categoryLookupById.get(entry.id);
-            if (!category) {
-                return;
+        let deltaCount = 0;
+        if (!initialSequence.length) {
+            deltaCount = entries.length;
+        } else {
+            const initialIndexLookup = new Map(initialSequence.map((id, index) => [id, index]));
+            entries.forEach((entry, index) => {
+                const initialIndex = initialIndexLookup.has(entry.id) ? initialIndexLookup.get(entry.id) : index;
+                if (initialIndex !== index) {
+                    deltaCount += 1;
+                }
+            });
+        }
+        changedCount += deltaCount;
+
+        const defaultSequence = categorySortState.defaultSequence.get(parentId) || [];
+        if (sequencesEqual(currentSequence, defaultSequence)) {
+            if (currentOverrides.has(parentId)) {
+                currentOverrides.delete(parentId);
+                overridesChanged = true;
             }
-            const nextOrder = index + 1;
-            const currentOrder = resolveCategorySortValue(category);
-            if (currentOrder !== nextOrder) {
-                changedCount += 1;
+        } else {
+            if (!sequencesEqual(currentSequence, currentOverrides.get(parentId))) {
+                overridesChanged = true;
             }
-            category.sortOrder = nextOrder;
-            category.sort = nextOrder;
-            category.order = nextOrder;
-            category.orderIndex = nextOrder;
-            category.displayOrder = nextOrder;
-            category.sequence = nextOrder;
-            category.position = nextOrder;
-        });
+            currentOverrides.set(parentId, currentSequence.slice());
+        }
+
+        categorySortState.initialSequence.set(parentId, currentSequence.slice());
     });
 
-    if (changedCount > 0) {
-        saveCategoriesToStorage();
-        refreshCategoryDirectoryView({ rebuildCaches: true, keepScroll: true });
-        if (state.activeCategoryDetailId) {
-            renderCategoryRelatedDrawer(state.activeCategoryDetailId);
-        }
+    if (overridesChanged) {
+        saveCategorySortOverrides(currentOverrides);
+        categorySortState.overrides = currentOverrides;
     }
 
     return { changedCount };
@@ -18561,6 +19578,13 @@ function handleCategoryCompareRequest(categoryId) {
 
 function handleCategoryGridClick(event) {
     const target = event.target;
+    const paginationControl = target.closest('[data-category-tree-page]');
+    if (paginationControl) {
+        if (!paginationControl.disabled) {
+            handleCategoryExplorerPageChange(paginationControl.dataset.categoryTreePage);
+        }
+        return;
+    }
     const relatedLink = target.closest('[data-related-category]');
     if (relatedLink) {
         const categoryId = relatedLink.dataset.relatedCategory;
@@ -18703,6 +19727,7 @@ async function activateCategoryEntry(category) {
 
     category.status = 'active';
     category.updatedAt = new Date().toISOString();
+    category.isHidden = false;
 
     saveCategoriesToStorage();
     refreshCategoryDirectoryView({ rebuildCaches: true, resetScroll: false, keepScroll: true });
@@ -18722,12 +19747,18 @@ async function deactivateCategoryEntry(category) {
         return false;
     }
 
+    const deactivateMode = await showCategoryDeactivateModePrompt();
+    if (deactivateMode !== 'deactivate' && deactivateMode !== 'deactivate-hide') {
+        return false;
+    }
+    const hideSelection = deactivateMode === 'deactivate-hide';
+
     const descendants = collectCategoryDescendants(category.id);
     const activeDescendants = descendants.filter(entry => getCategoryStatusFilterGroup(entry.status) === 'active');
 
     if (activeDescendants.length) {
         const pluralSuffix = activeDescendants.length === 1 ? 'y' : 'ies';
-        const warningMessage = `This Category Contains ${activeDescendants.length} Active Subcategor${pluralSuffix}. All of Them Will be Disabled. Do You Want to Continue?`;
+        const warningMessage = `This Category Contains ${activeDescendants.length} Active Subcategor${pluralSuffix}. All of Them Will be Deactivated. Do You Want to Continue?`;
         const proceed = await showCategoryConfirm(warningMessage, 'OK', 'Cancel');
         if (!proceed) {
             return false;
@@ -18735,14 +19766,27 @@ async function deactivateCategoryEntry(category) {
     }
 
     const timestamp = new Date().toISOString();
-    const categoriesToDeactivate = activeDescendants.length ? [category, ...descendants] : [category];
-    categoriesToDeactivate.forEach(entry => {
+    const statusTargets = activeDescendants.length ? [category, ...descendants] : [category];
+    statusTargets.forEach(entry => {
         if (!entry) {
             return;
         }
         entry.status = 'inactive';
         entry.updatedAt = timestamp;
     });
+
+    if (hideSelection) {
+        const hideTargets = [category, ...descendants];
+        hideTargets.forEach(entry => {
+            if (!entry) {
+                return;
+            }
+            entry.isHidden = true;
+            if (!entry.updatedAt) {
+                entry.updatedAt = timestamp;
+            }
+        });
+    }
 
     saveCategoriesToStorage();
     refreshCategoryDirectoryView({ rebuildCaches: true, resetScroll: false, keepScroll: true });
@@ -18949,6 +19993,7 @@ function removeCategoryFromCompare(categoryId) {
 
 function handleCategoryTreeSearchInput(term) {
     state.categoryTreeSearchTerm = term.trim();
+    state.categoryExplorerPage = 1;
     renderCategoryTree();
 }
 
@@ -19037,6 +20082,7 @@ function populateCategoryForm(category) {
     const enableNegotiationToggle = document.getElementById('categoryEnableNegotiationToggle');
     const showAtHomeToggle = document.getElementById('categoryShowAtHomeToggle');
     const realEstateToggle = document.getElementById('categoryRealEstateToggle');
+    const serviceToggle = document.getElementById('categoryServiceToggle');
     const chooseCategorySelect = document.getElementById('categoryChooseCategoryInput');
     const imageInput = document.getElementById('categoryImageInput');
 
@@ -19074,10 +20120,9 @@ function populateCategoryForm(category) {
         minimumBidValueInput.value = Number.isFinite(category.minimumBidValue) ? category.minimumBidValue : '';
     }
     if (minimumBidEditableSelect) {
-        const sellerCanModify = category.minimumBidSellerCanModify === true
-            || (typeof category.minimumBidSellerCanModify === 'string'
-                && category.minimumBidSellerCanModify.trim().toLowerCase() === 'yes');
-        minimumBidEditableSelect.value = sellerCanModify ? 'yes' : 'no';
+        const scopeValue = normalizeMinimumBidSellerScope(category.minimumBidSellerCanModify, 'yes');
+        const allowedScopes = new Set(['yes', 'no', 'individual-only', 'business-only']);
+        minimumBidEditableSelect.value = allowedScopes.has(scopeValue) ? scopeValue : 'yes';
     }
     if (subtitleFeeInput) subtitleFeeInput.value = Number.isFinite(category.subtitleFee) ? category.subtitleFee : '';
     if (auctionPeriodsInput) {
@@ -19098,6 +20143,7 @@ function populateCategoryForm(category) {
     if (enableNegotiationToggle) enableNegotiationToggle.checked = !!category.supportsNegotiation;
     if (showAtHomeToggle) showAtHomeToggle.checked = !!category.showAtHome;
     if (realEstateToggle) realEstateToggle.checked = !!category.isRealEstate;
+    if (serviceToggle) serviceToggle.checked = !!category.isService;
     if (chooseCategorySelect) chooseCategorySelect.value = category.baseCategory || '';
     if (imageInput && imageInput.dataset) {
         if (category.imageDataUrl) {
@@ -19119,6 +20165,7 @@ function showCategoryBuilder(mode = 'create', category = null) {
     const addBtn = document.getElementById('newCategoryBtn');
     const searchContainer = document.getElementById('categorySearchContainer');
     const actionsContainer = document.querySelector('#categories-app1 .roles-actions');
+    const header = document.querySelector('#categories-app1 .roles-header');
     const form = document.getElementById('categoryForm');
     if (!directory || !builder || !addBtn || !form) return;
 
@@ -19177,6 +20224,7 @@ function showCategoryBuilder(mode = 'create', category = null) {
     addBtn.classList.add('hidden');
     searchContainer?.classList.add('hidden');
     actionsContainer?.classList.add('hidden');
+    header?.classList.add('category-builder-active');
 
     const focusTarget = document.getElementById('categoryNameArabicInput');
     if (focusTarget) {
@@ -19192,6 +20240,7 @@ function hideCategoryBuilder() {
     const addBtn = document.getElementById('newCategoryBtn');
     const searchContainer = document.getElementById('categorySearchContainer');
     const actionsContainer = document.querySelector('#categories-app1 .roles-actions');
+    const header = document.querySelector('#categories-app1 .roles-header');
     const form = document.getElementById('categoryForm');
     if (!directory || !builder || !addBtn || !form) return;
 
@@ -19234,6 +20283,7 @@ function hideCategoryBuilder() {
     addBtn.classList.remove('hidden');
     searchContainer?.classList.remove('hidden');
     actionsContainer?.classList.remove('hidden');
+    header?.classList.remove('category-builder-active');
 
     updateCategoryFormHeader(null, { skipTitleUpdate: true });
     setCategoryModuleTitle('Categories');
@@ -19275,6 +20325,7 @@ function collectCategoryFormData() {
     const enableNegotiationToggle = document.getElementById('categoryEnableNegotiationToggle');
     const showAtHomeToggle = document.getElementById('categoryShowAtHomeToggle');
     const realEstateToggle = document.getElementById('categoryRealEstateToggle');
+    const serviceToggle = document.getElementById('categoryServiceToggle');
     const chooseCategorySelect = document.getElementById('categoryChooseCategoryInput');
 
     const parseInteger = value => {
@@ -19333,8 +20384,8 @@ function collectCategoryFormData() {
     const auctionFee = supportsAuction ? parseNumber(auctionFeeInput ? auctionFeeInput.value : 0) : 0;
     const minimumBidValue = supportsAuction ? parseNumber(minimumBidValueInput ? minimumBidValueInput.value : 0) : 0;
     const minimumBidSellerCanModify = supportsAuction
-        ? !!(minimumBidEditableSelect && minimumBidEditableSelect.value === 'yes')
-        : false;
+        ? normalizeMinimumBidSellerScope(minimumBidEditableSelect ? minimumBidEditableSelect.value : 'yes', 'yes')
+        : 'no';
     const auctionClosingPeriodsList = supportsAuction ? getAuctionPeriodsFromInput() : [];
     const auctionClosingTimeFee = supportsAuction ? parseNumber(auctionTimeFeeInput ? auctionTimeFeeInput.value : 0) : 0;
     const auctionClosingPeriodsUnit = auctionClosingPeriodsList.length
@@ -19386,7 +20437,8 @@ function collectCategoryFormData() {
         supportsAuction,
         supportsNegotiation,
         showAtHome: showAtHomeToggle ? !!showAtHomeToggle.checked : false,
-        isRealEstate: realEstateToggle ? !!realEstateToggle.checked : false
+        isRealEstate: realEstateToggle ? !!realEstateToggle.checked : false,
+        isService: serviceToggle ? !!serviceToggle.checked : false
     };
 }
 
@@ -19836,8 +20888,8 @@ function renderRoleFilters() {
     if (assignmentSelect) {
         const assignmentOptions = [
             { value: 'all', label: 'All' },
-            { value: 'with-users', label: 'With Members' },
-            { value: 'without-users', label: 'Without Members' }
+            { value: 'with-users', label: 'Assignee' },
+            { value: 'without-users', label: 'Not Assigned' }
         ];
         assignmentSelect.innerHTML = assignmentOptions
             .map(option => `<option value="${escapeAttribute(option.value)}">${escapeHtml(option.label)}</option>`)
@@ -22425,6 +23477,7 @@ function refreshRoleDetailPanel() {
 }
 
 let categoryConfirmResolver = null;
+let categoryDeactivateModeResolver = null;
 let specificationConfirmResolver = null;
 let roleConfirmResolver = null;
 let userConfirmResolver = null;
@@ -22462,6 +23515,44 @@ function setupCategoryConfirmOverlay() {
             complete(false);
         }
     });
+}
+
+function setupCategoryDeactivateModeOverlay() {
+    const overlay = document.getElementById('categoryDeactivateModeOverlay');
+    const cancelBtn = document.getElementById('categoryDeactivateModeCancel');
+    const deactivateBtn = document.getElementById('categoryDeactivateModeDeactivate');
+    const deactivateHideBtn = document.getElementById('categoryDeactivateModeDeactivateHide');
+    if (!overlay || !cancelBtn || !deactivateBtn || !deactivateHideBtn) {
+        return;
+    }
+    if (overlay.dataset.bound === 'true') {
+        return;
+    }
+
+    const complete = result => {
+        if (categoryDeactivateModeResolver) {
+            const resolver = categoryDeactivateModeResolver;
+            categoryDeactivateModeResolver = null;
+            overlay.classList.add('hidden');
+            resolver(result);
+        }
+    };
+
+    cancelBtn.addEventListener('click', () => complete(null));
+    deactivateBtn.addEventListener('click', () => complete('deactivate'));
+    deactivateHideBtn.addEventListener('click', () => complete('deactivate-hide'));
+    overlay.addEventListener('click', event => {
+        if (event.target === overlay) {
+            complete(null);
+        }
+    });
+    document.addEventListener('keydown', event => {
+        if (event.key === 'Escape' && categoryDeactivateModeResolver) {
+            complete(null);
+        }
+    });
+
+    overlay.dataset.bound = 'true';
 }
 
 function setupSpecificationConfirmOverlay() {
@@ -22516,6 +23607,32 @@ function showCategoryConfirm(message, confirmLabel = 'Confirm', cancelLabel = 'C
 
     return new Promise(resolve => {
         categoryConfirmResolver = resolve;
+    });
+}
+
+function showCategoryDeactivateModePrompt() {
+    const overlay = document.getElementById('categoryDeactivateModeOverlay');
+    const messageEl = document.getElementById('categoryDeactivateModeMessage');
+    const focusTarget = document.getElementById('categoryDeactivateModeDeactivateHide');
+    if (!overlay || !messageEl) {
+        return Promise.resolve('deactivate');
+    }
+
+    if (categoryDeactivateModeResolver) {
+        const resolver = categoryDeactivateModeResolver;
+        categoryDeactivateModeResolver = null;
+        resolver(null);
+    }
+
+    overlay.classList.remove('hidden');
+    requestAnimationFrame(() => {
+        if (focusTarget && typeof focusTarget.focus === 'function') {
+            focusTarget.focus();
+        }
+    });
+
+    return new Promise(resolve => {
+        categoryDeactivateModeResolver = resolve;
     });
 }
 

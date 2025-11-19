@@ -46,10 +46,6 @@
                     </nav>
                 </div>
                 <div class="topbar-right">
-                    <div class="search-field">
-                        <i class="fas fa-search"></i>
-                        <input type="text" placeholder="Search platform" id="topSearch" />
-                    </div>
                     <button class="icon-btn" id="themeToggle" aria-label="Toggle theme">
                         <i class="fas fa-moon"></i>
                     </button>
@@ -106,7 +102,7 @@
                                                 <option value="older-90">Older than 90 days</option>
                                             </select>
                                         </label>
-                                        <label class="filter-control" for="roleAssignmentFilter">Members
+                                        <label class="filter-control" for="roleAssignmentFilter">Assignee
                                             <select id="roleAssignmentFilter">
                                                 <option value="all">All</option>
                                             </select>
@@ -1385,6 +1381,10 @@
                                     <i class="fas fa-circle-plus"></i>
                                     Add Category
                                 </button>
+                                <button type="button" class="btn btn-primary" id="categoryBulkSortBtn">
+                                    <i class="fas fa-arrow-up-wide-short"></i>
+                                    Sort Categories
+                                </button>
                                 <button type="button" class="btn btn-outline" id="categoryImportBtn">
                                     <i class="fas fa-file-import"></i>
                                     Import
@@ -1401,7 +1401,7 @@
                                 <aside class="category-explorer" aria-label="Category explorer">
                                     <div class="explorer-header">
                                         <div>
-                                            <h3>Category Explorer</h3>
+                                            <h3>Categories Explorer</h3>
                                         </div>
                                         <div class="explorer-actions">
                                             <button type="button" class="btn btn-ghost" id="categoryExpandAllBtn" title="Expand all levels">
@@ -1414,9 +1414,10 @@
                                     </div>
                                     <div class="explorer-search">
                                         <i class="fas fa-search"></i>
-                                        <input type="text" id="categoryTreeSearchInput" placeholder="Search names or codes" aria-label="Search categories" />
+                                        <input type="text" id="categoryTreeSearchInput" placeholder="Search by Category Name, or Code" aria-label="Search categories" />
                                     </div>
                                     <div class="explorer-body" id="categoryTreeContainer" role="tree" aria-multiselectable="false"></div>
+                                    <div class="category-explorer-footer" id="categoryExplorerPagination" role="navigation" aria-hidden="true"></div>
                                 </aside>
                                 <section class="category-detail" aria-label="Category detail">
                                     <div class="detail-topbar">
@@ -1453,10 +1454,6 @@
                                         </div>
                                     </div>
                                     <div class="category-bulk-actions">
-                                        <button type="button" class="btn btn-outline" id="categoryBulkSortBtn">
-                                            <i class="fas fa-arrow-up-wide-short"></i>
-                                            Sort
-                                        </button>
                                         <button type="button" class="btn btn-outline" id="categoryBulkModifyBtn" disabled>
                                             <i class="fas fa-pen"></i>
                                             Modify
@@ -1521,15 +1518,31 @@
                                         <h3 id="categorySortTitle">Sort Categories</h3>
                                         <p class="category-sort-subtitle">Select a category group to adjust the display order. Update the position numbers or use the arrows to reorder.</p>
                                     </div>
-                                    <button type="button" class="modal-close-btn" id="categorySortCloseBtn" aria-label="Close sort dialog">
-                                        <i class="fas fa-xmark"></i>
-                                    </button>
                                 </header>
                                 <div class="category-sort-body">
-                                    <aside class="category-sort-tree" id="categorySortTree" aria-label="Category tree"></aside>
+                                    <aside class="category-explorer category-sort-explorer" aria-label="Category explorer">
+                                        <div class="explorer-header">
+                                            <div>
+                                                <h3>Categories Explorer</h3>
+                                            </div>
+                                            <div class="explorer-actions">
+                                                <button type="button" class="btn btn-ghost" id="categorySortExpandAllBtn" title="Expand all levels">
+                                                    <i class="fas fa-plus-square"></i>
+                                                </button>
+                                                <button type="button" class="btn btn-ghost" id="categorySortCollapseAllBtn" title="Collapse all levels">
+                                                    <i class="fas fa-minus-square"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div class="explorer-search">
+                                            <i class="fas fa-search"></i>
+                                            <input type="text" id="categorySortTreeSearchInput" placeholder="Search by Category Name, or Code" aria-label="Search categories" />
+                                        </div>
+                                        <div class="explorer-body" id="categorySortTree" role="tree" aria-multiselectable="false"></div>
+                                    </aside>
                                     <section class="category-sort-panel" aria-live="polite">
                                         <header>
-                                            <h4 id="categorySortGroupTitle">Top-level categories</h4>
+                                            <h4 id="categorySortGroupTitle">Main Categories</h4>
                                             <p id="categorySortGroupHint">Select a category to review its subcategories.</p>
                                         </header>
                                         <div id="categorySortList" class="category-sort-list" role="list"></div>
@@ -1542,7 +1555,7 @@
                                     </button>
                                     <button type="button" class="btn btn-primary" id="categorySortSaveBtn">
                                         <i class="fas fa-floppy-disk"></i>
-                                        <span id="categorySortSaveLabel">Save Order</span>
+                                        <span id="categorySortSaveLabel">Save</span>
                                     </button>
                                 </footer>
                             </div>
@@ -1730,7 +1743,7 @@
                                                 <input type="number" class="form-input" id="categoryNegotiationFeeInput" placeholder="Enter fees" min="0" step="0.01" />
                                             </div>
                                         </div>
-                                        <div style="display:flex; flex-direction:column; gap:12px; width: 100%;">
+                                        <div style="display:flex; flex-direction:column; width: 100%;">
                                             <div style="display:flex; align-items:center; gap:12px;">
                                                 <label class="toggle-switch" for="categoryEnableAuctionToggle">
                                                     <input type="checkbox" id="categoryEnableAuctionToggle" />
@@ -1766,8 +1779,10 @@
                                                         <div style="flex:1; min-width:140px;">
                                                             <label class="form-label" for="categoryMinimumBidEditableSelect">Seller can modify</label>
                                                             <select id="categoryMinimumBidEditableSelect" class="form-select">
-                                                                <option value="yes">Yes</option>
-                                                                <option value="no" selected>No</option>
+                                                                <option value="yes" selected>Yes</option>
+                                                                <option value="no">No</option>
+                                                                <option value="individual-only">Individual Accounts Only</option>
+                                                                <option value="business-only">Business Accounts Only</option>
                                                             </select>
                                                         </div>
                                                     </div>
@@ -1787,6 +1802,13 @@
                                                 <span class="toggle-slider"></span>
                                             </label>
                                             <span class="helper-text">Is Real Estate?</span>
+                                        </div>
+                                        <div style="display:flex; align-items:center; gap:12px; width: 100%;">
+                                            <label class="toggle-switch" for="categoryServiceToggle">
+                                                <input type="checkbox" id="categoryServiceToggle" />
+                                                <span class="toggle-slider"></span>
+                                            </label>
+                                            <span class="helper-text">Is Service?</span>
                                         </div>
                                     </div>
                                     <div id="auctionPeriodsModal" class="modal hidden" tabindex="-1" role="dialog" aria-modal="true" style="position:fixed;z-index:1000;left:0;top:0;width:100vw;height:100vh;background:rgba(0,0,0,0.25);display:flex;align-items:center;justify-content:center;">
@@ -1835,6 +1857,17 @@
                                 <div class="confirm-actions">
                                     <button type="button" class="btn btn-outline" id="categoryConfirmCancel">Cancel</button>
                                     <button type="button" class="btn btn-primary" id="categoryConfirmOk">Confirm</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="categoryDeactivateModeOverlay" class="confirm-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="categoryDeactivateModeMessage">
+                            <div class="confirm-dialog">
+                                <p id="categoryDeactivateModeMessage">Do You Want to Deactivate the Category Only or Deactivate and Hide the Category?</p>
+                                <div class="confirm-actions">
+                                    <button type="button" class="btn btn-outline" id="categoryDeactivateModeCancel">Cancel</button>
+                                    <button type="button" class="btn btn-outline" id="categoryDeactivateModeDeactivate">Deactivate</button>
+                                    <button type="button" class="btn btn-primary" id="categoryDeactivateModeDeactivateHide">Deactivate &amp; Hide</button>
                                 </div>
                             </div>
                         </div>
