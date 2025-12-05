@@ -646,10 +646,6 @@
                         <button class="sub-app-btn" data-target="onruf-users-business-requests" data-label="Business Accounts Requests Review">
                             <span>Business Accounts Requests Review</span>
                         </button>
-                        <button class="sub-app-btn" data-target="onruf-users-automation" data-label="Automation Policies">
-                            <span>Automation Policies</span>
-                            <span class="count" id="onrufAutomationCountLabel">#0 Entries</span>
-                        </button>
                     </div>
 
                     <div id="onruf-users-individual" class="sub-app active">
@@ -674,7 +670,31 @@
                                         </label>
                                         <label class="filter-control" for="individualAccountsCityFilter">City
                                             <select id="individualAccountsCityFilter">
-                                                <option value="all">All cities</option>
+                                                <option value="all">All</option>
+                                            </select>
+                                        </label>
+                                        <label class="filter-control" for="individualAccountsPublishingFilter">Publishing List
+                                            <select id="individualAccountsPublishingFilter">
+                                                <option value="all">All</option>
+                                                <option value="trusted">Trusted Accounts</option>
+                                                <option value="manualreview">Manual Review</option>
+                                                <option value="blacklist">Blacklist</option>
+                                            </select>
+                                        </label>
+                                        <label class="filter-control" for="individualAccountsBusinessFilter">Linked Accounts
+                                            <select id="individualAccountsBusinessFilter">
+                                                <option value="all">All</option>
+                                                <option value="linked">With links</option>
+                                                <option value="unlinked">No links</option>
+                                            </select>
+                                        </label>
+                                        <label class="filter-control" for="individualAccountsActivityFilter">Recent Activity
+                                            <select id="individualAccountsActivityFilter">
+                                                <option value="all">Any time</option>
+                                                <option value="7">Last 7 days</option>
+                                                <option value="30">Last 30 days</option>
+                                                <option value="90">Last 90 days</option>
+                                                <option value="365">Last 12 months</option>
                                             </select>
                                         </label>
                                     </div>
@@ -879,23 +899,38 @@
                                 <div class="detail-controls directory-controls">
                                     <div class="search-box">
                                         <i class="fas fa-search"></i>
-                                        <input type="search" id="businessAccountsSearchInput" placeholder="Search by company, contact, email, or account ID" />
+                                        <input type="search" id="businessAccountsSearchInput" placeholder="Search by Business Name, Email, Phone, or ID" />
                                     </div>
                                     <div class="detail-filters directory-filters">
                                         <label class="filter-control" for="businessAccountsStatusFilter">Status
                                             <select id="businessAccountsStatusFilter">
                                                 <option value="all">All</option>
-                                                <option value="pending">Pending review</option>
-                                                <option value="docs-requested">Documents requested</option>
-                                                <option value="active">Active</option>
-                                                <option value="suspended">Suspended</option>
+                                                <option value="pending">Pending Review</option>
                                                 <option value="rejected">Rejected</option>
-                                                <option value="cancelled">Cancelled</option>
+                                                <option value="active">Active</option>
+                                                <option value="inactive">Inactive</option>
                                             </select>
                                         </label>
-                                        <label class="filter-control" for="businessAccountsPackageFilter">Package
-                                            <select id="businessAccountsPackageFilter">
-                                                <option value="all">All packages</option>
+                                        <label class="filter-control" for="businessAccountsCityFilter">City
+                                            <select id="businessAccountsCityFilter">
+                                                <option value="all">All</option>
+                                            </select>
+                                        </label>
+                                        <label class="filter-control" for="businessAccountsPublishingFilter">Publishing List
+                                            <select id="businessAccountsPublishingFilter">
+                                                <option value="all">All</option>
+                                                <option value="trusted">Trusted Accounts</option>
+                                                <option value="manualreview">Manual Review</option>
+                                                <option value="blacklist">Blacklist</option>
+                                            </select>
+                                        </label>
+                                        <label class="filter-control" for="businessAccountsActivityFilter">Recent Activity
+                                            <select id="businessAccountsActivityFilter">
+                                                <option value="all">Any time</option>
+                                                <option value="7">Last 7 days</option>
+                                                <option value="30">Last 30 days</option>
+                                                <option value="90">Last 90 days</option>
+                                                <option value="365">Last 12 months</option>
                                             </select>
                                         </label>
                                     </div>
@@ -956,7 +991,7 @@
                                                 <th>Business</th>
                                                 <th>Status</th>
                                                 <th>Created</th>
-                                                <th>Package</th>
+                                                <th>Last Login</th>
                                                 <th>Individual Account</th>
                                                 <th>Publishing List</th>
                                             </tr>
@@ -985,8 +1020,45 @@
                                         <i class="fas fa-xmark"></i>
                                     </button>
                                 </header>
-                                <div id="businessAccountDetailContent" class="role-detail-content detail-card-body">
-                                    <p class="empty-state">Select a merchant to load their onboarding progress.</p>
+                                <div id="businessAccountDetailContent" class="role-detail-content">
+                                    <div id="businessAccountQuickActions" class="account-quick-actions" hidden></div>
+                                    <div id="businessAccountDetailBody" class="detail-card-body">
+                                        <p class="empty-state">Select a merchant to load their onboarding progress.</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="businessAccountMarketplaceOverlay" class="role-detail-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="businessAccountMarketplaceTitle">
+                            <div class="role-detail-modal" role="document">
+                                <header>
+                                    <div>
+                                        <h3 id="businessAccountMarketplaceTitle">Business Marketplace Activity</h3>
+                                        <p class="section-subtitle" id="businessAccountMarketplaceSubtitle">Select a business account to surface marketplace insights.</p>
+                                    </div>
+                                    <button type="button" class="modal-close-btn" id="businessAccountMarketplaceCloseBtn" aria-label="Close business marketplace panel">
+                                        <i class="fas fa-xmark"></i>
+                                    </button>
+                                </header>
+                                <div id="businessAccountMarketplaceContent" class="role-detail-content">
+                                    <p class="empty-state">Select a business account from the directory to review marketplace activity.</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="businessLinkedIndividualOverlay" class="role-detail-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="businessLinkedIndividualTitle">
+                            <div class="role-detail-modal" role="document">
+                                <header>
+                                    <div>
+                                        <h3 id="businessLinkedIndividualTitle">Linked Individual Account</h3>
+                                        <p class="section-subtitle" id="businessLinkedIndividualSubtitle">Review the person associated with this business account.</p>
+                                    </div>
+                                    <button type="button" class="modal-close-btn" id="businessLinkedIndividualCloseBtn" aria-label="Close linked individual details">
+                                        <i class="fas fa-xmark"></i>
+                                    </button>
+                                </header>
+                                <div id="businessLinkedIndividualContent" class="role-detail-content">
+                                    <p class="empty-state">Select a business account with a linked individual to view profile information.</p>
                                 </div>
                             </div>
                         </div>
@@ -1042,7 +1114,7 @@
                                     <div class="business-requests-controls">
                                         <div class="business-requests-search">
                                             <i class="fas fa-search"></i>
-                                            <input type="search" id="businessRequestsSearchInput" placeholder="Search by Company Name, Email, Phone, City, or ID" autocomplete="off" />
+                                            <input type="search" id="businessRequestsSearchInput" placeholder="Search by Business Name, Email, Phone, City, or ID" autocomplete="off" />
                                         </div>
                                         <button type="button" class="btn btn-outline btn-compact" id="businessRequestsResetBtn">
                                             <i class="fas fa-rotate-left"></i>
@@ -1097,63 +1169,18 @@
                         </div>
                     </div>
 
-                    <div id="onruf-users-automation" class="sub-app">
-                        <section class="automation-section" aria-labelledby="productAdsAutomationTitle">
-                            <header>
-                                <h3 id="productAdsAutomationTitle">Automation Lists</h3>
-                                <p class="helper-text">Maintain automation policies for ONRUF marketplace accounts.</p>
-                            </header>
-                            <div class="automation-grid">
-                                <article class="automation-card">
-                                    <div class="automation-card-header">
-                                        <div>
-                                            <h4>Trusted Accounts</h4>
-                                            <p class="helper-text" id="productAdsTrustedCount">0 auto-post</p>
-                                        </div>
-                                        <button type="button" class="btn btn-secondary btn-compact" id="addTrustedAdsBtn">
-                                            <i class="fas fa-user-check"></i>
-                                            Add account
-                                        </button>
-                                    </div>
-                                    <ul class="automation-list" id="productAdsTrustedList">
-                                        <li class="empty-state">No trusted accounts yet.</li>
-                                    </ul>
-                                </article>
-                                <article class="automation-card">
-                                    <div class="automation-card-header">
-                                        <div>
-                                            <h4>Manual Review</h4>
-                                            <p class="helper-text" id="productAdsReviewCount">0 monitored</p>
-                                        </div>
-                                        <button type="button" class="btn btn-secondary btn-compact" id="addManualReviewAdsBtn">
-                                            <i class="fas fa-user-shield"></i>
-                                            Add account
-                                        </button>
-                                    </div>
-                                    <ul class="automation-list" id="productAdsReviewList">
-                                        <li class="empty-state">No accounts require manual review.</li>
-                                    </ul>
-                                </article>
-                                <article class="automation-card">
-                                    <div class="automation-card-header">
-                                        <div>
-                                            <h4>Blacklist</h4>
-                                            <p class="helper-text" id="productAdsBlacklistCount">0 blocked</p>
-                                        </div>
-                                        <button type="button" class="btn btn-secondary btn-compact" id="addBlacklistedAdsBtn">
-                                            <i class="fas fa-user-slash"></i>
-                                            Add account
-                                        </button>
-                                    </div>
-                                    <ul class="automation-list" id="productAdsBlacklist">
-                                        <li class="empty-state">No blocked accounts.</li>
-                                    </ul>
-                                </article>
-                            </div>
-                        </section>
-                    </div>
                 </section>
                 <section id="product-ads" class="section-content">
+                    <div class="sub-apps-nav">
+                        <button class="sub-app-btn active" data-target="product-ads-overview" data-label="Product Ads Governance">
+                            <span>Product Ads Governance</span>
+                        </button>
+                        <button class="sub-app-btn" data-target="product-ads-automation" data-label="Publishing List">
+                            <span>Publishing List</span>
+                        </button>
+                    </div>
+
+                    <div id="product-ads-overview" class="sub-app active">
                     <div class="users-header">
                         <div class="header-stack">
                             <h2 class="module-title" id="productAdsModuleTitle">Product Ads Governance</h2>
@@ -1354,6 +1381,79 @@
                                 </form>
                             </div>
                         </div>
+                    </div>
+                    </div>
+
+                    <div id="product-ads-automation" class="sub-app">
+                        <section class="automation-section" aria-labelledby="productAdsAutomationTitle">
+                            <header>
+                                <h3 id="productAdsAutomationTitle">Automation Lists</h3>
+                                <p class="helper-text">Maintain publishing list policies for ONRUF marketplace accounts.</p>
+                            </header>
+                            <div class="automation-grid">
+                                <article class="automation-card">
+                                    <div class="automation-card-header">
+                                        <div>
+                                            <h4>Trusted Accounts</h4>
+                                            <p class="helper-text" id="productAdsTrustedCount">0 auto-post</p>
+                                        </div>
+                                        <button type="button" class="btn btn-secondary btn-compact" id="addTrustedAdsBtn">
+                                            <i class="fas fa-user-check"></i>
+                                            Add account
+                                        </button>
+                                    </div>
+                                    <ul class="automation-list" id="productAdsTrustedList">
+                                        <li class="empty-state">No trusted accounts yet.</li>
+                                    </ul>
+                                </article>
+                                <div class="automation-transfer-controls" aria-label="Move accounts between Trusted and Manual Review lists">
+                                    <button type="button" class="transfer-arrow" data-transfer-source="trusted" data-transfer-target="manualReview" aria-label="Move selected Trusted account to Manual Review">
+                                        <i class="fas fa-arrow-right" aria-hidden="true"></i>
+                                    </button>
+                                    <button type="button" class="transfer-arrow" data-transfer-source="manualReview" data-transfer-target="trusted" aria-label="Move selected Manual Review account to Trusted">
+                                        <i class="fas fa-arrow-left" aria-hidden="true"></i>
+                                    </button>
+                                </div>
+                                <article class="automation-card">
+                                    <div class="automation-card-header">
+                                        <div>
+                                            <h4>Manual Review</h4>
+                                            <p class="helper-text" id="productAdsReviewCount">0 monitored</p>
+                                        </div>
+                                        <button type="button" class="btn btn-secondary btn-compact" id="addManualReviewAdsBtn">
+                                            <i class="fas fa-user-shield"></i>
+                                            Add account
+                                        </button>
+                                    </div>
+                                    <ul class="automation-list" id="productAdsReviewList">
+                                        <li class="empty-state">No accounts require manual review.</li>
+                                    </ul>
+                                </article>
+                                <div class="automation-transfer-controls" aria-label="Move accounts between Manual Review and Blacklist">
+                                    <button type="button" class="transfer-arrow" data-transfer-source="manualReview" data-transfer-target="blacklist" aria-label="Move selected Manual Review account to Blacklist">
+                                        <i class="fas fa-arrow-right" aria-hidden="true"></i>
+                                    </button>
+                                    <button type="button" class="transfer-arrow" data-transfer-source="blacklist" data-transfer-target="manualReview" aria-label="Move selected Blacklist account to Manual Review">
+                                        <i class="fas fa-arrow-left" aria-hidden="true"></i>
+                                    </button>
+                                </div>
+                                <article class="automation-card">
+                                    <div class="automation-card-header">
+                                        <div>
+                                            <h4>Blacklist</h4>
+                                            <p class="helper-text" id="productAdsBlacklistCount">0 blocked</p>
+                                        </div>
+                                        <button type="button" class="btn btn-secondary btn-compact" id="addBlacklistedAdsBtn">
+                                            <i class="fas fa-user-slash"></i>
+                                            Add account
+                                        </button>
+                                    </div>
+                                    <ul class="automation-list" id="productAdsBlacklist">
+                                        <li class="empty-state">No blocked accounts.</li>
+                                    </ul>
+                                </article>
+                            </div>
+                        </section>
                     </div>
                 </section>
 
@@ -2173,11 +2273,8 @@
         <div class="confirm-dialog individual-publishing-dialog" role="document">
             <div class="individual-publishing-header">
                 <div>
-                    <h3 id="individualPublishingOverlayTitle">Add to Publishing List</h3>
+                    <h3 id="individualPublishingOverlayTitle">Publishing List</h3>
                 </div>
-                <button type="button" class="modal-close-btn" id="individualPublishingCloseBtn" aria-label="Close publishing list overlay">
-                    <i class="fas fa-xmark"></i>
-                </button>
             </div>
             <div class="individual-publishing-account">
                 <div class="account-name" id="individualPublishingAccountLabel">Individual Account</div>
