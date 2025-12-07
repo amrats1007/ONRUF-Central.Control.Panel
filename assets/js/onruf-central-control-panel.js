@@ -2284,6 +2284,7 @@ const state = {
     businessMarketplaceBiddingVisibleCounts: Object.create(null),
     businessMarketplaceMissedVisibleCounts: Object.create(null),
     businessMarketplaceNegotiationVisibleCounts: Object.create(null),
+    businessMarketplaceDiscountCouponVisibleCounts: Object.create(null),
     businessMarketplaceSalesVisibleCounts: {
         forSale: Object.create(null),
         almostOut: Object.create(null),
@@ -6571,6 +6572,8 @@ const MARKETPLACE_PURCHASE_ORDER_PAGE_SIZE = 5;
 const MARKETPLACE_BIDDING_OFFERS_PAGE_SIZE = 5;
 const MARKETPLACE_MISSED_OPPORTUNITIES_PAGE_SIZE = 5;
 const MARKETPLACE_NEGOTIATION_OFFERS_PAGE_SIZE = 5;
+const MARKETPLACE_DISCOUNT_COUPON_PAGE_SIZE = 5;
+const BUSINESS_DISCOUNT_COUPON_SEED_VERSION = '2025-02-01';
 const INDIVIDUAL_WALLET_MAX_TRANSACTIONS = 20;
 
 const SEED_PROFILE_LIMITS = {
@@ -9821,6 +9824,190 @@ function enrichBusinessAccountsWithFinancialSamples({ persist = true } = {}) {
     return mutated;
 }
 
+const BUSINESS_DISCOUNT_COUPON_BLUEPRINTS = [
+    {
+        name: 'Loyalty Boost',
+        codePrefix: 'LOYAL',
+        audience: 'Returning buyers',
+        segment: 'Loyal marketplace customers',
+        channel: 'Marketplace Storefront',
+        percentRange: { min: 10, max: 22 }
+    },
+    {
+        name: 'Seasonal Spotlight',
+        codePrefix: 'SEASON',
+        audience: 'New visitors',
+        segment: 'Prospect buyers',
+        channel: 'Homepage Banner',
+        percentRange: { min: 8, max: 18 }
+    },
+    {
+        name: 'Cart Recovery',
+        codePrefix: 'RECOVER',
+        audience: 'Abandoned cart users',
+        segment: 'Warm leads',
+        channel: 'Email Automation',
+        percentRange: { min: 12, max: 26 }
+    },
+    {
+        name: 'Wholesale Partner',
+        codePrefix: 'BULK',
+        audience: 'Business buyers',
+        segment: 'Wholesale partners',
+        channel: 'Sales Outreach',
+        percentRange: { min: 15, max: 30 }
+    }
+];
+
+function buildBusinessDiscountCouponSamples(account, { maxCoupons = MARKETPLACE_SECTION_ENTRY_LIMIT } = {}) {
+    if (!account || typeof account !== 'object') {
+        return [];
+    }
+    const effectiveMax = Number.isFinite(maxCoupons) && maxCoupons > 0
+        ? Math.min(MARKETPLACE_SECTION_ENTRY_LIMIT, Math.floor(maxCoupons))
+        : MARKETPLACE_SECTION_ENTRY_LIMIT;
+    if (effectiveMax <= 0) {
+        return [];
+    }
+    const rngSeed = `${account.id || account.companyName || account.companyNameEnglish || 'business'}-discount-coupons`;
+    const rng = createDeterministicRandom(rngSeed);
+    const couponCount = Math.floor(rng() * (effectiveMax + 1));
+    const DAY_MS = 86_400_000;
+    const now = Date.now();
+    const businessLabel = account.companyNameEnglish || account.companyName || 'Business';
+    const randomInt = (min, max) => {
+        const lower = Math.min(min, max);
+        const upper = Math.max(min, max);
+        return lower + Math.floor(rng() * (upper - lower + 1));
+    };
+    const randomFloat = (min, max) => {
+        const lower = Math.min(min, max);
+        const upper = Math.max(min, max);
+        return lower + (upper - lower) * rng();
+    };
+    const samples = [];
+    for (let index = 0; index < couponCount; index += 1) {
+        const blueprint = BUSINESS_DISCOUNT_COUPON_BLUEPRINTS[index % BUSINESS_DISCOUNT_COUPON_BLUEPRINTS.length];
+        const percentRange = blueprint.percentRange || { min: 8, max: 20 };
+        const percentValue = Math.round(randomFloat(percentRange.min, percentRange.max) * 10) / 10;
+        const usageLimit = randomInt(30, 150);
+        const usageCount = Math.min(usageLimit, randomInt(0, usageLimit));
+        const startOffsetDays = randomInt(5, 80);
+        const validityWindow = randomInt(10, 70);
+        const validFromDate = new Date(now - startOffsetDays * DAY_MS);
+        const validUntilDate = new Date(validFromDate.getTime() + validityWindow * DAY_MS);
+        const createdAt = validFromDate.toISOString();
+        const updatedAt = new Date(validFromDate.getTime() + randomInt(1, 5) * DAY_MS).toISOString();
+        const codeSuffix = String(index + 1).padStart(3, '0');
+        const couponCode = `${blueprint.codePrefix}${codeSuffix}`;
+        const status = validUntilDate.getTime() < now
+            ? 'Expired'
+            : usageCount >= usageLimit
+                ? 'Redeemed'
+                : 'Active';
+        samples.push({
+            id: `CPN-${account.id || 'BUS'}-${codeSuffix}`,
+            couponCode,
+            name: `${blueprint.name} ${businessLabel}`.trim(),
+            discountPercent: percentValue,
+            usageLimit,
+            usageCount,
+            audience: blueprint.audience,
+            segment: blueprint.segment,
+            channel: blueprint.channel,
+            status,
+            validFrom: createdAt,
+            validUntil: validUntilDate.toISOString(),
+            createdAt,
+            updatedAt,
+            timestamp: createdAt,
+            currency: 'SAR'
+        });
+    }
+    const resolveTimestamp = entry => {
+        if (!entry || typeof entry !== 'object') {
+            return 0;
+        }
+        const candidates = [entry.createdAt, entry.updatedAt, entry.validFrom, entry.timestamp];
+        for (const candidate of candidates) {
+            const parsed = Date.parse(candidate || '');
+            if (Number.isFinite(parsed)) {
+                return parsed;
+            }
+        }
+        return 0;
+    };
+    samples.sort((a, b) => resolveTimestamp(b) - resolveTimestamp(a));
+    return samples.slice(0, effectiveMax);
+}
+
+function ensureBusinessAccountsHaveDiscountCoupons({ persist = true } = {}) {
+    if (!Array.isArray(businessAccounts) || !businessAccounts.length) {
+        return false;
+    }
+    let mutated = false;
+    const resolveSortedCoupons = coupons => {
+        const list = Array.isArray(coupons) ? coupons.filter(Boolean) : [];
+        const resolveTimestamp = entry => {
+            if (!entry || typeof entry !== 'object') {
+                return 0;
+            }
+            const candidates = [entry.createdAt, entry.updatedAt, entry.validFrom, entry.timestamp];
+            for (const candidate of candidates) {
+                const parsed = Date.parse(candidate || '');
+                if (Number.isFinite(parsed)) {
+                    return parsed;
+                }
+            }
+            return 0;
+        };
+        return list
+            .slice()
+            .sort((a, b) => resolveTimestamp(b) - resolveTimestamp(a))
+            .slice(0, MARKETPLACE_SECTION_ENTRY_LIMIT);
+    };
+    businessAccounts.forEach(account => {
+        if (!account || typeof account !== 'object') {
+            return;
+        }
+        if (!account.marketplaceActivity || typeof account.marketplaceActivity !== 'object') {
+            account.marketplaceActivity = {};
+            mutated = true;
+        }
+        const activity = account.marketplaceActivity;
+        const seedVersion = typeof activity.__discountCouponSeedVersion === 'string'
+            ? activity.__discountCouponSeedVersion
+            : '';
+        const existingCoupons = Array.isArray(activity.discountCoupons)
+            ? activity.discountCoupons.filter(Boolean)
+            : [];
+        const shouldSeedCoupons = !Array.isArray(activity.discountCoupons)
+            || (!existingCoupons.length && seedVersion !== BUSINESS_DISCOUNT_COUPON_SEED_VERSION);
+        if (shouldSeedCoupons) {
+            const generatedCoupons = buildBusinessDiscountCouponSamples(account);
+            activity.discountCoupons = generatedCoupons.length ? generatedCoupons : [];
+            activity.__discountCouponSeedVersion = BUSINESS_DISCOUNT_COUPON_SEED_VERSION;
+            mutated = true;
+            return;
+        }
+        const normalized = resolveSortedCoupons(activity.discountCoupons);
+        const needsUpdate = normalized.length !== activity.discountCoupons.length
+            || normalized.some((entry, index) => entry !== activity.discountCoupons[index]);
+        if (needsUpdate) {
+            activity.discountCoupons = normalized;
+            mutated = true;
+        }
+        if (seedVersion !== BUSINESS_DISCOUNT_COUPON_SEED_VERSION) {
+            activity.__discountCouponSeedVersion = BUSINESS_DISCOUNT_COUPON_SEED_VERSION;
+            mutated = true;
+        }
+    });
+    if (mutated && persist) {
+        saveBusinessAccountsToStorage();
+    }
+    return mutated;
+}
+
 function normalizeBusinessPackagePayload(pkg, index = 0) {
     if (!pkg || typeof pkg !== 'object') {
         return null;
@@ -11805,6 +11992,7 @@ function initializeApp() {
         ? storedBusinessAccounts
         : [];
     enrichBusinessAccountsWithFinancialSamples();
+    ensureBusinessAccountsHaveDiscountCoupons();
 
     const storedBusinessPackages = loadBusinessPackagesFromStorage();
     if (storedBusinessPackages && storedBusinessPackages.length) {
@@ -32077,7 +32265,7 @@ function renderIndividualAccountDetail(account, { forceOpen = false } = {}) {
             ? addedAtInfo.time !== updatedAtInfo.time
             : Boolean(updatedAtInfo.time && !addedAtInfo.time);
         if (updatedAtLabel && (wasUpdatedFlag || hasDistinctTimestamps)) {
-            detailLines.push(`<div class="helper-text">Last updated ${escapeHtml(String(updatedAtLabel))}</div>`);
+            detailLines.push(`<div class="helper-text">Last Updated ${escapeHtml(String(updatedAtLabel))}</div>`);
         }
         return `<li><div>${headerParts.join(' ')}</div>${detailLines.join('')}</li>`;
     };
@@ -32224,7 +32412,7 @@ function renderIndividualAccountDetail(account, { forceOpen = false } = {}) {
             details.push(`<div class="helper-text">Added ${escapeHtml(String(addedAtLabel))}</div>`);
         }
         if (showUpdatedLabel) {
-            details.push(`<div class="helper-text">Last updated ${escapeHtml(String(updatedAtLabel))}</div>`);
+            details.push(`<div class="helper-text">Last Updated ${escapeHtml(String(updatedAtLabel))}</div>`);
         }
         const title = titleParts.filter(Boolean).join(' • ') || 'Payment method';
         const headingParts = [`<strong>${escapeHtml(title)}</strong>`];
@@ -34124,7 +34312,8 @@ function handleBusinessMarketplaceOverlayContentClick(event) {
         'load-more-purchase-orders',
         'load-more-bidding-offers',
         'load-more-missed-opportunities',
-        'load-more-negotiation-offers'
+        'load-more-negotiation-offers',
+        'load-more-marketplace-discount-coupons'
     ];
     if (!supportedActions.includes(action)) {
         return;
@@ -34204,6 +34393,8 @@ function handleBusinessMarketplaceOverlayContentClick(event) {
             MARKETPLACE_NEGOTIATION_OFFERS_PAGE_SIZE,
             negotiationBucket
         );
+    } else if (action === 'load-more-marketplace-discount-coupons') {
+        bumpVisibleCount('businessMarketplaceDiscountCouponVisibleCounts', MARKETPLACE_DISCOUNT_COUPON_PAGE_SIZE);
     } else if (action === 'load-more-marketplace-sales') {
         const bucket = typeof button.dataset.salesBucket === 'string' ? button.dataset.salesBucket.trim() : '';
         if (!bucket || !MARKETPLACE_SALES_BUCKET_KEYS.includes(bucket)) {
@@ -35097,10 +35288,10 @@ function bindMarketplaceEntryIdentifierClicks(root) {
         if (!(node instanceof HTMLElement)) {
             return;
         }
-        if (node.dataset.bound === 'true') {
+        if (node.dataset.marketplaceCouponBound === 'true') {
             return;
         }
-        node.dataset.bound = 'true';
+        node.dataset.marketplaceCouponBound = 'true';
         node.addEventListener('click', event => {
             event.preventDefault();
             event.stopPropagation();
@@ -35130,6 +35321,49 @@ function bindMarketplaceEntryIdentifierClicks(root) {
                     });
             } else {
                 showNotification('info', `Product ad ID ${normalizedReference}`);
+            }
+        });
+    });
+}
+
+function bindMarketplaceCouponCodeClicks(root) {
+    if (!root || typeof root.querySelectorAll !== 'function') {
+        return;
+    }
+    const targets = root.querySelectorAll('[data-marketplace-coupon-code]');
+    targets.forEach(node => {
+        if (!(node instanceof HTMLElement)) {
+            return;
+        }
+        if (node.dataset.bound === 'true') {
+            return;
+        }
+        node.dataset.bound = 'true';
+        node.addEventListener('click', event => {
+            event.preventDefault();
+            event.stopPropagation();
+            const couponCode = node.getAttribute('data-marketplace-coupon-code');
+            if (!couponCode) {
+                return;
+            }
+            const normalized = couponCode.trim();
+            if (!normalized) {
+                return;
+            }
+            const canCopy = typeof navigator !== 'undefined'
+                && navigator.clipboard
+                && typeof navigator.clipboard.writeText === 'function';
+            const fallbackMessage = `Coupon code ${normalized}`;
+            if (canCopy) {
+                navigator.clipboard.writeText(normalized)
+                    .then(() => {
+                        showNotification('success', `Coupon code ${normalized} copied to clipboard.`);
+                    })
+                    .catch(() => {
+                        showNotification('info', fallbackMessage);
+                    });
+            } else {
+                showNotification('info', fallbackMessage);
             }
         });
     });
@@ -35181,13 +35415,17 @@ function renderGenericMarketplaceOverlay(targetElements, account, options = {}) 
         hidePurchasesSection = false,
         hiddenSummaryMetrics = [],
         showAlmostOutSalesBucket = false,
+        showAlmostOutAddedMeta = true,
         showInactiveSalesBucket = false,
+        showInactiveReasonDetails = true,
         hideDiscountCouponsSection = true,
         discountCouponsSectionTitle = 'Discount Coupons',
+        discountCouponsPagination = null,
         hideOnrufCouponsSection = true,
         onrufCouponsSectionTitle = 'ONRUF Coupons',
         showClientsSummaryMetric = false,
-        clientsSummaryMetricLabel = 'Clients'
+        clientsSummaryMetricLabel = 'Clients',
+        showSellersSummaryMetric = true
     } = options;
 
     const shouldRenderBuyerRatings = !hideBuyerRatings;
@@ -35752,14 +35990,22 @@ function renderGenericMarketplaceOverlay(targetElements, account, options = {}) 
         const candidates = [
             entry.timestamp,
             entry.updatedAt,
+            entry.updated_at,
             entry.completedAt,
+            entry.completed_at,
             entry.orderedAt,
+            entry.ordered_at,
             entry.submittedAt,
+            entry.submitted_at,
             entry.createdAt,
+            entry.created_at,
             entry.date,
             entry.recordedAt,
+            entry.recorded_at,
             entry.publishedAt,
-            entry.reviewedAt
+            entry.published_at,
+            entry.reviewedAt,
+            entry.reviewed_at
         ];
         for (const candidate of candidates) {
             if (candidate === null || candidate === undefined || candidate === '') {
@@ -36163,8 +36409,12 @@ function renderGenericMarketplaceOverlay(targetElements, account, options = {}) 
         const {
             hideDetails = false,
             resolveIdentifier,
+            transformIdentifier,
+            resolveIdentifierAttributes,
+            renderIdentifierAdjacentContent,
             includeCreatedMeta = false,
             timestampsOnly = false,
+            showUpdatedWithTimestampsOnly = false,
             suppressDetails = [],
             staticDetails = [],
             updatedLabel = 'Updated',
@@ -36207,9 +36457,44 @@ function renderGenericMarketplaceOverlay(targetElements, account, options = {}) 
         if (typeof resolveIdentifier === 'function') {
             const identifierRaw = resolveIdentifier(entry);
             if (identifierRaw !== null && identifierRaw !== undefined) {
-                const identifierText = normalizeProductAdIdentifier(identifierRaw);
+                const displayValue = typeof transformIdentifier === 'function'
+                    ? transformIdentifier(identifierRaw, entry)
+                    : normalizeProductAdIdentifier(identifierRaw);
+                const identifierText = displayValue === null || displayValue === undefined
+                    ? ''
+                    : String(displayValue).trim();
                 if (identifierText) {
-                    identifierMarkup = ` <button type="button" class="marketplace-entry-identifier" data-marketplace-product-ad-id="${escapeAttribute(identifierText)}">${escapeHtml(identifierText)}</button>`;
+                    const resolvedAttributes = {};
+                    if (typeof resolveIdentifierAttributes === 'function') {
+                        const customAttributes = resolveIdentifierAttributes(identifierText, entry);
+                        if (customAttributes && typeof customAttributes === 'object') {
+                            Object.entries(customAttributes).forEach(([key, value]) => {
+                                if (!key) {
+                                    return;
+                                }
+                                if (value === null || value === undefined || value === '') {
+                                    return;
+                                }
+                                resolvedAttributes[key] = value;
+                            });
+                        }
+                    }
+                    if (!Object.keys(resolvedAttributes).length) {
+                        resolvedAttributes['data-marketplace-product-ad-id'] = identifierText;
+                    }
+                    const attributeString = Object.entries(resolvedAttributes)
+                        .map(([key, value]) => `${key}="${escapeAttribute(String(value))}"`)
+                        .join(' ');
+                    const attributesMarkup = attributeString ? ` ${attributeString}` : '';
+                    const buttonMarkup = `<button type="button" class="marketplace-entry-identifier"${attributesMarkup}>${escapeHtml(identifierText)}</button>`;
+                    const adjacentMarkup = typeof renderIdentifierAdjacentContent === 'function'
+                        ? renderIdentifierAdjacentContent(identifierText, entry) || ''
+                        : '';
+                    if (adjacentMarkup) {
+                        identifierMarkup = ` <span class="marketplace-identifier-cluster">${buttonMarkup}${adjacentMarkup}</span>`;
+                    } else {
+                        identifierMarkup = ` ${buttonMarkup}`;
+                    }
                 }
             }
         }
@@ -36303,23 +36588,38 @@ function renderGenericMarketplaceOverlay(targetElements, account, options = {}) 
         if (includeCreatedMeta) {
             const createdLabel = resolveMarketplaceTimestampLabel(
                 entry.createdAt,
+                entry.created_at,
                 entry.addedAt,
+                entry.added_at,
                 entry.publishedAt,
+                entry.published_at,
                 entry.createdOn,
+                entry.created_on,
                 entry.created,
                 entry.createdDate,
+                entry.created_date,
                 entry.creationDate,
+                entry.creation_date,
                 entry.createdTime,
+                entry.created_time,
                 entry.listedAt,
+                entry.listed_at,
                 entry.listedOn,
+                entry.listed_on,
                 entry.postedAt,
+                entry.posted_at,
                 entry.availableSince,
+                entry.available_since,
                 entry.availableFrom,
+                entry.available_from,
                 entry.startDate,
+                entry.start_date,
                 entry.startedAt,
+                entry.started_at,
                 entry.timestamp,
                 entry.date,
-                entry.recordedAt
+                entry.recordedAt,
+                entry.recorded_at
             );
             if (!detailIsSuppressed('added')) {
                 const createdPrefix = escapeHtml(normalizedCreatedLabelPrefix);
@@ -36334,37 +36634,48 @@ function renderGenericMarketplaceOverlay(targetElements, account, options = {}) 
 
         const updatedTimestampCandidates = [
             entry.updatedAt,
+            entry.updated_at,
             entry.modifiedAt,
+            entry.modified_at,
             entry.changedAt,
+            entry.changed_at,
             entry.lastUpdated,
+            entry.last_updated,
+            entry.lastUpdatedAt,
+            entry.last_updated_at,
             entry.lastModified,
+            entry.last_modified,
+            entry.lastModifiedAt,
+            entry.last_modified_at,
             entry.reviewedAt,
+            entry.reviewed_at,
             entry.adjustedAt,
-            entry.reconciledAt
+            entry.adjusted_at,
+            entry.reconciledAt,
+            entry.reconciled_at,
+            entry.syncedAt,
+            entry.synced_at,
+            entry.refreshedAt,
+            entry.refreshed_at,
+            entry.lastActivityAt,
+            entry.last_activity_at
         ];
-        const hasExplicitUpdatedTimestamp = updatedTimestampCandidates.some(value => {
-            if (value === null || value === undefined || value === '') {
-                return false;
-            }
-            if (typeof value === 'string') {
-                return Boolean(value.trim());
-            }
-            return true;
-        });
+        const resolvedUpdatedLabel = resolveMarketplaceTimestampLabel(...updatedTimestampCandidates);
+        const fallbackUpdatedLabel = showUpdatedWithTimestampsOnly && timestampMeta && timestampMeta.label
+            ? timestampMeta.label
+            : null;
+        const updatedDisplayLabel = resolvedUpdatedLabel || fallbackUpdatedLabel;
+        const hasExplicitUpdatedTimestamp = Boolean(resolvedUpdatedLabel);
 
-        let shouldShowUpdated = timestampMeta
-            && timestampMeta.label
-            && !timestampsOnly
-            && !detailIsSuppressed('updated')
-            && hasExplicitUpdatedTimestamp;
-        if (shouldShowUpdated && createdDisplayLabel) {
-            const updatedLabelNormalized = timestampMeta.label.trim();
-            if (updatedLabelNormalized && updatedLabelNormalized === createdDisplayLabel) {
-                shouldShowUpdated = false;
-            }
-        }
+        const canShowUpdated = (!timestampsOnly || showUpdatedWithTimestampsOnly)
+            && !detailIsSuppressed('updated');
+        let shouldShowUpdated = Boolean(
+            updatedDisplayLabel
+            && canShowUpdated
+            && (hasExplicitUpdatedTimestamp || Boolean(fallbackUpdatedLabel))
+        );
         if (shouldShowUpdated) {
-            detailLines.push(`<div class="helper-text">${escapeHtml(`${normalizedUpdatedLabel} ${timestampMeta.label}`)}</div>`);
+            detailLines.push(`<div class="helper-text">${escapeHtml(`${normalizedUpdatedLabel} ${updatedDisplayLabel}`)}</div>`);
         }
         const noteCandidate = entry.note || entry.notes || entry.description || entry.summary;
         if (noteCandidate && !timestampsOnly && !detailIsSuppressed('note')) {
@@ -36562,6 +36873,78 @@ function renderGenericMarketplaceOverlay(targetElements, account, options = {}) 
 
     const formatCount = entries => (Array.isArray(entries) && entries.length ? entries.length.toLocaleString('en-US') : '0');
     const cartValueLabel = cartItems.length ? formatOverviewCurrency(sumAmounts(cartItems)) : '—';
+    let sellersSummaryMetricEntry = null;
+    if (showSellersSummaryMetric) {
+        const favoriteSellerCount = (() => {
+            if (shouldSuppressActivity) {
+                return 0;
+            }
+            const identifiers = new Set();
+            const resolveFavoriteSellerLabel = candidate => {
+                if (candidate === null || candidate === undefined) {
+                    return '';
+                }
+                if (typeof candidate === 'string') {
+                    return candidate.trim();
+                }
+                if (typeof candidate === 'number' && Number.isFinite(candidate)) {
+                    return String(candidate);
+                }
+                if (typeof candidate === 'object') {
+                    const labelCandidates = [
+                        candidate.label,
+                        candidate.name,
+                        candidate.companyName,
+                        candidate.company,
+                        candidate.displayName,
+                        candidate.storeName,
+                        candidate.sellerName,
+                        candidate.businessName,
+                        candidate.account,
+                        candidate.email,
+                        candidate.id
+                    ];
+                    for (const labelCandidate of labelCandidates) {
+                        if (typeof labelCandidate === 'string' && labelCandidate.trim()) {
+                            return labelCandidate.trim();
+                        }
+                    }
+                }
+                return '';
+            };
+            const registerSeller = value => {
+                if (value === null || value === undefined) {
+                    return;
+                }
+                if (Array.isArray(value)) {
+                    value.forEach(entry => registerSeller(entry));
+                    return;
+                }
+                const label = resolveFavoriteSellerLabel(value);
+                if (label) {
+                    identifiers.add(label.toLowerCase());
+                }
+            };
+            const sellerSources = [
+                followUpsSource && followUpsSource.favoriteSellers,
+                activity && activity.favoriteSellers,
+                activity && activity.followUps && activity.followUps.favoriteSellers,
+                account && account.favoriteSellers,
+                account && account.followUps && account.followUps.favoriteSellers,
+                account && account.marketplaceActivity && account.marketplaceActivity.favoriteSellers
+            ];
+            sellerSources.forEach(source => registerSeller(source));
+            return identifiers.size;
+        })();
+        const sellersSummaryMetricValue = favoriteSellerCount > 0
+            ? favoriteSellerCount.toLocaleString('en-US')
+            : '0';
+        sellersSummaryMetricEntry = {
+            key: 'sellers',
+            label: 'Sellers',
+            value: sellersSummaryMetricValue
+        };
+    }
     const hiddenSummaryMetricSet = Array.isArray(hiddenSummaryMetrics)
         ? new Set(hiddenSummaryMetrics.map(key => String(key)))
         : new Set();
@@ -36671,8 +37054,16 @@ function renderGenericMarketplaceOverlay(targetElements, account, options = {}) 
         { key: 'salesVolume', label: 'Sales Volume', value: formatOverviewCurrency(salesVolume) },
         { key: 'cartValue', label: 'Cart Value', value: cartValueLabel }
     ];
+    let sellersInserted = false;
     if (clientsSummaryMetricEntry && !hiddenSummaryMetricSet.has(clientsSummaryMetricEntry.key)) {
         summaryMetricDefinitions.push(clientsSummaryMetricEntry);
+        if (sellersSummaryMetricEntry && !hiddenSummaryMetricSet.has(sellersSummaryMetricEntry.key)) {
+            summaryMetricDefinitions.push(sellersSummaryMetricEntry);
+            sellersInserted = true;
+        }
+    }
+    if (!sellersInserted && sellersSummaryMetricEntry && !hiddenSummaryMetricSet.has(sellersSummaryMetricEntry.key)) {
+        summaryMetricDefinitions.splice(1, 0, sellersSummaryMetricEntry);
     }
     const summaryMetrics = summaryMetricDefinitions
         .filter(def => !hiddenSummaryMetricSet.has(def.key))
@@ -37400,7 +37791,7 @@ function renderGenericMarketplaceOverlay(targetElements, account, options = {}) 
     };
     const salesProductsForSaleSection = buildSalesBucketSection(salesProductBuckets.forSale, 'forSale', emptySalesMessage, {
         resolveIdentifier: resolveSalesProductIdentifier,
-        includeCreatedMeta: true,
+        includeCreatedMeta: false,
         timestampsOnly: true
     });
     const salesProductsForSaleMarkup = salesProductsForSaleSection.markup;
@@ -37410,7 +37801,7 @@ function renderGenericMarketplaceOverlay(targetElements, account, options = {}) 
     if (showAlmostOutSalesBucket) {
         const salesProductsAlmostOutSection = buildSalesBucketSection(salesProductBuckets.almostOut, 'almostOut', emptySalesMessage, {
             resolveIdentifier: resolveSalesProductIdentifier,
-            includeCreatedMeta: true,
+            includeCreatedMeta: showAlmostOutAddedMeta,
             timestampsOnly: true,
             staticDetails: entry => resolveLowStockDetails(entry)
         });
@@ -37482,7 +37873,7 @@ function renderGenericMarketplaceOverlay(targetElements, account, options = {}) 
     };
     const salesProductsUnsoldSection = buildSalesBucketSection(salesProductBuckets.unsold, 'unsold', emptySalesMessage, {
         resolveIdentifier: resolveSalesProductIdentifier,
-        includeCreatedMeta: true,
+        includeCreatedMeta: false,
         timestampsOnly: true,
         staticDetails: entry => resolveUnsoldReason(entry)
     });
@@ -37531,7 +37922,7 @@ function renderGenericMarketplaceOverlay(targetElements, account, options = {}) 
             includeCreatedMeta: true,
             timestampsOnly: true,
             createdLabelPrefix: 'Deactivated',
-            staticDetails: entry => resolveInactiveReason(entry)
+            staticDetails: showInactiveReasonDetails ? entry => resolveInactiveReason(entry) : undefined
         });
         salesProductsInactiveMarkup = salesProductsInactiveSection.markup;
         salesProductsInactiveLoadMoreMarkup = salesProductsInactiveSection.loadMoreMarkup;
@@ -37900,9 +38291,15 @@ function renderGenericMarketplaceOverlay(targetElements, account, options = {}) 
     const biddingOffersHasMore = biddingVisibleCount < biddingOffersMaxEntries;
     const biddingOffersMarkup = buildCollectionMarkup(visibleBiddingOffers, purchasesEmptyMessage, {
         resolveIdentifier: resolveSalesProductIdentifier,
-        includeCreatedMeta: true,
+        includeCreatedMeta: false,
         timestampsOnly: true,
-        staticDetails: entry => resolveBiddingStatusDetailLine(entry),
+        staticDetails: [
+            entry => resolveOfferDateDetailLine(entry),
+            entry => resolveOfferPriceDetailLine(entry),
+            entry => resolveOfferQuantityDetailLine(entry),
+            entry => resolveOfferRecipientDetailLine(entry),
+            entry => resolveBiddingStatusDetailLine(entry)
+        ],
         preserveOrder: true
     });
     const biddingOffersLoadMoreMarkup = biddingOffersHasMore && biddingLoadMoreAction
@@ -37970,7 +38367,7 @@ function renderGenericMarketplaceOverlay(targetElements, account, options = {}) 
     const missedOpportunitiesHasMore = missedVisibleCount < missedOpportunitiesMaxEntries;
     const missedOpportunitiesMarkup = buildCollectionMarkup(visibleMissedOpportunities, purchasesEmptyMessage, {
         resolveIdentifier: resolveSalesProductIdentifier,
-        includeCreatedMeta: true,
+        includeCreatedMeta: false,
         timestampsOnly: true,
         staticDetails: entry => resolveUnsoldReason(entry),
         preserveOrder: true
@@ -38371,6 +38768,156 @@ function renderGenericMarketplaceOverlay(targetElements, account, options = {}) 
         return '';
     };
 
+    const parseCouponDateCandidate = value => {
+        if (value === null || value === undefined || value === '') {
+            return null;
+        }
+        if (value instanceof Date && Number.isFinite(value.getTime())) {
+            return value.getTime();
+        }
+        if (typeof value === 'number' && Number.isFinite(value)) {
+            return value;
+        }
+        if (typeof value === 'string') {
+            const trimmed = value.trim();
+            if (!trimmed) {
+                return null;
+            }
+            const parsed = Date.parse(trimmed);
+            if (!Number.isNaN(parsed)) {
+                return parsed;
+            }
+        }
+        return null;
+    };
+
+    const resolveCouponExpirationTimestamp = entry => {
+        if (!entry || typeof entry !== 'object') {
+            return null;
+        }
+        const candidates = [
+            entry.validUntil,
+            entry.validTo,
+            entry.endDate,
+            entry.expirationDate,
+            entry.expireAt,
+            entry.expiresAt,
+            entry.expiryDate,
+            entry.expiry
+        ];
+        for (const candidate of candidates) {
+            const timestamp = parseCouponDateCandidate(candidate);
+            if (timestamp !== null) {
+                return timestamp;
+            }
+        }
+        return null;
+    };
+
+    const resolveCouponStatusLabel = entry => {
+        if (!entry || typeof entry !== 'object') {
+            return '';
+        }
+        const coerceBoolean = value => {
+            if (value === true) {
+                return true;
+            }
+            if (value === false) {
+                return false;
+            }
+            if (typeof value === 'number') {
+                if (!Number.isFinite(value)) {
+                    return null;
+                }
+                if (value > 0) {
+                    return true;
+                }
+                if (value === 0) {
+                    return false;
+                }
+            }
+            if (typeof value === 'string') {
+                const normalized = value.trim().toLowerCase();
+                if (!normalized) {
+                    return null;
+                }
+                if (['true', 'yes', 'y', '1', 'enabled', 'active', 'allow'].includes(normalized)) {
+                    return true;
+                }
+                if (['false', 'no', 'n', '0', 'disabled', 'inactive', 'off'].includes(normalized)) {
+                    return false;
+                }
+            }
+            return null;
+        };
+        const textSegments = [];
+        const registerSegment = value => {
+            if (typeof value === 'string' && value.trim()) {
+                textSegments.push(value.trim().toLowerCase());
+            }
+        };
+        registerSegment(entry.status);
+        registerSegment(entry.state);
+        registerSegment(entry.lifecycle);
+        registerSegment(entry.progress);
+        registerSegment(entry.outcome);
+        registerSegment(entry.stage);
+        registerSegment(entry.availability);
+        const containsKeyword = keywords => textSegments.some(segment => keywords.some(keyword => segment.includes(keyword)));
+
+        const deletedFlags = [
+            entry.isDeleted,
+            entry.deleted,
+            entry.isRemoved,
+            entry.removed,
+            entry.isArchived,
+            entry.archived,
+            entry.isVoided,
+            entry.voided
+        ];
+        const isDeleted = deletedFlags.some(value => coerceBoolean(value) === true)
+            || containsKeyword(['deleted', 'removed', 'archived', 'void', 'terminated', 'cancel']);
+        if (isDeleted) {
+            return 'Deleted';
+        }
+
+        const expirationTimestamp = resolveCouponExpirationTimestamp(entry);
+        const expiredFlag = coerceBoolean(entry.isExpired) === true
+            || containsKeyword(['expired', 'past due', 'lapsed', 'ended', 'finished']);
+        if ((expirationTimestamp !== null && expirationTimestamp < Date.now()) || expiredFlag) {
+            return 'Expired';
+        }
+
+        const inactiveFlags = [
+            coerceBoolean(entry.isActive),
+            coerceBoolean(entry.active),
+            coerceBoolean(entry.enabled),
+            coerceBoolean(entry.isEnabled)
+        ];
+        const isInactiveByFlag = inactiveFlags.includes(false);
+        const isInactiveByKeyword = containsKeyword(['inactive', 'disabled', 'paused', 'blocked', 'suspend', 'hold']);
+        if (isInactiveByFlag || isInactiveByKeyword) {
+            return 'Inactive';
+        }
+        return 'Active';
+    };
+
+    const couponStatusClassMap = {
+        Active: 'status-active',
+        Inactive: 'status-inactive',
+        Expired: 'status-danger',
+        Deleted: 'status-danger'
+    };
+
+    const renderCouponStatusBadge = (identifierText, entry) => {
+        const statusLabel = resolveCouponStatusLabel(entry);
+        if (!statusLabel) {
+            return '';
+        }
+        const statusClass = couponStatusClassMap[statusLabel] || '';
+        return `<span class="coupon-status-badge status-badge ${statusClass}">${escapeHtml(statusLabel)}</span>`;
+    };
+
     const resolveCouponValueLabel = entry => {
         if (!entry || typeof entry !== 'object') {
             return '';
@@ -38410,51 +38957,74 @@ function renderGenericMarketplaceOverlay(targetElements, account, options = {}) 
         return '';
     };
 
-    const resolveCouponUsageLabel = entry => {
-        if (!entry || typeof entry !== 'object') {
-            return '';
-        }
-        const usageValueCandidates = [
-            entry.usageCount,
-            entry.redemptionCount,
-            entry.timesUsed,
-            entry.used,
-            entry.redeemed
-        ];
-        const usageLimitCandidates = [
-            entry.usageLimit,
-            entry.maxUsage,
-            entry.maxRedemptions,
-            entry.limit,
-            entry.allowedUses
-        ];
-        const resolveNumeric = candidates => {
+    const resolveCouponUsageStats = entry => {
+        const normalizeInteger = value => {
+            const parsed = parseNumericAmount(value);
+            if (parsed === null || Number.isNaN(parsed)) {
+                return null;
+            }
+            const rounded = Math.round(parsed);
+            return Number.isFinite(rounded) ? Math.max(0, rounded) : null;
+        };
+        const readFromCandidates = candidates => {
             for (const candidate of candidates) {
-                const parsed = parseNumericAmount(candidate);
-                if (parsed !== null) {
-                    return parsed;
+                if (candidate === null || candidate === undefined) {
+                    continue;
+                }
+                const normalized = normalizeInteger(candidate);
+                if (normalized !== null) {
+                    return normalized;
                 }
             }
             return null;
         };
-        const usedValue = resolveNumeric(usageValueCandidates);
-        const limitValue = resolveNumeric(usageLimitCandidates);
-        const normalizeNumber = value => {
-            if (!Number.isFinite(value)) {
-                return null;
-            }
-            return Math.max(0, Math.round(value));
+        return {
+            totalUsed: readFromCandidates([
+                entry?.usageCount,
+                entry?.redemptionCount,
+                entry?.timesUsed,
+                entry?.used,
+                entry?.redeemed
+            ]),
+            totalLimit: readFromCandidates([
+                entry?.usageLimit,
+                entry?.maxUsage,
+                entry?.maxRedemptions,
+                entry?.limit,
+                entry?.allowedUses,
+                entry?.globalLimit,
+                entry?.totalLimit
+            ]),
+            perCustomerLimit: readFromCandidates([
+                entry?.perCustomerLimit,
+                entry?.limitPerCustomer,
+                entry?.perUserLimit,
+                entry?.userLimit,
+                entry?.perClientLimit,
+                entry?.perAccountLimit
+            ]),
+            perCustomerUsed: readFromCandidates([
+                entry?.perCustomerUsage,
+                entry?.perUserUsage,
+                entry?.customerUsage,
+                entry?.userUsage
+            ])
         };
-        const normalizedUsed = normalizeNumber(usedValue);
-        const normalizedLimit = normalizeNumber(limitValue);
-        if (normalizedUsed !== null && normalizedLimit !== null) {
-            return `${normalizedUsed.toLocaleString('en-US')} / ${normalizedLimit.toLocaleString('en-US')} used`;
+    };
+
+    const resolveCouponUsageLabel = entry => {
+        if (!entry || typeof entry !== 'object') {
+            return '';
         }
-        if (normalizedUsed !== null) {
-            return `${normalizedUsed.toLocaleString('en-US')} used`;
+        const { totalUsed, totalLimit } = resolveCouponUsageStats(entry);
+        if (totalUsed !== null && totalLimit !== null) {
+            return `${totalUsed.toLocaleString('en-US')} / ${totalLimit.toLocaleString('en-US')} used`;
         }
-        if (normalizedLimit !== null) {
-            return `Limit: ${normalizedLimit.toLocaleString('en-US')}`;
+        if (totalUsed !== null) {
+            return `${totalUsed.toLocaleString('en-US')} used`;
+        }
+        if (totalLimit !== null) {
+            return `Limit: ${totalLimit.toLocaleString('en-US')}`;
         }
         return '';
     };
@@ -38503,49 +39073,341 @@ function renderGenericMarketplaceOverlay(targetElements, account, options = {}) 
         return value ? `Audience: ${value}` : '';
     };
 
-    const resolveCouponStatusLabel = entry => {
+    const resolveCouponBooleanFlag = (entry, candidateResolvers = []) => {
+        if (!entry || typeof entry !== 'object' || !Array.isArray(candidateResolvers)) {
+            return null;
+        }
+        const coerce = value => {
+            if (value === null || value === undefined) {
+                return null;
+            }
+            if (typeof value === 'boolean') {
+                return value;
+            }
+            if (typeof value === 'number') {
+                if (Number.isNaN(value)) {
+                    return null;
+                }
+                return value !== 0;
+            }
+            if (typeof value === 'string') {
+                const normalized = value.trim().toLowerCase();
+                if (!normalized) {
+                    return null;
+                }
+                if (['yes', 'true', 'y', '1', 'enabled', 'allow', 'allowed', 'include', 'included'].includes(normalized)) {
+                    return true;
+                }
+                if (['no', 'false', 'n', '0', 'disabled', 'deny', 'denied', 'exclude', 'excluded'].includes(normalized)) {
+                    return false;
+                }
+            }
+            return null;
+        };
+        for (const resolver of candidateResolvers) {
+            let value;
+            if (typeof resolver === 'function') {
+                value = resolver(entry);
+            } else if (typeof resolver === 'string' && resolver in entry) {
+                value = entry[resolver];
+            }
+            const coerced = coerce(value);
+            if (coerced !== null) {
+                return coerced;
+            }
+        }
+        return null;
+    };
+
+    const resolveCouponBooleanDetail = (entry, candidateResolvers, label) => {
+        const flag = resolveCouponBooleanFlag(entry, candidateResolvers);
+        if (flag === null) {
+            return '';
+        }
+        return `${label}: ${flag ? 'Yes' : 'No'}`;
+    };
+
+    const resolveCouponTypeLabel = entry => {
         if (!entry || typeof entry !== 'object') {
             return '';
         }
-        const candidates = [entry.status, entry.state, entry.stage, entry.lifecycle];
-        const value = pickFirstNonEmptyString(candidates);
-        if (value) {
-            return `Status: ${formatKeyLabel(value)}`;
+        const value = pickFirstNonEmptyString([
+            entry.couponType,
+            entry.type,
+            entry.offerType,
+            entry.discountType,
+            entry.campaignType,
+            entry.calculationType,
+            entry.benefitType
+        ]);
+        return value ? `Coupon Type: ${formatKeyLabel(value)}` : '';
+    };
+
+    const resolveCouponMinimumPurchaseLabel = entry => {
+        if (!entry || typeof entry !== 'object') {
+            return '';
         }
-        if (entry.isActive === false || entry.active === false || entry.disabled === true) {
-            return 'Status: Inactive';
+        const currency = entry.currency || entry.currencyCode || 'SAR';
+        const amountCandidates = [
+            entry.minimumPurchase,
+            entry.minimumSpend,
+            entry.minimumOrderValue,
+            entry.minSubtotal,
+            entry.minPurchaseAmount,
+            entry.minSpend,
+            entry.minimumAmount
+        ];
+        for (const candidate of amountCandidates) {
+            const parsed = parseNumericAmount(candidate);
+            if (parsed !== null) {
+                return `Minimum Purchases: ${formatCurrency(parsed, currency)}`;
+            }
+        }
+        const quantityCandidates = [
+            entry.minimumQuantity,
+            entry.minItems,
+            entry.minProducts,
+            entry.minimumItems,
+            entry.minimumUnits
+        ];
+        for (const candidate of quantityCandidates) {
+            const parsed = parseNumericAmount(candidate);
+            if (parsed !== null) {
+                const normalized = Math.max(1, Math.round(parsed));
+                return `Minimum Purchases: ${normalized.toLocaleString('en-US')} item${normalized === 1 ? '' : 's'}`;
+            }
         }
         return '';
     };
 
+    const resolveCouponCollectionLabel = (entry, keys, label) => {
+        if (!entry || typeof entry !== 'object') {
+            return '';
+        }
+        const values = [];
+        const seen = new Set();
+        const registerValue = value => {
+            if (value === null || value === undefined || value === '') {
+                return;
+            }
+            if (Array.isArray(value)) {
+                value.forEach(item => registerValue(item));
+                return;
+            }
+            if (typeof value === 'object') {
+                const objectCandidates = [
+                    value.label,
+                    value.name,
+                    value.title,
+                    value.value,
+                    value.displayName,
+                    value.categoryName,
+                    value.folderName,
+                    value.productName,
+                    value.code,
+                    value.id
+                ];
+                for (const candidate of objectCandidates) {
+                    if (typeof candidate === 'string' && candidate.trim()) {
+                        registerValue(candidate.trim());
+                        return;
+                    }
+                }
+                return;
+            }
+            if (typeof value === 'string') {
+                const trimmed = value.trim();
+                if (!trimmed) {
+                    return;
+                }
+                if (trimmed.includes(',')) {
+                    trimmed.split(',').forEach(item => registerValue(item));
+                    return;
+                }
+                const normalizedKey = trimmed.toLowerCase();
+                if (seen.has(normalizedKey)) {
+                    return;
+                }
+                seen.add(normalizedKey);
+                values.push(trimmed);
+                return;
+            }
+            const fallback = String(value).trim();
+            if (!fallback) {
+                return;
+            }
+            const normalizedKey = fallback.toLowerCase();
+            if (seen.has(normalizedKey)) {
+                return;
+            }
+            seen.add(normalizedKey);
+            values.push(fallback);
+        };
+        (keys || []).forEach(key => {
+            if (!key) {
+                return;
+            }
+            if (typeof key === 'function') {
+                registerValue(key(entry));
+            } else if (entry[key] !== undefined) {
+                registerValue(entry[key]);
+            }
+        });
+        if (!values.length) {
+            return '';
+        }
+        return `${label}: ${values.join(', ')}`;
+    };
+
+    const resolveCouponMediaUrl = entry => {
+        if (!entry || typeof entry !== 'object') {
+            return '';
+        }
+        const extractUrl = value => {
+            if (value === null || value === undefined || value === '') {
+                return '';
+            }
+            if (Array.isArray(value)) {
+                for (const item of value) {
+                    const url = extractUrl(item);
+                    if (url) {
+                        return url;
+                    }
+                }
+                return '';
+            }
+            if (typeof value === 'string') {
+                const trimmed = value.trim();
+                return trimmed || '';
+            }
+            if (typeof value === 'object') {
+                const nestedCandidates = [value.url, value.src, value.href, value.path, value.assetUrl];
+                for (const candidate of nestedCandidates) {
+                    const url = extractUrl(candidate);
+                    if (url) {
+                        return url;
+                    }
+                }
+            }
+            return '';
+        };
+        const candidates = [
+            entry.couponImage,
+            entry.couponImageUrl,
+            entry.imageUrl,
+            entry.imageURL,
+            entry.image,
+            entry.thumbnailUrl,
+            entry.thumbnail,
+            entry.bannerUrl,
+            entry.banner,
+            entry.mediaUrl,
+            entry.media,
+            entry.assetUrl,
+            entry.asset,
+            entry.coverImage,
+            entry.cover
+        ];
+        for (const candidate of candidates) {
+            const url = extractUrl(candidate);
+            if (url) {
+                return url;
+            }
+        }
+        return '';
+    };
+
+    const resolveCouponImageLabel = entry => {
+        const mediaUrl = resolveCouponMediaUrl(entry);
+        return mediaUrl ? `Coupon Image: ${mediaUrl}` : '';
+    };
+
+    const resolveCouponPerCustomerUsageDetail = entry => {
+        const { perCustomerLimit, perCustomerUsed } = resolveCouponUsageStats(entry);
+        if (perCustomerLimit === null && perCustomerUsed === null) {
+            return '';
+        }
+        if (perCustomerLimit !== null && perCustomerUsed !== null) {
+            return `Number of times of use for one customer: ${perCustomerUsed.toLocaleString('en-US')} / ${perCustomerLimit.toLocaleString('en-US')}`;
+        }
+        if (perCustomerLimit !== null) {
+            return `Number of times of use for one customer: ${perCustomerLimit.toLocaleString('en-US')}`;
+        }
+        return `Number of times of use for one customer: ${perCustomerUsed.toLocaleString('en-US')}`;
+    };
+
     const buildDiscountCouponDetailLines = entry => {
         const lines = [];
-        const code = resolveCouponCode(entry);
-        if (code) {
-            lines.push(`Code: ${code}`);
+        const imageLabel = resolveCouponImageLabel(entry);
+        if (imageLabel) {
+            lines.push(imageLabel);
         }
-        const valueLabel = resolveCouponValueLabel(entry);
-        if (valueLabel) {
-            lines.push(`Value: ${valueLabel}`);
+        const typeLabel = resolveCouponTypeLabel(entry);
+        if (typeLabel) {
+            lines.push(typeLabel);
         }
-        const usageLabel = resolveCouponUsageLabel(entry);
-        if (usageLabel) {
-            lines.push(usageLabel);
+        const freeDeliveryLabel = resolveCouponBooleanDetail(entry, [
+            'freeDelivery',
+            'freeShipping',
+            'includesShipping',
+            'shippingIncluded',
+            entryValue => entryValue?.shipping?.freeDelivery
+        ], 'Free Delivery');
+        if (freeDeliveryLabel) {
+            lines.push(freeDeliveryLabel);
         }
-        const validityLabel = resolveCouponValidityLabel(entry);
-        if (validityLabel) {
-            lines.push(`Valid: ${validityLabel}`);
+        const excludeDiscountedLabel = resolveCouponBooleanDetail(entry, [
+            'excludeDiscountedProducts',
+            'excludesDiscountedProducts',
+            'excludeSaleItems',
+            'excludeSaleProducts',
+            'skipDiscountedProducts'
+        ], 'Exclude Discounted Products');
+        if (excludeDiscountedLabel) {
+            lines.push(excludeDiscountedLabel);
         }
-        const audienceLabel = resolveCouponAudienceLabel(entry);
-        if (audienceLabel) {
-            lines.push(audienceLabel);
+        const minimumPurchaseLabel = resolveCouponMinimumPurchaseLabel(entry);
+        if (minimumPurchaseLabel) {
+            lines.push(minimumPurchaseLabel);
         }
-        const statusLabel = resolveCouponStatusLabel(entry);
-        if (statusLabel) {
-            lines.push(statusLabel);
+        const perCustomerUsageLabel = resolveCouponPerCustomerUsageDetail(entry);
+        if (perCustomerUsageLabel) {
+            lines.push(perCustomerUsageLabel);
         }
-        if (!lines.length) {
-            lines.push('Coupon details unavailable');
+        const categoriesLabel = resolveCouponCollectionLabel(entry, [
+            'categories',
+            'categoryList',
+            'applicableCategories',
+            'allowedCategories',
+            'categoryIds',
+            'categoryNames'
+        ], 'Categories Included');
+        if (categoriesLabel) {
+            lines.push(categoriesLabel);
+        }
+        const foldersLabel = resolveCouponCollectionLabel(entry, [
+            'folders',
+            'folderList',
+            'collections',
+            'collectionList',
+            'folderIds',
+            'folderNames'
+        ], 'Folders Included');
+        if (foldersLabel) {
+            lines.push(foldersLabel);
+        }
+        const productsLabel = resolveCouponCollectionLabel(entry, [
+            'products',
+            'productList',
+            'applicableProducts',
+            'allowedProducts',
+            'productIds',
+            'productSkus',
+            'skus',
+            'skuList'
+        ], 'Products Included');
+        if (productsLabel) {
+            lines.push(productsLabel);
         }
         return lines;
     };
@@ -38562,9 +39424,6 @@ function renderGenericMarketplaceOverlay(targetElements, account, options = {}) 
             entry.description
         ]);
         const code = resolveCouponCode(entry);
-        if (name && code) {
-            return `${name} • ${code}`;
-        }
         if (name) {
             return name;
         }
@@ -38576,21 +39435,94 @@ function renderGenericMarketplaceOverlay(targetElements, account, options = {}) 
 
     const discountCouponsEmptyMessage = 'There is no Data Available';
     const discountCouponsCountLabel = formatBucketCountLabel(discountCoupons, 'Coupon');
-    const discountCouponsMarkup = buildCollectionMarkup(discountCoupons, discountCouponsEmptyMessage, {
-        includeCreatedMeta: true,
+    const discountCouponsPaginationConfig = discountCouponsPagination && typeof discountCouponsPagination === 'object'
+        ? discountCouponsPagination
+        : null;
+    const discountCouponCountsMap = discountCouponsPaginationConfig
+        && discountCouponsPaginationConfig.visibleCountMap
+        && typeof discountCouponsPaginationConfig.visibleCountMap === 'object'
+            ? discountCouponsPaginationConfig.visibleCountMap
+            : null;
+    const discountCouponVisibilityKey = resolveVisibilityKey(discountCouponsPaginationConfig && discountCouponsPaginationConfig.resolveVisibilityKey);
+    const discountCouponPageSize = discountCouponsPaginationConfig
+        && Number.isFinite(discountCouponsPaginationConfig.pageSize)
+        && discountCouponsPaginationConfig.pageSize > 0
+            ? Math.max(1, Math.floor(discountCouponsPaginationConfig.pageSize))
+            : MARKETPLACE_DISCOUNT_COUPON_PAGE_SIZE;
+    const discountCouponLoadMoreAction = discountCouponsPaginationConfig && typeof discountCouponsPaginationConfig.loadMoreAction === 'string'
+        ? discountCouponsPaginationConfig.loadMoreAction
+        : 'load-more-marketplace-discount-coupons';
+    const resolveDefaultDiscountCouponLoadMoreAttributes = accountRef => {
+        if (accountRef && accountRef.accountId !== null && accountRef.accountId !== undefined) {
+            return { 'data-account-id': String(accountRef.accountId) };
+        }
+        if (accountRef && accountRef.id !== null && accountRef.id !== undefined) {
+            return { 'data-account-id': String(accountRef.id) };
+        }
+        return {};
+    };
+    const resolveDiscountCouponLoadMoreAttributes = typeof (discountCouponsPaginationConfig && discountCouponsPaginationConfig.resolveLoadMoreAttributes) === 'function'
+        ? discountCouponsPaginationConfig.resolveLoadMoreAttributes
+        : resolveDefaultDiscountCouponLoadMoreAttributes;
+    let discountCouponsCollectionForMarkup = discountCoupons;
+    let discountCouponsLoadMoreMarkup = '';
+    let discountCouponsPreserveOrder = false;
+    if (discountCouponsPaginationConfig) {
+        const sortedDiscountCoupons = sortByTimestampDesc(discountCoupons).slice(0, normalizedSectionLimit);
+        const maxEntries = sortedDiscountCoupons.length;
+        const baselineCount = maxEntries > 0
+            ? Math.min(discountCouponPageSize, maxEntries)
+            : 0;
+        let visibleCount = baselineCount;
+        if (discountCouponCountsMap && discountCouponVisibilityKey) {
+            const stored = Number.parseInt(discountCouponCountsMap[discountCouponVisibilityKey], 10);
+            if (Number.isFinite(stored) && stored > 0) {
+                visibleCount = Math.min(maxEntries, Math.max(baselineCount || 0, stored));
+            } else if (baselineCount > 0) {
+                discountCouponCountsMap[discountCouponVisibilityKey] = baselineCount;
+            }
+        }
+        visibleCount = Math.min(maxEntries, visibleCount || 0);
+        discountCouponsCollectionForMarkup = visibleCount ? sortedDiscountCoupons.slice(0, visibleCount) : [];
+        discountCouponsPreserveOrder = true;
+        const hasMoreCoupons = visibleCount < maxEntries;
+        if (hasMoreCoupons && discountCouponLoadMoreAction) {
+            const attributes = [`data-action="${escapeAttribute(discountCouponLoadMoreAction)}"`];
+            const extraAttributes = resolveDiscountCouponLoadMoreAttributes(account) || {};
+            Object.entries(extraAttributes).forEach(([key, value]) => {
+                if (value === null || value === undefined) {
+                    return;
+                }
+                attributes.push(`${key}="${escapeAttribute(String(value))}"`);
+            });
+            const attributeString = attributes.join(' ');
+            discountCouponsLoadMoreMarkup = `<div class="detail-subsection detail-load-more"><button type="button" class="btn btn-outline" ${attributeString} style="margin: auto;">More</button></div>`;
+        }
+    }
+    const discountCouponsMarkup = buildCollectionMarkup(discountCouponsCollectionForMarkup, discountCouponsEmptyMessage, {
+        includeCreatedMeta: false,
         timestampsOnly: true,
-        createdLabelPrefix: 'Created',
+        suppressDetails: ['updated'],
         staticDetails: entry => buildDiscountCouponDetailLines(entry),
-        transformTitle: (title, entry) => resolveDiscountCouponTitle(entry) || title
+        transformTitle: (title, entry) => resolveDiscountCouponTitle(entry) || title,
+        preserveOrder: discountCouponsPreserveOrder,
+        resolveIdentifier: resolveCouponCode,
+        transformIdentifier: value => (value === null || value === undefined ? '' : String(value).trim()),
+        resolveIdentifierAttributes: identifierText => (identifierText ? { 'data-marketplace-coupon-code': identifierText } : null),
+        renderIdentifierAdjacentContent: renderCouponStatusBadge
     });
     const onrufCouponsEmptyMessage = 'There is no Data Available';
     const onrufCouponsCountLabel = formatBucketCountLabel(onrufCoupons, 'Coupon');
     const onrufCouponsMarkup = buildCollectionMarkup(onrufCoupons, onrufCouponsEmptyMessage, {
-        includeCreatedMeta: true,
+        includeCreatedMeta: false,
         timestampsOnly: true,
-        createdLabelPrefix: 'Issued',
+        suppressDetails: ['updated'],
         staticDetails: entry => buildDiscountCouponDetailLines(entry),
-        transformTitle: (title, entry) => resolveDiscountCouponTitle(entry) || title
+        transformTitle: (title, entry) => resolveDiscountCouponTitle(entry) || title,
+        resolveIdentifier: resolveCouponCode,
+        transformIdentifier: value => (value === null || value === undefined ? '' : String(value).trim()),
+        resolveIdentifierAttributes: identifierText => (identifierText ? { 'data-marketplace-coupon-code': identifierText } : null),
+        renderIdentifierAdjacentContent: renderCouponStatusBadge
     });
 
     const sellerHasScore = Number.isFinite(sellerSummary.average);
@@ -38748,6 +39680,7 @@ function renderGenericMarketplaceOverlay(targetElements, account, options = {}) 
             <div class="detail-subsection">
                 ${discountCouponsMarkup}
             </div>
+            ${discountCouponsLoadMoreMarkup}
         </section>
     `;
     const onrufCouponsSectionMarkup = hideOnrufCouponsSection
@@ -38818,6 +39751,7 @@ function renderGenericMarketplaceOverlay(targetElements, account, options = {}) 
     `;
 
     bindMarketplaceEntryIdentifierClicks(contentEl);
+    bindMarketplaceCouponCodeClicks(contentEl);
 
     syncOverlayAriaHidden();
 }
@@ -39259,6 +40193,9 @@ function renderBusinessAccountMarketplaceOverlay(context) {
         hideDiscountCouponsSection: false,
         hideOnrufCouponsSection: false,
         showClientsSummaryMetric: true,
+        showSellersSummaryMetric: false,
+        showAlmostOutAddedMeta: false,
+        showInactiveReasonDetails: false,
         hiddenSummaryMetrics: ['purchaseOrders', 'purchaseVolume', 'cartValue'],
         showAlmostOutSalesBucket: true,
         showInactiveSalesBucket: true,
@@ -39302,6 +40239,13 @@ function renderBusinessAccountMarketplaceOverlay(context) {
             visibleCountMap: state.businessMarketplaceNegotiationVisibleCounts,
             resolveVisibilityKey: businessVisibilityKeyResolver,
             loadMoreAction: 'load-more-negotiation-offers',
+            resolveLoadMoreAttributes: businessLoadMoreAttributesResolver
+        },
+        discountCouponsPagination: {
+            pageSize: MARKETPLACE_DISCOUNT_COUPON_PAGE_SIZE,
+            visibleCountMap: state.businessMarketplaceDiscountCouponVisibleCounts,
+            resolveVisibilityKey: businessVisibilityKeyResolver,
+            loadMoreAction: 'load-more-marketplace-discount-coupons',
             resolveLoadMoreAttributes: businessLoadMoreAttributesResolver
         },
         salesPagination: {
@@ -41553,7 +42497,6 @@ function renderIndividualAccountBusinessOverlay(account) {
         const detailGridMarkup = business
             ? `
                 <div class="detail-grid">
-                    <div><dt>Submitted</dt><dd>${escapeHtml(submittedLabel)}</dd></div>
                     <div><dt>ID</dt><dd>${escapeHtml(businessIdLabel)}</dd></div>
                     <div><dt>Username</dt><dd>${escapeHtml(business.contactName || '—')}</dd></div>
                     <div><dt>Registration Document Type</dt><dd>${escapeHtml(documentTypeLabel)}</dd></div>
@@ -41562,6 +42505,7 @@ function renderIndividualAccountBusinessOverlay(account) {
                     <div><dt>Expiry Date</dt><dd>${escapeHtml(expiryDateLabel || '—')}</dd></div>
                     <div><dt>VAT Number</dt><dd>${escapeHtml(vatNumber)}</dd></div>
                     <div><dt>Trade for 15 years</dt><dd>${escapeHtml(tradeExperienceLabel)}</dd></div>
+                    <div><dt>Submitted</dt><dd>${escapeHtml(submittedLabel)}</dd></div>
                     <div><dt>Publishing List</dt><dd>${escapeHtml(businessPublishingLabel)}</dd></div>
                     <div><dt>Internal Notes</dt><dd>${escapeHtml(businessPublishingNotes)}</dd></div>
                     ${showApprovalDetails ? `<div><dt>Approved At</dt><dd>${escapeHtml(approvedAtLabel)}</dd></div>` : ''}
@@ -44631,6 +45575,41 @@ function renderBusinessAccountDetail(account, { preserveDetailScroll = false } =
     const businessCertificatesPlainDisplay = certificatesPlainText && certificatesPlainText !== '—'
         ? escapeHtml(certificatesPlainText)
         : '—';
+    const rawBusinessLogoSource = (() => {
+        if (typeof account.logoDataUrl === 'string' && account.logoDataUrl.trim()) {
+            return account.logoDataUrl.trim();
+        }
+        if (typeof application.logoDataUrl === 'string' && application.logoDataUrl.trim()) {
+            return application.logoDataUrl.trim();
+        }
+        return '';
+    })();
+    const hasBusinessLogo = /^data:image\//i.test(rawBusinessLogoSource) || /^https?:\/\//i.test(rawBusinessLogoSource);
+    const businessLogoAltText = `${englishCompanyName} logo`;
+    const businessLogoInlineMarkup = hasBusinessLogo
+        ? `<div class="business-logo-box business-logo-inline"><img src="${escapeAttribute(rawBusinessLogoSource)}" alt="${escapeAttribute(businessLogoAltText)}"></div>`
+        : '<div class="business-logo-box business-logo-inline"><span class="business-logo-meta">No logo</span></div>';
+    const businessStatusLabel = getBusinessAccountStatusLabel(account.status) || 'Status unavailable';
+    let businessStatusChipClass = 'neutral';
+    if (normalizedStatus === 'active') {
+        businessStatusChipClass = 'success';
+    } else if (normalizedStatus === 'inactive') {
+        businessStatusChipClass = 'inactive';
+    } else if (normalizedStatus === 'pending' || normalizedStatus === 'docs-requested') {
+        businessStatusChipClass = 'pending';
+    } else if (['suspended', 'cancelled', 'rejected'].includes(normalizedStatus)) {
+        businessStatusChipClass = 'danger';
+    }
+    const businessReviewSummaryMarkup = `
+        <div class="business-association-row business-review-summary">
+            ${businessLogoInlineMarkup}
+            <div class="business-association-summary">
+                <div><strong>${escapeHtml(englishCompanyName)}</strong></div>
+                ${arabicCompanyName ? `<div><strong>${escapeHtml(arabicCompanyName)}</strong></div>` : ''}
+            </div>
+            <span class="helper-chip ${businessStatusChipClass}">${escapeHtml(businessStatusLabel)}</span>
+        </div>
+    `;
 
     const requestExpirySource = normalizeText(application.expiryDate) || normalizeText(account.expiryDate);
     const requestExpiryLabel = requestExpirySource
@@ -44970,7 +45949,7 @@ function renderBusinessAccountDetail(account, { preserveDetailScroll = false } =
             details.push(`<div class="helper-text">Added ${escapeHtml(String(addedAtLabel))}</div>`);
         }
         if (updatedAtLabel && updatedAtLabel !== addedAtLabel) {
-            details.push(`<div class="helper-text">Last updated ${escapeHtml(String(updatedAtLabel))}</div>`);
+            details.push(`<div class="helper-text">Last Updated ${escapeHtml(String(updatedAtLabel))}</div>`);
         }
         const title = titleParts.filter(Boolean).join(' • ') || 'Payment Method';
         const headerParts = [`<strong>${escapeHtml(title)}</strong>`];
@@ -45063,7 +46042,7 @@ function renderBusinessAccountDetail(account, { preserveDetailScroll = false } =
             detailLines.push(`<div class="helper-text">Added ${escapeHtml(String(addedLabel))}</div>`);
         }
         if (updatedLabel && (!addedLabel || addedLabel !== updatedLabel)) {
-            detailLines.push(`<div class="helper-text">Last updated ${escapeHtml(String(updatedLabel))}</div>`);
+            detailLines.push(`<div class="helper-text">Last Updated ${escapeHtml(String(updatedLabel))}</div>`);
         }
         return `<li><div>${headerParts.join(' ')}</div>${detailLines.join('')}</li>`;
     };
@@ -45129,7 +46108,7 @@ function renderBusinessAccountDetail(account, { preserveDetailScroll = false } =
         const updatedLabel = formatTimelineLabel(partner.updatedAt);
         const timelineMarkup = [
             addedLabel ? `<div class="helper-text">Added ${escapeHtml(addedLabel)}</div>` : '',
-            updatedLabel ? `<div class="helper-text">Updated ${escapeHtml(updatedLabel)}</div>` : ''
+            updatedLabel ? `<div class="helper-text">Last Updated ${escapeHtml(updatedLabel)}</div>` : ''
         ].filter(Boolean).join('');
         const conditionsCount = Array.isArray(partner.conditions) ? partner.conditions.length : 0;
         const accountIdAttr = context && context.accountId ? String(context.accountId) : '';
@@ -45184,7 +46163,7 @@ function renderBusinessAccountDetail(account, { preserveDetailScroll = false } =
                     .map(field => `<div><dt>${escapeHtml(field.label)}</dt><dd>${escapeHtml(String(field.value))}</dd></div>`)
                     .join('')}</div>
                 ${createdAtLabel ? `<div class="helper-text">Added ${escapeHtml(createdAtLabel)}</div>` : ''}
-                ${lastUpdatedLabel ? `<div class="helper-text">Updated ${escapeHtml(lastUpdatedLabel)}</div>` : ''}
+                ${lastUpdatedLabel ? `<div class="helper-text">Last Updated ${escapeHtml(lastUpdatedLabel)}</div>` : ''}
             </li>
         `;
     };
@@ -45226,7 +46205,7 @@ function renderBusinessAccountDetail(account, { preserveDetailScroll = false } =
                 <div>${headerParts.join(' ')}</div>
                 ${addressMarkup}
                 ${addedLabel ? `<div class="helper-text">Added ${escapeHtml(addedLabel)}</div>` : ''}
-                ${updatedLabel ? `<div class="helper-text">Updated ${escapeHtml(updatedLabel)}</div>` : ''}
+                ${updatedLabel ? `<div class="helper-text">Last Updated ${escapeHtml(updatedLabel)}</div>` : ''}
             </li>
         `;
     };
@@ -45269,7 +46248,7 @@ function renderBusinessAccountDetail(account, { preserveDetailScroll = false } =
             <li>
                 ${detailMarkup}
                 ${addedLabel ? `<div class="helper-text">Added ${escapeHtml(addedLabel)}</div>` : ''}
-                ${updatedLabel ? `<div class="helper-text">Updated ${escapeHtml(updatedLabel)}</div>` : ''}
+                ${updatedLabel ? `<div class="helper-text">Last Updated ${escapeHtml(updatedLabel)}</div>` : ''}
             </li>
         `;
     };
@@ -45585,7 +46564,6 @@ function renderBusinessAccountDetail(account, { preserveDetailScroll = false } =
                 <div class="detail-grid">
                     <div><dt>Company Name (Arabic)</dt><dd>${arabicCompanyName ? escapeHtml(arabicCompanyName) : '—'}</dd></div>
                     <div><dt>Company Name (English)</dt><dd>${englishCompanyName ? escapeHtml(englishCompanyName) : '—'}</dd></div>
-                    <div><dt>Submitted</dt><dd>${escapeHtml(submittedLabel)}</dd></div>
                     <div><dt>ID</dt><dd>${requestIdDisplay ? escapeHtml(requestIdDisplay) : '—'}</dd></div>
                     <div><dt>Username</dt><dd>${requestUsername ? escapeHtml(requestUsername) : '—'}</dd></div>
                     <div><dt>Registration Document Type</dt><dd>${escapeHtml(documentTypeLabel)}</dd></div>
@@ -45595,6 +46573,7 @@ function renderBusinessAccountDetail(account, { preserveDetailScroll = false } =
                     <div><dt>VAT Number</dt><dd>${vatNumber ? escapeHtml(vatNumber) : '—'}</dd></div>
                     <div><dt>Trade for 15 Years</dt><dd>${escapeHtml(tradeExperienceLabel)}</dd></div>
                     <div><dt>Phone Number</dt><dd>${businessPhonePlainDisplay}</dd></div>
+                    <div><dt>Submitted</dt><dd>${escapeHtml(submittedLabel)}</dd></div>
                     <div><dt>Approved At</dt><dd>${businessApprovedAtPlainDisplay}</dd></div>
                     <div><dt>Approval Notes</dt><dd>${businessApprovalNotePlainDisplay}</dd></div>
                 </div>
@@ -45654,6 +46633,7 @@ function renderBusinessAccountDetail(account, { preserveDetailScroll = false } =
 
     const requestDataSectionMarkup = `
         <section class="detail-section business-review-section">
+            ${businessReviewSummaryMarkup}
             <div class="detail-grid">
                 <div><dt>Submitted</dt><dd>${escapeHtml(submittedLabel)}</dd></div>
                 <div><dt>ID</dt><dd>${escapeHtml(requestIdDisplay)}</dd></div>

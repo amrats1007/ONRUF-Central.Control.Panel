@@ -151,6 +151,19 @@ body.dark-mode .tree-label:hover {
     color: #0f1c3d;
     outline: none;
 }
+
+.marketplace-identifier-cluster {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    margin-left: 0.25rem;
+}
+
+.coupon-status-badge {
+    padding: 4px 10px;
+    font-size: 11px;
+    letter-spacing: 0.04em;
+}
 .tree-row.selected .tree-label {
     color: #1d4ed8;
 }
