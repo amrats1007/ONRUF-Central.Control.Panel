@@ -367,8 +367,12 @@
                         <div id="userPromptOverlay" class="confirm-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="userPromptMessage">
                             <div class="confirm-dialog" role="document">
                                 <p id="userPromptMessage">To Confirm, Type the Email Address Below</p>
-                                <input type="text" id="userPromptInput" class="confirm-input" aria-describedby="userPromptMessage userPromptError" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" />
-                                <p id="userPromptError" class="prompt-error hidden" role="alert"></p>
+                                <div class="prompt-field">
+                                    <div class="prompt-input-wrapper">
+                                        <input type="text" id="userPromptInput" class="confirm-input" aria-describedby="userPromptMessage userPromptError" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" />
+                                    </div>
+                                    <p id="userPromptError" class="prompt-error hidden" role="alert"></p>
+                                </div>
                                 <div class="confirm-actions">
                                     <button type="button" class="btn btn-outline" id="userPromptCancel">Cancel</button>
                                     <button type="button" class="btn btn-primary" id="userPromptConfirm">Delete</button>
@@ -1172,67 +1176,99 @@
                 </section>
                 <section id="product-ads" class="section-content">
                     <div class="sub-apps-nav">
-                        <button class="sub-app-btn active" data-target="product-ads-overview" data-label="Product Ads Governance">
-                            <span>Product Ads Governance</span>
+                        <button class="sub-app-btn active" data-target="product-ads-overview" data-label="Product Ads Management">
+                            <span>Product Ads Management</span>
                         </button>
-                        <button class="sub-app-btn" data-target="product-ads-automation" data-label="Publishing List">
-                            <span>Publishing List</span>
+                        <button class="sub-app-btn" data-target="product-ads-requests" data-label="Product Ads Requests Review">
+                            <span>Product Ads Requests Review</span>
+                        </button>
+                        <button class="sub-app-btn" data-target="product-ads-automation" data-label="Publishing Lists">
+                            <span>Publishing Lists</span>
                         </button>
                     </div>
 
                     <div id="product-ads-overview" class="sub-app active">
                     <div class="users-header">
                         <div class="header-stack">
-                            <h2 class="module-title" id="productAdsModuleTitle">Product Ads Governance</h2>
-                            <div class="search-box">
-                                <i class="fas fa-search"></i>
-                                <input type="text" id="productAdsSearchInput" placeholder="Search by listing title, ID, account, category, or city" />
+                            <h2 class="module-title" id="productAdsModuleTitle">
+                                <span id="productAdsModuleTitleText">Product Ads</span>
+                                <span class="count-badge" id="productAdsCountLabel">#0 Ads</span>
+                            </h2>
+                            <div class="detail-controls directory-controls product-ads-controls">
+                                <div class="search-box">
+                                    <i class="fas fa-search"></i>
+                                    <input type="text" id="productAdsSearchInput" placeholder="Search by listing title, ID, account, category, or city" />
+                                </div>
+                                <div class="detail-filters product-ads-filters">
+                                    <label class="filter-control" for="productAdsStatusFilter">Status
+                                        <select id="productAdsStatusFilter">
+                                            <option value="all">All</option>
+                                        </select>
+                                    </label>
+                                    <label class="filter-control" for="productAdsCategoryFilter">Category
+                                        <select id="productAdsCategoryFilter">
+                                            <option value="all">All categories</option>
+                                        </select>
+                                    </label>
+                                    <label class="filter-control" for="productAdsCityFilter">City
+                                        <select id="productAdsCityFilter">
+                                            <option value="all">All cities</option>
+                                        </select>
+                                    </label>
+                                    <label class="filter-control" for="productAdsAccountFilter">Account Type
+                                        <select id="productAdsAccountFilter">
+                                            <option value="all">All</option>
+                                            <option value="individual">Individual</option>
+                                            <option value="business">Business</option>
+                                        </select>
+                                    </label>
+                                </div>
                             </div>
-                        </div>
-                        <div class="users-actions">
-                            <button type="button" class="btn btn-outline" id="openProductAdsImportBtn">
-                                <i class="fas fa-file-import"></i>
-                                Import
-                            </button>
-                            <input type="file" id="productAdsImportInput" accept=".csv,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden />
-                            <button type="button" class="btn btn-outline" id="exportProductAdsBtn">
-                                <i class="fas fa-file-export"></i>
-                                Export
-                            </button>
-                            <div class="import-status" id="productAdsImportStatus" role="status" aria-live="polite"></div>
                         </div>
                     </div>
 
                     <div class="detail-quick-actions product-ads-toolbar">
-                        <div class="quick-action-group">
-                            <span class="section-subtitle" id="productAdsCountLabel">#0 Ads</span>
-                            <button type="button" class="btn btn-outline" id="productAdsResetFiltersBtn">
-                                <i class="fas fa-rotate-left"></i>
-                                Reset Filters
-                            </button>
-                        </div>
-                        <div class="detail-filters">
-                            <span class="filter-label" aria-hidden="true">Filter:</span>
-                            <label class="filter-control" for="productAdsStatusFilter">Status
-                                <select id="productAdsStatusFilter">
-                                    <option value="all">All</option>
-                                </select>
-                            </label>
-                            <label class="filter-control" for="productAdsCategoryFilter">Category
-                                <select id="productAdsCategoryFilter">
-                                    <option value="all">All categories</option>
-                                </select>
-                            </label>
-                            <label class="filter-control" for="productAdsCityFilter">City
-                                <select id="productAdsCityFilter">
-                                    <option value="all">All cities</option>
-                                </select>
-                            </label>
-                            <label class="filter-control" for="productAdsAccountFilter">Account
-                                <select id="productAdsAccountFilter">
-                                    <option value="all">All accounts</option>
-                                </select>
-                            </label>
+                        <div class="quick-action-group product-ads-actions" id="productAdsActionToolbar" role="group" aria-label="Product ad actions">
+                            <div class="product-ads-actions-primary">
+                                <button type="button" class="btn btn-secondary btn-compact" id="productAdsHistoryBtn" disabled>
+                                    <i class="fas fa-clock-rotate-left"></i>
+                                    <span>History</span>
+                                </button>
+                                <button type="button" class="btn btn-secondary btn-compact" id="productAdsEditBtn" disabled>
+                                    <i class="fas fa-pen"></i>
+                                    <span>Edit</span>
+                                </button>
+                                <button type="button" class="btn btn-outline" id="productAdsApproveBtn" disabled>
+                                    <i class="fas fa-circle-check"></i>
+                                    <span>Approve</span>
+                                </button>
+                                <button type="button" class="btn btn-outline" id="productAdsRejectBtn" disabled>
+                                    <i class="fas fa-circle-xmark"></i>
+                                    <span>Reject</span>
+                                </button>
+                                <button type="button" class="btn btn-outline" id="productAdsSuspendBtn" data-action="suspend" disabled>
+                                    <i class="fas fa-ban"></i>
+                                    <span class="action-label">Suspend</span>
+                                </button>
+                                <button type="button" class="btn btn-outline" id="productAdsResetFiltersBtn">
+                                    <i class="fas fa-rotate-left"></i>
+                                    Reset
+                                </button>
+                                <button type="button" class="btn btn-outline" id="productAdsDeleteBtn" disabled>
+                                    <i class="fas fa-trash"></i>
+                                    <span>Delete All</span>
+                                </button>
+                            </div>
+                            <div class="product-ads-actions-secondary">
+                                <button type="button" class="btn btn-primary" id="productAdsSeedBtn">
+                                    <i class="fas fa-seedling"></i>
+                                    <span>Seed Product Ad</span>
+                                </button>
+                                <button type="button" class="btn btn-outline" id="exportProductAdsBtn">
+                                    <i class="fas fa-file-export"></i>
+                                    Export
+                                </button>
+                            </div>
                         </div>
                     </div>
 
@@ -1249,12 +1285,11 @@
                                     <th>Views</th>
                                     <th>Created</th>
                                     <th>Updated</th>
-                                    <th>Actions</th>
                                 </tr>
                             </thead>
                             <tbody id="productAdsTableBody">
                                 <tr>
-                                    <td colspan="10">Use the filters above to load product listings.</td>
+                                    <td colspan="9">Use the filters above to load product listings.</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -1384,11 +1419,78 @@
                     </div>
                     </div>
 
+                    <div id="product-ads-requests" class="sub-app">
+                        <section class="product-ad-requests-shell business-requests-shell" aria-labelledby="productAdRequestsModuleTitleText">
+                            <div class="users-header" style="margin-bottom: 0;">
+                                <div class="header-stack">
+                                    <h2 class="module-title" id="productAdRequestsModuleTitle">
+                                        <span id="productAdRequestsModuleTitleText">Product Ads Requests</span>
+                                        <span class="count-badge" id="productAdRequestsCountLabel">#0 Requests</span>
+                                    </h2>
+                                </div>
+                            </div>
+
+                            <div class="product-ad-requests-toolbar business-requests-toolbar" id="productAdRequestsToolbar">
+                                <div class="product-ad-requests-filters business-requests-filters">
+                                    <div class="product-ad-requests-period business-requests-period" id="productAdRequestsPeriodChips" role="group" aria-label="Product ad request period filters">
+                                        <button type="button" class="chip" data-product-request-period="today">Today</button>
+                                        <button type="button" class="chip" data-product-request-period="7days">Last 7 days</button>
+                                        <button type="button" class="chip" data-product-request-period="30days">Last 30 days</button>
+                                        <button type="button" class="chip" data-product-request-period="all">All Pending</button>
+                                        <button type="button" class="chip" data-product-request-period="custom">Custom</button>
+                                        <div class="product-ad-requests-dates business-requests-dates" aria-label="Custom date range">
+                                            <label class="filter-control" for="productAdRequestsStartDate">From
+                                                <input type="date" id="productAdRequestsStartDate" disabled />
+                                            </label>
+                                            <label class="filter-control" for="productAdRequestsEndDate">To
+                                                <input type="date" id="productAdRequestsEndDate" disabled />
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <div class="product-ad-requests-controls business-requests-controls">
+                                        <div class="product-ad-requests-search business-requests-search">
+                                            <i class="fas fa-search"></i>
+                                            <input type="search" id="productAdRequestsSearchInput" placeholder="Search by Item Title, Account, City, or ID" autocomplete="off" />
+                                        </div>
+                                        <button type="button" class="btn btn-outline btn-compact" id="productAdRequestsResetBtn">
+                                            <i class="fas fa-rotate-left"></i>
+                                            Reset
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="product-ad-requests-summary business-requests-summary" id="productAdRequestsSummary"></div>
+
+                            <div class="product-ad-requests-grid business-requests-grid" id="productAdRequestsGrid" aria-live="polite">
+                                <div class="empty-state" id="productAdRequestsEmptyState">Pending product ad submissions will appear here.</div>
+                            </div>
+                        </section>
+
+                        <div id="productAdRequestDecisionOverlay" class="confirm-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="productAdRequestDecisionTitle">
+                            <div class="confirm-dialog" role="document">
+                                <h3 id="productAdRequestDecisionTitle">Review Product Ad</h3>
+                                <p class="helper-text" id="productAdRequestDecisionMessage">Add context for the approval or rejection before proceeding.</p>
+                                <label class="form-label" for="productAdRequestDecisionNoteInput">Decision note (optional)</label>
+                                <textarea id="productAdRequestDecisionNoteInput" class="form-input" placeholder="Explain the moderation decision"></textarea>
+                                <div class="confirm-actions">
+                                    <button type="button" class="btn btn-outline" id="productAdRequestDecisionCancelBtn">
+                                        <i class="fas fa-xmark"></i>
+                                        Cancel
+                                    </button>
+                                    <button type="button" class="btn btn-primary" id="productAdRequestDecisionConfirmBtn">
+                                        <i class="fas fa-circle-check"></i>
+                                        Confirm
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <div id="product-ads-automation" class="sub-app">
                         <section class="automation-section" aria-labelledby="productAdsAutomationTitle">
                             <header>
-                                <h3 id="productAdsAutomationTitle">Automation Lists</h3>
-                                <p class="helper-text">Maintain publishing list policies for ONRUF marketplace accounts.</p>
+                                <span id="productAdsAutomationTitle" class="sr-only">Automation Lists</span>
                             </header>
                             <div class="automation-grid">
                                 <article class="automation-card">
@@ -1402,9 +1504,23 @@
                                             Add account
                                         </button>
                                     </div>
+                                    <div class="automation-card-controls" aria-label="Trusted account filters">
+                                        <div class="automation-search">
+                                            <i class="fas fa-search" aria-hidden="true"></i>
+                                            <input type="search" id="productAdsTrustedSearchInput" placeholder="Name, Email, or ID" aria-label="Search trusted accounts" />
+                                        </div>
+                                        <div class="automation-filter">
+                                            <select id="productAdsTrustedTypeFilter" aria-label="Account Type">
+                                                <option value="all">All</option>
+                                                <option value="individual">Individual</option>
+                                                <option value="business">Business</option>
+                                            </select>
+                                        </div>
+                                    </div>
                                     <ul class="automation-list" id="productAdsTrustedList">
                                         <li class="empty-state">No trusted accounts yet.</li>
                                     </ul>
+                                    <div class="automation-pagination hidden" id="productAdsTrustedPagination" aria-live="polite"></div>
                                 </article>
                                 <div class="automation-transfer-controls" aria-label="Move accounts between Trusted and Manual Review lists">
                                     <button type="button" class="transfer-arrow" data-transfer-source="trusted" data-transfer-target="manualReview" aria-label="Move selected Trusted account to Manual Review">
@@ -1425,9 +1541,23 @@
                                             Add account
                                         </button>
                                     </div>
+                                    <div class="automation-card-controls" aria-label="Manual review filters">
+                                        <div class="automation-search">
+                                            <i class="fas fa-search" aria-hidden="true"></i>
+                                            <input type="search" id="productAdsReviewSearchInput" placeholder="Name, Email, or ID" aria-label="Search manual review accounts" />
+                                        </div>
+                                        <div class="automation-filter">
+                                            <select id="productAdsReviewTypeFilter" aria-label="Account Type">
+                                                <option value="all">All</option>
+                                                <option value="individual">Individual</option>
+                                                <option value="business">Business</option>
+                                            </select>
+                                        </div>
+                                    </div>
                                     <ul class="automation-list" id="productAdsReviewList">
                                         <li class="empty-state">No accounts require manual review.</li>
                                     </ul>
+                                    <div class="automation-pagination hidden" id="productAdsReviewPagination" aria-live="polite"></div>
                                 </article>
                                 <div class="automation-transfer-controls" aria-label="Move accounts between Manual Review and Blacklist">
                                     <button type="button" class="transfer-arrow" data-transfer-source="manualReview" data-transfer-target="blacklist" aria-label="Move selected Manual Review account to Blacklist">
@@ -1448,9 +1578,23 @@
                                             Add account
                                         </button>
                                     </div>
+                                    <div class="automation-card-controls" aria-label="Blacklist filters">
+                                        <div class="automation-search">
+                                            <i class="fas fa-search" aria-hidden="true"></i>
+                                            <input type="search" id="productAdsBlacklistSearchInput" placeholder="Name, Email, or ID" aria-label="Search blacklist accounts" />
+                                        </div>
+                                        <div class="automation-filter">
+                                            <select id="productAdsBlacklistTypeFilter" aria-label="Account Type">
+                                                <option value="all">All</option>
+                                                <option value="individual">Individual</option>
+                                                <option value="business">Business</option>
+                                            </select>
+                                        </div>
+                                    </div>
                                     <ul class="automation-list" id="productAdsBlacklist">
                                         <li class="empty-state">No blocked accounts.</li>
                                     </ul>
+                                    <div class="automation-pagination hidden" id="productAdsBlacklistPagination" aria-live="polite"></div>
                                 </article>
                             </div>
                         </section>

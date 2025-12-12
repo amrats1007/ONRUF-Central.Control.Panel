@@ -37,8 +37,7 @@ function buildCategoryModalHierarchy(items) {
             entry.slug
         ];
         for (const candidate of candidates) {
-            const canonical = canonicalize(candidate);
-            if (canonical) {
+            if (canonicalize(candidate)) {
                 return candidate;
             }
         }
@@ -89,10 +88,10 @@ function buildCategoryModalHierarchy(items) {
                 return label.trim();
             }
         }
-        if (typeof entry.categoryCode === 'string') {
+        if (typeof entry.categoryCode === 'string' && entry.categoryCode.trim()) {
             return entry.categoryCode.trim();
         }
-        if (typeof entry.id === 'string') {
+        if (typeof entry.id === 'string' && entry.id.trim()) {
             return entry.id.trim();
         }
         return '';
@@ -2163,6 +2162,81 @@ const BUSINESS_BRANCH_PAGE_SIZE = 5;
 const BUSINESS_EMPLOYEE_PAGE_SIZE = 5;
 const BUSINESS_SUBSCRIPTION_PAGE_SIZE = 5;
 const BUSINESS_ACTIVE_SUBSCRIPTION_STATUSES = new Set(['active', 'pending', 'awaiting-activation']);
+const PRODUCT_AD_AUTOMATION_PAGE_SIZE = 10;
+const PRODUCT_AD_AUTOMATION_LIST_TYPES = ['trusted', 'manualReview', 'blacklist'];
+const PRODUCT_AD_REQUEST_PLACEHOLDER_IMAGE = 'https://images.unsplash.com/photo-1503602642458-232111445657?auto=format&fit=crop&w=800&q=80';
+const PRODUCT_AD_REQUEST_ACCOUNT_TYPES = new Set(['individual', 'business']);
+const PRODUCT_AD_REQUEST_STATUSES = new Set(['pending', 'changes-requested', 'approved', 'rejected']);
+const PRODUCT_AD_REQUEST_STATUS_LABELS = new Map([
+    ['pending', 'Pending Review'],
+    ['changes-requested', 'Changes Requested'],
+    ['approved', 'Approved'],
+    ['rejected', 'Rejected']
+]);
+const PRODUCT_AD_REQUEST_ACCOUNT_LABELS = new Map([
+    ['individual', 'Individual Account'],
+    ['business', 'Business Account']
+]);
+const PRODUCT_AD_REQUEST_PAYMENT_OPTION_LABELS = new Map([
+    ['bank-transfer', 'Bank transfer'],
+    ['cash', 'Cash'],
+    ['credit-card', 'Credit Card'],
+    ['mada', 'Mada']
+]);
+const PRODUCT_AD_REQUEST_PICKUP_OPTIONS = new Map([
+    ['pickup-required', 'Must Pick-up'],
+    ['no-pickup', 'No Pick-up'],
+    ['pickup-available', 'Pick-up Available']
+]);
+const PRODUCT_AD_REQUEST_SHIPPING_OPTIONS = new Map([
+    ['seller-arranged', 'Arrangement Will Be Made With The Seller'],
+    ['integrated-carrier', 'Integrated shipping company options'],
+    ['free-sa', 'Free shipping within Saudi Arabia']
+]);
+const PRODUCT_AD_REQUEST_SALES_TYPE_LABELS = new Map([
+    ['fixed', 'Fixed Price Sale'],
+    ['auction', 'Auction'],
+    ['hybrid', 'Fixed + Auction']
+]);
+const PRODUCT_AD_REQUEST_CLOSING_MODE_LABELS = new Map([
+    ['fixed-length', 'Fixed Length'],
+    ['custom-date', 'Custom Date and Time']
+]);
+const PRODUCT_AD_REQUEST_PENDING_STATUSES = new Set(['pending', 'changes-requested']);
+const PRODUCT_AD_REQUEST_STATUS_CLASS_MAP = new Map([
+    ['pending', 'status-badge status-pending'],
+    ['changes-requested', 'status-badge status-warning'],
+    ['approved', 'status-badge status-active'],
+    ['rejected', 'status-badge status-danger']
+]);
+const BUSINESS_AUTOMATION_ENTRY_PREFIX = 'business-auto-';
+
+function createProductAdAutomationSelectionState() {
+    return {
+        trusted: new Set(),
+        manualReview: new Set(),
+        blacklist: new Set()
+    };
+}
+
+function createProductAdAutomationPaginationState() {
+    return {
+        trusted: 1,
+        manualReview: 1,
+        blacklist: 1
+    };
+}
+
+function createProductAdAutomationFilterState() {
+    const filters = {};
+    PRODUCT_AD_AUTOMATION_LIST_TYPES.forEach(listType => {
+        filters[listType] = {
+            search: '',
+            accountType: 'all'
+        };
+    });
+    return filters;
+}
 
 const state = {
     currentSection: 'dashboard',
@@ -2227,6 +2301,9 @@ const state = {
         city: 'all',
         account: 'all'
     },
+    productAdAutomationPerPage: PRODUCT_AD_AUTOMATION_PAGE_SIZE,
+    productAdAutomationPagination: createProductAdAutomationPaginationState(),
+    productAdAutomationFilters: createProductAdAutomationFilterState(),
     productAdDecisionContext: null,
     editingProductAdId: null,
     activeProductAdId: null,
@@ -2295,7 +2372,7 @@ const state = {
         receivedOffers: Object.create(null),
         sentOffers: Object.create(null)
     },
-    productAdAutomationSelection: null,
+    productAdAutomationSelection: createProductAdAutomationSelectionState(),
     favoriteCategoryCodeCopyBound: false,
     favoriteSellerAccountCopyBound: false,
     businessWalletVisibleCounts: Object.create(null),
@@ -2334,6 +2411,15 @@ const state = {
     },
     businessRequestsSort: 'newest',
     activeBusinessRequestId: null,
+    productAdRequestDecisionContext: null,
+    productAdRequestsFilters: {
+        search: '',
+        period: 'today',
+        previousPeriod: 'today',
+        startDate: null,
+        endDate: null
+    },
+    activeProductAdRequestId: null,
     editingBusinessPackageId: null,
     businessFinancialIntegration: true,
     currentFinanceTransactionsPage: 1,
@@ -3120,13 +3206,13 @@ const fallbackPermissionSectionsTemplate = [
         apps: [
             {
                 id: 'product-ads-overview',
-                label: 'Product Ads Governance',
+                label: 'Product Ads Management',
                 description: 'Search, review, and moderate all marketplace listings.',
                 defaultAction: 'enter'
             },
             {
                 id: 'product-ads-automation',
-                label: 'Publishing List',
+                label: 'Publishing Lists',
                 description: 'Curate trusted, manual review, and blacklist automation lists.',
                 defaultAction: 'modify'
             }
@@ -3353,115 +3439,141 @@ const defaultCategories = [];
 
 const defaultSpecifications = [];
 
-const defaultProductAds = [
-    {
-        id: 'AD-1024',
-        title: 'Prime Retail Space - Riyadh Front',
-        category: 'Real Estate',
-        city: 'Riyadh',
-        account: 'malqaa-holdings@onruf.com',
-        status: 'pending',
-        views: 1890,
-        createdAt: '2025-09-12T09:30:00.000Z',
-        lastEditedAt: '2025-09-29T14:05:00.000Z',
-        flags: { autoPosting: false, manualReview: true, blacklisted: false },
-        notes: 'High profile location flagged for manual review.',
-        history: [
-            { id: 'evt-ad1024-1', action: 'created', timestamp: '2025-09-12T09:30:00.000Z', actor: 'Malqaa Holdings', context: 'Ad submitted for approval.' },
-            { id: 'evt-ad1024-2', action: 'updated', timestamp: '2025-09-29T14:05:00.000Z', actor: 'Marketing Ops', context: 'Pricing adjusted before launch.' }
-        ]
-    },
-    {
-        id: 'AD-1088',
-        title: 'Premium SUV - Full Options',
-        category: 'Automotive',
-        city: 'Jeddah',
-        account: 'elite-motors@onruf.com',
-        status: 'approved',
-        views: 4821,
-        createdAt: '2025-08-22T10:15:00.000Z',
-        lastEditedAt: '2025-09-16T08:40:00.000Z',
-        flags: { autoPosting: true, manualReview: false, blacklisted: false },
-        notes: 'Trusted seller program participant.',
-        history: [
-            { id: 'evt-ad1088-1', action: 'created', timestamp: '2025-08-22T10:15:00.000Z', actor: 'Elite Motors', context: 'Listing published via API.' },
-            { id: 'evt-ad1088-2', action: 'approved', timestamp: '2025-08-22T10:20:00.000Z', actor: 'System', context: 'Auto-approved trusted merchant.' },
-            { id: 'evt-ad1088-3', action: 'views', timestamp: '2025-09-20T09:00:00.000Z', actor: 'System', context: '5,000 impressions achieved.' }
-        ]
-    },
-    {
-        id: 'AD-1115',
-        title: 'Co-working Desks in Dammam',
-        category: 'Services',
-        city: 'Dammam',
-        account: 'workspace-labs@onruf.com',
-        status: 'suspended',
-        views: 980,
-        createdAt: '2025-07-04T07:10:00.000Z',
-        lastEditedAt: '2025-09-30T12:12:00.000Z',
-        flags: { autoPosting: false, manualReview: true, blacklisted: false },
-        notes: 'Suspended pending document verification.',
-        history: [
-            { id: 'evt-ad1115-1', action: 'created', timestamp: '2025-07-04T07:10:00.000Z', actor: 'Workspace Labs', context: 'Listing submitted.' },
-            { id: 'evt-ad1115-2', action: 'approved', timestamp: '2025-07-05T11:40:00.000Z', actor: 'Marketplace Ops', context: 'Manual approval granted.' },
-            { id: 'evt-ad1115-3', action: 'suspended', timestamp: '2025-09-30T12:12:00.000Z', actor: 'Trust & Safety', context: 'Suspected policy breach reported.' }
-        ]
-    },
-    {
-        id: 'AD-1142',
-        title: 'Refurbished Laptops Bundle',
-        category: 'Electronics',
-        city: 'Riyadh',
-        account: 'techdealers@onruf.com',
-        status: 'rejected',
-        views: 245,
-        createdAt: '2025-09-18T09:05:00.000Z',
-        lastEditedAt: '2025-09-21T16:32:00.000Z',
-        flags: { autoPosting: false, manualReview: true, blacklisted: false },
-        notes: 'Rejected due to incomplete warranty documentation.',
-        history: [
-            { id: 'evt-ad1142-1', action: 'created', timestamp: '2025-09-18T09:05:00.000Z', actor: 'Tech Dealers', context: 'Listing submitted.' },
-            { id: 'evt-ad1142-2', action: 'rejected', timestamp: '2025-09-21T16:32:00.000Z', actor: 'Marketplace Ops', context: 'Missing warranty certificate.' }
-        ]
-    }
-];
+const defaultProductAds = [];
 
 const defaultProductAdAutomation = {
-    trusted: [
-        {
-            id: 'trusted-001',
-            account: 'elite-motors@onruf.com',
-            label: 'Elite Motors',
-            addedAt: '2025-08-01T08:00:00.000Z',
-            notes: 'Zero violations in the last 12 months.'
-        },
-        {
-            id: 'trusted-002',
-            account: 'verified-properties@onruf.com',
-            label: 'Verified Properties Program',
-            addedAt: '2025-07-14T09:30:00.000Z',
-            notes: 'Managed by real-estate trust desk.'
-        }
-    ],
-    manualReview: [
-        {
-            id: 'review-001',
-            account: 'flash-sales@onruf.com',
-            label: 'Flash Sales Marketplace',
-            addedAt: '2025-09-18T10:00:00.000Z',
-            notes: 'High volume seller with frequent price edits.'
-        }
-    ],
-    blacklist: [
-        {
-            id: 'blacklist-001',
-            account: 'suspended-dealer@onruf.com',
-            label: 'Suspended Dealer',
-            addedAt: '2025-08-12T12:22:00.000Z',
-            notes: 'Multiple counterfeit products detected.'
-        }
-    ]
+    trusted: [],
+    manualReview: [],
+    blacklist: []
 };
+
+const defaultProductAdRequests = [
+    {
+        id: 'PAR-2101',
+        accountType: 'individual',
+        accountId: 'IND-5103',
+        accountName: 'Reem Al-Mutairi',
+        accountEmail: 'reem.mutairi@onrufmail.com',
+        accountPhone: '+966503334455',
+        categoryPath: ['Electronics', 'Cameras', 'Mirrorless'],
+        submittedAt: '2025-11-15T09:30:00.000Z',
+        status: 'pending',
+        media: {
+            photos: [
+                'https://images.unsplash.com/photo-1519183071298-a2962dadc634?auto=format&fit=crop&w=800&q=80',
+                'https://images.unsplash.com/photo-1484704849700-f032a568e944?auto=format&fit=crop&w=800&q=80'
+            ],
+            videos: ['https://videos.onruf.com/watch/req-2101-demo']
+        },
+        specifications: [
+            { label: 'Brand', value: 'Lumina' },
+            { label: 'Model', value: 'LX-5 Mirrorless' },
+            { label: 'Sensor', value: '36MP Full-Frame' },
+            { label: 'Warranty', value: '12 months' }
+        ],
+        adDetails: {
+            arabic: {
+                title: 'كاميرا لومينا LX-5 جديدة',
+                subtitle: 'عدسة 24-70مم مع مثبت بصري',
+                description: 'كاميرا بدون مرآة مع تصوير 4K ومناسبة للمحترفين والهواة.'
+            },
+            english: {
+                title: 'Lumina LX-5 Mirrorless Camera',
+                subtitle: '24-70mm lens with optical stabilizer',
+                description: 'Mirrorless camera with 4K capture, dual card slots, and weather sealing.'
+            },
+            itemStatus: 'new',
+            quantity: 1,
+            address: { state: 'Riyadh Province', region: 'Central District', city: 'Riyadh' }
+        },
+        salesDetails: {
+            type: 'fixed',
+            fixedPrice: 4800,
+            auction: {
+                startPrice: null,
+                minimumPrice: null,
+                closing: { mode: 'fixed-length', value: '48 hours' }
+            },
+            negotiable: true,
+            paymentOptions: ['bank-transfer', 'cash', 'mada']
+        },
+        shipping: {
+            pickupOption: 'pickup-available',
+            shippingOptions: ['seller-arranged', 'integrated-carrier', 'free-sa']
+        },
+        packages: [
+            { name: 'Featured Boost', duration: '7 days', price: 75 },
+            { name: 'City Spotlight', duration: '3 days', price: 45 }
+        ],
+        notes: 'Manual review requested to verify authenticity before publishing.'
+    },
+    {
+        id: 'PAR-2107',
+        accountType: 'business',
+        accountId: 'BUS-9002',
+        accountName: 'Orbit Activewear',
+        accountEmail: 'partnerships@orbitactivewear.com',
+        accountPhone: '+966126669900',
+        categoryPath: ['Fashion', 'Athleisure', 'Women'],
+        submittedAt: '2025-11-16T11:10:00.000Z',
+        status: 'changes-requested',
+        media: {
+            photos: [
+                'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=800&q=80',
+                'https://images.unsplash.com/photo-1521572169035-493ca3c6e33b?auto=format&fit=crop&w=800&q=80'
+            ],
+            videos: []
+        },
+        specifications: [
+            { label: 'Fabric', value: 'Recycled nylon blend' },
+            { label: 'Available Sizes', value: 'XS - XXL' },
+            { label: 'Feature', value: 'Moisture wicking' }
+        ],
+        adDetails: {
+            arabic: {
+                title: 'طقم رياضي للسيدات من Orbit',
+                subtitle: 'قماش مرن وتهوية عالية',
+                description: 'طقم تدريب احترافي ببطانة خفيفة مناسب للجلسات الطويلة.'
+            },
+            english: {
+                title: 'Orbit Women Performance Set',
+                subtitle: 'Breathable stretch fabric',
+                description: 'Performance-ready athleisure set with reinforced seams and reflective piping.'
+            },
+            itemCondition: 'new',
+            quantity: 0,
+            quantityType: 'unlimited',
+            allowCustomerQuestions: true,
+            address: { state: 'Makkah Province', region: 'Western Zone', city: 'Jeddah' }
+        },
+        salesDetails: {
+            type: 'auction',
+            fixedPrice: 395,
+            auction: {
+                startPrice: 320,
+                minimumPrice: 360,
+                closing: { mode: 'custom-date', value: '2025-12-20T20:00:00.000Z' }
+            },
+            negotiable: true,
+            negotiationSettings: {
+                autoOffersAfterAuction: true,
+                negotiationPrice: 365,
+                offerAudience: 'top-three',
+                sendAccountInfoToWinner: true
+            },
+            paymentOptions: ['bank-transfer', 'credit-card', 'mada']
+        },
+        shipping: {
+            pickupOption: 'pickup-required',
+            shippingOptions: ['seller-arranged', 'integrated-carrier']
+        },
+        packages: [
+            { name: 'Nationwide Spotlight', duration: '14 days', price: 180 },
+            { name: 'Audience Retarget', duration: '7 days', price: 120 }
+        ],
+        notes: 'Additional documentation requested for warranty badge before approval.'
+    }
+];
 
 const defaultIndividualAccounts = [
     {
@@ -4047,6 +4159,7 @@ let users = [];
 let specifications = [];
 let productAds = [];
 let productAdAutomation = { trusted: [], manualReview: [], blacklist: [] };
+let productAdRequests = [];
 let individualAccounts = [];
 let individualSignupRecords = [];
 let businessAccounts = [];
@@ -4150,6 +4263,7 @@ const SPECIFICATIONS_STORAGE_KEY = 'onruf_specifications_v1';
 const SESSION_STORAGE_KEY = 'onruf_active_session_v1';
 const PRODUCT_ADS_STORAGE_KEY = 'onruf_product_ads_v1';
 const PRODUCT_AD_AUTOMATION_STORAGE_KEY = 'onruf_product_ads_automation_v1';
+const PRODUCT_AD_REQUESTS_STORAGE_KEY = 'onruf_product_ad_requests_v1';
 const INDIVIDUAL_ACCOUNTS_STORAGE_KEY = 'onruf_individual_accounts_v1';
 const INDIVIDUAL_SIGNUP_RECORDS_STORAGE_KEY = 'onruf_individual_signup_records_v1';
 const BUSINESS_ACCOUNTS_STORAGE_KEY = 'onruf_business_accounts_v1';
@@ -4157,7 +4271,7 @@ const BUSINESS_PACKAGES_STORAGE_KEY = 'onruf_business_packages_v1';
 const BUSINESS_SUBSCRIBERS_STORAGE_KEY = 'onruf_business_subscribers_v1';
 const FINANCE_TRANSACTIONS_STORAGE_KEY = 'onruf_finance_transactions_v1';
 const FINANCE_AUDIT_STORAGE_KEY = 'onruf_finance_audit_v1';
-const DATA_RESET_VERSION = '20251124-archived-market-activity';
+const DATA_RESET_VERSION = '20251212-product-ads-seedless';
 const DATA_RESET_KEY = 'onruf_data_reset_version';
 const CATEGORY_RESET_VERSION = '20251021-delete-all-categories';
 const CATEGORY_RESET_KEY = 'onruf_category_reset_version';
@@ -4463,6 +4577,72 @@ function clearActiveSession() {
     }
 }
 
+function enforceActiveSession() {
+    const session = loadActiveSession();
+    if (!session) {
+        redirectToLogin();
+        return false;
+    }
+
+    state.activeSession = {
+        ...session,
+        user: state.activeSession && state.activeSession.user ? state.activeSession.user : null
+    };
+
+    return true;
+}
+
+function ensureSessionUserIsActive() {
+    if (!state.activeSession) {
+        redirectToLogin();
+        return false;
+    }
+
+    const sessionUserId = Number.isInteger(state.activeSession.userId)
+        ? state.activeSession.userId
+        : (state.activeSession.user && Number.isInteger(state.activeSession.user.id)
+            ? state.activeSession.user.id
+            : null);
+    const sessionEmail = normalizeEmail(
+        (state.activeSession.email)
+        || (state.activeSession.user && state.activeSession.user.email)
+        || ''
+    );
+
+    const matchById = Number.isInteger(sessionUserId)
+        ? users.find(user => user && Number.isInteger(user.id) && user.id === sessionUserId)
+        : null;
+
+    let resolvedUser = matchById;
+    if (!resolvedUser && sessionEmail) {
+        resolvedUser = users.find(user => normalizeEmail(user && user.email ? user.email : '') === sessionEmail);
+    }
+
+    if (!resolvedUser) {
+        console.warn('Active session user could not be found. Redirecting to login.');
+        redirectToLogin();
+        return false;
+    }
+
+    const normalizedStatus = typeof resolvedUser.status === 'string'
+        ? resolvedUser.status.trim().toLowerCase()
+        : 'active';
+    if (normalizedStatus && normalizedStatus !== 'active') {
+        console.warn('Active session user is no longer active. Redirecting to login.');
+        redirectToLogin();
+        return false;
+    }
+
+    state.activeSession = {
+        ...state.activeSession,
+        userId: resolvedUser.id,
+        email: resolvedUser.email || state.activeSession.email || '',
+        user: resolvedUser
+    };
+
+    return true;
+}
+
 function redirectToLogin() {
     const loginUrl = getLoginPageUrl();
     try {
@@ -4470,61 +4650,11 @@ function redirectToLogin() {
     } catch (error) {
         console.warn('Unable to reset active session before redirect.', error);
     }
-    if (!loginUrl) {
-        console.warn('Login page URL is not defined.');
-        return false;
+    if (typeof window !== 'undefined' && loginUrl) {
+        window.location.href = loginUrl;
+        return;
     }
-    window.location.replace(loginUrl);
-    return true;
-}
-
-function enforceActiveSession() {
-    const session = loadActiveSession();
-    if (!session) {
-        redirectToLogin();
-        return false;
-    }
-    state.activeSession = session;
-    return true;
-}
-
-function ensureSessionUserIsActive() {
-    const session = state.activeSession;
-    if (!session) {
-        return false;
-    }
-
-    const normalizedEmail = session.email ? session.email.trim().toLowerCase() : '';
-    let matchedUser = null;
-
-    if (session.userId !== undefined && session.userId !== null) {
-        matchedUser = users.find(user => user && String(user.id) === String(session.userId));
-    }
-    if (!matchedUser && normalizedEmail) {
-        matchedUser = users.find(user => normalizeEmail(user.email) === normalizedEmail);
-    }
-
-    if (!matchedUser) {
-        redirectToLogin();
-        return false;
-    }
-
-    const status = (matchedUser.status || '').toLowerCase();
-    if (status !== 'active') {
-        redirectToLogin();
-        return false;
-    }
-
-    if (matchedUser.sessionExpiresAt) {
-        const expiry = new Date(matchedUser.sessionExpiresAt).getTime();
-        if (Number.isFinite(expiry) && Date.now() > expiry) {
-            redirectToLogin();
-            return false;
-        }
-    }
-
-    state.activeSession.user = matchedUser;
-    return true;
+    console.warn('Unable to redirect to login because window context or URL is unavailable.');
 }
 
 function updateActiveUserChip(user) {
@@ -6293,6 +6423,1140 @@ function saveProductAdAutomationToStorage() {
     } catch (error) {
         console.warn('Unable to save automation lists:', error);
     }
+}
+
+function normalizeProductAdRequestMedia(media, requestId = '') {
+    const source = media && typeof media === 'object' ? media : {};
+    const rawPhotos = Array.isArray(source.photos) ? source.photos : [];
+    const photos = rawPhotos
+        .map((entry, index) => {
+            if (typeof entry === 'string' && entry.trim()) {
+                return { url: entry.trim(), alt: `Product photo ${index + 1}` };
+            }
+            if (entry && typeof entry === 'object') {
+                const url = typeof entry.url === 'string' && entry.url.trim() ? entry.url.trim() : '';
+                if (!url) {
+                    return null;
+                }
+                const alt = typeof entry.alt === 'string' && entry.alt.trim()
+                    ? entry.alt.trim()
+                    : (typeof entry.label === 'string' && entry.label.trim() ? entry.label.trim() : `Product photo ${index + 1}`);
+                return { url, alt };
+            }
+            return null;
+        })
+        .filter(Boolean);
+    if (!photos.length) {
+        photos.push({
+            url: PRODUCT_AD_REQUEST_PLACEHOLDER_IMAGE,
+            alt: requestId ? `Placeholder for ${requestId}` : 'Product photo placeholder'
+        });
+    }
+    const rawVideos = Array.isArray(source.videos) ? source.videos : [];
+    const videos = rawVideos
+        .map(entry => {
+            if (typeof entry === 'string' && entry.trim()) {
+                return { url: entry.trim(), label: 'Video URL' };
+            }
+            if (entry && typeof entry === 'object') {
+                const url = typeof entry.url === 'string' && entry.url.trim() ? entry.url.trim() : '';
+                if (!url) {
+                    return null;
+                }
+                const label = typeof entry.label === 'string' && entry.label.trim() ? entry.label.trim() : 'Video URL';
+                return { url, label };
+            }
+            return null;
+        })
+        .filter(Boolean);
+    return { photos, videos };
+}
+
+function normalizeProductAdRequestSpecifications(entries) {
+    if (!Array.isArray(entries) || !entries.length) {
+        return [];
+    }
+    return entries
+        .map(entry => {
+            if (typeof entry === 'string' && entry.trim()) {
+                return { label: entry.trim(), value: '' };
+            }
+            if (entry && typeof entry === 'object') {
+                const label = typeof entry.label === 'string' && entry.label.trim() ? entry.label.trim() : '';
+                const value = typeof entry.value === 'string' && entry.value.trim() ? entry.value.trim() : '';
+                if (!label && !value) {
+                    return null;
+                }
+                return { label: label || value, value: value || label };
+            }
+            return null;
+        })
+        .filter(Boolean);
+}
+
+function normalizeProductAdRequestAddress(address) {
+    if (!address || typeof address !== 'object') {
+        return { state: '', region: '', city: '' };
+    }
+    return {
+        state: typeof address.state === 'string' ? address.state.trim() : (typeof address.province === 'string' ? address.province.trim() : ''),
+        region: typeof address.region === 'string' ? address.region.trim() : (typeof address.area === 'string' ? address.area.trim() : ''),
+        city: typeof address.city === 'string' ? address.city.trim() : ''
+    };
+}
+
+function normalizeProductAdRequestDetails(details, accountType) {
+    const source = details && typeof details === 'object' ? details : {};
+    const buildLocaleBlock = locale => {
+        const payload = source[locale] && typeof source[locale] === 'object' ? source[locale] : {};
+        return {
+            title: typeof payload.title === 'string' ? payload.title.trim() : '',
+            subtitle: typeof payload.subtitle === 'string' ? payload.subtitle.trim() : '',
+            description: typeof payload.description === 'string' ? payload.description.trim() : ''
+        };
+    };
+    const normalizedType = PRODUCT_AD_REQUEST_ACCOUNT_TYPES.has(accountType) ? accountType : 'individual';
+    const statusKey = normalizedType === 'business' ? 'itemCondition' : 'itemStatus';
+    const statusValue = typeof source[statusKey] === 'string'
+        ? source[statusKey].trim().toLowerCase()
+        : 'new';
+    const allowedStatus = statusValue === 'used' ? 'used' : 'new';
+    const quantityTypeCandidate = typeof source.quantityType === 'string' ? source.quantityType.trim().toLowerCase() : '';
+    const quantityType = normalizedType === 'business' && quantityTypeCandidate === 'unlimited' ? 'unlimited' : 'count';
+    const rawQuantity = Number(source.quantity);
+    const quantity = quantityType === 'unlimited' ? 0 : (Number.isFinite(rawQuantity) && rawQuantity > 0 ? Math.floor(rawQuantity) : 1);
+    const allowCustomerQuestions = normalizedType === 'business'
+        ? Boolean(source.allowCustomerQuestions)
+        : null;
+    return {
+        arabic: buildLocaleBlock('arabic'),
+        english: buildLocaleBlock('english'),
+        itemCondition: allowedStatus,
+        quantity,
+        quantityType,
+        allowCustomerQuestions,
+        address: normalizeProductAdRequestAddress(source.address)
+    };
+}
+
+function normalizeProductAdRequestSalesDetails(details, accountType) {
+    const source = details && typeof details === 'object' ? details : {};
+    const typeCandidate = typeof source.type === 'string' ? source.type.trim().toLowerCase() : 'fixed';
+    const type = PRODUCT_AD_REQUEST_SALES_TYPE_LABELS.has(typeCandidate) ? typeCandidate : 'fixed';
+    const fixedPrice = Number.isFinite(source.fixedPrice) ? Math.max(0, Number(source.fixedPrice)) : null;
+    const auctionSource = source.auction && typeof source.auction === 'object' ? source.auction : {};
+    const startPrice = Number.isFinite(auctionSource.startPrice) ? Math.max(0, Number(auctionSource.startPrice)) : null;
+    const minimumPrice = Number.isFinite(auctionSource.minimumPrice) ? Math.max(0, Number(auctionSource.minimumPrice)) : null;
+    const closing = auctionSource.closing && typeof auctionSource.closing === 'object' ? auctionSource.closing : {};
+    const closingModeCandidate = typeof closing.mode === 'string' ? closing.mode.trim().toLowerCase() : '';
+    const closingMode = PRODUCT_AD_REQUEST_CLOSING_MODE_LABELS.has(closingModeCandidate) ? closingModeCandidate : 'fixed-length';
+    const closingValue = typeof closing.value === 'string' && closing.value.trim() ? closing.value.trim() : '';
+    const paymentOptionsSource = Array.isArray(source.paymentOptions) && source.paymentOptions.length
+        ? source.paymentOptions
+        : Array.from(PRODUCT_AD_REQUEST_PAYMENT_OPTION_LABELS.keys());
+    const paymentOptions = paymentOptionsSource
+        .map(option => (typeof option === 'string' ? option.trim().toLowerCase() : ''))
+        .filter(option => PRODUCT_AD_REQUEST_PAYMENT_OPTION_LABELS.has(option));
+    const negotiationSource = source.negotiationSettings && typeof source.negotiationSettings === 'object'
+        ? source.negotiationSettings
+        : {};
+    const negotiationSettings = accountType === 'business'
+        ? {
+            autoOffersAfterAuction: negotiationSource.autoOffersAfterAuction === true,
+            negotiationPrice: Number.isFinite(negotiationSource.negotiationPrice)
+                ? Math.max(0, Number(negotiationSource.negotiationPrice))
+                : null,
+            offerAudience: typeof negotiationSource.offerAudience === 'string'
+                ? negotiationSource.offerAudience.trim().toLowerCase()
+                : 'all-bidders',
+            sendAccountInfoToWinner: negotiationSource.sendAccountInfoToWinner !== false
+        }
+        : null;
+    return {
+        type,
+        fixedPrice,
+        auction: {
+            startPrice,
+            minimumPrice,
+            closing: { mode: closingMode, value: closingValue }
+        },
+        negotiable: source.negotiable === true,
+        negotiationSettings,
+        paymentOptions: paymentOptions.length ? paymentOptions : Array.from(PRODUCT_AD_REQUEST_PAYMENT_OPTION_LABELS.keys())
+    };
+}
+
+function normalizeProductAdRequestShipping(shipping) {
+    const source = shipping && typeof shipping === 'object' ? shipping : {};
+    const pickupOptionCandidate = typeof source.pickupOption === 'string' ? source.pickupOption.trim().toLowerCase() : '';
+    const pickupOption = PRODUCT_AD_REQUEST_PICKUP_OPTIONS.has(pickupOptionCandidate)
+        ? pickupOptionCandidate
+        : 'pickup-available';
+    const shippingOptionsSource = Array.isArray(source.shippingOptions) ? source.shippingOptions : [];
+    const shippingOptions = shippingOptionsSource
+        .map(option => (typeof option === 'string' ? option.trim().toLowerCase() : ''))
+        .filter(option => PRODUCT_AD_REQUEST_SHIPPING_OPTIONS.has(option));
+    return {
+        pickupOption,
+        shippingOptions: shippingOptions.length ? shippingOptions : Array.from(PRODUCT_AD_REQUEST_SHIPPING_OPTIONS.keys())
+    };
+}
+
+function normalizeProductAdRequestPackages(packages) {
+    if (!Array.isArray(packages) || !packages.length) {
+        return [];
+    }
+    return packages
+        .map(entry => {
+            if (!entry || typeof entry !== 'object') {
+                return null;
+            }
+            const name = typeof entry.name === 'string' && entry.name.trim() ? entry.name.trim() : '';
+            if (!name) {
+                return null;
+            }
+            const duration = typeof entry.duration === 'string' && entry.duration.trim() ? entry.duration.trim() : '';
+            const price = Number.isFinite(entry.price) ? Math.max(0, Number(entry.price)) : null;
+            return { name, duration, price };
+        })
+        .filter(Boolean);
+}
+
+function normalizeProductAdRequestPayload(request, index = 0) {
+    if (!request || typeof request !== 'object') {
+        return null;
+    }
+    const fallbackId = `PAR-${String(index + 1).padStart(4, '0')}`;
+    const id = typeof request.id === 'string' && request.id.trim() ? request.id.trim() : fallbackId;
+    const accountTypeCandidate = typeof request.accountType === 'string' ? request.accountType.trim().toLowerCase() : 'individual';
+    const accountType = PRODUCT_AD_REQUEST_ACCOUNT_TYPES.has(accountTypeCandidate) ? accountTypeCandidate : 'individual';
+    const statusCandidate = typeof request.status === 'string' ? request.status.trim().toLowerCase() : 'pending';
+    const status = PRODUCT_AD_REQUEST_STATUSES.has(statusCandidate) ? statusCandidate : 'pending';
+    const submittedAt = normalizeIsoTimestamp(request.submittedAt, new Date().toISOString());
+    const accountId = typeof request.accountId === 'string' ? request.accountId.trim() : '';
+    const accountEmailRaw = typeof request.accountEmail === 'string' && request.accountEmail.trim() ? request.accountEmail.trim() : '';
+    const accountEmail = normalizeEmail(accountEmailRaw) || accountEmailRaw.toLowerCase();
+    const accountPhone = typeof request.accountPhone === 'string' ? request.accountPhone.trim() : '';
+    const accountName = typeof request.accountName === 'string' && request.accountName.trim() ? request.accountName.trim() : accountEmail || id;
+    const categoryPath = Array.isArray(request.categoryPath) && request.categoryPath.length
+        ? request.categoryPath.map(segment => (typeof segment === 'string' ? segment.trim() : '')).filter(Boolean)
+        : ['Marketplace'];
+    const media = normalizeProductAdRequestMedia(request.media, id);
+    const specifications = normalizeProductAdRequestSpecifications(request.specifications);
+    const adDetails = normalizeProductAdRequestDetails(request.adDetails, accountType);
+    const salesDetails = normalizeProductAdRequestSalesDetails(request.salesDetails, accountType);
+    const shipping = normalizeProductAdRequestShipping(request.shipping);
+    const packages = normalizeProductAdRequestPackages(request.packages);
+    const notes = typeof request.notes === 'string' ? request.notes.trim() : '';
+    const decisionHistory = Array.isArray(request.decisionHistory) ? request.decisionHistory : [];
+    return {
+        id,
+        accountType,
+        status,
+        submittedAt,
+        account: { id: accountId, name: accountName, email: accountEmail, phone: accountPhone },
+        categoryPath,
+        media,
+        specifications,
+        adDetails,
+        salesDetails,
+        shipping,
+        packages,
+        notes,
+        decisionHistory
+    };
+}
+
+function loadProductAdRequestsFromStorage() {
+    try {
+        const raw = localStorage.getItem(PRODUCT_AD_REQUESTS_STORAGE_KEY);
+        if (!raw) {
+            return null;
+        }
+        const parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed) || !parsed.length) {
+            return null;
+        }
+        const normalized = parsed.map((entry, index) => normalizeProductAdRequestPayload(entry, index)).filter(Boolean);
+        return normalized.length ? normalized : null;
+    } catch (error) {
+        console.warn('Unable to load product ad requests:', error);
+        return null;
+    }
+}
+
+function saveProductAdRequestsToStorage() {
+    try {
+        if (!Array.isArray(productAdRequests)) {
+            return;
+        }
+        localStorage.setItem(PRODUCT_AD_REQUESTS_STORAGE_KEY, JSON.stringify(productAdRequests));
+    } catch (error) {
+        console.warn('Unable to save product ad requests:', error);
+    }
+}
+
+function getProductAdRequestStatusLabel(status) {
+    const normalized = typeof status === 'string' ? status.trim().toLowerCase() : '';
+    return PRODUCT_AD_REQUEST_STATUS_LABELS.get(normalized)
+        || (normalized ? formatKeyLabel(normalized) : 'Pending Review');
+}
+
+function getProductAdRequestStatusClass(status) {
+    const normalized = typeof status === 'string' ? status.trim().toLowerCase() : '';
+    return PRODUCT_AD_REQUEST_STATUS_CLASS_MAP.get(normalized) || 'status-badge status-info';
+}
+
+function getAllProductAdRequests() {
+    return Array.isArray(productAdRequests) ? productAdRequests.slice() : [];
+}
+
+function updateProductAdRequestsCountLabel() {
+    const label = document.getElementById('productAdRequestsCountLabel');
+    if (!label) {
+        return;
+    }
+    const total = getPendingProductAdRequests().length;
+    label.textContent = `#${total} Request${total === 1 ? '' : 's'}`;
+}
+
+function ensureProductAdRequestsFiltersState() {
+    const defaults = {
+        search: '',
+        period: 'today',
+        previousPeriod: 'today',
+        startDate: null,
+        endDate: null
+    };
+    if (!state.productAdRequestsFilters || typeof state.productAdRequestsFilters !== 'object') {
+        state.productAdRequestsFilters = { ...defaults };
+    }
+    state.productAdRequestsFilters = { ...defaults, ...state.productAdRequestsFilters };
+    return state.productAdRequestsFilters;
+}
+
+function resolveProductAdRequestSubmissionDate(request) {
+    if (!request || typeof request !== 'object') {
+        return null;
+    }
+    return request.submittedAt || null;
+}
+
+function getPendingProductAdRequests() {
+    return getAllProductAdRequests()
+        .filter(request => {
+            const status = typeof request.status === 'string' ? request.status.trim().toLowerCase() : '';
+            return PRODUCT_AD_REQUEST_PENDING_STATUSES.has(status);
+        })
+        .sort((a, b) => {
+            const timeA = Date.parse(resolveProductAdRequestSubmissionDate(a) || '') || 0;
+            const timeB = Date.parse(resolveProductAdRequestSubmissionDate(b) || '') || 0;
+            return timeB - timeA;
+        });
+}
+
+function matchesProductAdRequestSearch(request, term) {
+    const search = typeof term === 'string' ? term.trim().toLowerCase() : '';
+    if (!search) {
+        return true;
+    }
+    const words = search.split(/\s+/).filter(Boolean);
+    if (!words.length) {
+        return true;
+    }
+    const englishDetails = request && request.adDetails && request.adDetails.english ? request.adDetails.english : {};
+    const arabicDetails = request && request.adDetails && request.adDetails.arabic ? request.adDetails.arabic : {};
+    const account = request && request.account ? request.account : {};
+    const address = request && request.adDetails && request.adDetails.address ? request.adDetails.address : {};
+    const specs = Array.isArray(request?.specifications) ? request.specifications : [];
+    const fields = [
+        request?.id,
+        englishDetails.title,
+        englishDetails.subtitle,
+        englishDetails.description,
+        arabicDetails.title,
+        arabicDetails.subtitle,
+        arabicDetails.description,
+        account.name,
+        account.email,
+        account.phone,
+        account.id,
+        Array.isArray(request?.categoryPath) ? request.categoryPath.join(' ') : '',
+        address.city,
+        address.region,
+        address.state,
+        request?.notes
+    ];
+    specs.forEach(spec => {
+        if (!spec) {
+            return;
+        }
+        fields.push(spec.label);
+        fields.push(spec.value);
+    });
+    const haystack = fields
+        .filter(value => typeof value === 'string' && value.trim())
+        .map(value => value.trim().toLowerCase())
+        .join(' ');
+    if (!haystack) {
+        return false;
+    }
+    return words.every(word => haystack.includes(word));
+}
+
+function filterProductAdRequestsByPeriod(requests, filters) {
+    if (!Array.isArray(requests) || !requests.length) {
+        return [];
+    }
+    const period = typeof filters.period === 'string' ? filters.period : 'today';
+    if (period === 'all') {
+        return requests.slice();
+    }
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    let rangeStart = null;
+    let rangeEnd = null;
+    if (period === 'today') {
+        rangeStart = new Date(startOfToday.getTime());
+        rangeEnd = new Date(startOfToday.getTime() + 86400000);
+    } else if (period === '7days') {
+        rangeStart = new Date(startOfToday.getTime());
+        rangeStart.setDate(rangeStart.getDate() - 6);
+        rangeEnd = new Date(startOfToday.getTime() + 86400000);
+    } else if (period === '30days') {
+        rangeStart = new Date(startOfToday.getTime());
+        rangeStart.setDate(rangeStart.getDate() - 29);
+        rangeEnd = new Date(startOfToday.getTime() + 86400000);
+    } else if (period === 'custom') {
+        const hasStart = Boolean(filters.startDate);
+        const hasEnd = Boolean(filters.endDate);
+        if (!hasStart && !hasEnd) {
+            const fallback = filters.previousPeriod && filters.previousPeriod !== 'custom'
+                ? filters.previousPeriod
+                : 'today';
+            return filterProductAdRequestsByPeriod(requests, { ...filters, period: fallback });
+        }
+        if (filters.startDate) {
+            const startMs = Date.parse(filters.startDate);
+            if (Number.isFinite(startMs)) {
+                rangeStart = new Date(startMs);
+                rangeStart.setHours(0, 0, 0, 0);
+            }
+        }
+        if (filters.endDate) {
+            const endMs = Date.parse(filters.endDate);
+            if (Number.isFinite(endMs)) {
+                rangeEnd = new Date(endMs);
+                rangeEnd.setHours(0, 0, 0, 0);
+                rangeEnd = new Date(rangeEnd.getTime() + 86400000);
+            }
+        }
+    }
+    return requests.filter(request => {
+        const iso = normalizeIsoTimestamp(resolveProductAdRequestSubmissionDate(request), null);
+        if (!iso) {
+            return false;
+        }
+        const stamp = Date.parse(iso);
+        if (!Number.isFinite(stamp)) {
+            return false;
+        }
+        if (rangeStart && stamp < rangeStart.getTime()) {
+            return false;
+        }
+        if (rangeEnd && stamp >= rangeEnd.getTime()) {
+            return false;
+        }
+        return true;
+    });
+}
+
+function buildProductAdRequestPeriodLabel(filters) {
+    const period = typeof filters.period === 'string' ? filters.period : 'today';
+    if (period === 'today') {
+        return 'Today';
+    }
+    if (period === '7days') {
+        return 'Last 7 days';
+    }
+    if (period === '30days') {
+        return 'Last 30 days';
+    }
+    if (period === 'all') {
+        return 'All Pending';
+    }
+    if (period === 'custom') {
+        const hasStart = Boolean(filters.startDate);
+        const hasEnd = Boolean(filters.endDate);
+        if (!hasStart && !hasEnd) {
+            const fallback = filters.previousPeriod && filters.previousPeriod !== 'custom'
+                ? filters.previousPeriod
+                : 'today';
+            return buildProductAdRequestPeriodLabel({ ...filters, period: fallback });
+        }
+        const startLabel = filters.startDate ? formatDateForDisplay(filters.startDate) : 'Start';
+        const endLabel = filters.endDate ? formatDateForDisplay(filters.endDate) : 'End';
+        return `${startLabel || 'Start'} – ${endLabel || 'End'}`;
+    }
+    return 'Pending requests';
+}
+
+function updateProductAdRequestsPeriodChips() {
+    const filters = ensureProductAdRequestsFiltersState();
+    document.querySelectorAll('[data-product-request-period]').forEach(button => {
+        if (!button || !button.dataset) {
+            return;
+        }
+        const value = button.dataset.productRequestPeriod;
+        if (value === filters.period) {
+            button.classList.add('active');
+        } else {
+            button.classList.remove('active');
+        }
+    });
+}
+
+function renderProductAdRequestsSummary(dataset, filtered, filters) {
+    const summary = document.getElementById('productAdRequestsSummary');
+    if (!summary) {
+        return;
+    }
+    if (!dataset.length) {
+        summary.innerHTML = '<div class="empty-state">All product ad submissions are cleared.</div>';
+        return;
+    }
+    const todayFilters = { period: 'today' };
+    const newTodayCount = filterProductAdRequestsByPeriod(dataset, todayFilters).length;
+    const changesRequested = dataset.filter(request => (request.status || '').toLowerCase() === 'changes-requested').length;
+    const accountMix = dataset.reduce((mix, request) => {
+        const type = typeof request.accountType === 'string' ? request.accountType.trim().toLowerCase() : 'individual';
+        if (type === 'business') {
+            mix.business += 1;
+        } else {
+            mix.individual += 1;
+        }
+        return mix;
+    }, { individual: 0, business: 0 });
+    const latestSubmission = dataset.reduce((latest, request) => {
+        const iso = normalizeIsoTimestamp(resolveProductAdRequestSubmissionDate(request), null);
+        const time = iso ? Date.parse(iso) : 0;
+        return time > latest.time ? { time, iso } : latest;
+    }, { time: 0, iso: null });
+    const helperChips = [];
+    if (newTodayCount) {
+        helperChips.push(`<span class="helper-chip helper-chip-info helper-chip-compact">+${escapeHtml(String(newTodayCount))} today</span>`);
+    }
+    if (changesRequested) {
+        helperChips.push(`<span class="helper-chip warning helper-chip-compact">${escapeHtml(String(changesRequested))} need edits</span>`);
+    }
+    const summaryCards = [];
+    summaryCards.push(`
+        <div class="business-requests-summary-card">
+            <span class="label">Pending queue</span>
+            <span class="value">#${dataset.length}</span>
+            ${helperChips.length ? `<span class="caption">${helperChips.join('')}</span>` : ''}
+        </div>
+    `);
+    summaryCards.push(`
+        <div class="business-requests-summary-card">
+            <span class="label">Active filter</span>
+            <span class="value">#${filtered.length}</span>
+            <span class="caption">${escapeHtml(buildProductAdRequestPeriodLabel(filters))}</span>
+        </div>
+    `);
+    summaryCards.push(`
+        <div class="business-requests-summary-card">
+            <span class="label">Account mix</span>
+            <span class="value">${escapeHtml(`${accountMix.individual} IND · ${accountMix.business} BUS`)}</span>
+            <span class="caption">Individuals vs Business</span>
+        </div>
+    `);
+    const latestLabel = latestSubmission.iso
+        ? (formatDateForDisplay(latestSubmission.iso, { includeTime: true }) || latestSubmission.iso)
+        : '—';
+    const latestRelative = latestSubmission.iso ? formatRelativeTimeFromNow(latestSubmission.iso) : '';
+    summaryCards.push(`
+        <div class="business-requests-summary-card">
+            <span class="label">Latest submission</span>
+            <span class="value">${escapeHtml(latestLabel)}</span>
+            ${latestRelative ? `<span class="caption">${escapeHtml(latestRelative)}</span>` : ''}
+        </div>
+    `);
+    summary.innerHTML = summaryCards.join('');
+}
+
+function renderProductAdRequestCard(request) {
+    if (!request) {
+        return '';
+    }
+    const requestId = typeof request.id === 'string' ? request.id : '';
+    const englishDetails = request.adDetails && request.adDetails.english ? request.adDetails.english : {};
+    const arabicDetails = request.adDetails && request.adDetails.arabic ? request.adDetails.arabic : {};
+    const address = request.adDetails && request.adDetails.address ? request.adDetails.address : {};
+    const salesDetails = request.salesDetails || {};
+    const shipping = request.shipping || {};
+    const specs = Array.isArray(request.specifications) ? request.specifications : [];
+    const packages = Array.isArray(request.packages) ? request.packages : [];
+    const account = request.account || {};
+    const submissionIso = normalizeIsoTimestamp(resolveProductAdRequestSubmissionDate(request), null);
+    const submittedLabel = submissionIso ? (formatDateForDisplay(submissionIso, { includeTime: true }) || submissionIso) : '—';
+    const relativeLabel = submissionIso ? formatRelativeTimeFromNow(submissionIso) : '';
+    const statusLabel = getProductAdRequestStatusLabel(request.status);
+    const statusClass = getProductAdRequestStatusClass(request.status);
+    const accountTypeLabel = PRODUCT_AD_REQUEST_ACCOUNT_LABELS.get(request.accountType)
+        || formatKeyLabel(request.accountType || 'individual');
+    const thumbnail = Array.isArray(request.media?.photos) && request.media.photos.length
+        ? request.media.photos[0]
+        : null;
+    const thumbnailUrl = thumbnail && thumbnail.url ? thumbnail.url : PRODUCT_AD_REQUEST_PLACEHOLDER_IMAGE;
+    const thumbnailAlt = thumbnail && thumbnail.alt
+        ? thumbnail.alt
+        : (englishDetails.title || arabicDetails.title || requestId || 'Product photo');
+    const videoLinks = Array.isArray(request.media?.videos) ? request.media.videos : [];
+    const videoMarkup = videoLinks.length
+        ? `<div class="helper-text">${videoLinks.map((video, index) => {
+            if (!video) {
+                return '';
+            }
+            const url = typeof video === 'string' ? video : video.url;
+            if (!url) {
+                return '';
+            }
+            const label = (video.label || `Video ${index + 1}`).trim();
+            const safeUrl = escapeAttribute(formatExternalLink(url));
+            return `<a href="${safeUrl}" target="_blank" rel="noopener">${escapeHtml(label)}</a>`;
+        }).filter(Boolean).join(' • ')}</div>`
+        : '';
+    const chips = [
+        `<span class="${escapeAttribute(statusClass)}">${escapeHtml(statusLabel)}</span>`,
+        `<span class="helper-chip helper-chip-info helper-chip-compact">${escapeHtml(accountTypeLabel)}</span>`
+    ];
+    if (salesDetails.negotiable) {
+        chips.push('<span class="helper-chip helper-chip-compact"><i class="fas fa-handshake"></i>Negotiable</span>');
+    }
+    if (Array.isArray(salesDetails.paymentOptions) && salesDetails.paymentOptions.length) {
+        chips.push(`<span class="helper-chip helper-chip-compact"><i class="fas fa-credit-card"></i>${escapeHtml(String(salesDetails.paymentOptions.length))} payment option${salesDetails.paymentOptions.length === 1 ? '' : 's'}</span>`);
+    }
+    const chipRow = `<div class="business-request-individual-chip-row">${chips.join('')}</div>`;
+    const categoryLabel = Array.isArray(request.categoryPath) && request.categoryPath.length
+        ? request.categoryPath.join(' › ')
+        : 'Uncategorized';
+    const quantityType = request.adDetails && request.adDetails.quantityType === 'unlimited'
+        ? 'Unlimited inventory'
+        : `${request.adDetails && Number.isFinite(request.adDetails.quantity) ? request.adDetails.quantity : 1} unit${request.adDetails && request.adDetails.quantity === 1 ? '' : 's'}`;
+    const paymentLabels = Array.isArray(salesDetails.paymentOptions)
+        ? salesDetails.paymentOptions.map(option => {
+            const label = PRODUCT_AD_REQUEST_PAYMENT_OPTION_LABELS.get(option) || formatKeyLabel(option);
+            return label ? `<span class="helper-chip helper-chip-compact">${escapeHtml(label)}</span>` : '';
+        }).filter(Boolean)
+        : [];
+    const pickupLabel = shipping.pickupOption
+        ? (PRODUCT_AD_REQUEST_PICKUP_OPTIONS.get(shipping.pickupOption) || formatKeyLabel(shipping.pickupOption))
+        : null;
+    const shippingLabels = Array.isArray(shipping.shippingOptions)
+        ? shipping.shippingOptions.map(option => PRODUCT_AD_REQUEST_SHIPPING_OPTIONS.get(option) || formatKeyLabel(option)).filter(Boolean)
+        : [];
+    const specificationTags = specs.length
+        ? specs.slice(0, 6).map(spec => `<span class="helper-chip helper-chip-compact">${escapeHtml(spec.label)}: ${escapeHtml(spec.value)}</span>`).join('')
+        : '<span class="helper-text">No specification data provided.</span>';
+    const packageList = packages.length
+        ? `<ul class="product-ad-request-packages">${packages.map(pkg => `<li><strong>${escapeHtml(pkg.name)}</strong> · ${escapeHtml(pkg.duration || 'Custom')} · ${pkg.price !== null && pkg.price !== undefined ? escapeHtml(formatCurrency(pkg.price || 0, 'SAR')) : 'TBD'}</li>`).join('')}</ul>`
+        : '<p class="helper-text">No promotion packages selected.</p>';
+    const accountLines = [];
+    if (account.name) {
+        accountLines.push(escapeHtml(account.name));
+    }
+    if (account.email) {
+        accountLines.push(`<a href="mailto:${escapeAttribute(account.email)}">${escapeHtml(account.email)}</a>`);
+    }
+    if (account.phone) {
+        accountLines.push(`<a href="tel:${escapeAttribute(account.phone)}">${escapeHtml(account.phone)}</a>`);
+    }
+    const locationParts = [address.city, address.region, address.state].filter(value => typeof value === 'string' && value.trim()).map(part => part.trim());
+    const locationLabel = locationParts.length ? locationParts.join(', ') : 'Location pending';
+    const classList = ['business-request-card', 'product-ad-request-card'];
+    if (state.activeProductAdRequestId && state.activeProductAdRequestId === requestId) {
+        classList.push('selected');
+    }
+    const dataAttributes = [`data-product-request-id="${escapeAttribute(requestId)}"`, `data-product-request-status="${escapeAttribute((request.status || '').toLowerCase())}"`];
+    return `
+        <article class="${classList.join(' ')}" ${dataAttributes.join(' ')} tabindex="0" aria-label="Product ad request ${escapeAttribute(requestId || englishDetails.title || 'Pending Request')}">
+            <header class="card-header">
+                <div class="product-ad-request-identity">
+                    <div class="product-ad-request-thumbnail"><img src="${escapeAttribute(thumbnailUrl)}" alt="${escapeAttribute(thumbnailAlt)}"></div>
+                    <div class="product-ad-request-meta">
+                        <span class="company">${escapeHtml(englishDetails.title || 'Untitled listing')}</span>
+                        ${arabicDetails.title ? `<span class="context">${escapeHtml(arabicDetails.title)}</span>` : ''}
+                        ${chipRow}
+                    </div>
+                </div>
+            </header>
+            <div class="business-request-body">
+                <div class="business-request-section">
+                    <dl class="info-grid">
+                        <div><dt>Submitted</dt><dd>${escapeHtml(submittedLabel)}${relativeLabel ? `<span class="caption caption-inline">${escapeHtml(relativeLabel)}</span>` : ''}</dd></div>
+                        <div><dt>Request ID</dt><dd>${requestId ? escapeHtml(requestId) : '—'}</dd></div>
+                        <div><dt>Account</dt><dd>${accountLines.length ? accountLines.join('<br>') : '—'}</dd></div>
+                        <div><dt>Category</dt><dd>${escapeHtml(categoryLabel)}</dd></div>
+                        <div><dt>Quantity</dt><dd>${escapeHtml(quantityType)}</dd></div>
+                        <div><dt>Location</dt><dd>${escapeHtml(locationLabel)}</dd></div>
+                        <div><dt>Sales Type</dt><dd>${escapeHtml(PRODUCT_AD_REQUEST_SALES_TYPE_LABELS.get(salesDetails.type) || formatKeyLabel(salesDetails.type || 'fixed'))}</dd></div>
+                        <div><dt>Price</dt><dd>${salesDetails.fixedPrice !== null && salesDetails.fixedPrice !== undefined ? escapeHtml(formatCurrency(salesDetails.fixedPrice || 0, 'SAR')) : '—'}</dd></div>
+                        <div class="field-span-2"><dt>Payment Options</dt><dd>${paymentLabels.length ? `<div class="business-request-individual-chip-row">${paymentLabels.join('')}</div>` : '—'}</dd></div>
+                        <div class="field-span-2"><dt>Shipping</dt><dd>${pickupLabel || shippingLabels.length ? `<div class="business-request-individual-chip-row">${[pickupLabel, ...shippingLabels].filter(Boolean).map(label => `<span class="helper-chip helper-chip-compact">${escapeHtml(label)}</span>`).join('')}</div>` : '—'}</dd></div>
+                        <div class="field-span-2"><dt>Specifications</dt><dd>${specificationTags}</dd></div>
+                        <div class="field-span-2"><dt>Notes</dt><dd>${request.notes ? escapeHtml(request.notes) : '—'}</dd></div>
+                    </dl>
+                </div>
+                <div class="business-request-section">
+                    <h4>Media</h4>
+                    <div class="product-ad-request-media-block">
+                        <div class="product-ad-request-media-preview"><img src="${escapeAttribute(thumbnailUrl)}" alt="${escapeAttribute(thumbnailAlt)}"></div>
+                        ${videoMarkup}
+                    </div>
+                </div>
+                <div class="business-request-section">
+                    <h4>Packages</h4>
+                    ${packageList}
+                </div>
+            </div>
+            <footer class="business-request-footer">
+                <button type="button" class="btn btn-outline btn-compact" data-product-request-action="request-changes">
+                    <i class="fas fa-pen-to-square"></i>
+                    <span>Request Changes</span>
+                </button>
+                <button type="button" class="btn btn-outline btn-reject" data-product-request-action="reject">
+                    <i class="fas fa-circle-xmark"></i>
+                    <span>Reject</span>
+                </button>
+                <button type="button" class="btn btn-primary" data-product-request-action="approve">
+                    <i class="fas fa-circle-check"></i>
+                    <span>Approve</span>
+                </button>
+            </footer>
+        </article>
+    `;
+}
+
+function renderProductAdRequestsBoard() {
+    const filters = ensureProductAdRequestsFiltersState();
+    const dataset = getPendingProductAdRequests();
+    const filtered = filterProductAdRequestsByPeriod(dataset.filter(request => matchesProductAdRequestSearch(request, filters.search)), filters);
+    const searchInput = document.getElementById('productAdRequestsSearchInput');
+    if (searchInput && searchInput.value !== filters.search) {
+        searchInput.value = filters.search;
+    }
+    const startInput = document.getElementById('productAdRequestsStartDate');
+    if (startInput) {
+        startInput.disabled = filters.period !== 'custom';
+        if (startInput.value !== (filters.startDate || '')) {
+            startInput.value = filters.startDate || '';
+        }
+    }
+    const endInput = document.getElementById('productAdRequestsEndDate');
+    if (endInput) {
+        endInput.disabled = filters.period !== 'custom';
+        if (endInput.value !== (filters.endDate || '')) {
+            endInput.value = filters.endDate || '';
+        }
+    }
+    updateProductAdRequestsPeriodChips();
+    updateProductAdRequestsCountLabel();
+    renderProductAdRequestsSummary(dataset, filtered, filters);
+    const grid = document.getElementById('productAdRequestsGrid');
+    if (grid) {
+        if (!filtered.length) {
+            grid.innerHTML = '<div class="empty-state">No product ad submissions match the selected filters.</div>';
+        } else {
+            grid.innerHTML = filtered.map(renderProductAdRequestCard).join('');
+        }
+    }
+}
+
+function setProductAdRequestsPeriod(period) {
+    const filters = ensureProductAdRequestsFiltersState();
+    const normalized = typeof period === 'string' ? period : 'today';
+    const currentPeriod = typeof filters.period === 'string' ? filters.period : 'today';
+    if (normalized === 'custom') {
+        const fallback = currentPeriod === 'custom'
+            ? (filters.previousPeriod && filters.previousPeriod !== 'custom' ? filters.previousPeriod : 'today')
+            : currentPeriod;
+        filters.previousPeriod = fallback === 'custom' ? 'today' : fallback;
+    } else {
+        filters.previousPeriod = normalized;
+        filters.startDate = null;
+        filters.endDate = null;
+    }
+    filters.period = normalized;
+    state.productAdRequestsFilters = filters;
+    renderProductAdRequestsBoard();
+}
+
+function handleProductAdRequestsSearch(value) {
+    const filters = ensureProductAdRequestsFiltersState();
+    filters.search = typeof value === 'string' ? value.trim() : '';
+    state.productAdRequestsFilters = filters;
+    renderProductAdRequestsBoard();
+}
+
+function handleProductAdRequestDateChange() {
+    const filters = ensureProductAdRequestsFiltersState();
+    const startInput = document.getElementById('productAdRequestsStartDate');
+    const endInput = document.getElementById('productAdRequestsEndDate');
+    filters.startDate = startInput && startInput.value ? startInput.value : null;
+    filters.endDate = endInput && endInput.value ? endInput.value : null;
+    const hasRange = Boolean(filters.startDate || filters.endDate);
+    if (hasRange) {
+        filters.period = 'custom';
+        if (!filters.previousPeriod || filters.previousPeriod === 'custom') {
+            filters.previousPeriod = 'today';
+        }
+    } else {
+        const fallback = filters.previousPeriod && filters.previousPeriod !== 'custom'
+            ? filters.previousPeriod
+            : 'today';
+        filters.period = fallback;
+    }
+    state.productAdRequestsFilters = filters;
+    renderProductAdRequestsBoard();
+}
+
+function resetProductAdRequestsFilters() {
+    state.productAdRequestsFilters = {
+        search: '',
+        period: 'today',
+        previousPeriod: 'today',
+        startDate: null,
+        endDate: null
+    };
+    renderProductAdRequestsBoard();
+}
+
+function handleProductAdRequestsGridClick(event) {
+    const button = event.target.closest('[data-product-request-action]');
+    if (!button || button.disabled) {
+        return;
+    }
+    const card = button.closest('[data-product-request-id]');
+    if (!card) {
+        return;
+    }
+    const requestId = card.dataset.productRequestId;
+    if (!requestId) {
+        return;
+    }
+    const request = getAllProductAdRequests().find(entry => entry && entry.id === requestId);
+    if (!request) {
+        showNotification('warning', 'Unable to locate the selected product ad request.');
+        return;
+    }
+    state.activeProductAdRequestId = request.id;
+    const action = button.dataset.productRequestAction;
+    if (action === 'approve' || action === 'reject' || action === 'request-changes') {
+        openProductAdRequestDecisionOverlay({ requestId: request.id, action });
+    }
+}
+
+function openProductAdRequestDecisionOverlay({ requestId, action }) {
+    if (!requestId || !action) {
+        showNotification('warning', 'Unable to open the decision overlay for this request.');
+        return;
+    }
+    const request = getAllProductAdRequests().find(entry => entry && entry.id === requestId);
+    if (!request) {
+        showNotification('warning', 'Unable to locate the selected product ad request.');
+        return;
+    }
+    const overlay = document.getElementById('productAdRequestDecisionOverlay');
+    const titleEl = document.getElementById('productAdRequestDecisionTitle');
+    const messageEl = document.getElementById('productAdRequestDecisionMessage');
+    const noteInputEl = document.getElementById('productAdRequestDecisionNoteInput');
+    const confirmBtn = document.getElementById('productAdRequestDecisionConfirmBtn');
+    if (!overlay || !titleEl || !messageEl || !noteInputEl || !confirmBtn) {
+        showNotification('warning', 'Decision overlay unavailable.');
+        return;
+    }
+    const englishTitle = request.adDetails?.english?.title || request.id || 'Product Request';
+    const accountLabel = request.account?.name || request.account?.email || request.account?.id || '';
+    const normalizedAction = action.trim().toLowerCase();
+    const actionMeta = {
+        approve: { label: 'Approve', icon: 'fa-circle-check', helper: 'Approval note (optional)' },
+        reject: { label: 'Reject', icon: 'fa-circle-xmark', helper: 'Rejection note (optional)' },
+        'request-changes': { label: 'Request Changes', icon: 'fa-pen-to-square', helper: 'Change request note (required for clarity)' }
+    };
+    const meta = actionMeta[normalizedAction] || actionMeta.approve;
+    titleEl.textContent = englishTitle;
+    messageEl.textContent = accountLabel ? `Submitted by ${accountLabel}` : 'Review this submission carefully before completing the decision.';
+    const noteLabelEl = document.querySelector('label[for="productAdRequestDecisionNoteInput"]');
+    if (noteLabelEl) {
+        noteLabelEl.textContent = meta.helper;
+    }
+    noteInputEl.value = '';
+    confirmBtn.innerHTML = `<i class="fas ${meta.icon}"></i> ${meta.label}`;
+    state.productAdRequestDecisionContext = {
+        id: request.id,
+        action: normalizedAction
+    };
+    overlay.classList.remove('hidden');
+    noteInputEl.focus();
+}
+
+function closeProductAdRequestDecisionOverlay() {
+    const overlay = document.getElementById('productAdRequestDecisionOverlay');
+    const noteInputEl = document.getElementById('productAdRequestDecisionNoteInput');
+    if (overlay) {
+        overlay.classList.add('hidden');
+    }
+    if (noteInputEl) {
+        noteInputEl.value = '';
+    }
+    state.productAdRequestDecisionContext = null;
+    state.activeProductAdRequestId = null;
+}
+
+function confirmProductAdRequestDecision() {
+    const context = state.productAdRequestDecisionContext;
+    if (!context || !context.id || !context.action) {
+        closeProductAdRequestDecisionOverlay();
+        return;
+    }
+    const request = getAllProductAdRequests().find(entry => entry && entry.id === context.id);
+    if (!request) {
+        showNotification('warning', 'Unable to locate the selected product ad request.');
+        closeProductAdRequestDecisionOverlay();
+        return;
+    }
+    const noteInputEl = document.getElementById('productAdRequestDecisionNoteInput');
+    const note = noteInputEl ? noteInputEl.value.trim() : '';
+    const result = applyProductAdRequestDecision(request, context.action, note);
+    if (!result || typeof result !== 'object') {
+        showNotification('warning', 'Unable to update the product ad request.');
+        return;
+    }
+    if (!result.success) {
+        showNotification(result.severity || 'warning', result.message || 'Unable to update the product ad request.');
+        return;
+    }
+    showNotification(result.severity || 'success', result.message || 'Product ad request updated.');
+    closeProductAdRequestDecisionOverlay();
+}
+
+function applyProductAdRequestDecision(request, action, note) {
+    if (!request || !action) {
+        return { success: false, severity: 'warning', message: 'Unable to process this submission.' };
+    }
+    const normalized = action.trim().toLowerCase();
+    const statusMap = {
+        approve: 'approved',
+        reject: 'rejected',
+        'request-changes': 'changes-requested'
+    };
+    const nextStatus = statusMap[normalized];
+    if (!nextStatus) {
+        return { success: false, severity: 'warning', message: 'Unsupported decision.' };
+    }
+    request.status = nextStatus;
+    if (!Array.isArray(request.decisionHistory)) {
+        request.decisionHistory = [];
+    }
+    const actorLabel = state.activeSession?.user?.fullName || state.activeSession?.user?.email || 'ONRUF Moderator';
+    request.decisionHistory.unshift({
+        id: `par-decision-${Date.now()}`,
+        action: normalized,
+        status: nextStatus,
+        note,
+        decidedAt: new Date().toISOString(),
+        decidedBy: actorLabel
+    });
+    if (note) {
+        request.notes = note;
+    }
+    saveProductAdRequestsToStorage();
+    renderProductAdRequestsBoard();
+    return {
+        success: true,
+        severity: nextStatus === 'approved' ? 'success' : nextStatus === 'rejected' ? 'danger' : 'info',
+        message: `${getProductAdRequestStatusLabel(nextStatus)} recorded for ${request.adDetails?.english?.title || request.id || 'this request'}.`
+    };
+}
+
+function refreshProductAdRequestsWorkspace() {
+    renderProductAdRequestsBoard();
+}
+
+function resetProductAdAutomationState() {
+    productAdAutomation = { trusted: [], manualReview: [], blacklist: [] };
+}
+
+function clearAutomationListsIfNoAccounts() {
+    const hasIndividualAccounts = Array.isArray(individualAccounts) && individualAccounts.length > 0;
+    const hasBusinessAccounts = Array.isArray(businessAccounts) && businessAccounts.length > 0;
+    if (hasIndividualAccounts || hasBusinessAccounts) {
+        return false;
+    }
+
+    const hasAutomationEntries = Boolean(
+        productAdAutomation
+        && (
+            (Array.isArray(productAdAutomation.trusted) && productAdAutomation.trusted.length)
+            || (Array.isArray(productAdAutomation.manualReview) && productAdAutomation.manualReview.length)
+            || (Array.isArray(productAdAutomation.blacklist) && productAdAutomation.blacklist.length)
+        )
+    );
+
+    if (!hasAutomationEntries) {
+        return false;
+    }
+
+    resetProductAdAutomationState();
+    saveProductAdAutomationToStorage();
+    return true;
+}
+
+function syncBusinessAccountsToAutomationLists(options = {}) {
+    const settings = {
+        persist: true,
+        refreshLists: false,
+        ...options
+    };
+
+    if (!productAdAutomation || typeof productAdAutomation !== 'object') {
+        productAdAutomation = { trusted: [], manualReview: [], blacklist: [] };
+    }
+
+    const businessCollection = Array.isArray(businessAccounts) ? businessAccounts : [];
+    const desiredMap = new Map();
+    const metadataMap = new Map();
+
+    businessCollection.forEach(account => {
+        if (!account || typeof account !== 'object') {
+            return;
+        }
+        const context = resolveBusinessAccountPublishingContext(account);
+        if (!context || !context.normalizedType) {
+            return;
+        }
+        const identifier = resolveBusinessAccountAutomationIdentifier(account);
+        if (!identifier) {
+            return;
+        }
+        const canonicalListType = PRODUCT_AD_AUTOMATION_LIST_TYPES.find(type => type.toLowerCase() === context.normalizedType) || '';
+        if (!canonicalListType) {
+            return;
+        }
+        desiredMap.set(identifier, canonicalListType);
+        metadataMap.set(identifier, {
+            label: account.companyName || account.tradeName || account.contactName || account.email || identifier,
+            notes: context.notes || account.defaultPublishingListNote || ''
+        });
+    });
+
+    if (!desiredMap.size) {
+        // Remove stale auto-synced entries if no business requires tracking.
+        PRODUCT_AD_AUTOMATION_LIST_TYPES.forEach(listType => {
+            const list = getProductAdAutomationEntries(listType);
+            for (let index = list.length - 1; index >= 0; index -= 1) {
+                const entry = list[index];
+                if (entry && typeof entry.id === 'string' && entry.id.startsWith(BUSINESS_AUTOMATION_ENTRY_PREFIX)) {
+                    list.splice(index, 1);
+                }
+            }
+        });
+        if (settings.persist) {
+            saveProductAdAutomationToStorage();
+        }
+        if (settings.refreshLists) {
+            renderProductAdAutomationLists();
+        }
+        return true;
+    }
+
+    const ensureListForType = listType => getProductAdAutomationEntries(listType);
+
+    desiredMap.forEach((desiredListType, identifier) => {
+        if (!desiredListType) {
+            return;
+        }
+        const desiredMetadata = metadataMap.get(identifier) || {};
+        const existingDetails = findAutomationListEntryForAccount(identifier);
+
+        if (existingDetails && existingDetails.listType !== desiredListType) {
+            const originList = ensureListForType(existingDetails.listType);
+            const originIndex = originList.findIndex(entry => entry && entry.account === identifier);
+            if (originIndex !== -1) {
+                originList.splice(originIndex, 1);
+            }
+        }
+
+        const refreshedDetails = findAutomationListEntryForAccount(identifier);
+        if (refreshedDetails) {
+            if (desiredMetadata.label) {
+                refreshedDetails.entry.label = desiredMetadata.label;
+            }
+            if (desiredMetadata.notes && !refreshedDetails.entry.notes) {
+                refreshedDetails.entry.notes = desiredMetadata.notes;
+            }
+            return;
+        }
+
+        const targetList = ensureListForType(desiredListType);
+        const normalizedEntry = normalizeAutomationEntry({
+            id: `${BUSINESS_AUTOMATION_ENTRY_PREFIX}${identifier}`,
+            account: identifier,
+            label: desiredMetadata.label,
+            notes: desiredMetadata.notes
+        }, targetList.length);
+        if (normalizedEntry) {
+            targetList.push(normalizedEntry);
+        }
+    });
+
+    PRODUCT_AD_AUTOMATION_LIST_TYPES.forEach(listType => {
+        const list = getProductAdAutomationEntries(listType);
+        for (let index = list.length - 1; index >= 0; index -= 1) {
+            const entry = list[index];
+            if (entry && typeof entry.id === 'string' && entry.id.startsWith(BUSINESS_AUTOMATION_ENTRY_PREFIX)) {
+                if (!desiredMap.has(entry.account)) {
+                    list.splice(index, 1);
+                }
+            }
+        }
+    });
+
+    if (settings.persist) {
+        saveProductAdAutomationToStorage();
+    }
+    if (settings.refreshLists) {
+        renderProductAdAutomationLists();
+    }
+    return true;
+}
+
+function updateBusinessPublishingPreferenceFromAutomation(identifier, listType, notes) {
+    if (!identifier) {
+        return false;
+    }
+    const businessCollection = Array.isArray(businessAccounts) ? businessAccounts : [];
+    const targetAccount = businessCollection.find(account => resolveBusinessAccountAutomationIdentifier(account) === identifier);
+    if (!targetAccount) {
+        return false;
+    }
+    const normalizedListType = typeof listType === 'string' ? listType.trim() : '';
+    if (normalizedListType) {
+        targetAccount.defaultPublishingListType = normalizedListType;
+    } else {
+        delete targetAccount.defaultPublishingListType;
+    }
+    if (typeof notes === 'string') {
+        const trimmedNotes = notes.trim();
+        if (trimmedNotes) {
+            targetAccount.defaultPublishingListNote = trimmedNotes;
+        } else {
+            delete targetAccount.defaultPublishingListNote;
+        }
+    }
+    saveBusinessAccountsToStorage({ syncAutomation: false, refreshLists: false });
+    return true;
 }
 
 function formatIndividualAccountLogAction(action) {
@@ -9756,12 +11020,20 @@ function loadBusinessAccountsFromStorage() {
     }
 }
 
-function saveBusinessAccountsToStorage() {
+function saveBusinessAccountsToStorage(options = {}) {
+    const settings = {
+        syncAutomation: true,
+        refreshLists: true,
+        ...options
+    };
     try {
         if (!Array.isArray(businessAccounts)) {
             return;
         }
         localStorage.setItem(BUSINESS_ACCOUNTS_STORAGE_KEY, JSON.stringify(businessAccounts));
+        if (settings.syncAutomation) {
+            syncBusinessAccountsToAutomationLists({ persist: true, refreshLists: settings.refreshLists });
+        }
     } catch (error) {
         console.warn('Unable to store business accounts:', error);
     }
@@ -11877,6 +13149,7 @@ function ensureSeedDataReset() {
             localStorage.removeItem(SPECIFICATIONS_STORAGE_KEY);
             localStorage.removeItem(PRODUCT_ADS_STORAGE_KEY);
             localStorage.removeItem(PRODUCT_AD_AUTOMATION_STORAGE_KEY);
+            localStorage.removeItem(PRODUCT_AD_REQUESTS_STORAGE_KEY);
             localStorage.removeItem(INDIVIDUAL_ACCOUNTS_STORAGE_KEY);
             localStorage.removeItem(BUSINESS_ACCOUNTS_STORAGE_KEY);
             localStorage.removeItem(BUSINESS_PACKAGES_STORAGE_KEY);
@@ -11979,6 +13252,16 @@ function initializeApp() {
         saveProductAdAutomationToStorage();
     }
 
+    const storedProductAdRequests = loadProductAdRequestsFromStorage();
+    if (storedProductAdRequests && storedProductAdRequests.length) {
+        productAdRequests = storedProductAdRequests;
+    } else {
+        productAdRequests = Array.isArray(defaultProductAdRequests)
+            ? defaultProductAdRequests.map((entry, index) => normalizeProductAdRequestPayload(entry, index)).filter(Boolean)
+            : [];
+        saveProductAdRequestsToStorage();
+    }
+
     const storedIndividualAccounts = loadIndividualAccountsFromStorage();
     individualAccounts = Array.isArray(storedIndividualAccounts)
         ? storedIndividualAccounts
@@ -11993,6 +13276,8 @@ function initializeApp() {
         : [];
     enrichBusinessAccountsWithFinancialSamples();
     ensureBusinessAccountsHaveDiscountCoupons();
+    clearAutomationListsIfNoAccounts();
+    syncBusinessAccountsToAutomationLists({ persist: true, refreshLists: false });
 
     const storedBusinessPackages = loadBusinessPackagesFromStorage();
     if (storedBusinessPackages && storedBusinessPackages.length) {
@@ -12064,6 +13349,7 @@ function initializeApp() {
 
     renderProductAdsTable(1);
     renderProductAdAutomationLists();
+    renderProductAdRequestsBoard();
     renderIndividualAccountsTable(1);
     renderBusinessAccountsTable(1);
     renderBusinessRequestsBoard();
@@ -12758,6 +14044,51 @@ function setupEventListeners() {
         productAdsResetBtn.dataset.bound = 'true';
     }
 
+    const productAdsSeedBtn = document.getElementById('productAdsSeedBtn');
+    if (productAdsSeedBtn && productAdsSeedBtn.dataset.bound !== 'true') {
+        productAdsSeedBtn.addEventListener('click', handleProductAdsSeedRequest);
+        productAdsSeedBtn.dataset.bound = 'true';
+    }
+
+    const productAdsHistoryBtn = document.getElementById('productAdsHistoryBtn');
+    if (productAdsHistoryBtn && productAdsHistoryBtn.dataset.bound !== 'true') {
+        productAdsHistoryBtn.addEventListener('click', () => triggerProductAdsToolbarAction('history'));
+        productAdsHistoryBtn.dataset.bound = 'true';
+    }
+
+    const productAdsEditBtn = document.getElementById('productAdsEditBtn');
+    if (productAdsEditBtn && productAdsEditBtn.dataset.bound !== 'true') {
+        productAdsEditBtn.addEventListener('click', () => triggerProductAdsToolbarAction('edit'));
+        productAdsEditBtn.dataset.bound = 'true';
+    }
+
+    const productAdsApproveBtn = document.getElementById('productAdsApproveBtn');
+    if (productAdsApproveBtn && productAdsApproveBtn.dataset.bound !== 'true') {
+        productAdsApproveBtn.addEventListener('click', () => triggerProductAdsToolbarAction('approve'));
+        productAdsApproveBtn.dataset.bound = 'true';
+    }
+
+    const productAdsRejectBtn = document.getElementById('productAdsRejectBtn');
+    if (productAdsRejectBtn && productAdsRejectBtn.dataset.bound !== 'true') {
+        productAdsRejectBtn.addEventListener('click', () => triggerProductAdsToolbarAction('reject'));
+        productAdsRejectBtn.dataset.bound = 'true';
+    }
+
+    const productAdsSuspendBtn = document.getElementById('productAdsSuspendBtn');
+    if (productAdsSuspendBtn && productAdsSuspendBtn.dataset.bound !== 'true') {
+        productAdsSuspendBtn.addEventListener('click', () => {
+            const action = productAdsSuspendBtn.dataset.action || 'suspend';
+            triggerProductAdsToolbarAction(action);
+        });
+        productAdsSuspendBtn.dataset.bound = 'true';
+    }
+
+    const productAdsDeleteBtn = document.getElementById('productAdsDeleteBtn');
+    if (productAdsDeleteBtn && productAdsDeleteBtn.dataset.bound !== 'true') {
+        productAdsDeleteBtn.addEventListener('click', () => triggerProductAdsToolbarAction('delete'));
+        productAdsDeleteBtn.dataset.bound = 'true';
+    }
+
     const productAdsTableBody = document.getElementById('productAdsTableBody');
     if (productAdsTableBody && productAdsTableBody.dataset.bound !== 'true') {
         productAdsTableBody.addEventListener('click', handleProductAdsTableClick);
@@ -12840,6 +14171,31 @@ function setupEventListeners() {
         }
         button.addEventListener('click', handleProductAdAutomationTransferClick);
         button.dataset.bound = 'true';
+    });
+
+    const automationControlBindings = [
+        { listType: 'trusted', ...PRODUCT_AD_AUTOMATION_CONTROLS.trusted },
+        { listType: 'manualReview', ...PRODUCT_AD_AUTOMATION_CONTROLS.manualReview },
+        { listType: 'blacklist', ...PRODUCT_AD_AUTOMATION_CONTROLS.blacklist }
+    ];
+    automationControlBindings.forEach(binding => {
+        const { listType, search: searchId, accountType: filterId } = binding;
+        if (searchId) {
+            const searchInput = document.getElementById(searchId);
+            if (searchInput && searchInput.dataset.bound !== 'true') {
+                const handler = () => handleProductAdAutomationSearchInput(listType, searchInput.value);
+                searchInput.addEventListener('input', handler);
+                searchInput.addEventListener('search', handler);
+                searchInput.dataset.bound = 'true';
+            }
+        }
+        if (filterId) {
+            const filterSelect = document.getElementById(filterId);
+            if (filterSelect && filterSelect.dataset.bound !== 'true') {
+                filterSelect.addEventListener('change', event => handleProductAdAutomationAccountTypeFilter(listType, event.target.value));
+                filterSelect.dataset.bound = 'true';
+            }
+        }
     });
 
     const openProductAdsImportBtn = document.getElementById('openProductAdsImportBtn');
@@ -13063,6 +14419,75 @@ function setupEventListeners() {
     if (businessRequestsGrid && businessRequestsGrid.dataset.bound !== 'true') {
         businessRequestsGrid.addEventListener('click', handleBusinessRequestsGridClick);
         businessRequestsGrid.dataset.bound = 'true';
+    }
+
+    const productAdRequestsSearchInput = document.getElementById('productAdRequestsSearchInput');
+    if (productAdRequestsSearchInput && productAdRequestsSearchInput.dataset.bound !== 'true') {
+        const handler = () => handleProductAdRequestsSearch(productAdRequestsSearchInput.value);
+        productAdRequestsSearchInput.addEventListener('input', handler);
+        productAdRequestsSearchInput.addEventListener('search', handler);
+        productAdRequestsSearchInput.dataset.bound = 'true';
+    }
+
+    document.querySelectorAll('[data-product-request-period]').forEach(button => {
+        if (!button || button.dataset.bound === 'true') {
+            return;
+        }
+        button.addEventListener('click', () => {
+            const period = button.dataset.productRequestPeriod || 'today';
+            setProductAdRequestsPeriod(period);
+        });
+        button.dataset.bound = 'true';
+    });
+
+    const productAdRequestsStartDate = document.getElementById('productAdRequestsStartDate');
+    if (productAdRequestsStartDate && productAdRequestsStartDate.dataset.bound !== 'true') {
+        const handler = () => handleProductAdRequestDateChange();
+        productAdRequestsStartDate.addEventListener('change', handler);
+        productAdRequestsStartDate.addEventListener('input', handler);
+        productAdRequestsStartDate.dataset.bound = 'true';
+    }
+
+    const productAdRequestsEndDate = document.getElementById('productAdRequestsEndDate');
+    if (productAdRequestsEndDate && productAdRequestsEndDate.dataset.bound !== 'true') {
+        const handler = () => handleProductAdRequestDateChange();
+        productAdRequestsEndDate.addEventListener('change', handler);
+        productAdRequestsEndDate.addEventListener('input', handler);
+        productAdRequestsEndDate.dataset.bound = 'true';
+    }
+
+    const productAdRequestsResetBtn = document.getElementById('productAdRequestsResetBtn');
+    if (productAdRequestsResetBtn && productAdRequestsResetBtn.dataset.bound !== 'true') {
+        productAdRequestsResetBtn.addEventListener('click', resetProductAdRequestsFilters);
+        productAdRequestsResetBtn.dataset.bound = 'true';
+    }
+
+    const productAdRequestsGrid = document.getElementById('productAdRequestsGrid');
+    if (productAdRequestsGrid && productAdRequestsGrid.dataset.bound !== 'true') {
+        productAdRequestsGrid.addEventListener('click', handleProductAdRequestsGridClick);
+        productAdRequestsGrid.dataset.bound = 'true';
+    }
+
+    const productAdRequestDecisionOverlay = document.getElementById('productAdRequestDecisionOverlay');
+    if (productAdRequestDecisionOverlay && productAdRequestDecisionOverlay.dataset.bound !== 'true') {
+        productAdRequestDecisionOverlay.addEventListener('click', event => {
+            if (event.target === productAdRequestDecisionOverlay) {
+                closeProductAdRequestDecisionOverlay();
+            }
+        });
+        productAdRequestDecisionOverlay.dataset.bound = 'true';
+    }
+
+    const productAdRequestDecisionCancelBtn = document.getElementById('productAdRequestDecisionCancelBtn');
+    if (productAdRequestDecisionCancelBtn && productAdRequestDecisionCancelBtn.dataset.bound !== 'true') {
+        productAdRequestDecisionCancelBtn.addEventListener('click', closeProductAdRequestDecisionOverlay);
+        productAdRequestDecisionCancelBtn.dataset.bound = 'true';
+    }
+
+    const productAdRequestDecisionConfirmBtn = document.getElementById('productAdRequestDecisionConfirmBtn');
+    if (productAdRequestDecisionConfirmBtn && productAdRequestDecisionConfirmBtn.dataset.bound !== 'true') {
+        productAdRequestDecisionConfirmBtn.addEventListener('click', confirmProductAdRequestDecision);
+        productAdRequestDecisionConfirmBtn.dataset.bound = 'true';
     }
 
     const businessAccountsSearchInput = document.getElementById('businessAccountsSearchInput');
@@ -13932,7 +15357,7 @@ function updateBreadcrumb(sectionId = state.currentSection) {
         diagrams: 'Diagrams',
         packages: 'Packages',
         advertisments: 'Advertisments',
-        'product-ads': 'Product Ads Governance',
+        'product-ads': 'Product Ads Management',
         'onruf-users': 'ONRUF Users',
         'individual-accounts': 'Individual Accounts',
         'business-accounts': 'Business Accounts',
@@ -25922,18 +27347,21 @@ function showUserPrompt(message, confirmLabel = 'Confirm', cancelLabel = 'Cancel
             if (typeof validation === 'boolean') {
                 return {
                     valid: validation,
-                    message: validation ? '' : fallbackError
+                    message: validation ? '' : fallbackError,
+                    tooltip: ''
                 };
             }
             if (validation && typeof validation === 'object') {
                 const valid = validation.valid !== false;
                 const message = valid ? '' : (validation.message || fallbackError);
+                const tooltip = valid ? '' : (validation.tooltip || '');
                 return {
                     valid,
-                    message
+                    message,
+                    tooltip
                 };
             }
-            return { valid: true, message: '' };
+            return { valid: true, message: '', tooltip: '' };
         };
     } else {
         userPromptValidator = null;
@@ -25949,6 +27377,16 @@ function showUserPrompt(message, confirmLabel = 'Confirm', cancelLabel = 'Cancel
     return new Promise(resolve => {
         userPromptResolver = resolve;
     });
+}
+
+function isUserPromptOverlayAvailable() {
+    return Boolean(
+        document.getElementById('userPromptOverlay')
+        && document.getElementById('userPromptMessage')
+        && document.getElementById('userPromptConfirm')
+        && document.getElementById('userPromptCancel')
+        && document.getElementById('userPromptInput')
+    );
 }
 
 function setupUserAlertOverlay() {
@@ -28719,6 +30157,61 @@ const PRODUCT_AD_STATUS_CLASSES = new Map([
     ['expired', 'status-badge status-inactive']
 ]);
 
+const PRODUCT_AD_SEED_CITY_POOL = ['Riyadh', 'Jeddah', 'Dammam', 'Khobar', 'Madinah', 'Abha', 'Tabuk', 'Buraydah'];
+const PRODUCT_AD_SEED_TEMPLATES = [
+    {
+        title: 'Smart Retail Activation Kit',
+        category: 'Retail Tech',
+        status: 'pending',
+        notes: 'Includes foldable fixtures, NFC beacons, and analytics tablets for launch events.',
+        cityOptions: ['Riyadh', 'Khobar'],
+        historyContext: 'Merchant requested QA before the nationwide launch window.',
+        viewsRange: [180, 2200],
+        manualReview: true
+    },
+    {
+        title: 'Premium EV Shuttle Fleet',
+        category: 'Automotive',
+        status: 'approved',
+        notes: 'Corporate mobility subscription with concierge-grade interior packages.',
+        cityOptions: ['Jeddah', 'Riyadh'],
+        historyContext: 'Trusted publisher auto-posted the series via API.',
+        viewsRange: [1200, 5400],
+        autoPosting: true,
+        manualReview: false
+    },
+    {
+        title: 'Artisan Dessert Subscription',
+        category: 'Food & Beverage',
+        status: 'rejected',
+        notes: 'Seasonal dessert box that needs refreshed labeling documentation.',
+        cityOptions: ['Madinah', 'Abha'],
+        historyContext: 'Listing flagged for mismatched allergen certificates.',
+        viewsRange: [90, 600],
+        manualReview: true
+    },
+    {
+        title: 'Immersive VR Showroom Slots',
+        category: 'Services',
+        status: 'suspended',
+        notes: 'Short-term rentals for VR demo pods across regional malls.',
+        cityOptions: ['Riyadh', 'Jeddah', 'Dammam'],
+        historyContext: 'Paused to verify each venue’s compliance paperwork.',
+        viewsRange: [300, 1600],
+        manualReview: true
+    },
+    {
+        title: 'Boutique Fitness Pop-Up Tour',
+        category: 'Health & Wellness',
+        status: 'draft',
+        notes: 'Portable reformer studio preparing for a traveling teaser series.',
+        cityOptions: ['Tabuk', 'Riyadh', 'Buraydah'],
+        historyContext: 'Marketing team is staging media before activation.',
+        viewsRange: [120, 900],
+        manualReview: false
+    }
+];
+
 function getProductAdStatusLabel(status) {
     const normalized = typeof status === 'string' ? status.trim().toLowerCase() : '';
     return PRODUCT_AD_STATUS_LABELS.get(normalized) || (normalized ? normalized.charAt(0).toUpperCase() + normalized.slice(1) : 'Pending Review');
@@ -28767,13 +30260,194 @@ function appendProductAdHistory(ad, action, context) {
     }
 }
 
+function resolveProductAdAccountType(ad) {
+    if (!ad || typeof ad !== 'object') {
+        return 'business';
+    }
+    if (typeof ad.accountType === 'string' && ad.accountType.trim()) {
+        return ad.accountType.trim().toLowerCase();
+    }
+
+    const normalizedEmail = normalizeEmail(ad.account);
+    if (!normalizedEmail) {
+        return 'business';
+    }
+
+    const matchEmail = (value) => normalizeEmail(value) === normalizedEmail;
+
+    const individualMatch = (individualAccounts || []).find(entry => entry && matchEmail(entry.email));
+    if (individualMatch) {
+        ad.accountType = 'individual';
+        return 'individual';
+    }
+
+    const businessMatch = (businessAccounts || []).find(entry => {
+        if (!entry || typeof entry !== 'object') {
+            return false;
+        }
+        const candidateEmails = [
+            entry.email,
+            entry.contactEmail,
+            entry.contactEmailPrimary,
+            entry.contactEmailSecondary,
+            entry.application && entry.application.email
+        ];
+        return candidateEmails.some(matchEmail);
+    });
+    if (businessMatch) {
+        ad.accountType = 'business';
+        return 'business';
+    }
+
+    ad.accountType = 'business';
+    return 'business';
+}
+
+function resolveNextProductAdId() {
+    const existing = Array.isArray(productAds) ? productAds : [];
+    const highest = existing.reduce((max, entry) => {
+        if (!entry || !entry.id) {
+            return max;
+        }
+        const match = String(entry.id).match(/(\d+)$/);
+        if (!match) {
+            return max;
+        }
+        const numeric = Number.parseInt(match[1], 10);
+        return Number.isFinite(numeric) && numeric > max ? numeric : max;
+    }, 1000);
+    return `AD-${String(highest + 1).padStart(4, '0')}`;
+}
+
+function resolveSeedProductAdOwner() {
+    const pool = [];
+    const readEmail = (candidates = []) => {
+        for (const candidate of candidates) {
+            if (typeof candidate === 'string' && candidate.trim()) {
+                return candidate.trim();
+            }
+        }
+        return '';
+    };
+
+    if (Array.isArray(businessAccounts)) {
+        businessAccounts.forEach(account => {
+            if (!account) {
+                return;
+            }
+            const email = readEmail([
+                account.email,
+                account.contactEmail,
+                account.contactEmailPrimary,
+                account.contactEmailSecondary,
+                account.application && account.application.email
+            ]);
+            if (!email) {
+                return;
+            }
+            const label = account.companyNameEnglish
+                || account.companyName
+                || account.tradeName
+                || email;
+            pool.push({ type: 'business', email, actorLabel: label });
+        });
+    }
+
+    if (Array.isArray(individualAccounts)) {
+        individualAccounts.forEach(account => {
+            if (!account) {
+                return;
+            }
+            const email = readEmail([account.email, account.contactEmail]);
+            if (!email) {
+                return;
+            }
+            const label = account.fullName || account.firstName || email;
+            pool.push({ type: 'individual', email, actorLabel: label });
+        });
+    }
+
+    const selected = pickRandomItem(pool);
+    if (selected) {
+        return selected;
+    }
+    return { type: 'business', email: 'seed-merchant@onruf.com', actorLabel: 'Seed Merchant' };
+}
+
+function buildSeedProductAdPayload() {
+    const template = pickRandomItem(PRODUCT_AD_SEED_TEMPLATES) || {};
+    const owner = resolveSeedProductAdOwner();
+    const now = new Date();
+    const creationOffsetDays = randomIntInclusive(2, 14);
+    const createdAt = new Date(now.getTime() - creationOffsetDays * 24 * 60 * 60 * 1000).toISOString();
+    const id = resolveNextProductAdId();
+    const cityPool = Array.isArray(template.cityOptions) && template.cityOptions.length
+        ? template.cityOptions
+        : PRODUCT_AD_SEED_CITY_POOL;
+    const city = pickRandomItem(cityPool) || 'Riyadh';
+    const status = template.status || 'pending';
+    const defaultViewsRange = [150, 4200];
+    const viewsRange = Array.isArray(template.viewsRange) && template.viewsRange.length === 2
+        ? template.viewsRange
+        : defaultViewsRange;
+    const minViews = Math.min(viewsRange[0], viewsRange[1]);
+    const maxViews = Math.max(viewsRange[0], viewsRange[1]);
+    const views = randomIntInclusive(minViews, maxViews);
+    const flags = {
+        autoPosting: typeof template.autoPosting === 'boolean' ? template.autoPosting : owner.type === 'business' && status === 'approved',
+        manualReview: typeof template.manualReview === 'boolean' ? template.manualReview : status === 'pending' || status === 'suspended',
+        blacklisted: Boolean(template.blacklisted)
+    };
+    const history = [
+        {
+            id: `${id}-hist-created`,
+            action: 'created',
+            timestamp: createdAt,
+            actor: owner.actorLabel || 'Seed Merchant',
+            context: template.historyContext || 'Listing submitted for moderation rehearsal.'
+        }
+    ];
+
+    const statusActionMap = {
+        approved: { action: 'approved', message: 'Seed listing auto-approved for dashboard demo.' },
+        rejected: { action: 'rejected', message: 'Seed listing rejected to illustrate escalation handling.' },
+        suspended: { action: 'suspended', message: 'Seed listing suspended for compliance review.' }
+    };
+    if (statusActionMap[status]) {
+        history.push({
+            id: `${id}-hist-${status}`,
+            action: statusActionMap[status].action,
+            timestamp: now.toISOString(),
+            actor: resolveProductAdModeratorLabel(),
+            context: template.statusHistoryContext || statusActionMap[status].message
+        });
+    }
+
+    const rawAd = {
+        id,
+        title: template.title || `Sample Listing ${randomIntInclusive(100, 999)}`,
+        category: template.category || 'General',
+        city,
+        account: owner.email || 'seed-merchant@onruf.com',
+        status,
+        views,
+        createdAt,
+        lastEditedAt: now.toISOString(),
+        flags,
+        notes: template.notes || 'Seeded product ad for tooling validation.',
+        history
+    };
+
+    return normalizeProductAdPayload(rawAd, Array.isArray(productAds) ? productAds.length : 0);
+}
+
 function getFilteredProductAds() {
     const filters = state.productAdsFilters || {};
     const searchTerm = typeof filters.search === 'string' ? filters.search.trim().toLowerCase() : '';
     const byStatus = typeof filters.status === 'string' ? filters.status.trim().toLowerCase() : 'all';
     const byCategory = typeof filters.category === 'string' ? filters.category.trim().toLowerCase() : 'all';
     const byCity = typeof filters.city === 'string' ? filters.city.trim().toLowerCase() : 'all';
-    const byAccount = typeof filters.account === 'string' ? filters.account.trim().toLowerCase() : 'all';
+    const byAccountType = typeof filters.account === 'string' ? filters.account.trim().toLowerCase() : 'all';
 
     const filtered = (productAds || []).filter(ad => {
         if (!ad) return false;
@@ -28793,9 +30467,9 @@ function getFilteredProductAds() {
             const cityValue = typeof ad.city === 'string' ? ad.city.trim().toLowerCase() : '';
             if (cityValue !== byCity) return false;
         }
-        if (byAccount !== 'all') {
-            const accountValue = typeof ad.account === 'string' ? ad.account.trim().toLowerCase() : '';
-            if (accountValue !== byAccount) return false;
+        if (byAccountType !== 'all') {
+            const accountTypeValue = resolveProductAdAccountType(ad);
+            if (accountTypeValue !== byAccountType) return false;
         }
         return true;
     });
@@ -28857,7 +30531,6 @@ function renderProductAdsFilterOptions() {
 
     const categoriesSet = new Set();
     const citiesSet = new Set();
-    const accountsSet = new Set();
     (productAds || []).forEach(ad => {
         if (ad && typeof ad.category === 'string' && ad.category.trim()) {
             categoriesSet.add(ad.category.trim());
@@ -28865,14 +30538,11 @@ function renderProductAdsFilterOptions() {
         if (ad && typeof ad.city === 'string' && ad.city.trim()) {
             citiesSet.add(ad.city.trim());
         }
-        if (ad && typeof ad.account === 'string' && ad.account.trim()) {
-            accountsSet.add(ad.account.trim());
-        }
     });
 
-    assignOptions(categorySelect, categoriesSet, 'All categories');
-    assignOptions(citySelect, citiesSet, 'All cities');
-    assignOptions(accountSelect, accountsSet, 'All accounts');
+    assignOptions(categorySelect, categoriesSet, 'All');
+    assignOptions(citySelect, citiesSet, 'All');
+    assignOptions(accountSelect, new Set(['Individual', 'Business']), 'All');
 }
 
 function renderProductAdsTable(page = state.currentProductAdsPage) {
@@ -28884,6 +30554,13 @@ function renderProductAdsTable(page = state.currentProductAdsPage) {
     const filtered = getFilteredProductAds();
     updateProductAdsCount(filtered.length);
 
+    if (state.activeProductAdId) {
+        const selectionStillVisible = filtered.some(ad => ad && ad.id === state.activeProductAdId);
+        if (!selectionStillVisible) {
+            state.activeProductAdId = null;
+        }
+    }
+
     const perPage = state.productAdsPerPage || 10;
     const totalPages = Math.max(1, Math.ceil(filtered.length / perPage));
     state.currentProductAdsPage = Math.min(Math.max(page, 1), totalPages);
@@ -28891,7 +30568,7 @@ function renderProductAdsTable(page = state.currentProductAdsPage) {
     const visible = filtered.slice(startIndex, startIndex + perPage);
 
     if (!visible.length) {
-        tbody.innerHTML = '<tr><td colspan="10">No product ads match the current filters.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9">There is no data available</td></tr>';
     } else {
         let index = startIndex + 1;
         tbody.innerHTML = visible.map(ad => {
@@ -28911,23 +30588,7 @@ function renderProductAdsTable(page = state.currentProductAdsPage) {
             if (flags.blacklisted) {
                 flagLabels.push('<span class="helper-chip danger">Blacklisted</span>');
             }
-            const normalizedStatus = typeof ad.status === 'string' ? ad.status.trim().toLowerCase() : '';
             const safeId = escapeAttribute(ad.id || '');
-            const actions = [];
-            actions.push(`<button type="button" class="action-btn view" data-action="history" data-ad-id="${safeId}" title="View moderation history"><i class="fas fa-clock-rotate-left"></i></button>`);
-            actions.push(`<button type="button" class="action-btn edit" data-action="edit" data-ad-id="${safeId}" title="Edit listing"><i class="fas fa-pen"></i></button>`);
-            if (normalizedStatus !== 'approved') {
-                actions.push(`<button type="button" class="action-btn approve" data-action="approve" data-ad-id="${safeId}" title="Approve listing"><i class="fas fa-circle-check"></i></button>`);
-            }
-            if (normalizedStatus !== 'rejected') {
-                actions.push(`<button type="button" class="action-btn reject" data-action="reject" data-ad-id="${safeId}" title="Reject listing"><i class="fas fa-circle-xmark"></i></button>`);
-            }
-            if (['suspended', 'rejected', 'expired'].includes(normalizedStatus)) {
-                actions.push(`<button type="button" class="action-btn reinstate" data-action="reinstate" data-ad-id="${safeId}" title="Reinstate listing"><i class="fas fa-arrow-rotate-left"></i></button>`);
-            } else {
-                actions.push(`<button type="button" class="action-btn suspend" data-action="suspend" data-ad-id="${safeId}" title="Suspend listing"><i class="fas fa-ban"></i></button>`);
-            }
-            actions.push(`<button type="button" class="action-btn delete" data-action="delete" data-ad-id="${safeId}" title="Delete listing"><i class="fas fa-trash"></i></button>`);
 
             return `
                 <tr data-ad-id="${safeId}">
@@ -28944,16 +30605,13 @@ function renderProductAdsTable(page = state.currentProductAdsPage) {
                     <td>${viewCount}</td>
                     <td>${escapeHtml(createdLabel)}</td>
                     <td>${escapeHtml(updatedLabel)}</td>
-                    <td>
-                        <div class="action-group">
-                            ${actions.join('')}
-                        </div>
-                    </td>
                 </tr>
             `;
         }).join('');
     }
 
+    refreshProductAdsSelectionStyles();
+    updateProductAdsActionToolbarState();
     renderProductAdsPagination(totalPages, filtered.length);
 }
 
@@ -28985,6 +30643,107 @@ function renderProductAdsPagination(totalPages, totalItems) {
     container.appendChild(createButton('Next', state.currentProductAdsPage + 1, state.currentProductAdsPage === totalPages));
 }
 
+function refreshProductAdsSelectionStyles() {
+    const tbody = document.getElementById('productAdsTableBody');
+    if (!tbody) {
+        return;
+    }
+    const rows = tbody.querySelectorAll('tr[data-ad-id]');
+    rows.forEach(row => {
+        if (state.activeProductAdId && row.dataset.adId === state.activeProductAdId) {
+            row.classList.add('selected');
+        } else {
+            row.classList.remove('selected');
+        }
+    });
+}
+
+function getSelectedProductAd() {
+    if (!state.activeProductAdId) {
+        return null;
+    }
+    return (productAds || []).find(ad => ad && ad.id === state.activeProductAdId) || null;
+}
+
+function setProductAdsSuspendButtonAppearance(button, action) {
+    if (!button) {
+        return;
+    }
+    const icon = button.querySelector('i');
+    const labelSpan = button.querySelector('.action-label');
+    if (icon) {
+        icon.className = action === 'reinstate' ? 'fas fa-arrow-rotate-left' : 'fas fa-ban';
+    }
+    if (labelSpan) {
+        labelSpan.textContent = action === 'reinstate' ? 'Reinstate' : 'Suspend';
+    }
+}
+
+function updateProductAdsActionToolbarState() {
+    const selectedAd = getSelectedProductAd();
+    const hasSelection = Boolean(selectedAd);
+    const normalizedStatus = hasSelection && typeof selectedAd.status === 'string'
+        ? selectedAd.status.trim().toLowerCase()
+        : '';
+
+    const historyBtn = document.getElementById('productAdsHistoryBtn');
+    if (historyBtn) {
+        historyBtn.disabled = !hasSelection;
+    }
+    const editBtn = document.getElementById('productAdsEditBtn');
+    if (editBtn) {
+        editBtn.disabled = !hasSelection;
+    }
+    const deleteBtn = document.getElementById('productAdsDeleteBtn');
+    if (deleteBtn) {
+        deleteBtn.disabled = !hasSelection;
+    }
+
+    const approveBtn = document.getElementById('productAdsApproveBtn');
+    if (approveBtn) {
+        approveBtn.disabled = !hasSelection || normalizedStatus === 'approved';
+    }
+    const rejectBtn = document.getElementById('productAdsRejectBtn');
+    if (rejectBtn) {
+        rejectBtn.disabled = !hasSelection || normalizedStatus === 'rejected';
+    }
+
+    const suspendBtn = document.getElementById('productAdsSuspendBtn');
+    if (suspendBtn) {
+        if (!hasSelection) {
+            suspendBtn.disabled = true;
+            suspendBtn.dataset.action = 'suspend';
+            setProductAdsSuspendButtonAppearance(suspendBtn, 'suspend');
+        } else {
+            const reinstateStatuses = new Set(['suspended', 'rejected', 'expired']);
+            const nextAction = reinstateStatuses.has(normalizedStatus) ? 'reinstate' : 'suspend';
+            suspendBtn.disabled = false;
+            suspendBtn.dataset.action = nextAction;
+            setProductAdsSuspendButtonAppearance(suspendBtn, nextAction);
+        }
+    }
+}
+
+function triggerProductAdsToolbarAction(action) {
+    const selectedAd = getSelectedProductAd();
+    if (!selectedAd || !selectedAd.id) {
+        showNotification('warning', 'Select a product ad first.');
+        return;
+    }
+
+    if (action === 'history') {
+        openProductAdHistoryDrawer(selectedAd.id);
+        return;
+    }
+    if (action === 'edit') {
+        openProductAdEditOverlay(selectedAd.id);
+        return;
+    }
+    if (['approve', 'reject', 'suspend', 'reinstate', 'delete'].includes(action)) {
+        openProductAdDecisionOverlay(selectedAd.id, action);
+    }
+}
+
 function handleProductAdsSearch(value) {
     state.productAdsFilters.search = (value || '').trim();
     state.currentProductAdsPage = 1;
@@ -29012,6 +30771,24 @@ function resetProductAdsFilters() {
         searchInput.value = '';
     }
     renderProductAdsTable(1);
+}
+
+function handleProductAdsSeedRequest() {
+    if (!Array.isArray(productAds)) {
+        productAds = [];
+    }
+    const seedAd = buildSeedProductAdPayload();
+    if (!seedAd) {
+        showNotification('warning', 'Unable to generate a sample listing.');
+        return;
+    }
+    productAds.unshift(seedAd);
+    state.currentProductAdsPage = 1;
+    state.activeProductAdId = seedAd.id;
+    saveProductAdsToStorage();
+    renderProductAdsTable(1);
+    openProductAdHistoryDrawer(seedAd.id);
+    showNotification('success', 'Sample product ad seeded.');
 }
 
 function formatProductAdHistoryAction(action) {
@@ -29066,15 +30843,18 @@ function renderProductAdHistory(ad) {
 function openProductAdHistoryDrawer(adId) {
     const ad = (productAds || []).find(entry => entry && entry.id === adId);
     state.activeProductAdId = ad ? ad.id : null;
+    refreshProductAdsSelectionStyles();
+    updateProductAdsActionToolbarState();
     renderProductAdHistory(ad || null);
 }
 
 function closeProductAdHistoryDrawer() {
-    state.activeProductAdId = null;
     const drawer = document.getElementById('productAdHistoryDrawer');
     if (drawer) {
         drawer.classList.add('hidden');
     }
+    refreshProductAdsSelectionStyles();
+    updateProductAdsActionToolbarState();
 }
 
 function openProductAdDecisionOverlay(adId, action) {
@@ -29307,24 +31087,17 @@ function handleProductAdEditSubmit(event) {
 }
 
 function handleProductAdsTableClick(event) {
-    const actionButton = event.target.closest('button[data-action]');
-    if (actionButton) {
-        const action = actionButton.dataset.action;
-        const adId = actionButton.dataset.adId;
-        if (!adId) return;
-        if (['approve', 'reject', 'suspend', 'reinstate', 'delete'].includes(action)) {
-            openProductAdDecisionOverlay(adId, action);
-        } else if (action === 'edit') {
-            openProductAdEditOverlay(adId);
-        } else if (action === 'history') {
-            openProductAdHistoryDrawer(adId);
-        }
-        return;
-    }
-
     const row = event.target.closest('tr[data-ad-id]');
     if (row) {
         const adId = row.dataset.adId;
+        if (!adId) {
+            return;
+        }
+        if (state.activeProductAdId !== adId) {
+            state.activeProductAdId = adId;
+            refreshProductAdsSelectionStyles();
+            updateProductAdsActionToolbarState();
+        }
         openProductAdHistoryDrawer(adId);
     }
 }
@@ -29347,6 +31120,21 @@ const PRODUCT_AD_AUTOMATION_LABELS = {
     blacklist: 'Blacklist'
 };
 
+const PRODUCT_AD_AUTOMATION_CONTROLS = {
+    trusted: {
+        search: 'productAdsTrustedSearchInput',
+        accountType: 'productAdsTrustedTypeFilter'
+    },
+    manualReview: {
+        search: 'productAdsReviewSearchInput',
+        accountType: 'productAdsReviewTypeFilter'
+    },
+    blacklist: {
+        search: 'productAdsBlacklistSearchInput',
+        accountType: 'productAdsBlacklistTypeFilter'
+    }
+};
+
 function getProductAdAutomationEntries(listType) {
     if (!productAdAutomation || typeof productAdAutomation !== 'object') {
         productAdAutomation = { trusted: [], manualReview: [], blacklist: [] };
@@ -29357,6 +31145,310 @@ function getProductAdAutomationEntries(listType) {
     return productAdAutomation[listType];
 }
 
+function ensureProductAdAutomationSelectionState() {
+    if (!state.productAdAutomationSelection || typeof state.productAdAutomationSelection !== 'object') {
+        state.productAdAutomationSelection = createProductAdAutomationSelectionState();
+    }
+    PRODUCT_AD_AUTOMATION_LIST_TYPES.forEach(listType => {
+        if (!(state.productAdAutomationSelection[listType] instanceof Set)) {
+            const existing = state.productAdAutomationSelection[listType];
+            const values = Array.isArray(existing) ? existing : [];
+            state.productAdAutomationSelection[listType] = new Set(values);
+        }
+    });
+    return state.productAdAutomationSelection;
+}
+
+function ensureProductAdAutomationPaginationState() {
+    if (!state.productAdAutomationPagination || typeof state.productAdAutomationPagination !== 'object') {
+        state.productAdAutomationPagination = createProductAdAutomationPaginationState();
+    }
+    PRODUCT_AD_AUTOMATION_LIST_TYPES.forEach(listType => {
+        const raw = state.productAdAutomationPagination[listType];
+        const numeric = Number.parseInt(raw, 10);
+        if (!Number.isFinite(numeric) || numeric < 1) {
+            state.productAdAutomationPagination[listType] = 1;
+        }
+    });
+    return state.productAdAutomationPagination;
+}
+
+function ensureProductAdAutomationFilterState() {
+    if (!state.productAdAutomationFilters || typeof state.productAdAutomationFilters !== 'object') {
+        state.productAdAutomationFilters = createProductAdAutomationFilterState();
+    }
+    PRODUCT_AD_AUTOMATION_LIST_TYPES.forEach(listType => {
+        if (!state.productAdAutomationFilters[listType]) {
+            state.productAdAutomationFilters[listType] = { search: '', accountType: 'all' };
+            return;
+        }
+        const filter = state.productAdAutomationFilters[listType];
+        filter.search = typeof filter.search === 'string' ? filter.search : '';
+        filter.accountType = filter.accountType || 'all';
+    });
+    return state.productAdAutomationFilters;
+}
+
+function getProductAdAutomationSelectedIds(listType) {
+    const selectionState = ensureProductAdAutomationSelectionState();
+    const selection = selectionState[listType];
+    return selection instanceof Set ? Array.from(selection) : [];
+}
+
+function clearProductAdAutomationSelection(listType) {
+    const selectionState = ensureProductAdAutomationSelectionState();
+    if (listType) {
+        selectionState[listType].clear();
+        return;
+    }
+    PRODUCT_AD_AUTOMATION_LIST_TYPES.forEach(type => selectionState[type].clear());
+}
+
+function toggleProductAdAutomationEntrySelection(listType, entryId) {
+    if (!listType || !entryId) {
+        return;
+    }
+    const selectionState = ensureProductAdAutomationSelectionState();
+    const selection = selectionState[listType];
+    if (selection.has(entryId)) {
+        selection.delete(entryId);
+    } else {
+        selection.add(entryId);
+    }
+    renderProductAdAutomationLists();
+}
+
+function setProductAdAutomationPage(listType, page) {
+    if (!listType) {
+        return;
+    }
+    const paginationState = ensureProductAdAutomationPaginationState();
+    const normalizedPage = Math.max(1, Number.parseInt(page, 10) || 1);
+    paginationState[listType] = normalizedPage;
+    renderProductAdAutomationLists();
+}
+
+function getAutomationEntryTimestamp(entry) {
+    if (!entry || typeof entry !== 'object') {
+        return 0;
+    }
+    const parsed = entry.addedAt ? Date.parse(entry.addedAt) : NaN;
+    return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function sortAutomationEntriesByNewest(a, b) {
+    const timestampDiff = getAutomationEntryTimestamp(b) - getAutomationEntryTimestamp(a);
+    if (timestampDiff !== 0) {
+        return timestampDiff;
+    }
+    const aLabel = typeof (a && a.label) === 'string' ? a.label.toLowerCase() : '';
+    const bLabel = typeof (b && b.label) === 'string' ? b.label.toLowerCase() : '';
+    return aLabel.localeCompare(bLabel);
+}
+
+function buildProductAdAutomationAccountLookup() {
+    const lookup = new Map();
+    const register = (email, payload) => {
+        const normalized = normalizeEmail(email);
+        if (!normalized || lookup.has(normalized)) {
+            return;
+        }
+        lookup.set(normalized, payload);
+    };
+
+    const individualRecords = Array.isArray(individualAccounts) ? individualAccounts : [];
+    individualRecords.forEach(account => {
+        if (!account) {
+            return;
+        }
+        register(account.email, {
+            type: 'individual',
+            typeLabel: 'Individual',
+            status: account.status || '',
+            normalizedStatus: typeof account.status === 'string' ? account.status.trim().toLowerCase() : '',
+            id: account.id || '',
+            name: account.fullName || [account.firstName, account.lastName].filter(Boolean).join(' '),
+            record: account
+        });
+    });
+
+    const businessRecords = Array.isArray(businessAccounts) ? businessAccounts : [];
+    businessRecords.forEach(account => {
+        if (!account) {
+            return;
+        }
+        register(account.email, {
+            type: 'business',
+            typeLabel: 'Business',
+            status: account.status || '',
+            normalizedStatus: typeof account.status === 'string' ? account.status.trim().toLowerCase() : '',
+            id: account.id || '',
+            name: account.companyName || account.tradeName || account.contactName || '',
+            record: account
+        });
+    });
+
+    return lookup;
+}
+
+function mapAutomationStatusTone(status) {
+    const normalized = typeof status === 'string' ? status.trim().toLowerCase() : '';
+    if (!normalized) {
+        return 'neutral';
+    }
+    if (['active', 'approved', 'trusted', 'enabled', 'verified'].includes(normalized)) {
+        return 'success';
+    }
+    if (['inactive', 'pending', 'manual review', 'review', 'under review', 'monitoring', 'queued'].includes(normalized)) {
+        return 'warning';
+    }
+    if (['suspended', 'blacklisted', 'blocked', 'rejected', 'banned', 'disabled'].includes(normalized)) {
+        return 'danger';
+    }
+    return 'neutral';
+}
+
+function resolveProductAdAutomationEntryContext(entry, listType, lookup) {
+    const normalizedEmail = normalizeEmail(entry && entry.account ? entry.account : '');
+    const linkedRecord = normalizedEmail ? lookup.get(normalizedEmail) : null;
+    const fallbackStatusLabel = getProductAdAutomationLabel(listType);
+    const fallbackStatusTone = listType === 'blacklist' ? 'danger' : listType === 'manualReview' ? 'warning' : 'success';
+    const statusLabel = linkedRecord && linkedRecord.status
+        ? formatStatusLabel(linkedRecord.status)
+        : fallbackStatusLabel;
+    const statusTone = linkedRecord && linkedRecord.status
+        ? mapAutomationStatusTone(linkedRecord.status)
+        : fallbackStatusTone;
+    const normalizedStatus = linkedRecord && linkedRecord.normalizedStatus
+        ? linkedRecord.normalizedStatus
+        : (linkedRecord && linkedRecord.status
+            ? String(linkedRecord.status).trim().toLowerCase()
+            : '');
+    const accountType = linkedRecord ? linkedRecord.type : 'unknown';
+    const accountTypeLabel = linkedRecord ? linkedRecord.typeLabel : 'Unlisted';
+    const accountId = linkedRecord && linkedRecord.id ? linkedRecord.id : '';
+    const displayName = entry && entry.label
+        ? entry.label
+        : (linkedRecord && linkedRecord.name ? linkedRecord.name : (entry && entry.account ? entry.account : ''));
+    const searchTokens = [
+        displayName,
+        entry && entry.account ? entry.account : '',
+        accountId,
+        statusLabel,
+        accountTypeLabel,
+        entry && entry.notes ? entry.notes : ''
+    ].join(' ').toLowerCase();
+
+    return {
+        name: displayName,
+        accountType,
+        accountTypeLabel,
+        statusLabel,
+        statusTone,
+        accountId,
+        searchTokens,
+        statusNormalized: normalizedStatus,
+        record: linkedRecord && linkedRecord.record ? linkedRecord.record : null
+    };
+}
+
+function setAutomationControlValue(controlId, value) {
+    if (!controlId) {
+        return;
+    }
+    const control = document.getElementById(controlId);
+    if (!control) {
+        return;
+    }
+    const nextValue = value === undefined || value === null ? '' : value;
+    if (control.value !== nextValue) {
+        control.value = nextValue;
+    }
+}
+
+function renderProductAdAutomationPagination(container, config) {
+    if (!container || !config) {
+        return;
+    }
+    const { listType, currentPage, totalPages, totalItems, perPage } = config;
+    container.innerHTML = '';
+    if (!totalItems || totalItems <= perPage) {
+        container.classList.add('hidden');
+        return;
+    }
+
+    container.classList.remove('hidden');
+    container.setAttribute('role', 'navigation');
+    container.setAttribute('aria-label', `${getProductAdAutomationLabel(listType)} pagination`);
+
+    const startIndex = (currentPage - 1) * perPage + 1;
+    const endIndex = Math.min(totalItems, startIndex + perPage - 1);
+
+    const summary = document.createElement('span');
+    summary.className = 'automation-pagination__summary helper-text';
+    summary.textContent = `Showing ${startIndex}-${endIndex} of ${totalItems}`;
+    container.appendChild(summary);
+
+    const controls = document.createElement('div');
+    controls.className = 'automation-pagination__controls';
+
+    const createButton = ({ label, page, disabled, icon, iconPosition = 'start' }) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'automation-pagination__button';
+        if (disabled) {
+            button.disabled = true;
+        }
+
+        const labelSpan = document.createElement('span');
+        labelSpan.className = 'automation-pagination__label';
+        labelSpan.textContent = label;
+
+        if (icon) {
+            const iconSpan = document.createElement('span');
+            iconSpan.className = 'automation-pagination__icon';
+            iconSpan.setAttribute('aria-hidden', 'true');
+            iconSpan.textContent = icon;
+            if (iconPosition === 'end') {
+                button.append(labelSpan, iconSpan);
+            } else {
+                button.append(iconSpan, labelSpan);
+            }
+        } else {
+            button.append(labelSpan);
+        }
+
+        button.addEventListener('click', () => {
+            if (!button.disabled) {
+                setProductAdAutomationPage(listType, page);
+            }
+        });
+        return button;
+    };
+
+    controls.appendChild(createButton({
+        label: 'Prev',
+        page: currentPage - 1,
+        disabled: currentPage === 1,
+        icon: '‹',
+        iconPosition: 'start'
+    }));
+
+    const status = document.createElement('span');
+    status.className = 'automation-pagination__status';
+    status.textContent = `Page ${currentPage} of ${totalPages}`;
+    controls.appendChild(status);
+
+    controls.appendChild(createButton({
+        label: 'Next',
+        page: currentPage + 1,
+        disabled: currentPage === totalPages,
+        icon: '›',
+        iconPosition: 'end'
+    }));
+    container.appendChild(controls);
+}
+
 function renderProductAdAutomationLists() {
     const trustedList = document.getElementById('productAdsTrustedList');
     const reviewList = document.getElementById('productAdsReviewList');
@@ -29365,59 +31457,155 @@ function renderProductAdAutomationLists() {
     const reviewCountEl = document.getElementById('productAdsReviewCount');
     const blacklistCountEl = document.getElementById('productAdsBlacklistCount');
 
-    const trustedEntries = getProductAdAutomationEntries('trusted');
-    const manualEntries = getProductAdAutomationEntries('manualReview');
-    const blacklistEntries = getProductAdAutomationEntries('blacklist');
+    const trustedPagination = document.getElementById('productAdsTrustedPagination');
+    const reviewPagination = document.getElementById('productAdsReviewPagination');
+    const blacklistPagination = document.getElementById('productAdsBlacklistPagination');
 
-    let selectedAutomationEntry = state.productAdAutomationSelection;
-    if (selectedAutomationEntry) {
-        const selectionExists = getProductAdAutomationEntries(selectedAutomationEntry.listType)
-            .some(entry => entry && entry.id === selectedAutomationEntry.entryId);
-        if (!selectionExists) {
-            selectedAutomationEntry = null;
-            state.productAdAutomationSelection = null;
+    const selectionState = ensureProductAdAutomationSelectionState();
+    const paginationState = ensureProductAdAutomationPaginationState();
+    const filterState = ensureProductAdAutomationFilterState();
+    const perPage = state.productAdAutomationPerPage || PRODUCT_AD_AUTOMATION_PAGE_SIZE;
+    const accountLookup = buildProductAdAutomationAccountLookup();
+
+    const listConfigs = [
+        {
+            listType: 'trusted',
+            target: trustedList,
+            paginationTarget: trustedPagination,
+            countLabel: trustedCountEl,
+            countFormatter: count => `${count} auto-post`,
+            entries: getProductAdAutomationEntries('trusted'),
+            emptyMessage: 'There is no Data Available',
+            controls: PRODUCT_AD_AUTOMATION_CONTROLS.trusted
+        },
+        {
+            listType: 'manualReview',
+            target: reviewList,
+            paginationTarget: reviewPagination,
+            countLabel: reviewCountEl,
+            countFormatter: count => `${count} monitored`,
+            entries: getProductAdAutomationEntries('manualReview'),
+            emptyMessage: 'There is no Data Available',
+            controls: PRODUCT_AD_AUTOMATION_CONTROLS.manualReview
+        },
+        {
+            listType: 'blacklist',
+            target: blacklist,
+            paginationTarget: blacklistPagination,
+            countLabel: blacklistCountEl,
+            countFormatter: count => `${count} blocked`,
+            entries: getProductAdAutomationEntries('blacklist'),
+            emptyMessage: 'There is no Data Available',
+            controls: PRODUCT_AD_AUTOMATION_CONTROLS.blacklist
         }
-    }
+    ];
 
-    const buildList = (target, entries, emptyMessage, listType) => {
-        if (!target) return;
-        if (!entries.length) {
-            target.innerHTML = `<li class="empty-state">${emptyMessage}</li>`;
+    listConfigs.forEach(config => {
+        const { listType, target, paginationTarget, countLabel, countFormatter, entries, emptyMessage, controls } = config;
+        const targetEntries = Array.isArray(entries) ? entries.slice().sort(sortAutomationEntriesByNewest) : [];
+        const selection = selectionState[listType];
+        const validIds = new Set(targetEntries.map(entry => entry && entry.id).filter(Boolean));
+        if (selection) {
+            Array.from(selection).forEach(entryId => {
+                if (!validIds.has(entryId)) {
+                    selection.delete(entryId);
+                }
+            });
+        }
+
+        const filters = filterState[listType] || { search: '', accountType: 'all' };
+        const normalizedSearch = (filters.search || '').trim().toLowerCase();
+        const accountTypeFilter = (filters.accountType || 'all').toLowerCase();
+        if (controls) {
+            setAutomationControlValue(controls.search, filters.search || '');
+            setAutomationControlValue(controls.accountType, filters.accountType || 'all');
+        }
+
+        const filteredEntries = targetEntries.filter(entry => {
+            const context = resolveProductAdAutomationEntryContext(entry, listType, accountLookup);
+            if (context.accountType === 'business') {
+                const hideBusinessEntry = (context.record && shouldHideBusinessPublishingList(context.record))
+                    || ['pending', 'rejected'].includes(context.statusNormalized || '')
+                    || ['pending review', 'rejected'].includes((context.statusLabel || '').trim().toLowerCase());
+                if (hideBusinessEntry) {
+                    return false;
+                }
+            }
+            const matchesType = accountTypeFilter === 'all' || context.accountType === accountTypeFilter;
+            const matchesSearch = !normalizedSearch || context.searchTokens.includes(normalizedSearch);
+            return matchesType && matchesSearch;
+        });
+
+        const totalItems = filteredEntries.length;
+        const totalPages = totalItems ? Math.max(1, Math.ceil(totalItems / perPage)) : 1;
+        let currentPage = paginationState[listType] || 1;
+        if (currentPage > totalPages) currentPage = totalPages;
+        if (currentPage < 1) currentPage = 1;
+        paginationState[listType] = currentPage;
+        const startIndex = (currentPage - 1) * perPage;
+        const visibleEntries = filteredEntries.slice(startIndex, startIndex + perPage);
+
+        if (!target) {
             return;
         }
-        target.innerHTML = entries.map(entry => {
-            const addedLabel = formatDateForDisplay(entry.addedAt, { includeTime: false }) || '';
-            const notes = entry.notes ? `<p class="helper-text">${escapeHtml(entry.notes)}</p>` : '';
-            const isSelected = selectedAutomationEntry
-                && selectedAutomationEntry.entryId === entry.id
-                && selectedAutomationEntry.listType === listType;
-            const selectedAttr = isSelected ? ' class="selected"' : '';
-            return `
-                <li${selectedAttr} data-entry-id="${escapeAttribute(entry.id)}" data-list-type="${escapeAttribute(listType)}" tabindex="0">
-                    <div class="automation-item">
-                        <div>
-                            <strong>${escapeHtml(entry.label || entry.account)}</strong>
-                            <div class="helper-text">${escapeHtml(entry.account)}</div>
-                            ${notes}
-                            ${addedLabel ? `<div class="helper-text">Added ${escapeHtml(addedLabel)}</div>` : ''}
+
+        const noMatchesMessage = !filteredEntries.length && targetEntries.length
+            ? 'There is no Data Available'
+            : emptyMessage;
+
+        if (!visibleEntries.length) {
+            target.innerHTML = `<li class="empty-state">${noMatchesMessage}</li>`;
+        } else {
+            target.innerHTML = visibleEntries.map(entry => {
+                const addedLabel = formatDateForDisplay(entry.addedAt, { includeTime: true }) || '';
+                const notes = entry.notes ? `<p class="helper-text">${escapeHtml(entry.notes)}</p>` : '';
+                const isSelected = selection && selection.has(entry.id);
+                const classAttr = isSelected ? ' class="selected"' : '';
+                const ariaSelected = ` aria-selected="${isSelected ? 'true' : 'false'}"`;
+                const context = resolveProductAdAutomationEntryContext(entry, listType, accountLookup);
+                const statusChipClass = `automation-chip automation-chip--status automation-chip--status-${context.statusTone}`;
+                const typeChipClass = `automation-chip automation-chip--type automation-chip--type-${context.accountType}`;
+                const accountIdRow = context.accountId
+                    ? `<div class="automation-entry-meta">${escapeHtml(context.accountId)} <span class="automation-entry-meta-separator" aria-hidden="true">•</span> ${escapeHtml(entry.account)}</div>`
+                    : `<div class="automation-entry-meta">${escapeHtml(entry.account)}</div>`;
+                const addedRow = addedLabel
+                    ? `<div class="automation-entry-row"><span class="automation-entry-label">Added</span><span class="automation-entry-value">${escapeHtml(addedLabel)}</span></div>`
+                    : '';
+                return `
+                    <li${classAttr} data-entry-id="${escapeAttribute(entry.id)}" data-list-type="${escapeAttribute(listType)}" tabindex="0"${ariaSelected}>
+                        <div class="automation-item">
+                            <div>
+                                <div class="automation-entry-heading">
+                                    <strong class="automation-entry-name">${escapeHtml(context.name)}</strong>
+                                    <div class="automation-entry-chips">
+                                        <span class="${statusChipClass}">${escapeHtml(context.statusLabel)}</span>
+                                        <span class="${typeChipClass}">${escapeHtml(context.accountTypeLabel)}</span>
+                                    </div>
+                                </div>
+                                <div class="automation-entry-details">
+                                    ${accountIdRow}
+                                    ${addedRow}
+                                </div>
+                                ${notes}
+                            </div>
                         </div>
-                        <button type="button" class="btn btn-ghost icon-only" data-action="remove" title="Remove entry">
-                            <i class="fas fa-times"></i>
-                        </button>
-                    </div>
-                </li>
-            `;
-        }).join('');
-    };
+                    </li>
+                `;
+            }).join('');
+        }
 
-    buildList(trustedList, trustedEntries, 'No trusted accounts yet.', 'trusted');
-    buildList(reviewList, manualEntries, 'No accounts require manual review.', 'manualReview');
-    buildList(blacklist, blacklistEntries, 'No blocked accounts.', 'blacklist');
+        if (typeof countFormatter === 'function' && countLabel) {
+            countLabel.textContent = countFormatter(totalItems);
+        }
 
-    if (trustedCountEl) trustedCountEl.textContent = `${trustedEntries.length} auto-post`;
-    if (reviewCountEl) reviewCountEl.textContent = `${manualEntries.length} monitored`;
-    if (blacklistCountEl) blacklistCountEl.textContent = `${blacklistEntries.length} blocked`;
-    // App button no longer surfaces a count badge, so we only update the list-specific chips above.
+        renderProductAdAutomationPagination(paginationTarget, {
+            listType,
+            currentPage,
+            totalPages,
+            totalItems,
+            perPage
+        });
+    });
 
     updateAutomationTransferButtonState();
 }
@@ -29428,56 +31616,101 @@ function getProductAdAutomationLabel(listType) {
 
 function updateAutomationTransferButtonState() {
     const buttons = document.querySelectorAll('[data-transfer-source][data-transfer-target]');
-    const selection = state.productAdAutomationSelection;
+    const selectionState = ensureProductAdAutomationSelectionState();
     buttons.forEach(button => {
         const sourceType = button.dataset.transferSource;
-        const shouldEnable = Boolean(selection && selection.listType === sourceType);
-        button.disabled = !shouldEnable;
+        const selection = selectionState[sourceType];
+        const selectedCount = selection instanceof Set ? selection.size : 0;
+        button.disabled = selectedCount === 0;
+        if (selectedCount > 0) {
+            button.setAttribute('data-selection-count', String(selectedCount));
+        } else {
+            button.removeAttribute('data-selection-count');
+        }
     });
 }
 
 function selectProductAdAutomationEntry(listType, entryId) {
-    if (!listType || !entryId) {
-        return;
-    }
-    const entries = getProductAdAutomationEntries(listType);
-    const exists = entries.some(entry => entry && entry.id === entryId);
-    if (!exists) {
-        state.productAdAutomationSelection = null;
-        renderProductAdAutomationLists();
-        return;
-    }
-    const currentSelection = state.productAdAutomationSelection;
-    if (currentSelection && currentSelection.listType === listType && currentSelection.entryId === entryId) {
-        state.productAdAutomationSelection = null;
-    } else {
-        state.productAdAutomationSelection = { listType, entryId };
-    }
-    renderProductAdAutomationLists();
+    toggleProductAdAutomationEntrySelection(listType, entryId);
 }
 
-function transferProductAdAutomationEntry(sourceType, targetType, entryId) {
+function transferProductAdAutomationEntries(sourceType, targetType, entryIds) {
     if (!sourceType || !targetType || sourceType === targetType) {
         return { success: false, message: 'Select a different destination list.' };
     }
+
+    const ids = Array.isArray(entryIds) ? Array.from(new Set(entryIds.filter(Boolean))) : [];
+    if (!ids.length) {
+        return { success: false, message: 'Select at least one account to move.' };
+    }
+
     const sourceList = getProductAdAutomationEntries(sourceType);
     const targetList = getProductAdAutomationEntries(targetType);
-    const entryIndex = sourceList.findIndex(entry => entry && entry.id === entryId);
-    if (entryIndex === -1) {
-        return { success: false, message: 'Selected account could not be found.' };
+    const movedIds = [];
+    const movedEntries = [];
+    const skippedDuplicates = [];
+    const skippedMissing = [];
+    const selectionState = ensureProductAdAutomationSelectionState();
+    const sourceSelection = selectionState[sourceType];
+    const targetSelection = selectionState[targetType];
+
+    ids.forEach(entryId => {
+        const entryIndex = sourceList.findIndex(entry => entry && entry.id === entryId);
+        if (entryIndex === -1) {
+            skippedMissing.push(entryId);
+            return;
+        }
+        const entry = sourceList[entryIndex];
+        if (targetList.some(item => item && item.account === entry.account)) {
+            skippedDuplicates.push(entryId);
+            return;
+        }
+        sourceList.splice(entryIndex, 1);
+        entry.addedAt = new Date().toISOString();
+        targetList.push(entry);
+        movedIds.push(entryId);
+        movedEntries.push({ identifier: entry.account, notes: entry.notes || '' });
+    });
+
+    ids.forEach(entryId => {
+        if (sourceSelection instanceof Set) {
+            sourceSelection.delete(entryId);
+        }
+    });
+    movedIds.forEach(entryId => {
+        if (targetSelection instanceof Set) {
+            targetSelection.add(entryId);
+        }
+    });
+
+    if (!movedIds.length) {
+        if (skippedDuplicates.length) {
+            const targetLabel = getProductAdAutomationLabel(targetType);
+            return { success: false, message: `${targetLabel} already contains the selected account(s).` };
+        }
+        return { success: false, message: 'Selected account could not be moved.' };
     }
-    const entry = sourceList[entryIndex];
-    if (targetList.some(item => item && item.account === entry.account)) {
-        const targetLabel = getProductAdAutomationLabel(targetType);
-        return { success: false, message: `${targetLabel} already contains this account.` };
-    }
-    sourceList.splice(entryIndex, 1);
-    targetList.push(entry);
-    state.productAdAutomationSelection = { listType: targetType, entryId };
+
+    const paginationState = ensureProductAdAutomationPaginationState();
+    paginationState[targetType] = 1;
+
+    movedEntries.forEach(entry => {
+        updateBusinessPublishingPreferenceFromAutomation(entry.identifier, targetType, entry.notes);
+    });
+
     saveProductAdAutomationToStorage();
     renderProductAdAutomationLists();
+
     const destinationLabel = getProductAdAutomationLabel(targetType);
-    return { success: true, message: `Account moved to ${destinationLabel}.` };
+    let message = `Moved ${movedIds.length} account${movedIds.length === 1 ? '' : 's'} to ${destinationLabel}.`;
+    if (skippedDuplicates.length) {
+        message += ` ${skippedDuplicates.length} entr${skippedDuplicates.length === 1 ? 'y was' : 'ies were'} skipped because they already exist there.`;
+    }
+    if (skippedMissing.length) {
+        message += ` ${skippedMissing.length} entr${skippedMissing.length === 1 ? 'y was' : 'ies were'} no longer available.`;
+    }
+
+    return { success: true, message };
 }
 
 function handleProductAdAutomationTransferClick(event) {
@@ -29488,13 +31721,16 @@ function handleProductAdAutomationTransferClick(event) {
     if (!sourceType || !targetType) {
         return;
     }
-    const selection = state.productAdAutomationSelection;
     const sourceLabel = getProductAdAutomationLabel(sourceType);
-    if (!selection || selection.listType !== sourceType) {
-        showNotification('warning', `Select an account from the ${sourceLabel} list first.`);
+    const selectedIds = getProductAdAutomationSelectedIds(sourceType);
+    if (!selectedIds.length) {
+        showNotification('warning', `Select at least one account from the ${sourceLabel} list first.`);
         return;
     }
-    const result = transferProductAdAutomationEntry(sourceType, targetType, selection.entryId);
+    if (openProductAdAutomationTransferOverlay(sourceType, targetType, selectedIds, button)) {
+        return;
+    }
+    const result = transferProductAdAutomationEntries(sourceType, targetType, selectedIds);
     if (!result.success) {
         showNotification('warning', result.message || 'Unable to move the selected account.');
         return;
@@ -29502,30 +31738,378 @@ function handleProductAdAutomationTransferClick(event) {
     showNotification('success', result.message || 'Publishing list updated.');
 }
 
-function openProductAdAutomationPrompt(listType) {
-    const listLabelMap = {
-        trusted: 'trusted auto-post list',
-        manualReview: 'manual review list',
-        blacklist: 'blacklist'
-    };
-    const label = listLabelMap[listType] || 'automation list';
-    const accountInput = window.prompt(`Enter the account email to add to the ${label}.`);
-    if (!accountInput) {
-        return;
+function openProductAdAutomationTransferOverlay(sourceType, targetType, entryIds, triggerElement) {
+    if (!sourceType || !targetType || sourceType === targetType) {
+        return false;
     }
-    const normalizedEmail = normalizeEmail(accountInput);
-    if (!normalizedEmail) {
-        showNotification('warning', 'Please enter a valid email address.');
-        return;
+    const ids = Array.isArray(entryIds) ? entryIds.filter(Boolean) : [];
+    if (!ids.length) {
+        return false;
     }
-    const displayName = window.prompt('Enter a label for this account (optional).');
-    const notes = window.prompt('Add an internal note (optional).');
+    const overlay = document.getElementById('individualPublishingOverlay');
+    if (!overlay) {
+        return false;
+    }
+    if (overlay.dataset.bound !== 'true') {
+        setupIndividualPublishingOverlay();
+    }
 
-    addProductAdAutomationEntry(listType, {
-        account: normalizedEmail,
-        label: displayName && displayName.trim() ? displayName.trim() : normalizedEmail,
-        notes: notes && notes.trim() ? notes.trim() : ''
+    const nameEl = document.getElementById('individualPublishingAccountLabel');
+    const identifierEl = document.getElementById('individualPublishingAccountIdentifier');
+    const statusEl = document.getElementById('individualPublishingStatus');
+    const listSelect = document.getElementById('individualPublishingListSelect');
+    const notesInput = document.getElementById('individualPublishingNotesInput');
+    const submitBtn = document.getElementById('individualPublishingSubmitBtn');
+    if (!nameEl || !identifierEl || !listSelect || !notesInput || !statusEl || !submitBtn) {
+        return false;
+    }
+
+    const sourceEntries = getProductAdAutomationEntries(sourceType);
+    const selectedEntries = ids
+        .map(entryId => sourceEntries.find(entry => entry && entry.id === entryId))
+        .filter(Boolean);
+    if (!selectedEntries.length) {
+        showNotification('warning', 'Selected account entries are no longer available.');
+        return false;
+    }
+
+    const sourceLabel = getProductAdAutomationLabel(sourceType);
+    const targetLabel = getProductAdAutomationLabel(targetType);
+    const selectionCount = selectedEntries.length;
+    const pluralSuffix = selectionCount === 1 ? '' : 's';
+    const primaryLabel = selectionCount === 1
+        ? (selectedEntries[0].label || selectedEntries[0].account || 'Account')
+        : `${selectionCount} Accounts Selected`;
+    const identifierLabel = selectionCount === 1
+        ? `${sourceLabel} → ${targetLabel}`
+        : `Move ${selectionCount} account${pluralSuffix} from ${sourceLabel} to ${targetLabel}`;
+
+    nameEl.textContent = primaryLabel;
+    identifierEl.textContent = identifierLabel;
+    statusEl.textContent = `Moving ${selectionCount === 1 ? 'this account' : 'these accounts'} from ${sourceLabel} to ${targetLabel}.`;
+    statusEl.classList.remove('hidden');
+
+    listSelect.value = targetType;
+    listSelect.disabled = true;
+    listSelect.setAttribute('aria-disabled', 'true');
+    listSelect.dataset.transferLocked = 'true';
+
+    notesInput.value = '';
+    submitBtn.disabled = false;
+
+    state.individualPublishingOverlayContext = {
+        mode: 'automation-transfer',
+        accountType: null,
+        accountId: null,
+        identifier: null,
+        currentListType: null,
+        businessAccountId: null,
+        automationTransfer: {
+            sourceType,
+            targetType,
+            sourceLabel,
+            targetLabel,
+            entryIds: ids
+        }
+    };
+    state.individualPublishingOverlayReturnFocus = triggerElement instanceof HTMLElement ? triggerElement : null;
+
+    setIndividualPublishingFormError('');
+    overlay.classList.remove('hidden');
+    syncIndividualPublishingSubmitState();
+    setTimeout(() => {
+        try {
+            notesInput.focus();
+        } catch (error) {
+            // focus fallback ignored
+        }
+    }, 0);
+    return true;
+}
+
+function handleProductAdAutomationSearchInput(listType, rawValue) {
+    if (!listType) {
+        return;
+    }
+    const filters = ensureProductAdAutomationFilterState();
+    if (!filters[listType]) {
+        filters[listType] = { search: '', accountType: 'all' };
+    }
+    const current = filters[listType];
+    const value = typeof rawValue === 'string' ? rawValue : '';
+    if (current.search === value) {
+        return;
+    }
+    current.search = value;
+    const paginationState = ensureProductAdAutomationPaginationState();
+    paginationState[listType] = 1;
+    renderProductAdAutomationLists();
+}
+
+function handleProductAdAutomationAccountTypeFilter(listType, rawValue) {
+    if (!listType) {
+        return;
+    }
+    const filters = ensureProductAdAutomationFilterState();
+    if (!filters[listType]) {
+        filters[listType] = { search: '', accountType: 'all' };
+    }
+    const current = filters[listType];
+    const value = typeof rawValue === 'string' && rawValue ? rawValue : 'all';
+    if (current.accountType === value) {
+        return;
+    }
+    current.accountType = value;
+    const paginationState = ensureProductAdAutomationPaginationState();
+    paginationState[listType] = 1;
+    renderProductAdAutomationLists();
+}
+
+function normalizeAutomationAccountIdentifierKey(value) {
+    if (value === null || value === undefined) {
+        return '';
+    }
+    if (typeof value === 'number' && Number.isFinite(value)) {
+        return String(value).trim();
+    }
+    if (typeof value !== 'string') {
+        return '';
+    }
+    const trimmed = value.trim();
+    if (!trimmed) {
+        return '';
+    }
+    return trimmed.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+}
+
+function isValidAutomationAccountIdFormat(value) {
+    if (typeof value !== 'string') {
+        return false;
+    }
+    const collapsed = value.trim().replace(/\s+/g, '');
+    if (!collapsed) {
+        return false;
+    }
+    return /^(IND|BUS)-\d+$/i.test(collapsed);
+}
+
+function collectAutomationIdentifierCandidates(record, accountType) {
+    const candidates = [];
+    const register = candidate => {
+        const normalized = normalizeAutomationAccountIdentifierKey(candidate);
+        if (normalized) {
+            candidates.push(normalized);
+        }
+    };
+    if (!record || typeof record !== 'object') {
+        return candidates;
+    }
+
+    [
+        record.id,
+        record.accountId,
+        record.accountCode,
+        record.accountIdentifier,
+        record.accountNumber,
+        record.referenceId,
+        record.userId,
+        record.primaryBusinessAccountId
+    ].forEach(register);
+
+    if (accountType === 'business') {
+        [
+            record.businessId,
+            record.registrationNumber,
+            record.detailRegistrationNumber,
+            record.tradeLicenseNumber,
+            record.companyId,
+            record.application && record.application.registrationNumber,
+            record.application && record.application.detailRegistrationNumber
+        ].forEach(register);
+    } else {
+        [
+            record.employeeId,
+            record.nationalId,
+            record.identityNumber,
+            record.accountReference
+        ].forEach(register);
+    }
+    return candidates;
+}
+
+function findAutomationAccountByInput(value) {
+    const lookupKey = normalizeAutomationAccountIdentifierKey(value);
+    if (!lookupKey) {
+        return null;
+    }
+
+    const matchInCollection = (collection, accountType) => {
+        const list = Array.isArray(collection) ? collection : [];
+        for (const record of list) {
+            if (!record || typeof record !== 'object') {
+                continue;
+            }
+            const identifiers = collectAutomationIdentifierCandidates(record, accountType);
+            if (identifiers.includes(lookupKey)) {
+                return { accountType, record };
+            }
+        }
+        return null;
+    };
+
+    return matchInCollection(individualAccounts, 'individual')
+        || matchInCollection(businessAccounts, 'business');
+}
+
+function buildShadowIndividualFromBusinessAccount(account) {
+    if (!account || typeof account !== 'object') {
+        return null;
+    }
+    return {
+        id: account.id || account.businessId || account.accountId || '',
+        fullName: account.companyName || account.contactName || 'Business Account',
+        firstName: account.companyName || account.contactName || 'Business',
+        lastName: account.city || 'Account',
+        email: account.email || account.contactEmail || '',
+        contactEmail: account.email || account.contactEmail || '',
+        notes: typeof account.defaultPublishingListNote === 'string' ? account.defaultPublishingListNote.trim() : ''
+    };
+}
+
+function openPublishingListWindowForAccountContext(context, preferredListType) {
+    if (!context || !context.record) {
+        showNotification('warning', 'Unable to locate the selected account.');
+        return;
+    }
+    const normalizedListType = typeof preferredListType === 'string' ? preferredListType : '';
+    if (context.accountType === 'business') {
+        const businessAccount = context.record;
+        const linkedIndividual = businessAccount.primaryIndividualId
+            ? (individualAccounts || []).find(entry => entry && entry.id === businessAccount.primaryIndividualId)
+            : null;
+        const surrogateAccount = linkedIndividual || buildShadowIndividualFromBusinessAccount(businessAccount);
+        if (!surrogateAccount) {
+            showNotification('warning', 'This account is missing the identifiers required to manage publishing lists.');
+            return;
+        }
+        openIndividualAccountPublishingListOverlay(surrogateAccount, {
+            accountType: 'business',
+            businessAccount,
+            overrideIdentifier: context.identifier,
+            initialListType: normalizedListType
+        });
+        return;
+    }
+    openIndividualAccountPublishingListOverlay(context.record, {
+        accountType: 'individual',
+        initialListType: normalizedListType
     });
+}
+
+async function openProductAdAutomationPrompt(listType) {
+    if (!listType) {
+        showNotification('warning', 'Select a target publishing list first.');
+        return;
+    }
+
+    const targetLabel = getProductAdAutomationLabel(listType);
+    const primaryPromptMessage = `Enter the Account ID to Add to the ${targetLabel} List`;
+    const primaryPlaceholder = 'Account ID (e.g. IND-5101)';
+    let pendingAccountContext = null;
+
+    const validateAccountLookup = rawValue => {
+        const trimmedValue = typeof rawValue === 'string' ? rawValue.trim() : '';
+        if (!isValidAutomationAccountIdFormat(trimmedValue)) {
+            pendingAccountContext = null;
+            return {
+                valid: false,
+                message: 'Enter a Valid Account ID',
+                tooltip: 'Publishing list IDs must follow IND-#### or BUS-#### (for example, IND-5101 or BUS-9001). Remove spaces and include the hyphen.'
+            };
+        }
+        const matchedAccount = findAutomationAccountByInput(trimmedValue);
+        if (!matchedAccount) {
+            pendingAccountContext = null;
+            return {
+                valid: false,
+                message: 'No Account Exists in the System with the Entered Account ID',
+                tooltip: 'This ID is not linked to any registered individual or business account. Confirm the identifier and try again without closing this window.'
+            };
+        }
+        const identifier = matchedAccount.accountType === 'business'
+            ? resolveBusinessAccountAutomationIdentifier(matchedAccount.record)
+            : resolveIndividualAccountAutomationIdentifier(matchedAccount.record);
+        if (!identifier) {
+            pendingAccountContext = null;
+            return {
+                valid: false,
+                message: 'This Account Cannot Be Added Yet',
+                tooltip: 'The selected account is missing the publishing identifier. Update the account profile and then try again.'
+            };
+        }
+        const existingEntry = findAutomationListEntryForAccount(identifier);
+        if (existingEntry) {
+            if (existingEntry.listType === listType) {
+                pendingAccountContext = null;
+                const existingLabel = getProductAdAutomationLabel(existingEntry.listType);
+                return {
+                    valid: false,
+                    message: 'The Account has Already been Added to the Publishing List',
+                    tooltip: `This account already exists in the ${existingLabel} list.`
+                };
+            }
+            pendingAccountContext = {
+                accountType: matchedAccount.accountType,
+                record: matchedAccount.record,
+                identifier,
+                existingListType: existingEntry.listType
+            };
+            return { valid: true, message: '', tooltip: '' };
+        }
+        pendingAccountContext = {
+            accountType: matchedAccount.accountType,
+            record: matchedAccount.record,
+            identifier
+        };
+        return { valid: true, message: '', tooltip: '' };
+    };
+
+    if (!isUserPromptOverlayAvailable()) {
+        const accountInput = window.prompt(primaryPromptMessage);
+        if (!accountInput) {
+            return;
+        }
+        const validation = validateAccountLookup(accountInput);
+        if (!validation.valid) {
+            window.alert(validation.message);
+            return;
+        }
+        if (!pendingAccountContext) {
+            return;
+        }
+        openPublishingListWindowForAccountContext(pendingAccountContext, listType);
+        pendingAccountContext = null;
+        return;
+    }
+
+    const accountPrompt = await showUserPrompt(
+        primaryPromptMessage,
+        'Add',
+        'Cancel',
+        primaryPlaceholder,
+        {
+            validate: value => validateAccountLookup(value),
+            errorMessage: 'Enter a Valid Account ID'
+        }
+    );
+
+    if (!accountPrompt.confirmed || !pendingAccountContext) {
+        pendingAccountContext = null;
+        return;
+    }
+
+    openPublishingListWindowForAccountContext(pendingAccountContext, listType);
+    pendingAccountContext = null;
 }
 
 function addProductAdAutomationEntry(listType, payload, options = {}) {
@@ -29563,6 +32147,9 @@ function addProductAdAutomationEntry(listType, payload, options = {}) {
     }
 
     targetList.push(normalized);
+    const paginationState = ensureProductAdAutomationPaginationState();
+    paginationState[listType] = 1;
+    updateBusinessPublishingPreferenceFromAutomation(normalized.account, listType, normalized.notes);
     saveProductAdAutomationToStorage();
     renderProductAdAutomationLists();
     showNotification('success', successMessage || 'Automation list updated.');
@@ -29582,11 +32169,13 @@ function removeProductAdAutomationEntry(listType, entryId) {
     if (!Array.isArray(targetList)) return;
     const index = targetList.findIndex(entry => entry && entry.id === entryId);
     if (index === -1) return;
-    targetList.splice(index, 1);
-    if (state.productAdAutomationSelection
-        && state.productAdAutomationSelection.entryId === entryId
-        && state.productAdAutomationSelection.listType === listType) {
-        state.productAdAutomationSelection = null;
+    const [removed] = targetList.splice(index, 1);
+    const selectionState = ensureProductAdAutomationSelectionState();
+    if (selectionState[listType] instanceof Set) {
+        selectionState[listType].delete(entryId);
+    }
+    if (removed) {
+        updateBusinessPublishingPreferenceFromAutomation(removed.account, '', '');
     }
     saveProductAdAutomationToStorage();
     renderProductAdAutomationLists();
@@ -29594,21 +32183,6 @@ function removeProductAdAutomationEntry(listType, entryId) {
 }
 
 function handleProductAdAutomationListClick(event) {
-    const button = event.target.closest('button[data-action="remove"]');
-    if (button) {
-        const listItem = button.closest('li[data-entry-id]');
-        if (!listItem) return;
-        const entryId = listItem.dataset.entryId;
-        const listElement = listItem.closest('ul');
-        if (!listElement) return;
-        const listType = PRODUCT_AD_AUTOMATION_LIST_ID_TO_TYPE[listElement.id];
-        if (!listType) return;
-        if (window.confirm('Remove this account from the list?')) {
-            removeProductAdAutomationEntry(listType, entryId);
-        }
-        return;
-    }
-
     const listItem = event.target.closest('li[data-entry-id]');
     if (!listItem) {
         return;
@@ -39870,6 +42444,24 @@ function resolvePublishingLabelFromValue(value) {
     return formatKeyLabel(raw);
 }
 
+function normalizePublishingListType(value) {
+    if (typeof value !== 'string') {
+        return '';
+    }
+    const trimmed = value.trim();
+    if (!trimmed) {
+        return '';
+    }
+    if (PUBLISHING_LIST_LABELS && Object.prototype.hasOwnProperty.call(PUBLISHING_LIST_LABELS, trimmed)) {
+        return trimmed;
+    }
+    const lower = trimmed.toLowerCase();
+    if (PUBLISHING_LIST_LABELS && Object.prototype.hasOwnProperty.call(PUBLISHING_LIST_LABELS, lower)) {
+        return lower;
+    }
+    return '';
+}
+
 function resolveBusinessPublishingListLabel(businessAccount, linkedIndividualOverride) {
     if (!businessAccount || typeof businessAccount !== 'object') {
         return '';
@@ -40932,17 +43524,37 @@ function closeBusinessAccountMarketplaceOverlay() {
 }
 
 function openIndividualAccountPublishingListOverlay(account, options = {}) {
-    if (!account || typeof account !== 'object') {
-        showNotification('warning', 'Unable to locate the selected account.');
-        return;
-    }
-
     const contextOptions = options && typeof options === 'object' ? options : {};
+    const requestedAccountType = contextOptions.accountType === 'business' ? 'business' : 'individual';
     const businessAccount = contextOptions.businessAccount && typeof contextOptions.businessAccount === 'object'
         ? contextOptions.businessAccount
         : null;
 
-    const identifier = resolveIndividualAccountAutomationIdentifier(account);
+    if (requestedAccountType === 'individual' && (!account || typeof account !== 'object')) {
+        showNotification('warning', 'Unable to locate the selected account.');
+        return;
+    }
+
+    if (requestedAccountType === 'business' && !businessAccount) {
+        showNotification('warning', 'Unable to locate the selected account.');
+        return;
+    }
+
+    const initialListType = typeof contextOptions.initialListType === 'string'
+        ? contextOptions.initialListType.trim()
+        : '';
+
+    const identifierOverride = typeof contextOptions.overrideIdentifier === 'string'
+        ? contextOptions.overrideIdentifier.trim()
+        : '';
+
+    let identifier = identifierOverride;
+    if (!identifier) {
+        identifier = requestedAccountType === 'business'
+            ? resolveBusinessAccountAutomationIdentifier(businessAccount)
+            : resolveIndividualAccountAutomationIdentifier(account);
+    }
+
     if (!identifier) {
         showNotification('warning', 'This account is missing an identifier for publishing lists.');
         return;
@@ -40974,8 +43586,16 @@ function openIndividualAccountPublishingListOverlay(account, options = {}) {
         return;
     }
 
+    listSelect.disabled = false;
+    listSelect.removeAttribute('aria-disabled');
+    delete listSelect.dataset.transferLocked;
+
     const existingEntryDetails = findAutomationListEntryForAccount(identifier);
-    const defaultNotes = existingEntryDetails && existingEntryDetails.entry ? existingEntryDetails.entry.notes || '' : (typeof account.notes === 'string' ? account.notes.trim() : '');
+    const defaultNotes = existingEntryDetails && existingEntryDetails.entry
+        ? existingEntryDetails.entry.notes || ''
+        : requestedAccountType === 'business'
+            ? (typeof businessAccount?.defaultPublishingListNote === 'string' ? businessAccount.defaultPublishingListNote.trim() : '')
+            : (typeof account?.notes === 'string' ? account.notes.trim() : '');
 
     const resolveBusinessDisplayName = target => {
         if (!target || typeof target !== 'object') {
@@ -41037,13 +43657,20 @@ function openIndividualAccountPublishingListOverlay(account, options = {}) {
         statusEl.classList.add('hidden');
     }
 
-    listSelect.value = existingEntryDetails && existingEntryDetails.listType ? existingEntryDetails.listType : '';
+    const resolvedListSelection = existingEntryDetails && existingEntryDetails.listType
+        ? existingEntryDetails.listType
+        : initialListType;
+    listSelect.value = resolvedListSelection || '';
     notesInput.value = defaultNotes;
     setIndividualPublishingFormError('');
     submitBtn.disabled = true;
 
     state.individualPublishingOverlayContext = {
-        accountId: account.id,
+        mode: 'account',
+        accountType: requestedAccountType,
+        accountId: requestedAccountType === 'business'
+            ? (businessAccount && businessAccount.id ? businessAccount.id : account && account.id ? account.id : null)
+            : (account && account.id ? account.id : null),
         identifier,
         currentListType: existingEntryDetails && existingEntryDetails.listType ? existingEntryDetails.listType : null,
         businessAccountId: businessAccount && businessAccount.id ? businessAccount.id : null
@@ -41099,6 +43726,7 @@ function closeIndividualAccountPublishingListOverlay() {
     const identifierEl = document.getElementById('individualPublishingAccountIdentifier');
     const nameEl = document.getElementById('individualPublishingAccountLabel');
     const submitBtn = document.getElementById('individualPublishingSubmitBtn');
+    const listSelect = document.getElementById('individualPublishingListSelect');
     if (form) {
         form.reset();
     }
@@ -41119,6 +43747,11 @@ function closeIndividualAccountPublishingListOverlay() {
     setIndividualPublishingFormError('');
     if (submitBtn) {
         submitBtn.disabled = true;
+    }
+    if (listSelect) {
+        listSelect.disabled = false;
+        listSelect.removeAttribute('aria-disabled');
+        delete listSelect.dataset.transferLocked;
     }
     overlay.classList.add('hidden');
 
@@ -41161,23 +43794,61 @@ async function handleIndividualPublishingFormSubmit(event) {
         }
 
         const context = state.individualPublishingOverlayContext;
-        
-        if (!context || !context.accountId) {
-            showNotification('warning', 'No individual account selected.');
+        if (!context) {
+            showNotification('warning', 'No account selected.');
             closeIndividualAccountPublishingListOverlay();
             return;
         }
 
-        const account = (individualAccounts || []).find(entry => entry && entry.id === context.accountId);
-        
-        if (!account) {
-            showNotification('warning', 'Unable to locate the selected account.');
-            closeIndividualAccountPublishingListOverlay();
+        if (context.mode === 'automation-transfer' && context.automationTransfer) {
+            await handleAutomationTransferSubmission(context, listType, notesInput.value.trim());
             return;
         }
 
-        const identifier = resolveIndividualAccountAutomationIdentifier(account);
-        
+        const accountType = context && context.accountType === 'business' ? 'business' : 'individual';
+
+        let targetAccount = null;
+        let businessAccount = null;
+
+        if (accountType === 'business') {
+            const businessId = context.businessAccountId || context.accountId;
+            if (!businessId) {
+                showNotification('warning', 'No account selected.');
+                closeIndividualAccountPublishingListOverlay();
+                return;
+            }
+            businessAccount = (businessAccounts || []).find(entry => entry && entry.id === businessId) || null;
+            if (!businessAccount) {
+                showNotification('warning', 'Unable to locate the selected account.');
+                closeIndividualAccountPublishingListOverlay();
+                return;
+            }
+            if (businessAccount.primaryIndividualId) {
+                targetAccount = (individualAccounts || []).find(entry => entry && entry.id === businessAccount.primaryIndividualId) || null;
+            }
+        } else {
+            if (!context.accountId) {
+                showNotification('warning', 'No individual account selected.');
+                closeIndividualAccountPublishingListOverlay();
+                return;
+            }
+            targetAccount = (individualAccounts || []).find(entry => entry && entry.id === context.accountId) || null;
+            if (!targetAccount) {
+                showNotification('warning', 'Unable to locate the selected account.');
+                closeIndividualAccountPublishingListOverlay();
+                return;
+            }
+        }
+
+        let identifier = typeof context.identifier === 'string' && context.identifier.trim()
+            ? context.identifier.trim()
+            : '';
+        if (!identifier) {
+            identifier = accountType === 'business'
+                ? resolveBusinessAccountAutomationIdentifier(businessAccount)
+                : resolveIndividualAccountAutomationIdentifier(targetAccount);
+        }
+
         if (!identifier) {
             showNotification('warning', 'This account is missing an identifier for publishing lists.');
             closeIndividualAccountPublishingListOverlay();
@@ -41249,7 +43920,9 @@ async function handleIndividualPublishingFormSubmit(event) {
 
         if (refreshedEntryDetails && refreshedEntryDetails.listType === listType) {
             refreshedEntryDetails.entry.notes = notes;
-            refreshedEntryDetails.entry.label = resolveIndividualAccountDisplayName(account);
+            refreshedEntryDetails.entry.label = accountType === 'business'
+                ? (businessAccount?.companyName || businessAccount?.contactName || identifier)
+                : resolveIndividualAccountDisplayName(targetAccount);
             saveProductAdAutomationToStorage();
             renderProductAdAutomationLists();
         } else {
@@ -41258,7 +43931,9 @@ async function handleIndividualPublishingFormSubmit(event) {
                 const duplicateEntry = targetList.find(entry => entry && entry.account === identifier);
                 if (duplicateEntry) {
                     duplicateEntry.notes = notes;
-                    duplicateEntry.label = resolveIndividualAccountDisplayName(account);
+                    duplicateEntry.label = accountType === 'business'
+                        ? (businessAccount?.companyName || businessAccount?.contactName || identifier)
+                        : resolveIndividualAccountDisplayName(targetAccount);
                     saveProductAdAutomationToStorage();
                     renderProductAdAutomationLists();
                 } else {
@@ -41268,7 +43943,9 @@ async function handleIndividualPublishingFormSubmit(event) {
             } else {
                 addProductAdAutomationEntry(listType, {
                     account: identifier,
-                    label: resolveIndividualAccountDisplayName(account),
+                    label: accountType === 'business'
+                        ? (businessAccount?.companyName || businessAccount?.contactName || identifier)
+                        : resolveIndividualAccountDisplayName(targetAccount),
                     notes
                 }, { successMessage: publishingUpdateSuccessMessage });
                 successMessageHandled = true;
@@ -41279,7 +43956,13 @@ async function handleIndividualPublishingFormSubmit(event) {
             showNotification('success', publishingUpdateSuccessMessage);
         }
 
-        renderIndividualAccountsToolbar(account);
+        if (accountType === 'business') {
+            if (typeof renderBusinessAccountsTable === 'function') {
+                renderBusinessAccountsTable(state.currentBusinessAccountsPage || 1);
+            }
+        } else {
+            renderIndividualAccountsToolbar(targetAccount);
+        }
         closeIndividualAccountPublishingListOverlay();
     } catch (error) {
         console.error('Error in handleIndividualPublishingFormSubmit:', error);
@@ -41287,6 +43970,77 @@ async function handleIndividualPublishingFormSubmit(event) {
     } finally {
         isProcessingPublishingSubmit = false;
     }
+}
+
+async function handleAutomationTransferSubmission(context, listType, notesValue) {
+    if (!context || !context.automationTransfer) {
+        closeIndividualAccountPublishingListOverlay();
+        return;
+    }
+
+    const transfer = context.automationTransfer;
+    const sourceLabel = transfer.sourceLabel || getProductAdAutomationLabel(transfer.sourceType);
+    const targetLabel = transfer.targetLabel || getProductAdAutomationLabel(transfer.targetType);
+    if (listType !== transfer.targetType) {
+        setIndividualPublishingFormError(`Publishing list is locked to ${targetLabel}.`);
+        const listSelect = document.getElementById('individualPublishingListSelect');
+        if (listSelect) {
+            listSelect.value = transfer.targetType || '';
+        }
+        return;
+    }
+
+    const ids = Array.isArray(transfer.entryIds) ? Array.from(new Set(transfer.entryIds.filter(Boolean))) : [];
+    if (!ids.length) {
+        showNotification('warning', 'Selected account entries are no longer available.');
+        closeIndividualAccountPublishingListOverlay();
+        return;
+    }
+
+    const entryCount = ids.length;
+    const pronoun = entryCount === 1 ? 'this Account' : 'these Accounts';
+    const confirmationMessage = `Are You Sure You Want to Move ${pronoun} from ${sourceLabel} to ${targetLabel}?`;
+    const confirmOverlay = document.getElementById('userConfirmOverlay');
+    const overlayAvailable = Boolean(
+        confirmOverlay
+        && document.getElementById('userConfirmMessage')
+        && document.getElementById('userConfirmOk')
+        && document.getElementById('userConfirmCancel')
+    );
+    const confirmed = overlayAvailable
+        ? await showUserConfirm(confirmationMessage, 'OK', 'Cancel')
+        : window.confirm(confirmationMessage);
+    if (!confirmed) {
+        return;
+    }
+
+    const sourceList = getProductAdAutomationEntries(transfer.sourceType);
+    const transferableIds = [];
+    ids.forEach(entryId => {
+        const entry = sourceList.find(item => item && item.id === entryId);
+        if (entry) {
+            entry.notes = notesValue || '';
+            transferableIds.push(entryId);
+        }
+    });
+
+    if (!transferableIds.length) {
+        showNotification('warning', 'Selected account entries are no longer available.');
+        closeIndividualAccountPublishingListOverlay();
+        return;
+    }
+
+    const result = transferProductAdAutomationEntries(transfer.sourceType, transfer.targetType, transferableIds);
+    if (!result.success) {
+        showNotification('warning', result.message || 'Unable to move the selected account.');
+        return;
+    }
+
+    const successMessage = transferableIds.length === 1
+        ? "The Account's Publishing List has been Successfully Updated"
+        : "The Accounts' Publishing List has been Successfully Updated";
+    showNotification('success', successMessage);
+    closeIndividualAccountPublishingListOverlay();
 }
 
 function setupIndividualPublishingOverlay() {
@@ -43007,7 +45761,7 @@ function shouldHideBusinessPublishingList(account) {
     return normalizedLabel === 'pending review' || normalizedLabel === 'rejected';
 }
 
-function resolveBusinessAccountPublishingContext(account, linkedIndividualOverride = undefined) {
+function resolveBusinessAccountPublishingContext(account, linkedIndividualOverride = undefined, options = {}) {
     const emptyContext = {
         listType: '',
         normalizedType: '',
@@ -43018,6 +45772,8 @@ function resolveBusinessAccountPublishingContext(account, linkedIndividualOverri
         return emptyContext;
     }
 
+    const { ignoreLinkedIndividual = false } = options || {};
+
     let linkedIndividual = linkedIndividualOverride;
     if (linkedIndividual === undefined) {
         const { individual } = resolveBusinessAccountPrimaryIndividual(account);
@@ -43027,29 +45783,53 @@ function resolveBusinessAccountPublishingContext(account, linkedIndividualOverri
     let listType = '';
     let notes = '';
 
-    if (linkedIndividual) {
-        const automationIdentifier = resolveIndividualAccountAutomationIdentifier(linkedIndividual);
-        if (automationIdentifier) {
-            const publishingEntry = findAutomationListEntryForAccount(automationIdentifier);
-            if (publishingEntry && publishingEntry.listType) {
-                listType = publishingEntry.listType;
-                notes = publishingEntry.entry && typeof publishingEntry.entry.notes === 'string'
-                    ? publishingEntry.entry.notes.trim()
-                    : '';
+    const applyBusinessTypeCandidates = () => {
+        const candidates = [
+            account.defaultPublishingListType,
+            account.publishingListPreset,
+            account.defaultPublishingListKey,
+            account.publishingList,
+            account.application && account.application.defaultPublishingListType,
+            account.application && account.application.publishingListPreset
+        ];
+        for (const candidate of candidates) {
+            const normalizedType = normalizePublishingListType(candidate);
+            if (normalizedType) {
+                listType = normalizedType;
+                if (candidate === account.defaultPublishingListType) {
+                    const defaultNotes = typeof account.defaultPublishingListNote === 'string'
+                        ? account.defaultPublishingListNote.trim()
+                        : '';
+                    if (defaultNotes) {
+                        notes = defaultNotes;
+                    }
+                }
+                return true;
             }
         }
-    }
+        return false;
+    };
 
-    if (!listType) {
-        const fallbackType = typeof account.defaultPublishingListType === 'string'
-            ? account.defaultPublishingListType.trim()
-            : '';
-        if (fallbackType) {
-            listType = fallbackType;
-            notes = typeof account.defaultPublishingListNote === 'string'
-                ? account.defaultPublishingListNote.trim()
+    const applyLinkedIndividualContext = () => {
+        if (!linkedIndividual) {
+            return;
+        }
+        const automationIdentifier = resolveIndividualAccountAutomationIdentifier(linkedIndividual);
+        if (!automationIdentifier) {
+            return;
+        }
+        const publishingEntry = findAutomationListEntryForAccount(automationIdentifier);
+        if (publishingEntry && publishingEntry.listType) {
+            listType = publishingEntry.listType;
+            notes = publishingEntry.entry && typeof publishingEntry.entry.notes === 'string'
+                ? publishingEntry.entry.notes.trim()
                 : '';
         }
+    };
+
+    applyBusinessTypeCandidates();
+    if (!listType && !ignoreLinkedIndividual) {
+        applyLinkedIndividualContext();
     }
 
     const trimmedType = typeof listType === 'string' ? listType.trim() : '';
@@ -43059,12 +45839,77 @@ function resolveBusinessAccountPublishingContext(account, linkedIndividualOverri
             || formatKeyLabel(trimmedType))
         : '';
 
+    if (!trimmedType) {
+        const businessCandidates = [
+            account.publishingListLabel,
+            account.publishingLabel,
+            account.defaultPublishingListType,
+            account.publishingListPreset,
+            account.publishingList,
+            account.application && account.application.defaultPublishingListType,
+            account.application && account.application.publishingListPreset
+        ];
+        const fallbackLabel = businessCandidates
+            .map(candidate => resolvePublishingLabelFromValue(candidate))
+            .find(Boolean);
+        if (fallbackLabel) {
+            return {
+                listType: '',
+                normalizedType: '',
+                label: fallbackLabel,
+                notes
+            };
+        }
+    }
+
     return {
         listType: trimmedType,
         normalizedType,
         label,
         notes
     };
+}
+
+function resolveBusinessAccountAutomationIdentifier(account) {
+    if (!account || typeof account !== 'object') {
+        return '';
+    }
+    const emailCandidates = [
+        account.email,
+        account.contactEmail,
+        account.loginEmail,
+        account.application && account.application.email,
+        account.application && account.application.contactEmail
+    ];
+    for (const candidate of emailCandidates) {
+        if (typeof candidate === 'string') {
+            const normalized = normalizeEmail(candidate);
+            if (normalized) {
+                return normalized;
+            }
+        }
+    }
+    const idCandidates = [
+        account.accountId,
+        account.id,
+        account.businessId,
+        account.registrationNumber,
+        account.tradeLicenseNumber
+    ];
+    for (const candidate of idCandidates) {
+        if (candidate === null || candidate === undefined) {
+            continue;
+        }
+        if (typeof candidate === 'string') {
+            const trimmed = candidate.trim();
+            if (trimmed) {
+                return trimmed.toLowerCase();
+            }
+        } else if (typeof candidate === 'number' && Number.isFinite(candidate)) {
+            return String(candidate);
+        }
+    }
+    return '';
 }
 
 function resolveBusinessAccountLastActiveTime(account) {
