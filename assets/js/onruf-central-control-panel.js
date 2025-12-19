@@ -1902,6 +1902,11 @@ function openSubSpecificationModal() {
     if (!modal) {
         return;
     }
+    // Clear the empty error message when opening
+    const emptyError = document.getElementById('subSpecificationEmptyError');
+    if (emptyError) {
+        emptyError.classList.add('hidden');
+    }
     const existingEntries = getSubSpecificationsFromInput();
     subSpecificationWorkingCopy = existingEntries.length
         ? existingEntries.map(entry => ({ ...entry }))
@@ -1923,6 +1928,22 @@ function applySubSpecificationSelection() {
     if (!modal) {
         return;
     }
+
+    // Clear empty error message first
+    const emptyError = document.getElementById('subSpecificationEmptyError');
+    if (emptyError) {
+        emptyError.classList.add('hidden');
+    }
+
+    // Check if no sub-specifications have been added
+    if (!Array.isArray(subSpecificationWorkingCopy) || subSpecificationWorkingCopy.length === 0) {
+        if (emptyError) {
+            emptyError.classList.remove('hidden');
+            emptyError.setAttribute('role', 'alert');
+        }
+        return;
+    }
+
     const inputs = modal.querySelectorAll('input[name="sub-specification-name-ar"], input[name="sub-specification-name-en"]');
     inputs.forEach(field => clearFieldError(field));
 
@@ -2165,6 +2186,28 @@ const BUSINESS_ACTIVE_SUBSCRIPTION_STATUSES = new Set(['active', 'pending', 'awa
 const PRODUCT_AD_AUTOMATION_PAGE_SIZE = 10;
 const PRODUCT_AD_AUTOMATION_LIST_TYPES = ['trusted', 'manualReview', 'blacklist'];
 const PRODUCT_AD_REQUEST_PLACEHOLDER_IMAGE = 'https://images.unsplash.com/photo-1503602642458-232111445657?auto=format&fit=crop&w=800&q=80';
+const PRODUCT_AD_SEED_PHOTO_POOL = [
+    'https://images.unsplash.com/photo-1503602642458-232111445657?auto=format&fit=crop&w=800&q=80',
+    'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=800&q=80',
+    'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=800&q=80',
+    'https://images.unsplash.com/photo-1572635196237-14b3f281503f?auto=format&fit=crop&w=800&q=80',
+    'https://images.unsplash.com/photo-1560343090-f0409e92791a?auto=format&fit=crop&w=800&q=80',
+    'https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=800&q=80',
+    'https://images.unsplash.com/photo-1585386959984-a4155224a1ad?auto=format&fit=crop&w=800&q=80',
+    'https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?auto=format&fit=crop&w=800&q=80',
+    'https://images.unsplash.com/photo-1559056199-641a0ac8b55e?auto=format&fit=crop&w=800&q=80',
+    'https://images.unsplash.com/photo-1606107557195-0e29a4b5b4aa?auto=format&fit=crop&w=800&q=80'
+];
+const PRODUCT_AD_SEED_VIDEO_POOL = [
+    { url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', label: 'Product Overview' },
+    { url: 'https://www.youtube.com/watch?v=example1', label: 'Demo Video' },
+    { url: 'https://www.youtube.com/watch?v=example2', label: 'Unboxing' },
+    { url: 'https://www.youtube.com/watch?v=example3', label: 'Installation Guide' },
+    { url: 'https://www.youtube.com/watch?v=example4', label: 'Feature Walkthrough' },
+    { url: 'https://www.youtube.com/watch?v=example5', label: 'Customer Review' },
+    { url: 'https://vimeo.com/example1', label: 'Promotional Video' },
+    { url: 'https://vimeo.com/example2', label: 'Product Showcase' }
+];
 const PRODUCT_AD_REQUEST_ACCOUNT_TYPES = new Set(['individual', 'business']);
 const PRODUCT_AD_REQUEST_STATUSES = new Set(['pending', 'changes-requested', 'approved', 'rejected']);
 const PRODUCT_AD_REQUEST_STATUS_LABELS = new Map([
@@ -2194,15 +2237,15 @@ const PRODUCT_AD_REQUEST_SHIPPING_OPTIONS = new Map([
     ['free-sa', 'Free shipping within Saudi Arabia']
 ]);
 const PRODUCT_AD_REQUEST_SALES_TYPE_LABELS = new Map([
-    ['fixed', 'Fixed Price Sale'],
+    ['fixed', 'Fixed Price'],
     ['auction', 'Auction'],
-    ['hybrid', 'Fixed + Auction']
+    ['negotiation', 'Negotiation']
 ]);
 const PRODUCT_AD_REQUEST_CLOSING_MODE_LABELS = new Map([
     ['fixed-length', 'Fixed Length'],
     ['custom-date', 'Custom Date and Time']
 ]);
-const PRODUCT_AD_REQUEST_PENDING_STATUSES = new Set(['pending', 'changes-requested']);
+const PRODUCT_AD_REQUEST_PENDING_STATUSES = new Set(['pending']);
 const PRODUCT_AD_REQUEST_STATUS_CLASS_MAP = new Map([
     ['pending', 'status-badge status-pending'],
     ['changes-requested', 'status-badge status-warning'],
@@ -2210,6 +2253,254 @@ const PRODUCT_AD_REQUEST_STATUS_CLASS_MAP = new Map([
     ['rejected', 'status-badge status-danger']
 ]);
 const BUSINESS_AUTOMATION_ENTRY_PREFIX = 'business-auto-';
+
+function formatProductAdExportCategory(ad, request) {
+    if (request && Array.isArray(request.categoryPath) && request.categoryPath.length) {
+        const path = request.categoryPath
+            .map(segment => (typeof segment === 'string' ? segment.trim() : ''))
+            .filter(Boolean);
+        if (path.length) {
+            return path.join(' › ');
+        }
+    }
+    if (ad && typeof ad.category === 'string' && ad.category.trim()) {
+        return ad.category.trim();
+    }
+    return '';
+}
+
+function getProductAdExportLocaleDetails(request, locale) {
+    const details = request && request.adDetails && typeof request.adDetails === 'object'
+        ? request.adDetails
+        : null;
+    if (!details || !details[locale] || typeof details[locale] !== 'object') {
+        return null;
+    }
+    return details[locale];
+}
+
+function formatProductAdExportItemCondition(request, ad) {
+    const details = request && request.adDetails && typeof request.adDetails === 'object'
+        ? request.adDetails
+        : null;
+    const value = details && typeof details.itemCondition === 'string' && details.itemCondition.trim()
+        ? details.itemCondition.trim()
+        : ad && ad.status
+            ? resolveCanonicalProductAdStatus(ad.status)
+            : '';
+    return value ? formatKeyLabel(value) : '';
+}
+
+function getProductAdExportQuantityLabels(request) {
+    const details = request && request.adDetails && typeof request.adDetails === 'object'
+        ? request.adDetails
+        : null;
+    if (!details) {
+        return {
+            quantity: '',
+            remaining: ''
+        };
+    }
+    const isUnlimited = details.quantityType === 'unlimited';
+    const numeric = Number.isFinite(details.quantity) && details.quantity > 0 ? Math.floor(details.quantity) : 0;
+    return {
+        quantity: isUnlimited ? 'Unlimited' : String(numeric),
+        remaining: isUnlimited ? 'Unlimited' : String(numeric)
+    };
+}
+
+function formatProductAdExportAddress(request, ad) {
+    const details = request && request.adDetails && typeof request.adDetails === 'object'
+        ? request.adDetails
+        : null;
+    if (details && details.address) {
+        const parts = [details.address.state, details.address.region, details.address.city]
+            .map(part => (typeof part === 'string' ? part.trim() : ''))
+            .filter(Boolean);
+        if (parts.length) {
+            return parts.join(', ');
+        }
+    }
+    if (ad && typeof ad.city === 'string' && ad.city.trim()) {
+        return ad.city.trim();
+    }
+    return '';
+}
+
+function formatProductAdExportSaleType(request) {
+    const sales = request && request.salesDetails ? request.salesDetails : null;
+    if (!sales || !sales.type) {
+        return '';
+    }
+    return PRODUCT_AD_REQUEST_SALES_TYPE_LABELS.get(sales.type)
+        || formatKeyLabel(sales.type);
+}
+
+function formatProductAdExportPaymentOptions(request) {
+    const sales = request && request.salesDetails ? request.salesDetails : null;
+    if (!sales || !Array.isArray(sales.paymentOptions)) {
+        return '';
+    }
+    const labels = sales.paymentOptions
+        .map(option => PRODUCT_AD_REQUEST_PAYMENT_OPTION_LABELS.get(option) || formatKeyLabel(option))
+        .filter(Boolean);
+    return labels.join('; ');
+}
+
+function formatProductAdExportShippingOptions(request) {
+    const shipping = request && request.shipping ? request.shipping : null;
+    if (!shipping) {
+        return '';
+    }
+    const labels = [];
+    if (shipping.pickupOption) {
+        labels.push(PRODUCT_AD_REQUEST_PICKUP_OPTIONS.get(shipping.pickupOption) || formatKeyLabel(shipping.pickupOption));
+    }
+    if (Array.isArray(shipping.shippingOptions)) {
+        shipping.shippingOptions.forEach(option => {
+            const label = PRODUCT_AD_REQUEST_SHIPPING_OPTIONS.get(option) || formatKeyLabel(option);
+            if (label) {
+                labels.push(label);
+            }
+        });
+    }
+    return labels.join('; ');
+}
+
+function formatProductAdExportPackages(request) {
+    if (!request || !Array.isArray(request.packages) || !request.packages.length) {
+        return '';
+    }
+    return request.packages
+        .map(pkg => {
+            if (!pkg || typeof pkg !== 'object') {
+                return '';
+            }
+            const name = typeof pkg.name === 'string' ? pkg.name.trim() : '';
+            const duration = typeof pkg.duration === 'string' ? pkg.duration.trim() : '';
+            const price = Number.isFinite(pkg.price) ? formatCurrency(pkg.price, 'SAR') : '';
+            const fragments = [name, duration, price].filter(Boolean);
+            return fragments.join(' · ');
+        })
+        .filter(Boolean)
+        .join('; ');
+}
+
+const PRODUCT_AD_EXPORT_COLUMNS = [
+    { id: 'id', label: 'ID', locked: true, value: ad => (ad && ad.id) || '' },
+    { id: 'category', label: 'Category', value: (ad, request) => formatProductAdExportCategory(ad, request) },
+    {
+        id: 'titleAr',
+        label: 'Ad Title (AR)',
+        value: (ad, request) => {
+            const block = getProductAdExportLocaleDetails(request, 'arabic');
+            return block && block.title ? block.title : '';
+        }
+    },
+    {
+        id: 'subtitleAr',
+        label: 'Ad Subtitle (AR)',
+        value: (ad, request) => {
+            const block = getProductAdExportLocaleDetails(request, 'arabic');
+            return block && block.subtitle ? block.subtitle : '';
+        }
+    },
+    {
+        id: 'detailsAr',
+        label: 'Ad Details (AR)',
+        value: (ad, request) => {
+            const block = getProductAdExportLocaleDetails(request, 'arabic');
+            return block && block.description ? block.description : '';
+        }
+    },
+    {
+        id: 'titleEn',
+        label: 'Ad Title (EN)',
+        value: (ad, request) => {
+            const block = getProductAdExportLocaleDetails(request, 'english');
+            return block && block.title ? block.title : '';
+        }
+    },
+    {
+        id: 'subtitleEn',
+        label: 'Ad Subtitle (EN)',
+        value: (ad, request) => {
+            const block = getProductAdExportLocaleDetails(request, 'english');
+            return block && block.subtitle ? block.subtitle : '';
+        }
+    },
+    {
+        id: 'detailsEn',
+        label: 'Ad Details (EN)',
+        value: (ad, request) => {
+            const block = getProductAdExportLocaleDetails(request, 'english');
+            return block && block.description ? block.description : '';
+        }
+    },
+    { id: 'itemCondition', label: 'Item Condition', value: (ad, request) => formatProductAdExportItemCondition(request, ad) },
+    {
+        id: 'quantity',
+        label: 'Quantity',
+        value: (ad, request) => getProductAdExportQuantityLabels(request).quantity
+    },
+    {
+        id: 'remaining',
+        label: 'Remaining',
+        value: (ad, request) => getProductAdExportQuantityLabels(request).remaining
+    },
+    {
+        id: 'address',
+        label: 'Address',
+        value: (ad, request) => formatProductAdExportAddress(request, ad)
+    },
+    {
+        id: 'saleTypes',
+        label: 'Sale Types',
+        value: (ad, request) => formatProductAdExportSaleType(request)
+    },
+    {
+        id: 'paymentOptions',
+        label: 'Payment Options',
+        value: (ad, request) => formatProductAdExportPaymentOptions(request)
+    },
+    {
+        id: 'shippingOptions',
+        label: 'Shipping Options',
+        value: (ad, request) => formatProductAdExportShippingOptions(request)
+    },
+    {
+        id: 'packages',
+        label: 'Packages',
+        value: (ad, request) => formatProductAdExportPackages(request)
+    }
+];
+
+const PRODUCT_AD_EXPORT_COLUMN_LOOKUP = new Map(PRODUCT_AD_EXPORT_COLUMNS.map(column => [column.id, column]));
+const PRODUCT_AD_EXPORT_LOCKED_COLUMN_IDS = PRODUCT_AD_EXPORT_COLUMNS
+    .filter(column => column.locked)
+    .map(column => column.id);
+const PRODUCT_AD_EXPORT_LOCKED_COLUMN_ID_SET = new Set(PRODUCT_AD_EXPORT_LOCKED_COLUMN_IDS);
+
+function getProductAdExportLockedColumnIds() {
+    return PRODUCT_AD_EXPORT_LOCKED_COLUMN_IDS.slice();
+}
+
+function isProductAdExportColumnLocked(columnId) {
+    return PRODUCT_AD_EXPORT_LOCKED_COLUMN_ID_SET.has(columnId);
+}
+
+function resolveProductAdExportRequest(ad, lookup) {
+    if (!ad || !ad.id) {
+        return null;
+    }
+    if (lookup && typeof lookup.get === 'function') {
+        const candidate = lookup.get(ad.id);
+        if (candidate) {
+            return candidate;
+        }
+    }
+    return buildProductAdRequestFromListing(ad);
+}
 
 function createProductAdAutomationSelectionState() {
     return {
@@ -2294,6 +2585,7 @@ const state = {
     editingCategoryId: null,
     currentProductAdsPage: 1,
     productAdsPerPage: 10,
+    productAdExportSelection: PRODUCT_AD_EXPORT_COLUMNS.map(column => column.id),
     productAdsFilters: {
         search: '',
         status: 'all',
@@ -2305,6 +2597,7 @@ const state = {
     productAdAutomationPagination: createProductAdAutomationPaginationState(),
     productAdAutomationFilters: createProductAdAutomationFilterState(),
     productAdDecisionContext: null,
+    productAdDetailsContext: null,
     editingProductAdId: null,
     activeProductAdId: null,
     currentIndividualAccountsPage: 1,
@@ -4271,7 +4564,7 @@ const BUSINESS_PACKAGES_STORAGE_KEY = 'onruf_business_packages_v1';
 const BUSINESS_SUBSCRIBERS_STORAGE_KEY = 'onruf_business_subscribers_v1';
 const FINANCE_TRANSACTIONS_STORAGE_KEY = 'onruf_finance_transactions_v1';
 const FINANCE_AUDIT_STORAGE_KEY = 'onruf_finance_audit_v1';
-const DATA_RESET_VERSION = '20251212-product-ads-seedless';
+const DATA_RESET_VERSION = '20251217-product-ads-arabic-v7';
 const DATA_RESET_KEY = 'onruf_data_reset_version';
 const CATEGORY_RESET_VERSION = '20251021-delete-all-categories';
 const CATEGORY_RESET_KEY = 'onruf_category_reset_version';
@@ -6329,16 +6622,22 @@ function normalizeProductAdPayload(ad, index = 0) {
     const id = typeof ad.id === 'string' && ad.id.trim() ? ad.id.trim() : fallbackId;
     const title = typeof ad.title === 'string' && ad.title.trim() ? ad.title.trim() : `Product Ad ${index + 1}`;
     const category = typeof ad.category === 'string' && ad.category.trim() ? ad.category.trim() : 'General';
+    const categoryCode = typeof ad.categoryCode === 'string' && ad.categoryCode.trim() ? ad.categoryCode.trim() : '';
     const city = typeof ad.city === 'string' && ad.city.trim() ? ad.city.trim() : 'Riyadh';
     const accountRaw = typeof ad.account === 'string' && ad.account.trim() ? ad.account.trim() : 'unknown@onruf.com';
     const account = normalizeEmail(accountRaw) || accountRaw.toLowerCase();
-    const allowedStatuses = new Set(['pending', 'approved', 'rejected', 'suspended', 'draft', 'expired']);
+    const allowedStatuses = new Set(['pending', 'approved', 'rejected', 'suspended', 'draft', 'expired', 'active', 'inactive', 'blocked', 'deleted']);
     const statusCandidate = typeof ad.status === 'string' && ad.status.trim() ? ad.status.trim().toLowerCase() : 'pending';
     const status = allowedStatuses.has(statusCandidate) ? statusCandidate : 'pending';
     const views = Number.isFinite(ad.views) ? Math.max(0, Math.floor(ad.views)) : 0;
     const createdAt = normalizeIsoTimestamp(ad.createdAt, new Date().toISOString());
     const lastEditedAt = normalizeIsoTimestamp(ad.lastEditedAt, createdAt);
     const notes = typeof ad.notes === 'string' ? ad.notes.trim() : '';
+    const subtitle = typeof ad.subtitle === 'string' && ad.subtitle.trim() ? ad.subtitle.trim() : '';
+    const description = typeof ad.description === 'string' && ad.description.trim() ? ad.description.trim() : '';
+    const titleAr = typeof ad.titleAr === 'string' && ad.titleAr.trim() ? ad.titleAr.trim() : '';
+    const subtitleAr = typeof ad.subtitleAr === 'string' && ad.subtitleAr.trim() ? ad.subtitleAr.trim() : '';
+    const descriptionAr = typeof ad.descriptionAr === 'string' && ad.descriptionAr.trim() ? ad.descriptionAr.trim() : '';
     const flags = normalizeProductAdFlags(ad.flags);
     const historySource = Array.isArray(ad.history) ? ad.history : [];
     const history = historySource
@@ -6348,7 +6647,20 @@ function normalizeProductAdPayload(ad, index = 0) {
     if (!history.length) {
         history.push(normalizeProductAdHistoryEntry({ action: 'created', timestamp: createdAt, actor: 'System', context: 'Imported record.' }, 'created', createdAt, 0));
     }
-    return { id, title, category, city, account, status, views, createdAt, lastEditedAt, flags, notes, history };
+    const media = ad.media && typeof ad.media === 'object' ? {
+        photos: Array.isArray(ad.media.photos) ? ad.media.photos : [],
+        videos: Array.isArray(ad.media.videos) ? ad.media.videos : []
+    } : { photos: [], videos: [] };
+    const validSaleTypes = new Set(['fixed', 'auction', 'negotiation']);
+    const saleTypes = Array.isArray(ad.saleTypes) 
+        ? ad.saleTypes.filter(t => typeof t === 'string' && validSaleTypes.has(t.toLowerCase())).map(t => t.toLowerCase())
+        : [];
+    const approvedAt = normalizeIsoTimestamp(ad.approvedAt, null);
+    const approvalNotes = typeof ad.approvalNotes === 'string' ? ad.approvalNotes.trim() : '';
+    const rejectedAt = normalizeIsoTimestamp(ad.rejectedAt, null);
+    const rejectionNotes = typeof ad.rejectionNotes === 'string' ? ad.rejectionNotes.trim() : '';
+    const deletedAt = normalizeIsoTimestamp(ad.deletedAt, null);
+    return { id, title, subtitle, description, titleAr, subtitleAr, descriptionAr, category, categoryCode, city, account, status, views, createdAt, lastEditedAt, flags, notes, history, media, saleTypes, approvedAt, approvalNotes, rejectedAt, rejectionNotes, deletedAt };
 }
 
 function loadProductAdsFromStorage() {
@@ -6649,6 +6961,7 @@ function normalizeProductAdRequestPayload(request, index = 0) {
     const packages = normalizeProductAdRequestPackages(request.packages);
     const notes = typeof request.notes === 'string' ? request.notes.trim() : '';
     const decisionHistory = Array.isArray(request.decisionHistory) ? request.decisionHistory : [];
+    const linkedAdId = typeof request.linkedAdId === 'string' ? request.linkedAdId.trim() : '';
     return {
         id,
         accountType,
@@ -6663,8 +6976,326 @@ function normalizeProductAdRequestPayload(request, index = 0) {
         shipping,
         packages,
         notes,
-        decisionHistory
+        decisionHistory,
+        linkedAdId
     };
+}
+
+function mapProductAdStatusToRequestStatus(status) {
+    const canonical = resolveCanonicalProductAdStatus(status);
+    switch (canonical) {
+        case 'active':
+            return 'approved';
+        case 'inactive':
+            return 'changes-requested';
+        case 'rejected':
+        case 'blocked':
+            return 'rejected';
+        case 'pending':
+        default:
+            return 'pending';
+    }
+}
+
+function resolveProductAdRequestAccountSnapshot(ad) {
+    if (!ad || typeof ad !== 'object') {
+        return null;
+    }
+    const pickFirstString = candidates => {
+        if (!Array.isArray(candidates)) {
+            return '';
+        }
+        for (const value of candidates) {
+            if (typeof value === 'string' && value.trim()) {
+                return value.trim();
+            }
+        }
+        return '';
+    };
+    const context = resolveProductAdAccountReference(ad) || null;
+    const fallbackEmail = normalizeEmail(ad.account) || (typeof ad.account === 'string' ? ad.account.trim() : '');
+    const accountType = context && context.type ? context.type : resolveProductAdAccountType(ad) || 'business';
+    const record = context && context.record ? context.record : null;
+    let resolvedName = '';
+    if (record) {
+        resolvedName = pickFirstString(accountType === 'business'
+            ? [record.companyNameEnglish, record.companyName, record.tradeName, record.contactName]
+            : [record.fullName, [record.firstName, record.lastName].filter(Boolean).join(' ')]);
+    }
+    if (!resolvedName) {
+        resolvedName = pickFirstString([context && context.label, fallbackEmail, 'Marketplace Seller']) || 'Marketplace Seller';
+    }
+    const phoneCandidates = record
+        ? [
+            record.phone,
+            record.contactPhone,
+            record.contactPhonePrimary,
+            record.contactPhoneSecondary,
+            record.primaryPhone,
+            record.secondaryPhone,
+            record.mobile,
+            record.companyPhone
+        ]
+        : [];
+    const phone = pickFirstString(phoneCandidates);
+    return {
+        id: context && context.id ? context.id : '',
+        name: resolvedName,
+        email: (context && context.email) || fallbackEmail || 'seller@onruf.com',
+        phone,
+        type: accountType
+    };
+}
+
+const PRODUCT_AD_SEED_CITY_ADDRESS_MAP = new Map([
+    ['Riyadh', { state: 'Saudi Arabia', region: 'Riyadh Region', city: 'Riyadh' }],
+    ['Jeddah', { state: 'Saudi Arabia', region: 'Makkah Region', city: 'Jeddah' }],
+    ['Dammam', { state: 'Saudi Arabia', region: 'Eastern Province', city: 'Dammam' }],
+    ['Khobar', { state: 'Saudi Arabia', region: 'Eastern Province', city: 'Khobar' }],
+    ['Madinah', { state: 'Saudi Arabia', region: 'Madinah Region', city: 'Madinah' }],
+    ['Abha', { state: 'Saudi Arabia', region: 'Asir Region', city: 'Abha' }],
+    ['Tabuk', { state: 'Saudi Arabia', region: 'Tabuk Region', city: 'Tabuk' }],
+    ['Buraydah', { state: 'Saudi Arabia', region: 'Qassim Region', city: 'Buraydah' }]
+]);
+
+function resolveProductAdSeedAddress(city) {
+    const mapped = PRODUCT_AD_SEED_CITY_ADDRESS_MAP.get(city);
+    if (mapped) {
+        return { ...mapped };
+    }
+    return { state: 'Saudi Arabia', region: '', city: city || 'Riyadh' };
+}
+
+function generateRandomClosingDetails() {
+    const useCustomDate = Math.random() < 0.3;
+    if (useCustomDate) {
+        const daysAhead = Math.floor(Math.random() * 30) + 3;
+        const futureDate = new Date();
+        futureDate.setDate(futureDate.getDate() + daysAhead);
+        futureDate.setHours(Math.floor(Math.random() * 12) + 10, 0, 0, 0);
+        return { mode: 'custom-date', value: futureDate.toISOString() };
+    }
+    const periods = [
+        '1 day', '2 days', '3 days', '5 days', '7 days',
+        '1 week', '2 weeks', '3 weeks',
+        '1 month', '2 months', '3 months',
+        '24 hours', '48 hours', '72 hours'
+    ];
+    const randomPeriod = periods[Math.floor(Math.random() * periods.length)];
+    return { mode: 'fixed-length', value: randomPeriod };
+}
+
+function generateRandomShippingOptions() {
+    const allOptions = ['seller-arranged', 'integrated-carrier', 'free-sa'];
+    const count = Math.floor(Math.random() * 3) + 1; // 1 to 3 options
+    const shuffled = [...allOptions].sort(() => Math.random() - 0.5);
+    return shuffled.slice(0, count);
+}
+
+function generateRandomPickupOption() {
+    const options = ['pickup-required', 'no-pickup', 'pickup-available'];
+    return options[Math.floor(Math.random() * options.length)];
+}
+
+function generateQuantityDetails(accountType) {
+    if (accountType === 'business') {
+        const isUnlimited = Math.random() < 0.5;
+        const almostSoldOut = Math.random() < 0.5;
+        if (isUnlimited) {
+            return { quantity: 0, quantityType: 'unlimited', almostSoldOut };
+        }
+        return { quantity: Math.floor(Math.random() * 100) + 5, quantityType: 'count', almostSoldOut };
+    }
+    return { quantity: 1, quantityType: 'unit' };
+}
+
+function buildProductAdRequestFromListing(ad) {
+    if (!ad || typeof ad !== 'object') {
+        return null;
+    }
+    const snapshot = resolveProductAdRequestAccountSnapshot(ad) || {
+        id: '',
+        name: ad.title || 'Marketplace Seller',
+        email: normalizeEmail(ad.account) || ad.account || 'seller@onruf.com',
+        phone: '',
+        type: resolveProductAdAccountType(ad) || 'business'
+    };
+    const linkedAdId = typeof ad.id === 'string' ? ad.id : '';
+    const estimatedPrice = Math.max(250, Math.round((Number.isFinite(ad.views) ? ad.views : 600) / 1.5));
+
+    // Use the ad's stored media if available, otherwise use placeholder
+    const adMedia = ad.media && typeof ad.media === 'object' ? ad.media : null;
+    const photos = adMedia && Array.isArray(adMedia.photos) && adMedia.photos.length
+        ? adMedia.photos
+        : [{ url: PRODUCT_AD_REQUEST_PLACEHOLDER_IMAGE, alt: ad.title || 'Product photo' }];
+    const videos = adMedia && Array.isArray(adMedia.videos) ? adMedia.videos : [];
+
+    const accountType = snapshot.type || 'business';
+    const quantityDetails = generateQuantityDetails(accountType);
+
+    const payload = {
+        id: linkedAdId ? `PAR-${linkedAdId.replace(/[^a-z0-9]/gi, '').toUpperCase()}` : undefined,
+        linkedAdId,
+        accountType: accountType,
+        accountId: snapshot.id,
+        accountName: snapshot.name,
+        accountEmail: snapshot.email,
+        accountPhone: snapshot.phone,
+        categoryPath: ad.category ? [ad.category] : ['Marketplace'],
+        categoryCode: ad.categoryCode || '',
+        submittedAt: ad.createdAt || new Date().toISOString(),
+        status: mapProductAdStatusToRequestStatus(ad.status),
+        media: {
+            photos,
+            videos
+        },
+        specifications: [],
+        adDetails: {
+            arabic: {
+                title: ad.titleAr || '',
+                subtitle: ad.subtitleAr || '',
+                description: ad.descriptionAr || ''
+            },
+            english: {
+                title: ad.title || 'Untitled listing',
+                subtitle: ad.subtitle || ad.category || 'Marketplace',
+                description: ad.description || ad.notes || 'Imported from Product Ads queue for moderation review.'
+            },
+            quantity: quantityDetails.quantity,
+            quantityType: quantityDetails.quantityType,
+            almostSoldOut: quantityDetails.almostSoldOut,
+            itemStatus: 'new',
+            address: resolveProductAdSeedAddress(ad.city || 'Riyadh')
+        },
+        salesDetails: {
+            types: Array.isArray(ad.saleTypes) ? ad.saleTypes : ['fixed'],
+            type: Array.isArray(ad.saleTypes) && ad.saleTypes.length ? ad.saleTypes[0] : 'fixed',
+            fixedPrice: estimatedPrice,
+            auction: {
+                startPrice: null,
+                minimumPrice: null,
+                closing: generateRandomClosingDetails()
+            },
+            negotiable: Array.isArray(ad.saleTypes) && ad.saleTypes.includes('negotiation'),
+            paymentOptions: ['bank-transfer', 'cash']
+        },
+        shipping: {
+            pickupOption: generateRandomPickupOption(),
+            shippingOptions: generateRandomShippingOptions()
+        },
+        packages: [
+            { name: 'Featured Boost', duration: '7 days', price: 75 },
+            { name: 'City Spotlight', duration: '3 days', price: 45 }
+        ],
+        notes: ad.notes || 'Listing synced from Product Ads queue for reviewer visibility.'
+    };
+    return normalizeProductAdRequestPayload(payload, Array.isArray(productAdRequests) ? productAdRequests.length : 0);
+}
+
+function syncProductAdRequestForListing(ad, { persist = false } = {}) {
+    if (!ad || typeof ad !== 'object' || !ad.id) {
+        return false;
+    }
+    if (!Array.isArray(productAdRequests)) {
+        productAdRequests = [];
+    }
+    const canonicalStatus = resolveCanonicalProductAdStatus(ad.status);
+    const mappedStatus = mapProductAdStatusToRequestStatus(ad.status);
+    const existing = productAdRequests.find(entry => entry && entry.linkedAdId === ad.id) || null;
+    let mutated = false;
+    if (!existing && canonicalStatus !== 'pending') {
+        return false;
+    }
+    if (!existing) {
+        const created = buildProductAdRequestFromListing(ad);
+        if (created) {
+            productAdRequests.push(created);
+            mutated = true;
+        }
+    } else {
+        if (existing.status !== mappedStatus) {
+            existing.status = mappedStatus;
+            mutated = true;
+        }
+        if (!existing.linkedAdId) {
+            existing.linkedAdId = ad.id;
+            mutated = true;
+        }
+        if (!existing.submittedAt && ad.createdAt) {
+            existing.submittedAt = ad.createdAt;
+            mutated = true;
+        }
+    }
+    if (mutated && persist) {
+        saveProductAdRequestsToStorage();
+    }
+    return mutated;
+}
+
+function syncProductAdRequestsWithListings({ persist = true, refreshBoard = false } = {}) {
+    if (!Array.isArray(productAds)) {
+        return false;
+    }
+    let mutated = false;
+    productAds.forEach(ad => {
+        if (syncProductAdRequestForListing(ad, { persist: false })) {
+            mutated = true;
+        }
+    });
+    if (mutated && persist) {
+        saveProductAdRequestsToStorage();
+    }
+    if (mutated && refreshBoard) {
+        renderProductAdRequestsBoard();
+    }
+    return mutated;
+}
+
+function cleanupOrphanedProductAdRequests({ persist = true, refreshBoard = false } = {}) {
+    if (!Array.isArray(productAdRequests) || !productAdRequests.length) {
+        return false;
+    }
+    const productAdIds = new Set(
+        (Array.isArray(productAds) ? productAds : [])
+            .filter(ad => ad && ad.id)
+            .map(ad => ad.id)
+    );
+    const originalLength = productAdRequests.length;
+    productAdRequests = productAdRequests.filter(request => {
+        if (!request || !request.linkedAdId) {
+            return false;
+        }
+        return productAdIds.has(request.linkedAdId);
+    });
+    const removed = originalLength - productAdRequests.length;
+    if (removed > 0) {
+        if (persist) {
+            saveProductAdRequestsToStorage();
+        }
+        if (refreshBoard) {
+            renderProductAdRequestsBoard();
+        }
+        return true;
+    }
+    return false;
+}
+
+function removeProductAdRequestByLinkedAdId(adId, { persist = true, refreshBoard = false } = {}) {
+    if (!adId || !Array.isArray(productAdRequests)) {
+        return false;
+    }
+    const index = productAdRequests.findIndex(entry => entry && entry.linkedAdId === adId);
+    if (index === -1) {
+        return false;
+    }
+    productAdRequests.splice(index, 1);
+    if (persist) {
+        saveProductAdRequestsToStorage();
+    }
+    if (refreshBoard) {
+        renderProductAdRequestsBoard();
+    }
+    return true;
 }
 
 function loadProductAdRequestsFromStorage() {
@@ -6711,22 +7342,14 @@ function getAllProductAdRequests() {
     return Array.isArray(productAdRequests) ? productAdRequests.slice() : [];
 }
 
-function updateProductAdRequestsCountLabel() {
-    const label = document.getElementById('productAdRequestsCountLabel');
-    if (!label) {
-        return;
-    }
-    const total = getPendingProductAdRequests().length;
-    label.textContent = `#${total} Request${total === 1 ? '' : 's'}`;
-}
-
 function ensureProductAdRequestsFiltersState() {
     const defaults = {
         search: '',
         period: 'today',
         previousPeriod: 'today',
         startDate: null,
-        endDate: null
+        endDate: null,
+        accountType: 'all'
     };
     if (!state.productAdRequestsFilters || typeof state.productAdRequestsFilters !== 'object') {
         state.productAdRequestsFilters = { ...defaults };
@@ -6742,17 +7365,33 @@ function resolveProductAdRequestSubmissionDate(request) {
     return request.submittedAt || null;
 }
 
+function sortProductAdRequestsBySubmittedAt(requests) {
+    const entries = Array.isArray(requests) ? requests.slice() : [];
+    return entries.sort((a, b) => {
+        const timeA = Date.parse(resolveProductAdRequestSubmissionDate(a) || '') || 0;
+        const timeB = Date.parse(resolveProductAdRequestSubmissionDate(b) || '') || 0;
+        return timeB - timeA;
+    });
+}
+
 function getPendingProductAdRequests() {
-    return getAllProductAdRequests()
-        .filter(request => {
-            const status = typeof request.status === 'string' ? request.status.trim().toLowerCase() : '';
-            return PRODUCT_AD_REQUEST_PENDING_STATUSES.has(status);
-        })
-        .sort((a, b) => {
-            const timeA = Date.parse(resolveProductAdRequestSubmissionDate(a) || '') || 0;
-            const timeB = Date.parse(resolveProductAdRequestSubmissionDate(b) || '') || 0;
-            return timeB - timeA;
-        });
+    const pendingProductAdIds = new Set(
+        (productAds || [])
+            .filter(ad => ad && resolveCanonicalProductAdStatus(ad.status) === 'pending' && ad.id)
+            .map(ad => ad.id)
+    );
+    const pendingEntries = getAllProductAdRequests().filter(request => {
+        const status = typeof request.status === 'string' ? request.status.trim().toLowerCase() : '';
+        if (!PRODUCT_AD_REQUEST_PENDING_STATUSES.has(status)) {
+            return false;
+        }
+        if (!pendingProductAdIds.size) {
+            return true;
+        }
+        const linkedId = typeof request.linkedAdId === 'string' ? request.linkedAdId.trim() : '';
+        return linkedId && pendingProductAdIds.has(linkedId);
+    });
+    return sortProductAdRequestsBySubmittedAt(pendingEntries);
 }
 
 function matchesProductAdRequestSearch(request, term) {
@@ -6916,19 +7555,17 @@ function updateProductAdRequestsPeriodChips() {
     });
 }
 
-function renderProductAdRequestsSummary(dataset, filtered, filters) {
+function renderProductAdRequestsSummary(pendingDataset, visibleDataset, filters) {
     const summary = document.getElementById('productAdRequestsSummary');
     if (!summary) {
         return;
     }
-    if (!dataset.length) {
-        summary.innerHTML = '<div class="empty-state">All product ad submissions are cleared.</div>';
-        return;
-    }
+    const pendingEntries = Array.isArray(pendingDataset) ? pendingDataset : [];
+    const visibleEntries = Array.isArray(visibleDataset) ? visibleDataset : [];
     const todayFilters = { period: 'today' };
-    const newTodayCount = filterProductAdRequestsByPeriod(dataset, todayFilters).length;
-    const changesRequested = dataset.filter(request => (request.status || '').toLowerCase() === 'changes-requested').length;
-    const accountMix = dataset.reduce((mix, request) => {
+    const newTodayCount = filterProductAdRequestsByPeriod(pendingEntries, todayFilters).length;
+    const accountMixSource = visibleEntries.length ? visibleEntries : pendingEntries;
+    const accountMix = accountMixSource.reduce((mix, request) => {
         const type = typeof request.accountType === 'string' ? request.accountType.trim().toLowerCase() : 'individual';
         if (type === 'business') {
             mix.business += 1;
@@ -6937,59 +7574,129 @@ function renderProductAdRequestsSummary(dataset, filtered, filters) {
         }
         return mix;
     }, { individual: 0, business: 0 });
-    const latestSubmission = dataset.reduce((latest, request) => {
+    const latestSource = visibleEntries.length ? visibleEntries : pendingEntries;
+    const latestSubmission = latestSource.reduce((latest, request) => {
         const iso = normalizeIsoTimestamp(resolveProductAdRequestSubmissionDate(request), null);
         const time = iso ? Date.parse(iso) : 0;
         return time > latest.time ? { time, iso } : latest;
     }, { time: 0, iso: null });
-    const helperChips = [];
-    if (newTodayCount) {
-        helperChips.push(`<span class="helper-chip helper-chip-info helper-chip-compact">+${escapeHtml(String(newTodayCount))} today</span>`);
-    }
-    if (changesRequested) {
-        helperChips.push(`<span class="helper-chip warning helper-chip-compact">${escapeHtml(String(changesRequested))} need edits</span>`);
-    }
     const summaryCards = [];
     summaryCards.push(`
         <div class="business-requests-summary-card">
             <span class="label">Pending queue</span>
-            <span class="value">#${dataset.length}</span>
-            ${helperChips.length ? `<span class="caption">${helperChips.join('')}</span>` : ''}
+            <span class="value">#${pendingEntries.length}</span>
+        </div>
+    `);
+    summaryCards.push(`
+        <div class="business-requests-summary-card">
+            <span class="label">New today</span>
+            <span class="value">#${newTodayCount}</span>
         </div>
     `);
     summaryCards.push(`
         <div class="business-requests-summary-card">
             <span class="label">Active filter</span>
-            <span class="value">#${filtered.length}</span>
-            <span class="caption">${escapeHtml(buildProductAdRequestPeriodLabel(filters))}</span>
+            <span class="value">#${visibleEntries.length}</span>
         </div>
     `);
     summaryCards.push(`
         <div class="business-requests-summary-card">
             <span class="label">Account mix</span>
             <span class="value">${escapeHtml(`${accountMix.individual} IND · ${accountMix.business} BUS`)}</span>
-            <span class="caption">Individuals vs Business</span>
         </div>
     `);
+    const oldestSubmission = latestSource.reduce((oldest, request) => {
+        const iso = normalizeIsoTimestamp(resolveProductAdRequestSubmissionDate(request), null);
+        const time = iso ? Date.parse(iso) : Number.POSITIVE_INFINITY;
+        return time < oldest.time ? { time, iso } : oldest;
+    }, { time: Number.POSITIVE_INFINITY, iso: null });
     const latestLabel = latestSubmission.iso
         ? (formatDateForDisplay(latestSubmission.iso, { includeTime: true }) || latestSubmission.iso)
         : '—';
-    const latestRelative = latestSubmission.iso ? formatRelativeTimeFromNow(latestSubmission.iso) : '';
     summaryCards.push(`
         <div class="business-requests-summary-card">
             <span class="label">Latest submission</span>
             <span class="value">${escapeHtml(latestLabel)}</span>
-            ${latestRelative ? `<span class="caption">${escapeHtml(latestRelative)}</span>` : ''}
+        </div>
+    `);
+    const oldestLabel = oldestSubmission.iso
+        ? (formatDateForDisplay(oldestSubmission.iso, { includeTime: true }) || oldestSubmission.iso)
+        : '—';
+    summaryCards.push(`
+        <div class="business-requests-summary-card">
+            <span class="label">Oldest pending</span>
+            <span class="value">${escapeHtml(oldestLabel)}</span>
         </div>
     `);
     summary.innerHTML = summaryCards.join('');
 }
 
-function renderProductAdRequestCard(request) {
+function resolveProductAdRequestAccountContext(request, options = {}) {
+    if (!request || typeof request !== 'object') {
+        return null;
+    }
+    const settings = {
+        accountLookup: null,
+        productAdsById: null,
+        ...options
+    };
+    const lookup = settings.accountLookup && typeof settings.accountLookup.get === 'function'
+        ? settings.accountLookup
+        : null;
+    const adsById = settings.productAdsById instanceof Map ? settings.productAdsById : null;
+    const account = request.account || {};
+    const linkedAdId = typeof request.linkedAdId === 'string' ? request.linkedAdId.trim() : '';
+
+    const findAdById = (identifier) => {
+        if (!identifier) {
+            return null;
+        }
+        if (adsById && adsById.has(identifier)) {
+            return adsById.get(identifier);
+        }
+        if (!Array.isArray(productAds)) {
+            return null;
+        }
+        return productAds.find(entry => entry && entry.id === identifier) || null;
+    };
+
+    const resolveContextFromAd = (ad) => (ad ? resolveProductAdAccountReference(ad, lookup) : null);
+
+    let context = resolveContextFromAd(findAdById(linkedAdId));
+    if (!context) {
+        const normalizedEmail = normalizeEmail(account.email);
+        if (normalizedEmail) {
+            context = resolveProductAdAccountReference({ account: normalizedEmail, accountType: request.accountType }, lookup);
+        }
+    }
+    if (!context) {
+        const fallbackId = typeof account.id === 'string' ? account.id.trim() : '';
+        if (fallbackId) {
+            context = {
+                id: fallbackId,
+                label: fallbackId,
+                type: request.accountType || 'individual',
+                typeLabel: PRODUCT_AD_REQUEST_ACCOUNT_LABELS.get(request.accountType) || formatKeyLabel(request.accountType || 'individual'),
+                email: account.email || '',
+                record: null
+            };
+        }
+    }
+    return context;
+}
+
+function renderProductAdRequestCard(request, options = {}) {
     if (!request) {
         return '';
     }
+    const settings = {
+        accountLookup: null,
+        productAdsById: null,
+        ...options
+    };
     const requestId = typeof request.id === 'string' ? request.id : '';
+    const linkedAdId = typeof request.linkedAdId === 'string' ? request.linkedAdId.trim() : '';
+    const productAdIdentifier = linkedAdId || requestId;
     const englishDetails = request.adDetails && request.adDetails.english ? request.adDetails.english : {};
     const arabicDetails = request.adDetails && request.adDetails.arabic ? request.adDetails.arabic : {};
     const address = request.adDetails && request.adDetails.address ? request.adDetails.address : {};
@@ -7001,9 +7708,14 @@ function renderProductAdRequestCard(request) {
     const submissionIso = normalizeIsoTimestamp(resolveProductAdRequestSubmissionDate(request), null);
     const submittedLabel = submissionIso ? (formatDateForDisplay(submissionIso, { includeTime: true }) || submissionIso) : '—';
     const relativeLabel = submissionIso ? formatRelativeTimeFromNow(submissionIso) : '';
-    const statusLabel = getProductAdRequestStatusLabel(request.status);
-    const statusClass = getProductAdRequestStatusClass(request.status);
-    const accountTypeLabel = PRODUCT_AD_REQUEST_ACCOUNT_LABELS.get(request.accountType)
+    const englishSubtitle = typeof englishDetails.subtitle === 'string' ? englishDetails.subtitle.trim() : '';
+    const englishDescription = typeof englishDetails.description === 'string' ? englishDetails.description.trim() : '';
+    const arabicTitle = typeof arabicDetails.title === 'string' ? arabicDetails.title.trim() : '';
+    const arabicSubtitle = typeof arabicDetails.subtitle === 'string' ? arabicDetails.subtitle.trim() : '';
+    const arabicDescription = typeof arabicDetails.description === 'string' ? arabicDetails.description.trim() : '';
+    const accountContext = resolveProductAdRequestAccountContext(request, settings) || null;
+    const accountTypeLabel = (accountContext && accountContext.typeLabel)
+        || PRODUCT_AD_REQUEST_ACCOUNT_LABELS.get(request.accountType)
         || formatKeyLabel(request.accountType || 'individual');
     const thumbnail = Array.isArray(request.media?.photos) && request.media.photos.length
         ? request.media.photos[0]
@@ -7011,43 +7723,46 @@ function renderProductAdRequestCard(request) {
     const thumbnailUrl = thumbnail && thumbnail.url ? thumbnail.url : PRODUCT_AD_REQUEST_PLACEHOLDER_IMAGE;
     const thumbnailAlt = thumbnail && thumbnail.alt
         ? thumbnail.alt
-        : (englishDetails.title || arabicDetails.title || requestId || 'Product photo');
+        : (englishDetails.title || arabicDetails.title || productAdIdentifier || 'Product photo');
+    const allPhotos = Array.isArray(request.media?.photos) ? request.media.photos : [];
+    const photoGridMarkup = allPhotos.length
+        ? `<div class="product-ad-media-grid">${allPhotos.map((photo, index) => {
+            const photoUrl = photo && photo.url ? photo.url : PRODUCT_AD_REQUEST_PLACEHOLDER_IMAGE;
+            const url = escapeAttribute(photoUrl);
+            const alt = escapeAttribute((photo && photo.alt) || `Product photo ${index + 1}`);
+            const badgeMarkup = index === 0 ? '<span class="product-ad-photo-card__badge">Main</span>' : '';
+            return `
+                <div class="product-ad-photo-card ${index === 0 ? 'primary' : ''}">
+                    <img src="${url}" alt="${alt}" loading="lazy">
+                    ${badgeMarkup}
+                </div>
+            `;
+        }).join('')}</div>`
+        : '<p class="helper-text">No product photos were provided.</p>';
     const videoLinks = Array.isArray(request.media?.videos) ? request.media.videos : [];
     const videoMarkup = videoLinks.length
-        ? `<div class="helper-text">${videoLinks.map((video, index) => {
-            if (!video) {
+        ? `<div class="product-ad-video-chips">${videoLinks.map((video, index) => {
+            const rawUrl = typeof video === 'string' ? video : video && video.url;
+            if (!rawUrl) {
                 return '';
             }
-            const url = typeof video === 'string' ? video : video.url;
-            if (!url) {
-                return '';
-            }
-            const label = (video.label || `Video ${index + 1}`).trim();
-            const safeUrl = escapeAttribute(formatExternalLink(url));
-            return `<a href="${safeUrl}" target="_blank" rel="noopener">${escapeHtml(label)}</a>`;
-        }).filter(Boolean).join(' • ')}</div>`
+            const safeHref = escapeAttribute(formatExternalLink(rawUrl));
+            return `<a href="${safeHref}" target="_blank" rel="noopener" class="product-ad-video-chip"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg><span>${escapeHtml(rawUrl)}</span><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" class="external-icon"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg></a>`;
+        }).filter(Boolean).join('')}</div>`
         : '';
-    const chips = [
-        `<span class="${escapeAttribute(statusClass)}">${escapeHtml(statusLabel)}</span>`,
-        `<span class="helper-chip helper-chip-info helper-chip-compact">${escapeHtml(accountTypeLabel)}</span>`
-    ];
-    if (salesDetails.negotiable) {
-        chips.push('<span class="helper-chip helper-chip-compact"><i class="fas fa-handshake"></i>Negotiable</span>');
-    }
-    if (Array.isArray(salesDetails.paymentOptions) && salesDetails.paymentOptions.length) {
-        chips.push(`<span class="helper-chip helper-chip-compact"><i class="fas fa-credit-card"></i>${escapeHtml(String(salesDetails.paymentOptions.length))} payment option${salesDetails.paymentOptions.length === 1 ? '' : 's'}</span>`);
-    }
-    const chipRow = `<div class="business-request-individual-chip-row">${chips.join('')}</div>`;
-    const categoryLabel = Array.isArray(request.categoryPath) && request.categoryPath.length
-        ? request.categoryPath.join(' › ')
+    const categorySegments = Array.isArray(request.categoryPath)
+        ? request.categoryPath.map(segment => (typeof segment === 'string' ? segment.trim() : '')).filter(Boolean)
+        : [];
+    const categoryBreadcrumb = categorySegments.length
+        ? categorySegments.map(segment => `<span>${escapeHtml(segment)}</span>`).join('<span class="breadcrumb-separator">›</span>')
         : 'Uncategorized';
     const quantityType = request.adDetails && request.adDetails.quantityType === 'unlimited'
         ? 'Unlimited inventory'
-        : `${request.adDetails && Number.isFinite(request.adDetails.quantity) ? request.adDetails.quantity : 1} unit${request.adDetails && request.adDetails.quantity === 1 ? '' : 's'}`;
+        : `${request.adDetails && Number.isFinite(request.adDetails.quantity) ? request.adDetails.quantity : 1}`;
     const paymentLabels = Array.isArray(salesDetails.paymentOptions)
         ? salesDetails.paymentOptions.map(option => {
             const label = PRODUCT_AD_REQUEST_PAYMENT_OPTION_LABELS.get(option) || formatKeyLabel(option);
-            return label ? `<span class="helper-chip helper-chip-compact">${escapeHtml(label)}</span>` : '';
+            return label || '';
         }).filter(Boolean)
         : [];
     const pickupLabel = shipping.pickupOption
@@ -7062,69 +7777,131 @@ function renderProductAdRequestCard(request) {
     const packageList = packages.length
         ? `<ul class="product-ad-request-packages">${packages.map(pkg => `<li><strong>${escapeHtml(pkg.name)}</strong> · ${escapeHtml(pkg.duration || 'Custom')} · ${pkg.price !== null && pkg.price !== undefined ? escapeHtml(formatCurrency(pkg.price || 0, 'SAR')) : 'TBD'}</li>`).join('')}</ul>`
         : '<p class="helper-text">No promotion packages selected.</p>';
+    const pickFirstString = (values = []) => {
+        for (const value of values) {
+            if (typeof value === 'string' && value.trim()) {
+                return value.trim();
+            }
+        }
+        return '';
+    };
+    const accountRecord = accountContext && accountContext.record ? accountContext.record : null;
+    const resolvedAccountName = account.name
+        || (accountRecord
+            ? pickFirstString(accountContext && accountContext.type === 'business'
+                ? [accountRecord.companyNameEnglish, accountRecord.companyName, accountRecord.tradeName, accountRecord.contactName]
+                : [accountRecord.fullName, [accountRecord.firstName, accountRecord.lastName].filter(Boolean).join(' ')]
+            )
+            : '');
+    const resolvedAccountEmail = account.email || (accountContext && accountContext.email) || '';
+    const resolvedAccountPhone = account.phone
+        || (accountRecord
+            ? pickFirstString([
+                accountRecord.phone,
+                accountRecord.contactPhone,
+                accountRecord.contactPhonePrimary,
+                accountRecord.contactPhoneSecondary,
+                accountRecord.primaryPhone,
+                accountRecord.secondaryPhone,
+                accountRecord.mobile,
+                accountRecord.companyPhone
+            ])
+            : '');
     const accountLines = [];
-    if (account.name) {
-        accountLines.push(escapeHtml(account.name));
-    }
-    if (account.email) {
-        accountLines.push(`<a href="mailto:${escapeAttribute(account.email)}">${escapeHtml(account.email)}</a>`);
-    }
-    if (account.phone) {
-        accountLines.push(`<a href="tel:${escapeAttribute(account.phone)}">${escapeHtml(account.phone)}</a>`);
+    const hasAccountChip = Boolean(accountContext && accountContext.id);
+    if (hasAccountChip) {
+        accountLines.push(escapeHtml(accountContext.id));
+    } else {
+        if (resolvedAccountName) {
+            accountLines.push(escapeHtml(resolvedAccountName));
+        }
+        if (resolvedAccountEmail) {
+            accountLines.push(`<a href="mailto:${escapeAttribute(resolvedAccountEmail)}">${escapeHtml(resolvedAccountEmail)}</a>`);
+        }
+        if (resolvedAccountPhone) {
+            accountLines.push(`<a href="tel:${escapeAttribute(resolvedAccountPhone)}">${escapeHtml(resolvedAccountPhone)}</a>`);
+        }
     }
     const locationParts = [address.city, address.region, address.state].filter(value => typeof value === 'string' && value.trim()).map(part => part.trim());
     const locationLabel = locationParts.length ? locationParts.join(', ') : 'Location pending';
+    
+    // Build full category path using the category lookup system
+    const resolvedCategory = findCategoryForProductAd(request, null);
+    const fullCategoryPath = resolvedCategory ? buildCategoryDisplayPath(resolvedCategory, categories) : '';
+    const categoryPathDisplay = fullCategoryPath || (categorySegments.length ? categorySegments.join(' › ') : '');
+    
+    // Resolve category code from request or resolved category
+    const categoryCode = (typeof request.categoryCode === 'string' && request.categoryCode.trim())
+        ? request.categoryCode.trim()
+        : (resolvedCategory && typeof resolvedCategory.categoryCode === 'string' && resolvedCategory.categoryCode.trim())
+            ? resolvedCategory.categoryCode.trim()
+            : '';
+    
+    const categoryDisplay = categoryPathDisplay
+        ? `${escapeHtml(categoryPathDisplay)}${categoryCode ? ` <span class="helper-text">(${escapeHtml(categoryCode)})</span>` : ''}`
+        : (categoryCode ? escapeHtml(categoryCode) : 'Uncategorized');
     const classList = ['business-request-card', 'product-ad-request-card'];
     if (state.activeProductAdRequestId && state.activeProductAdRequestId === requestId) {
         classList.push('selected');
     }
     const dataAttributes = [`data-product-request-id="${escapeAttribute(requestId)}"`, `data-product-request-status="${escapeAttribute((request.status || '').toLowerCase())}"`];
     return `
-        <article class="${classList.join(' ')}" ${dataAttributes.join(' ')} tabindex="0" aria-label="Product ad request ${escapeAttribute(requestId || englishDetails.title || 'Pending Request')}">
+        <article class="${classList.join(' ')}" ${dataAttributes.join(' ')} tabindex="0" aria-label="Product ad request ${escapeAttribute(requestId || arabicDetails.title || englishDetails.title || 'Pending Request')}">
             <header class="card-header">
                 <div class="product-ad-request-identity">
-                    <div class="product-ad-request-thumbnail"><img src="${escapeAttribute(thumbnailUrl)}" alt="${escapeAttribute(thumbnailAlt)}"></div>
                     <div class="product-ad-request-meta">
-                        <span class="company">${escapeHtml(englishDetails.title || 'Untitled listing')}</span>
-                        ${arabicDetails.title ? `<span class="context">${escapeHtml(arabicDetails.title)}</span>` : ''}
-                        ${chipRow}
+                        <span class="company">${escapeHtml(arabicTitle || englishDetails.title || 'Untitled listing')}</span>
+                        ${arabicSubtitle ? `<span class="context product-ad-request-subtitle">${escapeHtml(arabicSubtitle)}</span>` : ''}
+                        ${arabicDescription ? `<div class="context product-ad-request-description">${escapeHtml(arabicDescription)}</div>` : ''}
                     </div>
                 </div>
             </header>
             <div class="business-request-body">
                 <div class="business-request-section">
                     <dl class="info-grid">
-                        <div><dt>Submitted</dt><dd>${escapeHtml(submittedLabel)}${relativeLabel ? `<span class="caption caption-inline">${escapeHtml(relativeLabel)}</span>` : ''}</dd></div>
-                        <div><dt>Request ID</dt><dd>${requestId ? escapeHtml(requestId) : '—'}</dd></div>
+                        <div><dt>Created</dt><dd>${escapeHtml(submittedLabel)}</dd></div>
+                        <div><dt>ID</dt><dd>${productAdIdentifier ? escapeHtml(productAdIdentifier) : '—'}</dd></div>
+                        <div><dt>Product Title (EN)</dt><dd>${englishDetails.title ? escapeHtml(englishDetails.title) : '—'}</dd></div>
+                        <div><dt>Product Subtitle (EN)</dt><dd>${englishSubtitle ? escapeHtml(englishSubtitle) : '—'}</dd></div>
+                        <div><dt>Product Description (EN)</dt><dd>${englishDescription ? escapeHtml(englishDescription) : '—'}</dd></div>
                         <div><dt>Account</dt><dd>${accountLines.length ? accountLines.join('<br>') : '—'}</dd></div>
-                        <div><dt>Category</dt><dd>${escapeHtml(categoryLabel)}</dd></div>
+                        <div><dt>Category</dt><dd>${categoryDisplay}</dd></div>
+                        <div><dt>Item Condition</dt><dd>${request.adDetails && request.adDetails.itemCondition ? escapeHtml(formatKeyLabel(request.adDetails.itemCondition)) : '—'}</dd></div>
                         <div><dt>Quantity</dt><dd>${escapeHtml(quantityType)}</dd></div>
-                        <div><dt>Location</dt><dd>${escapeHtml(locationLabel)}</dd></div>
-                        <div><dt>Sales Type</dt><dd>${escapeHtml(PRODUCT_AD_REQUEST_SALES_TYPE_LABELS.get(salesDetails.type) || formatKeyLabel(salesDetails.type || 'fixed'))}</dd></div>
-                        <div><dt>Price</dt><dd>${salesDetails.fixedPrice !== null && salesDetails.fixedPrice !== undefined ? escapeHtml(formatCurrency(salesDetails.fixedPrice || 0, 'SAR')) : '—'}</dd></div>
-                        <div class="field-span-2"><dt>Payment Options</dt><dd>${paymentLabels.length ? `<div class="business-request-individual-chip-row">${paymentLabels.join('')}</div>` : '—'}</dd></div>
-                        <div class="field-span-2"><dt>Shipping</dt><dd>${pickupLabel || shippingLabels.length ? `<div class="business-request-individual-chip-row">${[pickupLabel, ...shippingLabels].filter(Boolean).map(label => `<span class="helper-chip helper-chip-compact">${escapeHtml(label)}</span>`).join('')}</div>` : '—'}</dd></div>
-                        <div class="field-span-2"><dt>Specifications</dt><dd>${specificationTags}</dd></div>
-                        <div class="field-span-2"><dt>Notes</dt><dd>${request.notes ? escapeHtml(request.notes) : '—'}</dd></div>
+                        ${request.accountType === 'business' ? `<div><dt>Almost Sold Out</dt><dd>${request.adDetails && request.adDetails.almostSoldOut === true ? 'Yes' : request.adDetails && request.adDetails.almostSoldOut === false ? 'No' : '—'}</dd></div>` : ''}
+                        <div><dt>Address</dt><dd>${locationLabel ? escapeHtml(locationLabel) : '—'}</dd></div>
+                        ${request.accountType === 'business' ? `<div><dt>Receive Questions About the Product?</dt><dd>${request.adDetails && request.adDetails.allowCustomerQuestions === true ? 'Yes' : request.adDetails && request.adDetails.allowCustomerQuestions === false ? 'No' : '—'}</dd></div>` : ''}
+                        <div><dt>Sale Types</dt><dd>${escapeHtml(PRODUCT_AD_REQUEST_SALES_TYPE_LABELS.get(salesDetails.type) || formatKeyLabel(salesDetails.type || 'fixed'))}</dd></div>
+                        <div><dt>Purchasing Price</dt><dd>${salesDetails.fixedPrice !== null && salesDetails.fixedPrice !== undefined ? escapeHtml(formatCurrency(salesDetails.fixedPrice || 0, 'SAR')) : '—'}</dd></div>
+                        <div><dt>Auction Start Price</dt><dd>${salesDetails.auction && salesDetails.auction.startPrice !== null && salesDetails.auction.startPrice !== undefined ? escapeHtml(formatCurrency(salesDetails.auction.startPrice || 0, 'SAR')) : '—'}</dd></div>
+                        <div><dt>Auction Minimum Price</dt><dd>${salesDetails.auction && salesDetails.auction.minimumPrice !== null && salesDetails.auction.minimumPrice !== undefined ? escapeHtml(formatCurrency(salesDetails.auction.minimumPrice || 0, 'SAR')) : '—'}</dd></div>
+                        <div><dt>Time to Close</dt><dd>${salesDetails.auction && salesDetails.auction.closing && salesDetails.auction.closing.mode ? escapeHtml(salesDetails.auction.closing.mode === 'custom-date' && salesDetails.auction.closing.value ? formatDateForDisplay(salesDetails.auction.closing.value, { includeTime: true }) : (salesDetails.auction.closing.value || PRODUCT_AD_REQUEST_CLOSING_MODE_LABELS.get(salesDetails.auction.closing.mode) || formatKeyLabel(salesDetails.auction.closing.mode))) : '—'}</dd></div>
+                        ${request.accountType === 'business' ? `<div><dt>Auto-send Offers After Auction?</dt><dd>${salesDetails.auction && salesDetails.auction.autoSendOffers === true ? 'Yes' : salesDetails.auction && salesDetails.auction.autoSendOffers === false ? 'No' : '—'}</dd></div>` : ''}
+                        ${request.accountType === 'business' ? `<div><dt>Negotiation Price</dt><dd>${salesDetails.negotiationPrice !== null && salesDetails.negotiationPrice !== undefined ? escapeHtml(formatCurrency(salesDetails.negotiationPrice || 0, 'SAR')) : '—'}</dd></div>` : ''}
+                        ${request.accountType === 'business' ? `<div><dt>Whom to Send the Offer</dt><dd>${salesDetails.offerRecipient ? escapeHtml(formatKeyLabel(salesDetails.offerRecipient)) : '—'}</dd></div>` : ''}
+                        ${request.accountType === 'business' ? `<div><dt>Send Account Info to Winner?</dt><dd>${salesDetails.sendAccountInfoToWinner === true ? 'Yes' : salesDetails.sendAccountInfoToWinner === false ? 'No' : '—'}</dd></div>` : ''}
+                        ${request.accountType !== 'business' ? `<div><dt>Payment Options</dt><dd>${paymentLabels.length ? escapeHtml(paymentLabels.join(', ')) : '—'}</dd></div>` : ''}
+                        <div><dt>Pick-up Option</dt><dd>${pickupLabel ? escapeHtml(pickupLabel) : '—'}</dd></div>
+                        <div><dt>Shipping Options</dt><dd>${shippingLabels.length ? escapeHtml(shippingLabels.join(', ')) : '—'}</dd></div>
                     </dl>
                 </div>
                 <div class="business-request-section">
-                    <h4>Media</h4>
-                    <div class="product-ad-request-media-block">
-                        <div class="product-ad-request-media-preview"><img src="${escapeAttribute(thumbnailUrl)}" alt="${escapeAttribute(thumbnailAlt)}"></div>
-                        ${videoMarkup}
-                    </div>
+                    <h4>Photos</h4>
+                    ${photoGridMarkup}
                 </div>
                 <div class="business-request-section">
-                    <h4>Packages</h4>
-                    ${packageList}
+                    <h4>Videos URLs</h4>
+                    ${videoMarkup || '<div class="product-ad-media-empty">No product videos were provided.</div>'}
+                </div>
+                <div class="business-request-section">
+                    <h4>Fees Details</h4>
+                    <button type="button" class="btn btn-secondary product-ad-fees-btn" data-product-request-action="view-fees" data-request-id="${escapeAttribute(request.id || '')}">
+                        <i class="fas fa-receipt"></i>
+                        <span>View Fees Details</span>
+                    </button>
                 </div>
             </div>
             <footer class="business-request-footer">
-                <button type="button" class="btn btn-outline btn-compact" data-product-request-action="request-changes">
-                    <i class="fas fa-pen-to-square"></i>
-                    <span>Request Changes</span>
-                </button>
                 <button type="button" class="btn btn-outline btn-reject" data-product-request-action="reject">
                     <i class="fas fa-circle-xmark"></i>
                     <span>Reject</span>
@@ -7140,11 +7917,22 @@ function renderProductAdRequestCard(request) {
 
 function renderProductAdRequestsBoard() {
     const filters = ensureProductAdRequestsFiltersState();
-    const dataset = getPendingProductAdRequests();
-    const filtered = filterProductAdRequestsByPeriod(dataset.filter(request => matchesProductAdRequestSearch(request, filters.search)), filters);
+    const pendingDataset = getPendingProductAdRequests();
+    const searchFiltered = pendingDataset.filter(request => matchesProductAdRequestSearch(request, filters.search));
+    const periodFiltered = filterProductAdRequestsByPeriod(searchFiltered, filters);
+    
+    const filtered = periodFiltered.filter(request => {
+        if (filters.accountType === 'all') return true;
+        return request.accountType === filters.accountType;
+    });
+
     const searchInput = document.getElementById('productAdRequestsSearchInput');
     if (searchInput && searchInput.value !== filters.search) {
         searchInput.value = filters.search;
+    }
+    const accountTypeFilter = document.getElementById('productAdRequestsAccountTypeFilter');
+    if (accountTypeFilter && accountTypeFilter.value !== filters.accountType) {
+        accountTypeFilter.value = filters.accountType;
     }
     const startInput = document.getElementById('productAdRequestsStartDate');
     if (startInput) {
@@ -7161,14 +7949,24 @@ function renderProductAdRequestsBoard() {
         }
     }
     updateProductAdRequestsPeriodChips();
-    updateProductAdRequestsCountLabel();
-    renderProductAdRequestsSummary(dataset, filtered, filters);
+    renderProductAdRequestsSummary(pendingDataset, filtered, filters);
     const grid = document.getElementById('productAdRequestsGrid');
     if (grid) {
         if (!filtered.length) {
-            grid.innerHTML = '<div class="empty-state">No product ad submissions match the selected filters.</div>';
+            grid.innerHTML = '<div class="empty-state">There is no Data Available</div>';
         } else {
-            grid.innerHTML = filtered.map(renderProductAdRequestCard).join('');
+            const accountLookup = buildProductAdAutomationAccountLookup();
+            const productAdsById = new Map();
+            if (Array.isArray(productAds)) {
+                productAds.forEach(ad => {
+                    if (ad && ad.id) {
+                        productAdsById.set(ad.id, ad);
+                    }
+                });
+            }
+            grid.innerHTML = filtered
+                .map(request => renderProductAdRequestCard(request, { accountLookup, productAdsById }))
+                .join('');
         }
     }
 }
@@ -7195,6 +7993,13 @@ function setProductAdRequestsPeriod(period) {
 function handleProductAdRequestsSearch(value) {
     const filters = ensureProductAdRequestsFiltersState();
     filters.search = typeof value === 'string' ? value.trim() : '';
+    state.productAdRequestsFilters = filters;
+    renderProductAdRequestsBoard();
+}
+
+function handleProductAdRequestsAccountTypeChange(value) {
+    const filters = ensureProductAdRequestsFiltersState();
+    filters.accountType = typeof value === 'string' ? value.trim() : 'all';
     state.productAdRequestsFilters = filters;
     renderProductAdRequestsBoard();
 }
@@ -7227,7 +8032,8 @@ function resetProductAdRequestsFilters() {
         period: 'today',
         previousPeriod: 'today',
         startDate: null,
-        endDate: null
+        endDate: null,
+        accountType: 'all'
     };
     renderProductAdRequestsBoard();
 }
@@ -7252,6 +8058,10 @@ function handleProductAdRequestsGridClick(event) {
     }
     state.activeProductAdRequestId = request.id;
     const action = button.dataset.productRequestAction;
+    if (action === 'view-fees') {
+        openProductAdRequestFeesOverlay(request);
+        return;
+    }
     if (action === 'approve' || action === 'reject' || action === 'request-changes') {
         openProductAdRequestDecisionOverlay({ requestId: request.id, action });
     }
@@ -7276,7 +8086,7 @@ function openProductAdRequestDecisionOverlay({ requestId, action }) {
         showNotification('warning', 'Decision overlay unavailable.');
         return;
     }
-    const englishTitle = request.adDetails?.english?.title || request.id || 'Product Request';
+    const arabicTitle = request.adDetails?.arabic?.title || request.adDetails?.english?.title || request.id || 'Product Request';
     const accountLabel = request.account?.name || request.account?.email || request.account?.id || '';
     const normalizedAction = action.trim().toLowerCase();
     const actionMeta = {
@@ -7285,8 +8095,9 @@ function openProductAdRequestDecisionOverlay({ requestId, action }) {
         'request-changes': { label: 'Request Changes', icon: 'fa-pen-to-square', helper: 'Change request note (required for clarity)' }
     };
     const meta = actionMeta[normalizedAction] || actionMeta.approve;
-    titleEl.textContent = englishTitle;
-    messageEl.textContent = accountLabel ? `Submitted by ${accountLabel}` : 'Review this submission carefully before completing the decision.';
+    titleEl.textContent = arabicTitle;
+    messageEl.textContent = '';
+    messageEl.style.display = 'none';
     const noteLabelEl = document.querySelector('label[for="productAdRequestDecisionNoteInput"]');
     if (noteLabelEl) {
         noteLabelEl.textContent = meta.helper;
@@ -7312,6 +8123,88 @@ function closeProductAdRequestDecisionOverlay() {
     }
     state.productAdRequestDecisionContext = null;
     state.activeProductAdRequestId = null;
+}
+
+function openProductAdRequestFeesOverlay(request) {
+    const overlay = document.getElementById('productAdRequestFeesOverlay');
+    const titleEl = document.getElementById('productAdRequestFeesTitle');
+    const content = document.getElementById('productAdRequestFeesContent');
+    if (!overlay || !titleEl || !content) {
+        showNotification('warning', 'Fees details overlay unavailable.');
+        return;
+    }
+
+    const requestTitle = request.adDetails?.arabic?.title || request.adDetails?.english?.title || request.id || 'Product Ad Request';
+    titleEl.textContent = requestTitle;
+
+    const formatCurrency = value => {
+        if (!Number.isFinite(value)) return '0.00 SAR';
+        try {
+            return value.toLocaleString('en-SA', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' SAR';
+        } catch (error) {
+            return value.toFixed(2) + ' SAR';
+        }
+    };
+
+    // Generate fees details from request data or use default seed values
+    const fees = request.fees || {};
+    const adPublishingFees = Number.isFinite(fees.adPublishingFees) ? fees.adPublishingFees : randomIntInclusive(10, 50);
+    const additionalPackagePrice = Number.isFinite(fees.additionalPackagePrice) ? fees.additionalPackagePrice : (Math.random() > 0.6 ? randomIntInclusive(20, 100) : 0);
+    const additionalImageFees = Number.isFinite(fees.additionalImageFees) ? fees.additionalImageFees : (Math.random() > 0.5 ? randomIntInclusive(5, 25) : 0);
+    const additionalVideoLinkFees = Number.isFinite(fees.additionalVideoLinkFees) ? fees.additionalVideoLinkFees : (Math.random() > 0.7 ? randomIntInclusive(10, 40) : 0);
+    const subtitleFees = Number.isFinite(fees.subtitleFees) ? fees.subtitleFees : (Math.random() > 0.6 ? randomIntInclusive(5, 15) : 0);
+    const fixedSalePriceOptionFees = Number.isFinite(fees.fixedSalePriceOptionFees) ? fees.fixedSalePriceOptionFees : (Math.random() > 0.4 ? randomIntInclusive(5, 20) : 0);
+    const negotiablePriceOptionFees = Number.isFinite(fees.negotiablePriceOptionFees) ? fees.negotiablePriceOptionFees : (Math.random() > 0.5 ? randomIntInclusive(5, 20) : 0);
+    const publicAuctionOptionFees = Number.isFinite(fees.publicAuctionOptionFees) ? fees.publicAuctionOptionFees : (Math.random() > 0.7 ? randomIntInclusive(15, 50) : 0);
+    const auctionClosingTimeOptionFees = Number.isFinite(fees.auctionClosingTimeOptionFees) ? fees.auctionClosingTimeOptionFees : (publicAuctionOptionFees > 0 && Math.random() > 0.5 ? randomIntInclusive(5, 15) : 0);
+    const couponDiscount = Number.isFinite(fees.couponDiscount) ? fees.couponDiscount : (Math.random() > 0.8 ? randomIntInclusive(5, 30) : 0);
+
+    const subtotal = adPublishingFees + additionalPackagePrice + additionalImageFees + additionalVideoLinkFees + subtitleFees + fixedSalePriceOptionFees + negotiablePriceOptionFees + publicAuctionOptionFees + auctionClosingTimeOptionFees - couponDiscount;
+    const taxRate = 0.15;
+    const tax = subtotal * taxRate;
+    const total = subtotal + tax;
+
+    const feesRows = [
+        { label: 'Ad Publishing Fees', value: adPublishingFees },
+        { label: 'Additional Package Price', value: additionalPackagePrice },
+        { label: 'Additional Image Fees', value: additionalImageFees },
+        { label: 'Additional Video Link Fees', value: additionalVideoLinkFees },
+        { label: 'Subtitle Fees', value: subtitleFees },
+        { label: 'Fixed Sale Price Option Fees', value: fixedSalePriceOptionFees },
+        { label: 'Negotiable Price Option Fees', value: negotiablePriceOptionFees },
+        { label: 'Public Auction Option Fees', value: publicAuctionOptionFees },
+        { label: 'Auction Closing Time Option (Set Your Own Date and Time)', value: auctionClosingTimeOptionFees },
+        { label: 'Coupon Discount', value: -couponDiscount, isDiscount: true },
+        { label: 'Subtotal', value: subtotal, isSummary: true },
+        { label: 'Tax (15%)', value: tax, isSummary: true },
+        { label: 'Total', value: total, isTotal: true }
+    ];
+
+    content.innerHTML = `
+        <div class="fees-details-table">
+            ${feesRows.map(row => {
+                const valueClass = row.isTotal ? 'fees-total' : (row.isSummary ? 'fees-summary' : (row.isDiscount ? 'fees-discount' : ''));
+                const displayValue = row.isDiscount && row.value < 0 ? `−${formatCurrency(Math.abs(row.value))}` : formatCurrency(row.value);
+                return `
+                    <div class="fees-row${row.isTotal ? ' fees-row-total' : ''}${row.isSummary ? ' fees-row-summary' : ''}${row.isDiscount ? ' fees-row-discount' : ''}">
+                        <span class="fees-label">${escapeHtml(row.label)}</span>
+                        <span class="fees-value ${valueClass}">${displayValue}</span>
+                    </div>
+                `;
+            }).join('')}
+        </div>
+    `;
+
+    state.productAdRequestFeesOverlayRequestId = request.id;
+    overlay.classList.remove('hidden');
+}
+
+function closeProductAdRequestFeesOverlay() {
+    const overlay = document.getElementById('productAdRequestFeesOverlay');
+    if (overlay) {
+        overlay.classList.add('hidden');
+    }
+    state.productAdRequestFeesOverlayRequestId = null;
 }
 
 function confirmProductAdRequestDecision() {
@@ -7372,11 +8265,48 @@ function applyProductAdRequestDecision(request, action, note) {
         request.notes = note;
     }
     saveProductAdRequestsToStorage();
+
+    // Update the linked product ad status
+    if (request.linkedAdId && Array.isArray(productAds)) {
+        const linkedAd = productAds.find(ad => ad && ad.id === request.linkedAdId);
+        if (linkedAd) {
+            const adStatusMap = {
+                approve: 'active',
+                reject: 'rejected',
+                'request-changes': 'pending'
+            };
+            const newAdStatus = adStatusMap[normalized];
+            if (newAdStatus && linkedAd.status !== newAdStatus) {
+                linkedAd.status = newAdStatus;
+                linkedAd.lastEditedAt = new Date().toISOString();
+                // Record approval/rejection timestamps and notes
+                if (normalized === 'approve') {
+                    linkedAd.approvedAt = new Date().toISOString();
+                    linkedAd.approvalNotes = note || '';
+                } else if (normalized === 'reject') {
+                    linkedAd.rejectedAt = new Date().toISOString();
+                    linkedAd.rejectionNotes = note || '';
+                }
+                appendProductAdHistory(linkedAd, normalized === 'approve' ? 'approved' : normalized === 'reject' ? 'rejected' : 'updated', note || `Status changed via request review.`);
+                saveProductAdsToStorage();
+            }
+        }
+    }
+
     renderProductAdRequestsBoard();
+
+    const adTitle = request.adDetails?.arabic?.title || request.adDetails?.english?.title || request.id || 'this request';
+    let successMessage = `${getProductAdRequestStatusLabel(nextStatus)} recorded for ${adTitle}.`;
+    if (nextStatus === 'approved') {
+        successMessage = `The Product Ad: ${adTitle} has been Approved`;
+    } else if (nextStatus === 'rejected') {
+        successMessage = `The Product Ad: ${adTitle} has been Rejected`;
+    }
+
     return {
         success: true,
         severity: nextStatus === 'approved' ? 'success' : nextStatus === 'rejected' ? 'danger' : 'info',
-        message: `${getProductAdRequestStatusLabel(nextStatus)} recorded for ${request.adDetails?.english?.title || request.id || 'this request'}.`
+        message: successMessage
     };
 }
 
@@ -13278,6 +14208,8 @@ function initializeApp() {
     ensureBusinessAccountsHaveDiscountCoupons();
     clearAutomationListsIfNoAccounts();
     syncBusinessAccountsToAutomationLists({ persist: true, refreshLists: false });
+    cleanupOrphanedProductAdRequests({ persist: true, refreshBoard: false });
+    syncProductAdRequestsWithListings({ persist: true });
 
     const storedBusinessPackages = loadBusinessPackagesFromStorage();
     if (storedBusinessPackages && storedBusinessPackages.length) {
@@ -14050,16 +14982,16 @@ function setupEventListeners() {
         productAdsSeedBtn.dataset.bound = 'true';
     }
 
-    const productAdsHistoryBtn = document.getElementById('productAdsHistoryBtn');
-    if (productAdsHistoryBtn && productAdsHistoryBtn.dataset.bound !== 'true') {
-        productAdsHistoryBtn.addEventListener('click', () => triggerProductAdsToolbarAction('history'));
-        productAdsHistoryBtn.dataset.bound = 'true';
+    const productAdsActivateBtn = document.getElementById('productAdsActivateBtn');
+    if (productAdsActivateBtn && productAdsActivateBtn.dataset.bound !== 'true') {
+        productAdsActivateBtn.addEventListener('click', () => triggerProductAdsToolbarAction('activate'));
+        productAdsActivateBtn.dataset.bound = 'true';
     }
 
-    const productAdsEditBtn = document.getElementById('productAdsEditBtn');
-    if (productAdsEditBtn && productAdsEditBtn.dataset.bound !== 'true') {
-        productAdsEditBtn.addEventListener('click', () => triggerProductAdsToolbarAction('edit'));
-        productAdsEditBtn.dataset.bound = 'true';
+    const productAdsDeactivateBtn = document.getElementById('productAdsDeactivateBtn');
+    if (productAdsDeactivateBtn && productAdsDeactivateBtn.dataset.bound !== 'true') {
+        productAdsDeactivateBtn.addEventListener('click', () => triggerProductAdsToolbarAction('deactivate'));
+        productAdsDeactivateBtn.dataset.bound = 'true';
     }
 
     const productAdsApproveBtn = document.getElementById('productAdsApproveBtn');
@@ -14068,24 +15000,21 @@ function setupEventListeners() {
         productAdsApproveBtn.dataset.bound = 'true';
     }
 
-    const productAdsRejectBtn = document.getElementById('productAdsRejectBtn');
-    if (productAdsRejectBtn && productAdsRejectBtn.dataset.bound !== 'true') {
-        productAdsRejectBtn.addEventListener('click', () => triggerProductAdsToolbarAction('reject'));
-        productAdsRejectBtn.dataset.bound = 'true';
+    const productAdDetailsBtn = document.getElementById('productAdDetailsBtn');
+    if (productAdDetailsBtn && productAdDetailsBtn.dataset.bound !== 'true') {
+        productAdDetailsBtn.addEventListener('click', handleProductAdDetailsButtonClick);
+        productAdDetailsBtn.dataset.bound = 'true';
     }
 
-    const productAdsSuspendBtn = document.getElementById('productAdsSuspendBtn');
-    if (productAdsSuspendBtn && productAdsSuspendBtn.dataset.bound !== 'true') {
-        productAdsSuspendBtn.addEventListener('click', () => {
-            const action = productAdsSuspendBtn.dataset.action || 'suspend';
-            triggerProductAdsToolbarAction(action);
-        });
-        productAdsSuspendBtn.dataset.bound = 'true';
+    const productAdMarketplaceBtn = document.getElementById('productAdMarketplaceBtn');
+    if (productAdMarketplaceBtn && productAdMarketplaceBtn.dataset.bound !== 'true') {
+        productAdMarketplaceBtn.addEventListener('click', handleProductAdMarketplaceButtonClick);
+        productAdMarketplaceBtn.dataset.bound = 'true';
     }
 
     const productAdsDeleteBtn = document.getElementById('productAdsDeleteBtn');
     if (productAdsDeleteBtn && productAdsDeleteBtn.dataset.bound !== 'true') {
-        productAdsDeleteBtn.addEventListener('click', () => triggerProductAdsToolbarAction('delete'));
+        productAdsDeleteBtn.addEventListener('click', handleProductAdsDeleteAllRequest);
         productAdsDeleteBtn.dataset.bound = 'true';
     }
 
@@ -14101,6 +15030,54 @@ function setupEventListeners() {
         productAdHistoryCloseBtn.dataset.bound = 'true';
     }
 
+    const productAdDetailsCloseBtn = document.getElementById('productAdDetailsCloseBtn');
+    if (productAdDetailsCloseBtn && productAdDetailsCloseBtn.dataset.bound !== 'true') {
+        productAdDetailsCloseBtn.addEventListener('click', closeProductAdDetailsOverlay);
+        productAdDetailsCloseBtn.dataset.bound = 'true';
+    }
+
+    const productAdMarketplaceCloseBtn = document.getElementById('productAdMarketplaceCloseBtn');
+    if (productAdMarketplaceCloseBtn && productAdMarketplaceCloseBtn.dataset.bound !== 'true') {
+        productAdMarketplaceCloseBtn.addEventListener('click', closeProductAdMarketplaceOverlay);
+        productAdMarketplaceCloseBtn.dataset.bound = 'true';
+    }
+
+    const productAdMarketplaceOverlay = document.getElementById('productAdMarketplaceOverlay');
+    if (productAdMarketplaceOverlay && productAdMarketplaceOverlay.dataset.bound !== 'true') {
+        productAdMarketplaceOverlay.addEventListener('click', event => {
+            if (event.target === productAdMarketplaceOverlay) {
+                closeProductAdMarketplaceOverlay();
+            }
+        });
+        productAdMarketplaceOverlay.dataset.bound = 'true';
+    }
+    if (productAdMarketplaceOverlay && productAdMarketplaceOverlay.dataset.escapeBound !== 'true') {
+        document.addEventListener('keydown', event => {
+            if (event.key === 'Escape' && !productAdMarketplaceOverlay.classList.contains('hidden')) {
+                closeProductAdMarketplaceOverlay();
+            }
+        });
+        productAdMarketplaceOverlay.dataset.escapeBound = 'true';
+    }
+
+    const productAdDetailsOverlay = document.getElementById('productAdDetailsOverlay');
+    if (productAdDetailsOverlay && productAdDetailsOverlay.dataset.bound !== 'true') {
+        productAdDetailsOverlay.addEventListener('click', event => {
+            if (event.target === productAdDetailsOverlay) {
+                closeProductAdDetailsOverlay();
+            }
+        });
+        productAdDetailsOverlay.dataset.bound = 'true';
+    }
+    if (productAdDetailsOverlay && productAdDetailsOverlay.dataset.escapeBound !== 'true') {
+        document.addEventListener('keydown', event => {
+            if (event.key === 'Escape' && !productAdDetailsOverlay.classList.contains('hidden')) {
+                closeProductAdDetailsOverlay();
+            }
+        });
+        productAdDetailsOverlay.dataset.escapeBound = 'true';
+    }
+
     const productAdDecisionCancelBtn = document.getElementById('productAdDecisionCancelBtn');
     if (productAdDecisionCancelBtn && productAdDecisionCancelBtn.dataset.bound !== 'true') {
         productAdDecisionCancelBtn.addEventListener('click', closeProductAdDecisionOverlay);
@@ -14111,6 +15088,24 @@ function setupEventListeners() {
     if (productAdDecisionConfirmBtn && productAdDecisionConfirmBtn.dataset.bound !== 'true') {
         productAdDecisionConfirmBtn.addEventListener('click', confirmProductAdDecision);
         productAdDecisionConfirmBtn.dataset.bound = 'true';
+    }
+
+    const productAdDecisionOverlay = document.getElementById('productAdDecisionOverlay');
+    if (productAdDecisionOverlay && productAdDecisionOverlay.dataset.bound !== 'true') {
+        productAdDecisionOverlay.addEventListener('click', event => {
+            if (event.target === productAdDecisionOverlay) {
+                closeProductAdDecisionOverlay();
+            }
+        });
+        productAdDecisionOverlay.dataset.bound = 'true';
+    }
+    if (productAdDecisionOverlay && productAdDecisionOverlay.dataset.escapeBound !== 'true') {
+        document.addEventListener('keydown', event => {
+            if (event.key === 'Escape' && !productAdDecisionOverlay.classList.contains('hidden')) {
+                closeProductAdDecisionOverlay();
+            }
+        });
+        productAdDecisionOverlay.dataset.escapeBound = 'true';
     }
 
     const productAdEditForm = document.getElementById('productAdEditForm');
@@ -14161,8 +15156,56 @@ function setupEventListeners() {
 
     const exportProductAdsBtn = document.getElementById('exportProductAdsBtn');
     if (exportProductAdsBtn && exportProductAdsBtn.dataset.bound !== 'true') {
-        exportProductAdsBtn.addEventListener('click', exportProductAds);
+        exportProductAdsBtn.addEventListener('click', openProductAdExportOverlay);
         exportProductAdsBtn.dataset.bound = 'true';
+    }
+
+    const productAdExportCancelBtn = document.getElementById('productAdExportCancelBtn');
+    if (productAdExportCancelBtn && productAdExportCancelBtn.dataset.bound !== 'true') {
+        productAdExportCancelBtn.addEventListener('click', closeProductAdExportOverlay);
+        productAdExportCancelBtn.dataset.bound = 'true';
+    }
+
+    const productAdExportConfirmBtn = document.getElementById('productAdExportConfirmBtn');
+    if (productAdExportConfirmBtn && productAdExportConfirmBtn.dataset.bound !== 'true') {
+        productAdExportConfirmBtn.addEventListener('click', handleProductAdExportConfirm);
+        productAdExportConfirmBtn.dataset.bound = 'true';
+    }
+
+    const productAdExportSelectAllBtn = document.getElementById('productAdExportSelectAllBtn');
+    if (productAdExportSelectAllBtn && productAdExportSelectAllBtn.dataset.bound !== 'true') {
+        productAdExportSelectAllBtn.addEventListener('click', handleProductAdExportSelectAll);
+        productAdExportSelectAllBtn.dataset.bound = 'true';
+    }
+
+    const productAdExportClearBtn = document.getElementById('productAdExportClearBtn');
+    if (productAdExportClearBtn && productAdExportClearBtn.dataset.bound !== 'true') {
+        productAdExportClearBtn.addEventListener('click', handleProductAdExportClearSelection);
+        productAdExportClearBtn.dataset.bound = 'true';
+    }
+
+    const productAdExportOverlay = document.getElementById('productAdExportOverlay');
+    if (productAdExportOverlay && productAdExportOverlay.dataset.bound !== 'true') {
+        productAdExportOverlay.addEventListener('click', event => {
+            if (event.target === productAdExportOverlay) {
+                closeProductAdExportOverlay();
+            }
+        });
+        productAdExportOverlay.dataset.bound = 'true';
+    }
+    if (productAdExportOverlay && productAdExportOverlay.dataset.escapeBound !== 'true') {
+        document.addEventListener('keydown', event => {
+            if (event.key === 'Escape' && !productAdExportOverlay.classList.contains('hidden')) {
+                closeProductAdExportOverlay();
+            }
+        });
+        productAdExportOverlay.dataset.escapeBound = 'true';
+    }
+
+    const productAdExportColumnsContainer = document.getElementById('productAdExportColumnsContainer');
+    if (productAdExportColumnsContainer && productAdExportColumnsContainer.dataset.bound !== 'true') {
+        productAdExportColumnsContainer.addEventListener('change', handleProductAdExportColumnChange);
+        productAdExportColumnsContainer.dataset.bound = 'true';
     }
     const automationTransferButtons = document.querySelectorAll('[data-transfer-source][data-transfer-target]');
     automationTransferButtons.forEach(button => {
@@ -14429,6 +15472,14 @@ function setupEventListeners() {
         productAdRequestsSearchInput.dataset.bound = 'true';
     }
 
+    const productAdRequestsAccountTypeFilter = document.getElementById('productAdRequestsAccountTypeFilter');
+    if (productAdRequestsAccountTypeFilter && productAdRequestsAccountTypeFilter.dataset.bound !== 'true') {
+        productAdRequestsAccountTypeFilter.addEventListener('change', () => {
+            handleProductAdRequestsAccountTypeChange(productAdRequestsAccountTypeFilter.value);
+        });
+        productAdRequestsAccountTypeFilter.dataset.bound = 'true';
+    }
+
     document.querySelectorAll('[data-product-request-period]').forEach(button => {
         if (!button || button.dataset.bound === 'true') {
             return;
@@ -14488,6 +15539,22 @@ function setupEventListeners() {
     if (productAdRequestDecisionConfirmBtn && productAdRequestDecisionConfirmBtn.dataset.bound !== 'true') {
         productAdRequestDecisionConfirmBtn.addEventListener('click', confirmProductAdRequestDecision);
         productAdRequestDecisionConfirmBtn.dataset.bound = 'true';
+    }
+
+    const productAdRequestFeesOverlay = document.getElementById('productAdRequestFeesOverlay');
+    if (productAdRequestFeesOverlay && productAdRequestFeesOverlay.dataset.bound !== 'true') {
+        productAdRequestFeesOverlay.addEventListener('click', event => {
+            if (event.target === productAdRequestFeesOverlay) {
+                closeProductAdRequestFeesOverlay();
+            }
+        });
+        productAdRequestFeesOverlay.dataset.bound = 'true';
+    }
+
+    const productAdRequestFeesCloseBtn = document.getElementById('productAdRequestFeesCloseBtn');
+    if (productAdRequestFeesCloseBtn && productAdRequestFeesCloseBtn.dataset.bound !== 'true') {
+        productAdRequestFeesCloseBtn.addEventListener('click', closeProductAdRequestFeesOverlay);
+        productAdRequestFeesCloseBtn.dataset.bound = 'true';
     }
 
     const businessAccountsSearchInput = document.getElementById('businessAccountsSearchInput');
@@ -30145,7 +31212,11 @@ const PRODUCT_AD_STATUS_LABELS = new Map([
     ['rejected', 'Rejected'],
     ['suspended', 'Suspended'],
     ['draft', 'Draft'],
-    ['expired', 'Expired']
+    ['expired', 'Expired'],
+    ['active', 'Active'],
+    ['inactive', 'Inactive'],
+    ['blocked', 'Blocked'],
+    ['deleted', 'Deleted']
 ]);
 
 const PRODUCT_AD_STATUS_CLASSES = new Map([
@@ -30154,16 +31225,51 @@ const PRODUCT_AD_STATUS_CLASSES = new Map([
     ['rejected', 'status-badge status-danger'],
     ['suspended', 'status-badge status-warning'],
     ['draft', 'status-badge status-pending'],
-    ['expired', 'status-badge status-inactive']
+    ['expired', 'status-badge status-inactive'],
+    ['active', 'status-badge status-active'],
+    ['inactive', 'status-badge status-inactive'],
+    ['blocked', 'status-badge status-danger'],
+    ['deleted', 'status-badge status-danger']
 ]);
+
+const PRODUCT_AD_STATUS_FILTER_VALUES = ['pending', 'active', 'inactive', 'rejected', 'blocked', 'deleted'];
+
+const PRODUCT_AD_STATUS_CANONICAL_MAP = new Map([
+    ['pending', 'pending'],
+    ['draft', 'pending'],
+    ['approved', 'active'],
+    ['active', 'active'],
+    ['suspended', 'inactive'],
+    ['inactive', 'inactive'],
+    ['expired', 'inactive'],
+    ['rejected', 'rejected'],
+    ['blocked', 'blocked'],
+    ['deleted', 'deleted']
+]);
+
+const PRODUCT_AD_APPROVAL_ELIGIBLE_STATUSES = new Set(['rejected', 'blocked']);
+
+function resolveCanonicalProductAdStatus(status) {
+    const normalized = typeof status === 'string' ? status.trim().toLowerCase() : '';
+    if (!normalized) {
+        return 'pending';
+    }
+    return PRODUCT_AD_STATUS_CANONICAL_MAP.get(normalized) || 'pending';
+}
 
 const PRODUCT_AD_SEED_CITY_POOL = ['Riyadh', 'Jeddah', 'Dammam', 'Khobar', 'Madinah', 'Abha', 'Tabuk', 'Buraydah'];
 const PRODUCT_AD_SEED_TEMPLATES = [
     {
         title: 'Smart Retail Activation Kit',
+        subtitle: 'Pop-up fixture and analytics bundle',
         category: 'Retail Tech',
+        categoryCode: '1.5.6.',
         status: 'pending',
         notes: 'Includes foldable fixtures, NFC beacons, and analytics tablets for launch events.',
+        description: 'Portable launch kit pairing fixtures, NFC beacons, and analytics tablets for brand activations.',
+        titleAr: 'مجموعة تفعيل التجزئة الذكية',
+        subtitleAr: 'حزمة العرض المنبثق والتحليلات',
+        descriptionAr: 'مجموعة إطلاق محمولة تجمع بين التجهيزات وأجهزة NFC وأجهزة التحليلات اللوحية لتفعيل العلامات التجارية.',
         cityOptions: ['Riyadh', 'Khobar'],
         historyContext: 'Merchant requested QA before the nationwide launch window.',
         viewsRange: [180, 2200],
@@ -30171,9 +31277,15 @@ const PRODUCT_AD_SEED_TEMPLATES = [
     },
     {
         title: 'Premium EV Shuttle Fleet',
+        subtitle: 'Concierge-grade electric shuttle program',
         category: 'Automotive',
+        categoryCode: '2.3.1.',
         status: 'approved',
         notes: 'Corporate mobility subscription with concierge-grade interior packages.',
+        description: 'Corporate mobility subscription featuring luxury interiors, concierge drivers, and tiered packages.',
+        titleAr: 'أسطول المكوكات الكهربائية الفاخرة',
+        subtitleAr: 'برنامج النقل الكهربائي بمستوى الكونسيرج',
+        descriptionAr: 'اشتراك تنقل للشركات يتميز بتصميمات داخلية فاخرة وسائقين محترفين وباقات متعددة المستويات.',
         cityOptions: ['Jeddah', 'Riyadh'],
         historyContext: 'Trusted publisher auto-posted the series via API.',
         viewsRange: [1200, 5400],
@@ -30182,9 +31294,15 @@ const PRODUCT_AD_SEED_TEMPLATES = [
     },
     {
         title: 'Artisan Dessert Subscription',
+        subtitle: 'Limited-batch dessert tasting box',
         category: 'Food & Beverage',
+        categoryCode: '3.2.4.',
         status: 'rejected',
         notes: 'Seasonal dessert box that needs refreshed labeling documentation.',
+        description: 'Seasonal dessert subscription delivering rotating patisserie selections that require updated allergen docs.',
+        titleAr: 'اشتراك الحلويات الحرفية',
+        subtitleAr: 'صندوق تذوق الحلويات بكميات محدودة',
+        descriptionAr: 'اشتراك حلويات موسمية يقدم تشكيلات متنوعة من المعجنات تتطلب وثائق محدثة للحساسية.',
         cityOptions: ['Madinah', 'Abha'],
         historyContext: 'Listing flagged for mismatched allergen certificates.',
         viewsRange: [90, 600],
@@ -30192,9 +31310,15 @@ const PRODUCT_AD_SEED_TEMPLATES = [
     },
     {
         title: 'Immersive VR Showroom Slots',
+        subtitle: 'Short-term VR activation rentals',
         category: 'Services',
+        categoryCode: '4.1.2.',
         status: 'suspended',
         notes: 'Short-term rentals for VR demo pods across regional malls.',
+        description: 'Turnkey VR showroom pods bookable by the week for malls and exhibitions with onsite support.',
+        titleAr: 'فترات صالة عرض الواقع الافتراضي',
+        subtitleAr: 'تأجير قصير المدى لتفعيل الواقع الافتراضي',
+        descriptionAr: 'كبائن عرض الواقع الافتراضي الجاهزة للحجز أسبوعياً للمولات والمعارض مع دعم في الموقع.',
         cityOptions: ['Riyadh', 'Jeddah', 'Dammam'],
         historyContext: 'Paused to verify each venue’s compliance paperwork.',
         viewsRange: [300, 1600],
@@ -30202,9 +31326,15 @@ const PRODUCT_AD_SEED_TEMPLATES = [
     },
     {
         title: 'Boutique Fitness Pop-Up Tour',
+        subtitle: 'Traveling reformer studio experience',
         category: 'Health & Wellness',
+        categoryCode: '5.4.3.',
         status: 'draft',
         notes: 'Portable reformer studio preparing for a traveling teaser series.',
+        description: 'Portable reformer studio that tours secondary cities with hosted micro-classes and merchandising.',
+        titleAr: 'جولة استوديو اللياقة المتنقل',
+        subtitleAr: 'تجربة استوديو الريفورمر المتنقلة',
+        descriptionAr: 'استوديو ريفورمر محمول يجوب المدن الثانوية مع دروس صغيرة ومنتجات ترويجية.',
         cityOptions: ['Tabuk', 'Riyadh', 'Buraydah'],
         historyContext: 'Marketing team is staging media before activation.',
         viewsRange: [120, 900],
@@ -30213,13 +31343,31 @@ const PRODUCT_AD_SEED_TEMPLATES = [
 ];
 
 function getProductAdStatusLabel(status) {
-    const normalized = typeof status === 'string' ? status.trim().toLowerCase() : '';
-    return PRODUCT_AD_STATUS_LABELS.get(normalized) || (normalized ? normalized.charAt(0).toUpperCase() + normalized.slice(1) : 'Pending Review');
+    const canonical = resolveCanonicalProductAdStatus(status);
+    return PRODUCT_AD_STATUS_LABELS.get(canonical) || canonical.charAt(0).toUpperCase() + canonical.slice(1);
 }
 
 function getProductAdStatusClass(status) {
-    const normalized = typeof status === 'string' ? status.trim().toLowerCase() : '';
-    return PRODUCT_AD_STATUS_CLASSES.get(normalized) || 'status-badge status-pending';
+    const canonical = resolveCanonicalProductAdStatus(status);
+    return PRODUCT_AD_STATUS_CLASSES.get(canonical) || 'status-badge status-pending';
+}
+
+const PRODUCT_AD_ACTIVATION_LOCK_STATUSES = new Set(['pending', 'blocked']);
+
+function isProductAdActivationLocked(ad) {
+    if (!ad) {
+        return false;
+    }
+    const canonicalStatus = resolveCanonicalProductAdStatus(ad.status);
+    return PRODUCT_AD_ACTIVATION_LOCK_STATUSES.has(canonicalStatus);
+}
+
+function getProductAdActivationLockMessage(ad) {
+    if (!ad || !isProductAdActivationLocked(ad)) {
+        return '';
+    }
+    const statusLabel = getProductAdStatusLabel(ad.status) || 'Pending Review';
+    return `${statusLabel} listings cannot be activated or deactivated.`;
 }
 
 function resolveProductAdModeratorLabel() {
@@ -30303,6 +31451,84 @@ function resolveProductAdAccountType(ad) {
     return 'business';
 }
 
+function resolveProductAdAccountReference(ad, lookup) {
+    if (!ad || typeof ad !== 'object') {
+        return null;
+    }
+
+    const normalizedEmail = normalizeEmail(ad.account);
+    if (!normalizedEmail) {
+        return null;
+    }
+
+    if (lookup && typeof lookup.get === 'function') {
+        const payload = lookup.get(normalizedEmail);
+        if (payload) {
+            const identifier = payload.id || '';
+            const fallbackLabel = payload.typeLabel || 'Linked Account';
+            return {
+                id: identifier,
+                label: identifier || fallbackLabel,
+                type: payload.type || 'unknown',
+                typeLabel: payload.typeLabel || fallbackLabel,
+                email: normalizedEmail,
+                record: payload.record || null
+            };
+        }
+    }
+
+    const matchEmail = value => normalizeEmail(value) === normalizedEmail;
+
+    const individualMatch = (individualAccounts || []).find(entry => entry && matchEmail(entry.email)) || null;
+    if (individualMatch) {
+        const identifier = individualMatch.id
+            || individualMatch.accountId
+            || individualMatch.individualId
+            || individualMatch.identifier
+            || '';
+        return {
+            id: identifier,
+            label: identifier || 'Individual Account',
+            type: 'individual',
+            typeLabel: 'Individual',
+            email: normalizedEmail,
+            record: individualMatch
+        };
+    }
+
+    const businessMatch = (businessAccounts || []).find(entry => {
+        if (!entry || typeof entry !== 'object') {
+            return false;
+        }
+        const candidateEmails = [
+            entry.email,
+            entry.contactEmail,
+            entry.contactEmailPrimary,
+            entry.contactEmailSecondary,
+            entry.application && entry.application.email
+        ];
+        return candidateEmails.some(matchEmail);
+    }) || null;
+
+    if (businessMatch) {
+        const identifier = businessMatch.id
+            || businessMatch.accountId
+            || businessMatch.businessId
+            || businessMatch.identifier
+            || '';
+        return {
+            id: identifier,
+            label: identifier || 'Business Account',
+            type: 'business',
+            typeLabel: 'Business',
+            email: normalizedEmail,
+            record: businessMatch
+        };
+    }
+
+    return null;
+}
+
 function resolveNextProductAdId() {
     const existing = Array.isArray(productAds) ? productAds : [];
     const highest = existing.reduce((max, entry) => {
@@ -30330,26 +31556,36 @@ function resolveSeedProductAdOwner() {
         return '';
     };
 
+    const registerCandidate = (type, account, labelCandidates = [], emailCandidates = []) => {
+        if (!isAccountActiveForProductAds(account)) {
+            return;
+        }
+        const email = readEmail(emailCandidates);
+        if (!email) {
+            return;
+        }
+        const label = labelCandidates.find(value => typeof value === 'string' && value.trim())
+            || email;
+        pool.push({ type, email, actorLabel: label, record: account });
+    };
+
     if (Array.isArray(businessAccounts)) {
         businessAccounts.forEach(account => {
             if (!account) {
                 return;
             }
-            const email = readEmail([
-                account.email,
-                account.contactEmail,
-                account.contactEmailPrimary,
-                account.contactEmailSecondary,
-                account.application && account.application.email
-            ]);
-            if (!email) {
-                return;
-            }
-            const label = account.companyNameEnglish
-                || account.companyName
-                || account.tradeName
-                || email;
-            pool.push({ type: 'business', email, actorLabel: label });
+            registerCandidate(
+                'business',
+                account,
+                [account.companyNameEnglish, account.companyName, account.tradeName, account.contactName],
+                [
+                    account.email,
+                    account.contactEmail,
+                    account.contactEmailPrimary,
+                    account.contactEmailSecondary,
+                    account.application && account.application.email
+                ]
+            );
         });
     }
 
@@ -30358,25 +31594,40 @@ function resolveSeedProductAdOwner() {
             if (!account) {
                 return;
             }
-            const email = readEmail([account.email, account.contactEmail]);
-            if (!email) {
-                return;
-            }
-            const label = account.fullName || account.firstName || email;
-            pool.push({ type: 'individual', email, actorLabel: label });
+            registerCandidate(
+                'individual',
+                account,
+                [account.fullName, account.firstName, account.lastName],
+                [account.email, account.contactEmail, account.loginEmail]
+            );
         });
     }
 
     const selected = pickRandomItem(pool);
-    if (selected) {
-        return selected;
+    return selected || null;
+}
+
+function pickRandomActiveCategory() {
+    if (!Array.isArray(categories) || !categories.length) {
+        return null;
     }
-    return { type: 'business', email: 'seed-merchant@onruf.com', actorLabel: 'Seed Merchant' };
+    const activeCategories = categories.filter(cat => {
+        if (!cat) return false;
+        const status = typeof cat.status === 'string' ? cat.status.trim().toLowerCase() : '';
+        return status === 'active' || status === 'published';
+    });
+    if (!activeCategories.length) {
+        return null;
+    }
+    return pickRandomItem(activeCategories);
 }
 
 function buildSeedProductAdPayload() {
     const template = pickRandomItem(PRODUCT_AD_SEED_TEMPLATES) || {};
     const owner = resolveSeedProductAdOwner();
+    if (!owner) {
+        return null;
+    }
     const now = new Date();
     const creationOffsetDays = randomIntInclusive(2, 14);
     const createdAt = new Date(now.getTime() - creationOffsetDays * 24 * 60 * 60 * 1000).toISOString();
@@ -30385,7 +31636,20 @@ function buildSeedProductAdPayload() {
         ? template.cityOptions
         : PRODUCT_AD_SEED_CITY_POOL;
     const city = pickRandomItem(cityPool) || 'Riyadh';
-    const status = template.status || 'pending';
+
+    // Pick a random active category from registered categories
+    const registeredCategory = pickRandomActiveCategory();
+    let status = template.status || 'pending';
+    const publishingRule = resolvePublishingRuleForSeedOwner(owner);
+    if (publishingRule) {
+        if (publishingRule.type === 'blacklist') {
+            status = 'blocked';
+        } else if (publishingRule.type === 'manualReview') {
+            status = 'pending';
+        } else if (publishingRule.type === 'trusted') {
+            status = 'active';
+        }
+    }
     const defaultViewsRange = [150, 4200];
     const viewsRange = Array.isArray(template.viewsRange) && template.viewsRange.length === 2
         ? template.viewsRange
@@ -30408,7 +31672,31 @@ function buildSeedProductAdPayload() {
         }
     ];
 
+    if (publishingRule) {
+        const publishingLabel = publishingRule.label
+            || PUBLISHING_LIST_LABELS[publishingRule.type]
+            || formatKeyLabel(publishingRule.type);
+        const automationHistoryActions = {
+            trusted: 'activated',
+            manualReview: 'manual-review',
+            blacklist: 'blocked'
+        };
+        const automationHistoryMessages = {
+            trusted: `Auto-activated because this account sits on the ${publishingLabel} list.`,
+            manualReview: `Routing to manual review based on the ${publishingLabel} list membership.`,
+            blacklist: `Blocked automatically because this account is on the ${publishingLabel} list.`
+        };
+        history.push({
+            id: `${id}-hist-automation-${publishingRule.type}`,
+            action: automationHistoryActions[publishingRule.type] || 'updated',
+            timestamp: now.toISOString(),
+            actor: resolveProductAdModeratorLabel(),
+            context: automationHistoryMessages[publishingRule.type] || 'Automation rule applied.'
+        });
+    }
+
     const statusActionMap = {
+        active: { action: 'activated', message: 'Seed listing auto-activated for trusted account.' },
         approved: { action: 'approved', message: 'Seed listing auto-approved for dashboard demo.' },
         rejected: { action: 'rejected', message: 'Seed listing rejected to illustrate escalation handling.' },
         suspended: { action: 'suspended', message: 'Seed listing suspended for compliance review.' }
@@ -30423,10 +31711,52 @@ function buildSeedProductAdPayload() {
         });
     }
 
+    // Generate deterministic media based on ad ID
+    const hashCode = (str) => {
+        let hash = 0;
+        for (let i = 0; i < str.length; i++) {
+            const char = str.charCodeAt(i);
+            hash = ((hash << 5) - hash) + char;
+            hash = hash & hash;
+        }
+        return Math.abs(hash);
+    };
+    const adHash = hashCode(id);
+    const photoCount = (adHash % 6) + 1;
+    const photoStartIndex = adHash % PRODUCT_AD_SEED_PHOTO_POOL.length;
+    const seedPhotos = [];
+    for (let i = 0; i < photoCount; i++) {
+        const photoIndex = (photoStartIndex + i) % PRODUCT_AD_SEED_PHOTO_POOL.length;
+        seedPhotos.push({
+            url: PRODUCT_AD_SEED_PHOTO_POOL[photoIndex],
+            alt: `${template.title || 'Product'} photo ${i + 1}`
+        });
+    }
+    const videoCount = (adHash >> 3) % 7;
+    const videoStartIndex = (adHash >> 5) % PRODUCT_AD_SEED_VIDEO_POOL.length;
+    const seedVideos = [];
+    for (let i = 0; i < videoCount; i++) {
+        const videoIndex = (videoStartIndex + i) % PRODUCT_AD_SEED_VIDEO_POOL.length;
+        const video = PRODUCT_AD_SEED_VIDEO_POOL[videoIndex];
+        seedVideos.push({ url: video.url, label: video.label });
+    }
+
+    // Generate random sale types (0 to 3)
+    const allSaleTypes = ['fixed', 'auction', 'negotiation'];
+    const saleTypeCount = adHash % 4; // 0, 1, 2, or 3
+    const shuffledSaleTypes = [...allSaleTypes].sort(() => ((adHash >> 2) % 2) - 0.5);
+    const saleTypes = shuffledSaleTypes.slice(0, saleTypeCount);
+
     const rawAd = {
         id,
         title: template.title || `Sample Listing ${randomIntInclusive(100, 999)}`,
-        category: template.category || 'General',
+        subtitle: template.subtitle || `${(registeredCategory ? registeredCategory.nameEnglish || registeredCategory.nameArabic : template.category) || 'Marketplace'} spotlight`,
+        description: template.description || template.notes || 'Seeded product ad for tooling validation.',
+        titleAr: template.titleAr || '',
+        subtitleAr: template.subtitleAr || '',
+        descriptionAr: template.descriptionAr || '',
+        category: registeredCategory ? (registeredCategory.nameEnglish || registeredCategory.nameArabic || 'General') : (template.category || 'General'),
+        categoryCode: registeredCategory ? (registeredCategory.categoryCode || registeredCategory.id || '') : (template.categoryCode || ''),
         city,
         account: owner.email || 'seed-merchant@onruf.com',
         status,
@@ -30435,7 +31765,12 @@ function buildSeedProductAdPayload() {
         lastEditedAt: now.toISOString(),
         flags,
         notes: template.notes || 'Seeded product ad for tooling validation.',
-        history
+        history,
+        saleTypes,
+        media: {
+            photos: seedPhotos,
+            videos: seedVideos
+        }
     };
 
     return normalizeProductAdPayload(rawAd, Array.isArray(productAds) ? productAds.length : 0);
@@ -30456,7 +31791,7 @@ function getFilteredProductAds() {
             return false;
         }
         if (byStatus !== 'all') {
-            const statusValue = typeof ad.status === 'string' ? ad.status.trim().toLowerCase() : '';
+            const statusValue = resolveCanonicalProductAdStatus(ad.status);
             if (statusValue !== byStatus) return false;
         }
         if (byCategory !== 'all') {
@@ -30499,10 +31834,8 @@ function renderProductAdsFilterOptions() {
 
     if (statusSelect) {
         const current = state.productAdsFilters.status || 'all';
-        const statuses = Array.from(new Set((productAds || []).map(ad => (ad.status || '').trim()).filter(Boolean)))
-            .map(status => status.toLowerCase())
-            .sort();
-    const options = ['<option value="all">All</option>']
+        const statuses = PRODUCT_AD_STATUS_FILTER_VALUES.slice();
+        const options = ['<option value="all">All</option>']
             .concat(statuses.map(status => `<option value="${escapeAttribute(status)}">${escapeHtml(getProductAdStatusLabel(status))}</option>`));
         statusSelect.innerHTML = options.join('');
         statusSelect.value = statuses.includes(current) ? current : 'all';
@@ -30545,11 +31878,102 @@ function renderProductAdsFilterOptions() {
     assignOptions(accountSelect, new Set(['Individual', 'Business']), 'All');
 }
 
+function buildProductAdRequestLookupByAdId() {
+    const map = new Map();
+    if (!Array.isArray(productAdRequests)) {
+        return map;
+    }
+    productAdRequests.forEach(request => {
+        if (!request || typeof request !== 'object') {
+            return;
+        }
+        const linkedId = typeof request.linkedAdId === 'string' ? request.linkedAdId.trim() : '';
+        if (linkedId) {
+            map.set(linkedId, request);
+        }
+    });
+    return map;
+}
+
+function findProductAdRequestByAdId(adId) {
+    if (!adId || !Array.isArray(productAdRequests)) {
+        return null;
+    }
+    return productAdRequests.find(entry => entry && entry.linkedAdId === adId) || null;
+}
+
+function resolveProductAdPrimaryPhoto(ad, requestLookup = null) {
+    const fallbackAlt = ad && typeof ad.title === 'string' && ad.title.trim() ? ad.title.trim() : 'Product photo';
+    const fallback = {
+        url: PRODUCT_AD_REQUEST_PLACEHOLDER_IMAGE,
+        alt: fallbackAlt
+    };
+    if (!ad || typeof ad !== 'object') {
+        return fallback;
+    }
+
+    const readPhotoEntry = (entry) => {
+        if (typeof entry === 'string' && entry.trim()) {
+            return { url: entry.trim(), alt: fallbackAlt };
+        }
+        if (entry && typeof entry === 'object') {
+            const url = typeof entry.url === 'string' && entry.url.trim() ? entry.url.trim() : '';
+            if (url) {
+                const alt = typeof entry.alt === 'string' && entry.alt.trim()
+                    ? entry.alt.trim()
+                    : (typeof entry.label === 'string' && entry.label.trim() ? entry.label.trim() : fallbackAlt);
+                return { url, alt };
+            }
+        }
+        return null;
+    };
+
+    const media = ad.media && typeof ad.media === 'object' ? ad.media : null;
+    if (media && Array.isArray(media.photos)) {
+        const mediaPhoto = media.photos.map(readPhotoEntry).find(Boolean);
+        if (mediaPhoto) {
+            return mediaPhoto;
+        }
+    }
+
+    const directCandidates = [
+        ad.photoUrl,
+        ad.photoURL,
+        ad.productPhotoUrl,
+        ad.productPhotoURL,
+        ad.thumbnailUrl,
+        ad.thumbnailURL,
+        ad.thumbnail,
+        ad.coverImage,
+        ad.imageUrl,
+        ad.imageURL
+    ];
+    const directPhoto = directCandidates.find(value => typeof value === 'string' && value.trim());
+    if (directPhoto) {
+        return { url: directPhoto.trim(), alt: fallbackAlt };
+    }
+
+    const lookup = requestLookup && typeof requestLookup.get === 'function' ? requestLookup : null;
+    if (lookup && ad.id) {
+        const linkedRequest = lookup.get(ad.id);
+        if (linkedRequest && linkedRequest.media && Array.isArray(linkedRequest.media.photos)) {
+            const requestPhoto = linkedRequest.media.photos.map(readPhotoEntry).find(Boolean);
+            if (requestPhoto) {
+                return requestPhoto;
+            }
+        }
+    }
+
+    return fallback;
+}
+
 function renderProductAdsTable(page = state.currentProductAdsPage) {
     const tbody = document.getElementById('productAdsTableBody');
     if (!tbody) return;
 
     renderProductAdsFilterOptions();
+    const requestLookup = buildProductAdRequestLookupByAdId();
+    const accountLookup = buildProductAdAutomationAccountLookup();
 
     const filtered = getFilteredProductAds();
     updateProductAdsCount(filtered.length);
@@ -30568,7 +31992,7 @@ function renderProductAdsTable(page = state.currentProductAdsPage) {
     const visible = filtered.slice(startIndex, startIndex + perPage);
 
     if (!visible.length) {
-        tbody.innerHTML = '<tr><td colspan="9">There is no data available</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8">There is no data available</td></tr>';
     } else {
         let index = startIndex + 1;
         tbody.innerHTML = visible.map(ad => {
@@ -30576,33 +32000,73 @@ function renderProductAdsTable(page = state.currentProductAdsPage) {
             const statusClass = getProductAdStatusClass(ad.status);
             const createdLabel = formatDateForDisplay(ad.createdAt, { includeTime: true }) || '—';
             const updatedLabel = formatDateForDisplay(ad.lastEditedAt, { includeTime: true }) || '—';
-            const viewCount = Number.isFinite(ad.views) ? ad.views.toLocaleString('en-US') : '0';
             const flags = ad.flags || {};
-            const flagLabels = [];
-            if (flags.autoPosting) {
-                flagLabels.push('<span class="helper-chip success">Auto-posting</span>');
-            }
-            if (flags.manualReview) {
-                flagLabels.push('<span class="helper-chip warning">Manual review</span>');
-            }
-            if (flags.blacklisted) {
-                flagLabels.push('<span class="helper-chip danger">Blacklisted</span>');
-            }
             const safeId = escapeAttribute(ad.id || '');
+            const photo = resolveProductAdPrimaryPhoto(ad, requestLookup);
+            const photoUrl = escapeAttribute(photo && photo.url ? photo.url : PRODUCT_AD_REQUEST_PLACEHOLDER_IMAGE);
+            const photoAlt = escapeAttribute(photo && photo.alt ? photo.alt : (ad.title || 'Product photo'));
+            const accountContext = resolveProductAdAccountReference(ad, accountLookup);
+            const accountTooltipParts = [];
+            if (accountContext && accountContext.typeLabel) {
+                accountTooltipParts.push(accountContext.typeLabel);
+            }
+            if (ad.account) {
+                accountTooltipParts.push(ad.account);
+            }
+            const accountTooltip = accountTooltipParts.length
+                ? accountTooltipParts.join(' · ')
+                : 'Account details unavailable';
+            const accountBadgeLabel = accountContext && (accountContext.label || accountContext.id)
+                ? (accountContext.label || accountContext.id)
+                : (ad.account || 'Unlinked Account');
+            const accountBadgeAttrs = [
+                'class="linked-business-trigger product-ad-account-chip"',
+                `title="${escapeAttribute(accountTooltip)}"`
+            ];
+            if (accountContext && accountContext.id) {
+                accountBadgeAttrs.push(`data-account-id="${escapeAttribute(accountContext.id)}"`);
+            }
+            if (accountContext && accountContext.type) {
+                accountBadgeAttrs.push(`data-account-type="${escapeAttribute(accountContext.type)}"`);
+            }
+            const accountBadge = `<span ${accountBadgeAttrs.join(' ')}><i class="fas fa-eye" aria-hidden="true"></i><span>${escapeHtml(accountBadgeLabel)}</span></span>`;
+            const productTitle = typeof ad.titleAr === 'string' && ad.titleAr.trim() ? ad.titleAr.trim() : (ad.title || 'Untitled Listing');
+            const productSubtitle = typeof ad.subtitleAr === 'string' && ad.subtitleAr.trim() ? ad.subtitleAr.trim() : '';
+            const productDescription = typeof ad.descriptionAr === 'string' && ad.descriptionAr.trim()
+                ? ad.descriptionAr.trim()
+                : (typeof ad.notes === 'string' && ad.notes.trim() ? ad.notes.trim() : '');
+            const subtitleLine = productSubtitle
+                ? `<div class="table-cell-subtitle">${escapeHtml(productSubtitle)}</div>`
+                : '';
+            const descriptionLine = productDescription
+                ? `<div class="table-cell-description">${escapeHtml(productDescription)}</div>`
+                : '';
+            const categoryValue = typeof ad.category === 'string' && ad.category.trim() ? ad.category.trim() : 'Uncategorized';
+            const categoryCodeValue = typeof ad.categoryCode === 'string' && ad.categoryCode.trim() ? ad.categoryCode.trim() : '';
+            const categoryCodeChip = categoryCodeValue ? `<span class="helper-chip helper-chip-compact" style="margin-left: 6px;">${escapeHtml(categoryCodeValue)}</span>` : '';
+            const categoryDisplayMarkup = categoryCodeValue
+                ? `<span class="table-cell-category">${escapeHtml(categoryValue)}</span>${categoryCodeChip}`
+                : `<span class="table-cell-category">${escapeHtml(categoryValue)}</span>`;
 
             return `
                 <tr data-ad-id="${safeId}">
                     <td>${index++}</td>
+                    <td><span class="table-cell-id">${escapeHtml(ad.id || '—')}</span></td>
                     <td>
-                        <div class="table-cell-title">${escapeHtml(ad.title || 'Untitled Listing')}</div>
-                        <div class="table-cell-meta">ID: ${escapeHtml(ad.id || '—')}</div>
-                        <div class="table-cell-meta">${flagLabels.join(' ')}</div>
+                        <div class="product-ad-product-cell">
+                            <div class="product-ad-photo">
+                                <img src="${photoUrl}" alt="${photoAlt}" loading="lazy" />
+                            </div>
+                            <div class="product-ad-details">
+                                <div class="table-cell-title">${escapeHtml(productTitle)}</div>
+                                ${subtitleLine}
+                                ${descriptionLine}
+                            </div>
+                        </div>
                     </td>
-                    <td>${escapeHtml(ad.category || '—')}</td>
-                    <td>${escapeHtml(ad.city || '—')}</td>
-                    <td>${escapeHtml(ad.account || '—')}</td>
+                    <td>${categoryDisplayMarkup}</td>
+                    <td>${accountBadge}</td>
                     <td><span class="${statusClass}">${escapeHtml(statusLabel)}</span></td>
-                    <td>${viewCount}</td>
                     <td>${escapeHtml(createdLabel)}</td>
                     <td>${escapeHtml(updatedLabel)}</td>
                 </tr>
@@ -30665,76 +32129,166 @@ function getSelectedProductAd() {
     return (productAds || []).find(ad => ad && ad.id === state.activeProductAdId) || null;
 }
 
-function setProductAdsSuspendButtonAppearance(button, action) {
-    if (!button) {
-        return;
+function resolveProductAdMarketplaceTarget(ad) {
+    if (!ad) {
+        return null;
     }
-    const icon = button.querySelector('i');
-    const labelSpan = button.querySelector('.action-label');
-    if (icon) {
-        icon.className = action === 'reinstate' ? 'fas fa-arrow-rotate-left' : 'fas fa-ban';
+
+    const reference = resolveProductAdAccountReference(ad);
+    if (!reference || !reference.record) {
+        return null;
     }
-    if (labelSpan) {
-        labelSpan.textContent = action === 'reinstate' ? 'Reinstate' : 'Suspend';
+
+    const pickIdentifier = (candidates = []) => {
+        for (const candidate of candidates) {
+            if (candidate === null || candidate === undefined) {
+                continue;
+            }
+            if (typeof candidate === 'string') {
+                const trimmed = candidate.trim();
+                if (trimmed) {
+                    return trimmed;
+                }
+            } else if (typeof candidate === 'number') {
+                return candidate;
+            }
+        }
+        return null;
+    };
+
+    if (reference.type === 'business') {
+        const record = reference.record;
+        const targetId = pickIdentifier([
+            record.id,
+            record.businessAccountId,
+            record.businessId,
+            record.accountId,
+            record.companyId,
+            record.registrationNumber,
+            reference.id
+        ]);
+        return targetId !== null ? { type: 'business', id: targetId, reference } : null;
     }
+
+    if (reference.type === 'individual') {
+        const record = reference.record;
+        const targetId = pickIdentifier([
+            record.id,
+            record.accountId,
+            record.individualId,
+            record.identifier,
+            reference.id
+        ]);
+        return targetId !== null ? { type: 'individual', id: targetId, reference } : null;
+    }
+
+    return null;
 }
 
 function updateProductAdsActionToolbarState() {
     const selectedAd = getSelectedProductAd();
     const hasSelection = Boolean(selectedAd);
-    const normalizedStatus = hasSelection && typeof selectedAd.status === 'string'
-        ? selectedAd.status.trim().toLowerCase()
-        : '';
+    const normalizedStatus = hasSelection ? resolveCanonicalProductAdStatus(selectedAd.status) : '';
+    const rawStatus = hasSelection && selectedAd.status ? selectedAd.status.trim().toLowerCase() : '';
+    const activationLocked = hasSelection && isProductAdActivationLocked(selectedAd);
+    const lockMessage = activationLocked ? getProductAdActivationLockMessage(selectedAd) : '';
+    const hasProductAds = Array.isArray(productAds) && productAds.length > 0;
 
-    const historyBtn = document.getElementById('productAdsHistoryBtn');
-    if (historyBtn) {
-        historyBtn.disabled = !hasSelection;
+    const activateBtn = document.getElementById('productAdsActivateBtn');
+    if (activateBtn) {
+        if (!Object.prototype.hasOwnProperty.call(activateBtn.dataset, 'defaultTitle')) {
+            activateBtn.dataset.defaultTitle = activateBtn.getAttribute('title') || '';
+        }
+        activateBtn.disabled = !hasSelection || normalizedStatus === 'active' || activationLocked;
+        if (activationLocked) {
+            activateBtn.title = lockMessage;
+        } else if (activateBtn.dataset.defaultTitle) {
+            activateBtn.title = activateBtn.dataset.defaultTitle;
+        } else {
+            activateBtn.removeAttribute('title');
+        }
     }
-    const editBtn = document.getElementById('productAdsEditBtn');
-    if (editBtn) {
-        editBtn.disabled = !hasSelection;
+    const deactivateBtn = document.getElementById('productAdsDeactivateBtn');
+    if (deactivateBtn) {
+        if (!Object.prototype.hasOwnProperty.call(deactivateBtn.dataset, 'defaultTitle')) {
+            deactivateBtn.dataset.defaultTitle = deactivateBtn.getAttribute('title') || '';
+        }
+        deactivateBtn.disabled = !hasSelection || normalizedStatus === 'inactive' || activationLocked;
+        if (activationLocked) {
+            deactivateBtn.title = lockMessage;
+        } else if (deactivateBtn.dataset.defaultTitle) {
+            deactivateBtn.title = deactivateBtn.dataset.defaultTitle;
+        } else {
+            deactivateBtn.removeAttribute('title');
+        }
+    }
+    const detailsBtn = document.getElementById('productAdDetailsBtn');
+    if (detailsBtn) {
+        detailsBtn.disabled = !hasSelection;
+    }
+    const marketplaceBtn = document.getElementById('productAdMarketplaceBtn');
+    if (marketplaceBtn) {
+        const marketplaceEligibleStatuses = new Set(['active', 'inactive', 'deleted']);
+        marketplaceBtn.disabled = !hasSelection || !marketplaceEligibleStatuses.has(normalizedStatus);
+    }
+    const approveBtn = document.getElementById('productAdsApproveBtn');
+    if (approveBtn) {
+        approveBtn.disabled = !hasSelection || !PRODUCT_AD_APPROVAL_ELIGIBLE_STATUSES.has(rawStatus);
     }
     const deleteBtn = document.getElementById('productAdsDeleteBtn');
     if (deleteBtn) {
-        deleteBtn.disabled = !hasSelection;
-    }
-
-    const approveBtn = document.getElementById('productAdsApproveBtn');
-    if (approveBtn) {
-        approveBtn.disabled = !hasSelection || normalizedStatus === 'approved';
-    }
-    const rejectBtn = document.getElementById('productAdsRejectBtn');
-    if (rejectBtn) {
-        rejectBtn.disabled = !hasSelection || normalizedStatus === 'rejected';
-    }
-
-    const suspendBtn = document.getElementById('productAdsSuspendBtn');
-    if (suspendBtn) {
-        if (!hasSelection) {
-            suspendBtn.disabled = true;
-            suspendBtn.dataset.action = 'suspend';
-            setProductAdsSuspendButtonAppearance(suspendBtn, 'suspend');
-        } else {
-            const reinstateStatuses = new Set(['suspended', 'rejected', 'expired']);
-            const nextAction = reinstateStatuses.has(normalizedStatus) ? 'reinstate' : 'suspend';
-            suspendBtn.disabled = false;
-            suspendBtn.dataset.action = nextAction;
-            setProductAdsSuspendButtonAppearance(suspendBtn, nextAction);
-        }
+        deleteBtn.disabled = !hasProductAds;
     }
 }
 
-function triggerProductAdsToolbarAction(action) {
+async function triggerProductAdsToolbarAction(action) {
     const selectedAd = getSelectedProductAd();
     if (!selectedAd || !selectedAd.id) {
         showNotification('warning', 'Select a product ad first.');
         return;
     }
 
-    if (action === 'history') {
-        openProductAdHistoryDrawer(selectedAd.id);
+    const rawStatus = selectedAd.status ? selectedAd.status.trim().toLowerCase() : '';
+    if (action === 'approve' && !PRODUCT_AD_APPROVAL_ELIGIBLE_STATUSES.has(rawStatus)) {
+        showNotification('info', 'Only pending submissions can be approved.');
         return;
     }
+
+    const isActivationAction = ['activate', 'deactivate'].includes(action);
+
+    if (isActivationAction && isProductAdActivationLocked(selectedAd)) {
+        const message = getProductAdActivationLockMessage(selectedAd) || 'Pending review or blocked listings cannot change activation state.';
+        showNotification('info', message);
+        return;
+    }
+
+    if (isActivationAction) {
+        const confirmMessage = action === 'activate'
+            ? 'Are You Sure You Want to Activate the Product Ad?'
+            : 'Are You Sure You Want to Deactivate the Product Ad?';
+        const confirmOverlayAvailable = Boolean(
+            document.getElementById('userConfirmOverlay')
+            && document.getElementById('userConfirmMessage')
+            && document.getElementById('userConfirmOk')
+            && document.getElementById('userConfirmCancel')
+        );
+        const confirmed = confirmOverlayAvailable
+            ? await showUserConfirm(confirmMessage, 'OK', 'Cancel')
+            : window.confirm(confirmMessage);
+        if (!confirmed) {
+            return;
+        }
+        const auditReason = action === 'activate'
+            ? 'Listing activated via toolbar confirmation.'
+            : 'Listing deactivated via toolbar confirmation.';
+        applyProductAdStatusChange(selectedAd, action, auditReason);
+        const successMessage = action === 'activate'
+            ? 'Product Ad Activated Successfully'
+            : 'Product Ad Deactivated Successfully';
+        showNotification('success', successMessage);
+        return;
+    }
+
     if (action === 'edit') {
         openProductAdEditOverlay(selectedAd.id);
         return;
@@ -30773,7 +32327,84 @@ function resetProductAdsFilters() {
     renderProductAdsTable(1);
 }
 
+function isAccountActiveForProductAds(account) {
+    if (!account || typeof account !== 'object') {
+        return false;
+    }
+    const status = typeof account.status === 'string' ? account.status.trim().toLowerCase() : '';
+    return status === 'active';
+}
+
+function hasProductAdSeedEntries(collection, predicate) {
+    if (!Array.isArray(collection) || !collection.length) {
+        return false;
+    }
+    if (typeof predicate === 'function') {
+        return collection.some(entry => predicate(entry));
+    }
+    return collection.some(entry => Boolean(entry));
+}
+
+function formatProductAdSeedList(items = []) {
+    const filtered = items
+        .map(item => (typeof item === 'string' ? item.trim() : ''))
+        .filter(Boolean);
+    if (!filtered.length) {
+        return '';
+    }
+    if (filtered.length === 1) {
+        return filtered[0];
+    }
+    if (filtered.length === 2) {
+        return `${filtered[0]} and ${filtered[1]}`;
+    }
+    const head = filtered.slice(0, -1).join(', ');
+    const tail = filtered[filtered.length - 1];
+    return `${head}, and ${tail}`;
+}
+
+function evaluateProductAdSeedPrerequisites() {
+    const prerequisites = [
+        {
+            key: 'individualAccounts',
+            label: 'Individual Accounts',
+            ready: hasProductAdSeedEntries(individualAccounts, isAccountActiveForProductAds)
+        },
+        {
+            key: 'businessAccounts',
+            label: 'Business Accounts',
+            ready: hasProductAdSeedEntries(businessAccounts, isAccountActiveForProductAds)
+        },
+        {
+            key: 'categories',
+            label: 'Categories',
+            ready: hasProductAdSeedEntries(categories)
+        },
+        {
+            key: 'specifications',
+            label: 'Specifications',
+            ready: hasProductAdSeedEntries(specifications)
+        }
+    ];
+
+    const missing = prerequisites.filter(entry => !entry.ready);
+    if (!missing.length) {
+        return { ready: true, message: '' };
+    }
+
+    const missingList = formatProductAdSeedList(missing.map(entry => entry.label));
+    return {
+        ready: false,
+        message: `Please Seed ${missingList} First`
+    };
+}
+
 function handleProductAdsSeedRequest() {
+    const seedStatus = evaluateProductAdSeedPrerequisites();
+    if (!seedStatus.ready) {
+        showNotification('warning', seedStatus.message);
+        return;
+    }
     if (!Array.isArray(productAds)) {
         productAds = [];
     }
@@ -30787,8 +32418,161 @@ function handleProductAdsSeedRequest() {
     state.activeProductAdId = seedAd.id;
     saveProductAdsToStorage();
     renderProductAdsTable(1);
-    openProductAdHistoryDrawer(seedAd.id);
-    showNotification('success', 'Sample product ad seeded.');
+    if (syncProductAdRequestForListing(seedAd, { persist: true })) {
+        renderProductAdRequestsBoard();
+    }
+    showNotification('success', 'Product Ad Successfully Seeded');
+}
+
+function handleProductAdDetailsButtonClick() {
+    const selectedAd = getSelectedProductAd();
+    if (!selectedAd || !selectedAd.id) {
+        showNotification('warning', 'Select a product ad first.');
+        return;
+    }
+    openProductAdDetailsOverlay(selectedAd.id);
+}
+
+function handleProductAdMarketplaceButtonClick() {
+    const selectedAd = getSelectedProductAd();
+    if (!selectedAd) {
+        showNotification('warning', 'Select a product ad first.');
+        return;
+    }
+
+    openProductAdMarketplaceOverlay(selectedAd.id);
+}
+
+function renderProductAdMarketplaceOverlay(ad) {
+    const overlay = document.getElementById('productAdMarketplaceOverlay');
+    const titleEl = document.getElementById('productAdMarketplaceTitle');
+    const subtitleEl = document.getElementById('productAdMarketplaceSubtitle');
+    const content = document.getElementById('productAdMarketplaceContent');
+    if (!overlay || !titleEl || !content) {
+        return;
+    }
+
+    const statusLabel = getProductAdStatusLabel(ad.status) || 'Pending Review';
+    const createdLabel = formatDateForDisplay(ad.createdAt, { includeTime: true }) || 'Not available';
+    const updatedLabel = formatDateForDisplay(ad.lastEditedAt, { includeTime: true }) || 'Not available';
+    const approvedLabel = ad.approvedAt ? formatDateForDisplay(ad.approvedAt, { includeTime: true }) : '—';
+    const rejectedLabel = ad.rejectedAt ? formatDateForDisplay(ad.rejectedAt, { includeTime: true }) : '—';
+    const deletedLabel = ad.deletedAt ? formatDateForDisplay(ad.deletedAt, { includeTime: true }) : '—';
+    const viewsValue = Number.isFinite(ad.views) ? ad.views : 0;
+    const historyEntries = Array.isArray(ad.history) ? ad.history.length : 0;
+
+    const formatNumber = value => {
+        if (!Number.isFinite(value)) return '0';
+        try {
+            return value.toLocaleString();
+        } catch (error) {
+            return String(value);
+        }
+    };
+
+    titleEl.textContent = ad.titleAr || ad.title || ad.id || 'Marketplace Activity';
+    if (subtitleEl) {
+        subtitleEl.textContent = '';
+        subtitleEl.style.display = 'none';
+    }
+
+    // Determine account type for sales status options
+    const accountType = resolveProductAdAccountType(ad);
+    const isBusinessAccount = accountType === 'business';
+    
+    // Determine sales status based on ad data or generate random
+    let salesStatus = ad.salesStatus;
+    if (!salesStatus) {
+        const salesStatusOptions = isBusinessAccount
+            ? ['For Sale', 'Almost Out', 'Sold', 'Unsold', 'Inactive', 'Archived']
+            : ['For Sale', 'Sold', 'Unsold', 'Archived'];
+        salesStatus = pickRandomItem(salesStatusOptions) || 'For Sale';
+    }
+
+    // Generate bidding and negotiation offers
+    const biddingOffers = Number.isFinite(ad.biddingOffers) ? ad.biddingOffers : randomIntInclusive(0, 25);
+    const negotiationOffers = Number.isFinite(ad.negotiationOffers) ? ad.negotiationOffers : randomIntInclusive(0, 15);
+
+    const stats = [
+        { label: 'Views', value: formatNumber(viewsValue) },
+        { label: 'Sales', value: salesStatus },
+        { label: 'Bidding Offers', value: formatNumber(biddingOffers) },
+        { label: 'Negotiation Offers', value: formatNumber(negotiationOffers) }
+    ];
+
+    content.innerHTML = `
+        <div class="marketplace-performance-grid">
+            ${stats.map(stat => `
+                <div class="stat-card">
+                    <p class="stat-label">${escapeHtml(stat.label)}</p>
+                    <p class="stat-value">${escapeHtml(String(stat.value || '—'))}</p>
+                    ${stat.helper ? `<p class="stat-helper">${escapeHtml(stat.helper)}</p>` : ''}
+                </div>
+            `).join('')}
+        </div>
+    `;
+}
+
+function openProductAdMarketplaceOverlay(adId) {
+    const overlay = document.getElementById('productAdMarketplaceOverlay');
+    if (!overlay) {
+        showNotification('warning', 'Marketplace activity overlay is unavailable.');
+        return;
+    }
+
+    const ad = (productAds || []).find(entry => entry && entry.id === adId);
+    if (!ad) {
+        showNotification('warning', 'Unable to locate the selected product ad.');
+        return;
+    }
+
+    renderProductAdMarketplaceOverlay(ad);
+
+    state.productAdMarketplaceOverlayAdId = ad.id;
+    state.productAdMarketplaceOverlayReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+
+    overlay.classList.remove('hidden');
+    overlay.setAttribute('aria-hidden', 'false');
+
+    const modal = overlay.querySelector('.role-detail-modal');
+    if (modal) {
+        if (!modal.hasAttribute('tabindex')) {
+            modal.setAttribute('tabindex', '-1');
+        }
+        const focusTarget = modal;
+        const focusFn = () => {
+            try {
+                focusTarget.focus({ preventScroll: true });
+            } catch (error) {
+                focusTarget.focus();
+            }
+        };
+        if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+            window.requestAnimationFrame(focusFn);
+        } else {
+            setTimeout(focusFn, 0);
+        }
+    }
+}
+
+function closeProductAdMarketplaceOverlay() {
+    const overlay = document.getElementById('productAdMarketplaceOverlay');
+    if (overlay) {
+        overlay.classList.add('hidden');
+        overlay.setAttribute('aria-hidden', 'true');
+    }
+
+    const focusTarget = state.productAdMarketplaceOverlayReturnFocus;
+    state.productAdMarketplaceOverlayAdId = null;
+    state.productAdMarketplaceOverlayReturnFocus = null;
+
+    if (focusTarget && typeof focusTarget.focus === 'function') {
+        try {
+            focusTarget.focus({ preventScroll: true });
+        } catch (error) {
+            focusTarget.focus();
+        }
+    }
 }
 
 function formatProductAdHistoryAction(action) {
@@ -30840,6 +32624,829 @@ function renderProductAdHistory(ad) {
     drawer.classList.remove('hidden');
 }
 
+function renderProductAdDetailsContent(ad, request) {
+    if (!request) {
+        return '<p class="empty-state">Detailed submission data is unavailable for this listing.</p>';
+    }
+    const hero = renderProductAdDetailsHero(ad, request);
+    const sections = [
+        renderProductAdDetailsMediaSection(request, { extraClass: 'is-wide' }),
+        renderProductAdDetailsSpecificationsSection(request, ad, { extraClass: 'is-wide' }),
+        renderProductAdDetailsAdSection(request, { extraClass: 'is-wide' }),
+        renderProductAdDetailsSalesSection(request, ad, { extraClass: 'is-wide' }),
+        renderProductAdDetailsShippingSection(request, { extraClass: 'is-wide' })
+    ].filter(Boolean).join('');
+    return `${hero}<div class="product-ad-details-sections">${sections}</div>`;
+}
+
+function resolveProductAdAccountDisplayName(request, ad) {
+    const readValue = value => (typeof value === 'string' && value.trim() ? value.trim() : '');
+    if (request) {
+        const direct = readValue(request.accountName);
+        if (direct) {
+            return direct;
+        }
+        if (request.account && typeof request.account === 'object') {
+            const nestedName = readValue(request.account.name);
+            if (nestedName) {
+                return nestedName;
+            }
+            const nestedEmail = readValue(request.account.email);
+            if (nestedEmail) {
+                return nestedEmail;
+            }
+        }
+        const email = readValue(request.accountEmail);
+        if (email) {
+            return email;
+        }
+    }
+    if (ad) {
+        const name = readValue(ad.accountName);
+        if (name) {
+            return name;
+        }
+        const account = readValue(ad.account);
+        if (account) {
+            return account;
+        }
+    }
+    return 'Unassigned Account';
+}
+
+function resolveProductAdDetailsLocationLabel(request, ad) {
+    const address = request && request.adDetails && request.adDetails.address ? request.adDetails.address : null;
+    const addressParts = address
+        ? [address.state, address.region, address.city].map(part => (typeof part === 'string' ? part.trim() : '')).filter(Boolean)
+        : [];
+    if (addressParts.length) {
+        return addressParts.join(', ');
+    }
+    if (ad && typeof ad.city === 'string' && ad.city.trim()) {
+        return ad.city.trim();
+    }
+    return '';
+}
+
+function resolveProductAdDetailsCategorySegments(request, ad) {
+    const segments = [];
+    const appendSegmentsFromValue = value => {
+        if (typeof value !== 'string') {
+            return;
+        }
+        const trimmed = value.trim();
+        if (!trimmed) {
+            return;
+        }
+        const [labelPart] = trimmed.split('·');
+        const normalizedLabel = (labelPart || trimmed).trim();
+        if (!normalizedLabel) {
+            return;
+        }
+        const parts = normalizedLabel
+            .split(/>|›/)
+            .map(part => part.trim())
+            .filter(Boolean);
+        if (parts.length) {
+            segments.push(...parts);
+        } else {
+            segments.push(normalizedLabel);
+        }
+    };
+
+    if (Array.isArray(request && request.categoryPath) && request.categoryPath.length) {
+        request.categoryPath.forEach(appendSegmentsFromValue);
+    } else if (ad && typeof ad.category === 'string') {
+        appendSegmentsFromValue(ad.category);
+    }
+
+    return segments;
+}
+
+function resolveProductAdDetailsCategoryPath(request, ad) {
+    // First try to resolve using category code from the registered categories
+    const categoryCode = (ad && typeof ad.categoryCode === 'string' && ad.categoryCode.trim())
+        ? ad.categoryCode.trim()
+        : (request && typeof request.categoryCode === 'string' && request.categoryCode.trim())
+            ? request.categoryCode.trim()
+            : '';
+    
+    if (categoryCode) {
+        const category = resolveCategoryByIdentifier(categoryCode);
+        if (category) {
+            const fullPath = buildCategoryDisplayPath(category, categories);
+            if (fullPath && fullPath.trim()) {
+                return fullPath.trim();
+            }
+        }
+    }
+
+    // Fallback to segments from request.categoryPath
+    const segments = resolveProductAdDetailsCategorySegments(request, ad);
+    if (segments.length) {
+        return segments.join(' › ');
+    }
+    if (ad && typeof ad.category === 'string' && ad.category.trim()) {
+        return ad.category.trim();
+    }
+    return 'Uncategorized';
+}
+
+function resolveProductAdDetailsCategoryDisplay(request, ad) {
+    const pathLabel = resolveProductAdDetailsCategoryPath(request, ad);
+    const codeLabel = resolveProductAdDetailsCategoryCode(request, ad);
+    if (!codeLabel) {
+        return pathLabel;
+    }
+    if (pathLabel && pathLabel.toLowerCase().includes(codeLabel.trim().toLowerCase())) {
+        return pathLabel;
+    }
+    if (pathLabel && pathLabel !== 'Uncategorized') {
+        return `${pathLabel} · ${codeLabel}`;
+    }
+    return codeLabel;
+}
+
+function resolveProductAdDetailsCategoryCode(request, ad) {
+    const ensureCategoriesReady = () => {
+        if (!(categoryLookupById instanceof Map) || !categoryLookupById.size
+            || !(categoryLookupByCode instanceof Map) || !categoryLookupByCode.size) {
+            rebuildCategoryCaches();
+        }
+    };
+    ensureCategoriesReady();
+    const prioritize = [];
+    const pushCodeCandidate = value => {
+        if (typeof value === 'string') {
+            const trimmed = value.trim();
+            if (trimmed && !prioritize.includes(trimmed)) {
+                prioritize.push(trimmed);
+            }
+        }
+    };
+    if (request && typeof request.categoryCode === 'string') {
+        pushCodeCandidate(request.categoryCode);
+    }
+    if (ad && typeof ad.categoryCode === 'string') {
+        pushCodeCandidate(ad.categoryCode);
+    }
+    if (Array.isArray(request && request.categoryCodes)) {
+        request.categoryCodes.forEach(pushCodeCandidate);
+    }
+    for (const candidate of prioritize) {
+        const normalized = normalizeCategoryCodeCandidate(candidate);
+        if (normalized && categoryLookupByCode instanceof Map && categoryLookupByCode.has(normalized)) {
+            const category = categoryLookupByCode.get(normalized);
+            if (category && category.categoryCode) {
+                return category.categoryCode;
+            }
+        }
+        if (candidate) {
+            return ensureCategoryCodeTrailingDot(candidate);
+        }
+    }
+
+    const segments = resolveProductAdDetailsCategorySegments(request, ad);
+    if (segments.length && Array.isArray(categories) && categories.length) {
+        const normalizeToken = value => (typeof value === 'string' ? value.trim().toLowerCase() : '');
+        const collectTokens = category => {
+            const tokens = new Set();
+            if (!category || typeof category !== 'object') {
+                return tokens;
+            }
+            const pushToken = token => {
+                const normalized = normalizeToken(token);
+                if (normalized) {
+                    tokens.add(normalized);
+                }
+            };
+            pushToken(category.nameEnglish);
+            pushToken(category.nameArabic);
+            pushToken(category.id);
+            pushToken(category.categoryCode);
+            if (typeof category.categoryCode === 'string' && category.categoryCode.trim().endsWith('.')) {
+                pushToken(category.categoryCode.trim().slice(0, -1));
+            }
+            return tokens;
+        };
+        const normalizedSegments = segments.map(segment => normalizeToken(segment)).filter(Boolean);
+        if (normalizedSegments.length) {
+            const leafToken = normalizedSegments[normalizedSegments.length - 1];
+            const candidates = categories.filter(category => collectTokens(category).has(leafToken));
+            if (candidates.length) {
+                const matchesHierarchy = candidate => {
+                    if (!candidate) {
+                        return false;
+                    }
+                    let current = candidate;
+                    for (let index = normalizedSegments.length - 1; index >= 0; index -= 1) {
+                        const tokens = collectTokens(current);
+                        if (!tokens.has(normalizedSegments[index])) {
+                            return false;
+                        }
+                        if (index === 0) {
+                            return true;
+                        }
+                        const parentId = getCategoryParentId(current);
+                        if (!parentId || parentId === CATEGORY_TREE_ROOT_ID) {
+                            return false;
+                        }
+                        current = categoryLookupById instanceof Map ? categoryLookupById.get(parentId) : null;
+                        if (!current) {
+                            return false;
+                        }
+                    }
+                    return false;
+                };
+                const matchedCategory = candidates.find(matchesHierarchy) || candidates[0];
+                if (matchedCategory && typeof matchedCategory.categoryCode === 'string') {
+                    return matchedCategory.categoryCode;
+                }
+            }
+        }
+    }
+
+    const labelCandidates = collectProductAdCategoryLabels(request, ad);
+    const matchCategoryByLabel = label => {
+        if (!label) {
+            return null;
+        }
+        const normalized = label.trim().toLowerCase();
+        if (!normalized) {
+            return null;
+        }
+        const matchesEntry = entry => {
+            if (!entry || typeof entry !== 'object') {
+                return false;
+            }
+            const labelPool = [
+                entry.nameEnglish,
+                entry.nameArabic,
+                entry.label,
+                entry.categoryLabel,
+                entry.displayName,
+                entry.slug
+            ];
+            return labelPool.some(value => typeof value === 'string' && value.trim().toLowerCase() === normalized);
+        };
+        if (categoryLookupById instanceof Map && categoryLookupById.size) {
+            for (const entry of categoryLookupById.values()) {
+                if (matchesEntry(entry)) {
+                    return entry;
+                }
+            }
+        }
+        if (Array.isArray(categories)) {
+            return categories.find(matchesEntry) || null;
+        }
+        return null;
+    };
+
+    for (const label of labelCandidates) {
+        const category = matchCategoryByLabel(label);
+        if (category && category.categoryCode) {
+            return category.categoryCode;
+        }
+    }
+    return '';
+}
+
+function collectProductAdCategoryLabels(request, ad) {
+    const labels = [];
+    const seen = new Set();
+    const pushLabel = value => {
+        if (typeof value !== 'string') {
+            return;
+        }
+        const trimmed = value.trim();
+        if (!trimmed || seen.has(trimmed.toLowerCase())) {
+            return;
+        }
+        seen.add(trimmed.toLowerCase());
+        labels.push(trimmed);
+    };
+
+    const processPath = path => {
+        if (!path) return;
+        if (Array.isArray(path)) {
+            path.forEach(segment => pushLabel(segment));
+            return;
+        }
+        if (typeof path === 'string') {
+            pushLabel(path);
+            path.split(/[›>]/).forEach(segment => pushLabel(segment));
+        }
+    };
+
+    if (request) {
+        processPath(request.categoryPath);
+        pushLabel(request.category);
+        pushLabel(request.categoryLabel);
+    }
+    if (ad) {
+        pushLabel(ad.category);
+        pushLabel(ad.categoryLabel);
+    }
+    return labels;
+}
+
+function renderProductAdDetailsHero(ad, request) {
+    const lookup = request && ad && ad.id ? new Map([[ad.id, request]]) : null;
+    const heroPhoto = resolveProductAdPrimaryPhoto(ad, lookup);
+    const accountType = request && request.accountType ? request.accountType : resolveProductAdAccountType(ad) || 'individual';
+    const accountLabel = PRODUCT_AD_REQUEST_ACCOUNT_LABELS.get(accountType) || formatKeyLabel(accountType);
+    const accountName = resolveProductAdAccountDisplayName(request, ad);
+    const statusLabel = getProductAdStatusLabel(ad.status);
+    const statusClass = getProductAdStatusClass(ad.status);
+    const categoryLabel = resolveProductAdDetailsCategoryDisplay(request, ad);
+    const categoryCode = resolveProductAdDetailsCategoryCode(request, ad);
+    const categoryPath = resolveProductAdDetailsCategoryPath(request, ad);
+    const locationLabel = resolveProductAdDetailsLocationLabel(request, ad);
+    const submittedLabel = request && request.submittedAt
+        ? formatDateForDisplay(request.submittedAt, { includeTime: true })
+        : formatDateForDisplay(ad.createdAt, { includeTime: true });
+    const updatedLabel = formatDateForDisplay(ad.lastEditedAt || ad.updatedAt || ad.createdAt, { includeTime: true }) || '—';
+    const saleTypesArray = request && request.salesDetails && Array.isArray(request.salesDetails.types) 
+        ? request.salesDetails.types 
+        : (Array.isArray(ad.saleTypes) ? ad.saleTypes : []);
+    const salesTypeLabel = saleTypesArray.length 
+        ? saleTypesArray.map(t => PRODUCT_AD_REQUEST_SALES_TYPE_LABELS.get(t) || formatKeyLabel(t)).join(', ')
+        : '—';
+    const description = (request && request.adDetails && (
+        (request.adDetails.english && request.adDetails.english.subtitle)
+        || (request.adDetails.arabic && request.adDetails.arabic.subtitle)
+        || (request.adDetails.english && request.adDetails.english.description)
+        || (request.adDetails.arabic && request.adDetails.arabic.description)
+    )) || ad.description || ad.notes || '';
+
+    const metaRows = [
+        { label: 'Created', value: submittedLabel ? escapeHtml(submittedLabel) : '' },
+        { label: 'Updated', value: updatedLabel ? escapeHtml(updatedLabel) : '' },
+        { label: 'Account', value: escapeHtml(accountName), isChip: true, chipClass: 'product-ad-hero-value-chip--account' },
+        { label: 'Category', value: escapeHtml(categoryCode), isChip: true, chipClass: 'helper-chip helper-chip-compact' },
+        { label: 'Views', value: ad && Number.isFinite(ad.views) ? ad.views.toLocaleString('en-US') : '0' }
+    ].filter(row => row.value);
+
+    const metaMarkup = metaRows.length
+        ? `<div class="product-ad-hero-meta-grid">${metaRows.map(row => `
+            <dl>
+                <dt>${row.label}</dt>
+                <dd>${row.isChip ? `<span class="${row.chipClass || 'product-ad-hero-value-chip'}">${row.value}</span>` : row.value}</dd>
+            </dl>
+        `).join('')}</div>`
+        : '';
+
+    const descriptionMarkup = description
+        ? `<p class="product-ad-hero-description">${escapeHtml(description)}</p>`
+        : '';
+
+    return `
+        <section class="product-ad-details-hero">
+            <div class="product-ad-hero-media">
+                <img src="${escapeAttribute(heroPhoto.url)}" alt="${escapeAttribute(heroPhoto.alt)}" loading="lazy" />
+                <span class="product-ad-hero-media-badge">Primary Image</span>
+            </div>
+            <div class="product-ad-hero-info">
+                <div class="product-ad-hero-header">
+                    <h4 class="product-ad-hero-title">${escapeHtml(ad.title || request.title || ad.id || 'Product Listing')}</h4>
+                    <div class="product-ad-hero-chips">
+                        <span class="${statusClass} product-ad-hero-status">${escapeHtml(statusLabel)}</span>
+                        <span class="product-ad-hero-chip product-ad-hero-chip--${escapeAttribute(accountType)}">${escapeHtml(accountLabel)}</span>
+                    </div>
+                </div>
+                ${descriptionMarkup}
+                ${metaMarkup}
+            </div>
+        </section>
+    `;
+}
+
+function renderProductAdDetailGrid(rows = [], emptyMessage = 'Details unavailable.') {
+    if (!rows.length) {
+        return `<p class="product-ad-details-empty">${escapeHtml(emptyMessage)}</p>`;
+    }
+    return `<div class="product-ad-details-grid">${rows.map(row => `
+        <dl>
+            <dt>${escapeHtml(row.label)}</dt>
+            <dd>${row.value || '—'}</dd>
+        </dl>
+    `).join('')}</div>`;
+}
+
+function renderProductAdDetailsCategorySection(request, { extraClass = '' } = {}) {
+    const categoryPath = Array.isArray(request.categoryPath) ? request.categoryPath.map(segment => (typeof segment === 'string' ? segment.trim() : '')).filter(Boolean) : [];
+    const fullPath = categoryPath.length ? escapeHtml(categoryPath.join(' › ')) : 'Uncategorized';
+    const sectionClass = extraClass ? `product-ad-details-section ${extraClass}` : 'product-ad-details-section';
+    return `
+        <section class="${sectionClass}">
+            <h4>Category</h4>
+            ${renderProductAdDetailGrid([{ label: 'Full Path', value: fullPath }], 'Category path was not provided.')}
+        </section>
+    `;
+}
+
+function renderProductAdDetailsMediaSection(request, { extraClass = '' } = {}) {
+    const media = request.media || {};
+    const photos = Array.isArray(media.photos) ? media.photos : [];
+    const videos = Array.isArray(media.videos) ? media.videos : [];
+    const photoGrid = photos.length
+        ? `<div class="product-ad-media-grid">${photos.map((photo, index) => {
+            const photoUrl = photo && photo.url ? photo.url : PRODUCT_AD_REQUEST_PLACEHOLDER_IMAGE;
+            const url = escapeAttribute(photoUrl);
+            const alt = escapeAttribute((photo && photo.alt) || `Product photo ${index + 1}`);
+            const badgeMarkup = index === 0 ? '<span class="product-ad-photo-card__badge">Main</span>' : '';
+            return `
+                <div class="product-ad-photo-card ${index === 0 ? 'primary' : ''}">
+                    <img src="${url}" alt="${alt}" loading="lazy">
+                    ${badgeMarkup}
+                </div>
+            `;
+        }).join('')}</div>`
+        : '<div class="product-ad-media-empty">No product photos were provided.</div>';
+    const videoLinks = videos.length
+        ? `<div class="product-ad-video-chips">${videos.map((video, index) => {
+            const rawUrl = typeof video === 'string' ? video : video && video.url;
+            if (!rawUrl) {
+                return '';
+            }
+            const safeHref = escapeAttribute(formatExternalLink(rawUrl));
+            return `<a href="${safeHref}" target="_blank" rel="noopener" class="product-ad-video-chip"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg><span>${escapeHtml(rawUrl)}</span><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" class="external-icon"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg></a>`;
+        }).filter(Boolean).join('')}</div>`
+        : '<div class="product-ad-media-empty">No product videos were provided.</div>';
+    const sectionClass = extraClass ? `product-ad-details-section ${extraClass}` : 'product-ad-details-section';
+    return `
+        <section class="${sectionClass}">
+            <div class="product-ad-details-subsection">
+                <strong>Photos</strong>
+                ${photoGrid}
+            </div>
+            <div class="product-ad-details-subsection">
+                <strong>Videos URLs</strong>
+                ${videoLinks}
+            </div>
+        </section>
+    `;
+}
+
+function findCategoryForProductAd(request, ad) {
+    if (!Array.isArray(categories) || !categories.length) {
+        return null;
+    }
+    const candidateValues = [];
+    if (request) {
+        if (typeof request.categoryCode === 'string' && request.categoryCode.trim()) {
+            candidateValues.push(request.categoryCode.trim());
+        }
+        if (typeof request.category === 'string' && request.category.trim()) {
+            candidateValues.push(request.category.trim());
+        }
+        if (Array.isArray(request.categoryPath) && request.categoryPath.length) {
+            const lastSegment = request.categoryPath[request.categoryPath.length - 1];
+            if (typeof lastSegment === 'string' && lastSegment.trim()) {
+                candidateValues.push(lastSegment.trim());
+            }
+        }
+    }
+    if (ad) {
+        if (typeof ad.categoryCode === 'string' && ad.categoryCode.trim()) {
+            candidateValues.push(ad.categoryCode.trim());
+        }
+        if (typeof ad.category === 'string' && ad.category.trim()) {
+            candidateValues.push(ad.category.trim());
+        }
+    }
+    if (!candidateValues.length) {
+        return null;
+    }
+    for (const candidate of candidateValues) {
+        const normalizedCandidate = candidate.toLowerCase();
+        const matched = categories.find(cat => {
+            if (!cat) return false;
+            const matchId = cat.id && cat.id.toLowerCase() === normalizedCandidate;
+            const matchCode = cat.categoryCode && cat.categoryCode.toLowerCase() === normalizedCandidate;
+            const matchEnglish = cat.nameEnglish && cat.nameEnglish.toLowerCase() === normalizedCandidate;
+            const matchArabic = cat.nameArabic && cat.nameArabic.toLowerCase() === normalizedCandidate;
+            return matchId || matchCode || matchEnglish || matchArabic;
+        });
+        if (matched) {
+            return matched;
+        }
+    }
+    return null;
+}
+
+function getSpecificationsForCategory(categoryId) {
+    if (!categoryId || !Array.isArray(specifications) || !specifications.length) {
+        return [];
+    }
+    const normalizedCategoryId = typeof categoryId === 'string' ? categoryId.trim() : '';
+    if (!normalizedCategoryId) {
+        return [];
+    }
+    return specifications.filter(spec => {
+        if (!spec || !Array.isArray(spec.categoryIds) || !spec.categoryIds.length) {
+            return false;
+        }
+        return spec.categoryIds.some(id => {
+            const normalizedId = typeof id === 'string' ? id.trim() : '';
+            return normalizedId && normalizedId === normalizedCategoryId;
+        });
+    });
+}
+
+function renderProductAdDetailsSpecificationsSection(request, ad, { extraClass = '' } = {}) {
+    // Get category specifications
+    const category = findCategoryForProductAd(request, ad);
+    const categorySpecs = category ? getSpecificationsForCategory(category.id) : [];
+
+    const sectionClass = extraClass ? `product-ad-details-section ${extraClass}` : 'product-ad-details-section';
+
+    // If no category specs, show empty state message
+    if (!categorySpecs.length) {
+        return `
+        <section class="${sectionClass}">
+            <h4>Item Details</h4>
+            <p class="helper-text">No Specifications Assigned to this Category.</p>
+        </section>
+    `;
+    }
+
+    const renderSubSpecifications = (subSpecs) => {
+        if (!Array.isArray(subSpecs) || !subSpecs.length) {
+            return '';
+        }
+        return `<div class="spec-sub-options">
+            ${subSpecs.map(sub => {
+                const name = sub.nameEnglish || sub.nameArabic || '—';
+                return `<span class="spec-sub-option">${escapeHtml(name)}</span>`;
+            }).join('')}
+        </div>`;
+    };
+
+    const categorySpecsMarkup = `<div class="product-ad-specs-grid">
+        ${categorySpecs.map(spec => {
+            const name = spec.nameEnglish || spec.nameArabic || spec.name || 'Specification';
+            const dataType = spec.dataType ? formatKeyLabel(spec.dataType) : '—';
+            const required = spec.isRequired ? '<span class="spec-required-badge">Required</span>' : '';
+            const subSpecs = Array.isArray(spec.subSpecifications) ? spec.subSpecifications : [];
+            const subSpecsMarkup = renderSubSpecifications(subSpecs);
+            const hasSubSpecs = subSpecs.length > 0;
+            
+            return `<div class="product-ad-spec-card${hasSubSpecs ? ' has-sub-specs' : ''}">
+                <div class="spec-card-header">
+                    <div class="spec-card-title">
+                        <strong>${escapeHtml(name)}</strong>
+                    </div>
+                    <div class="spec-card-meta">
+                        <span class="spec-data-type">${escapeHtml(dataType)}</span>
+                        ${required}
+                    </div>
+                </div>
+                ${subSpecsMarkup}
+            </div>`;
+        }).join('')}
+    </div>`;
+
+    return `
+        <section class="${sectionClass}">
+            <h4>Item Details</h4>
+            ${categorySpecsMarkup}
+        </section>
+    `;
+}
+
+function formatProductAdDetailsAddress(address) {
+    if (!address || typeof address !== 'object') {
+        return '—';
+    }
+    const parts = [address.state, address.region, address.city]
+        .map(part => (typeof part === 'string' ? part.trim() : ''))
+        .filter(Boolean);
+    return parts.length ? escapeHtml(parts.join(', ')) : '—';
+}
+
+function formatProductAdDetailsYesNo(value) {
+    if (value === true) return 'Yes';
+    if (value === false) return 'No';
+    return '—';
+}
+
+function renderProductAdDetailsAdSection(request, { extraClass = '' } = {}) {
+    const details = request.adDetails || {};
+    const arabic = details.arabic || {};
+    const english = details.english || {};
+    const accountType = request.accountType || 'individual';
+    const quantityLabel = details.quantityType === 'unlimited'
+        ? 'Unlimited Quantity'
+        : (Number.isFinite(details.quantity) ? `${details.quantity}` : '—');
+    const statusLabel = details.itemCondition ? formatKeyLabel(details.itemCondition) : '—';
+    const rows = [
+        { label: 'Item Title (AR)', value: arabic.title ? escapeHtml(arabic.title) : '—' },
+        { label: 'Subtitle (AR)', value: arabic.subtitle ? escapeHtml(arabic.subtitle) : '—' },
+        { label: 'Item Details (AR)', value: arabic.description ? escapeHtml(arabic.description) : '—' },
+        { label: 'Item Title (EN)', value: english.title ? escapeHtml(english.title) : '—' },
+        { label: 'Subtitle (EN)', value: english.subtitle ? escapeHtml(english.subtitle) : '—' },
+        { label: 'Item Details (EN)', value: english.description ? escapeHtml(english.description) : '—' },
+        { label: 'Item Condition', value: statusLabel },
+        { label: 'Quantity', value: escapeHtml(quantityLabel) }
+    ];
+    if (accountType === 'business') {
+        rows.push({
+            label: 'Almost Sold Out',
+            value: formatProductAdDetailsYesNo(details.almostSoldOut)
+        });
+    }
+    rows.push({ label: 'Address', value: formatProductAdDetailsAddress(details.address) });
+    if (accountType === 'business') {
+        rows.push({
+            label: 'Receive Questions About the Product?',
+            value: formatProductAdDetailsYesNo(details.allowCustomerQuestions)
+        });
+    }
+    const sectionClass = extraClass ? `product-ad-details-section ${extraClass}` : 'product-ad-details-section';
+    return `
+        <section class="${sectionClass}">
+            <h4>Ad Details</h4>
+            ${renderProductAdDetailGrid(rows, 'No ad details were provided.')}
+        </section>
+    `;
+}
+
+function renderProductAdDetailsSalesSection(request, ad, { extraClass = '' } = {}) {
+    const sales = request.salesDetails || {};
+    const accountType = request.accountType || 'individual';
+    const closing = sales.auction && typeof sales.auction === 'object' ? sales.auction : { closing: {} };
+    const closingMode = closing.closing && closing.closing.mode ? closing.closing.mode : '';
+    const closingValue = closing.closing && closing.closing.value ? closing.closing.value : '';
+    const saleTypesArray = Array.isArray(sales.types) ? sales.types : (Array.isArray(ad && ad.saleTypes) ? ad.saleTypes : (sales.type ? [sales.type] : []));
+    const salesTypeLabel = saleTypesArray.length 
+        ? saleTypesArray.map(t => PRODUCT_AD_REQUEST_SALES_TYPE_LABELS.get(t) || formatKeyLabel(t)).join(', ')
+        : '—';
+    const rows = [
+        {
+            label: 'Sale Types',
+            value: escapeHtml(salesTypeLabel)
+        },
+        {
+            label: 'Purchasing Price',
+            value: sales.fixedPrice !== null && sales.fixedPrice !== undefined
+                ? escapeHtml(formatCurrency(sales.fixedPrice || 0, 'SAR'))
+                : '—'
+        },
+        {
+            label: 'Auction Start Price',
+            value: sales.auction && sales.auction.startPrice !== null && sales.auction.startPrice !== undefined
+                ? escapeHtml(formatCurrency(sales.auction.startPrice || 0, 'SAR'))
+                : '—'
+        },
+        {
+            label: 'Auction Minimum Price',
+            value: sales.auction && sales.auction.minimumPrice !== null && sales.auction.minimumPrice !== undefined
+                ? escapeHtml(formatCurrency(sales.auction.minimumPrice || 0, 'SAR'))
+                : '—'
+        },
+        {
+            label: 'Time to Close',
+            value: closingMode
+                ? escapeHtml(closingMode === 'custom-date' && closingValue
+                    ? formatDateForDisplay(closingValue, { includeTime: true })
+                    : (closingValue || PRODUCT_AD_REQUEST_CLOSING_MODE_LABELS.get(closingMode) || formatKeyLabel(closingMode)))
+                : '—'
+        }
+    ];
+
+    if (accountType === 'business' && sales.negotiationSettings) {
+        const negotiation = sales.negotiationSettings;
+        rows.push(
+            {
+                label: 'Auto-send Offers After Auction?',
+                value: formatProductAdDetailsYesNo(negotiation.autoOffersAfterAuction)
+            },
+            {
+                label: 'Negotiation Price',
+                value: negotiation.negotiationPrice !== null && negotiation.negotiationPrice !== undefined
+                    ? escapeHtml(formatCurrency(negotiation.negotiationPrice || 0, 'SAR'))
+                    : '—'
+            },
+            {
+                label: 'Whom to Send the Offer',
+                value: negotiation.offerAudience ? escapeHtml(formatKeyLabel(negotiation.offerAudience)) : '—'
+            },
+            {
+                label: 'Send Account Info to Winner?',
+                value: formatProductAdDetailsYesNo(negotiation.sendAccountInfoToWinner)
+            }
+        );
+    }
+
+    const paymentOptions = Array.isArray(sales.paymentOptions)
+        ? sales.paymentOptions.map(option => PRODUCT_AD_REQUEST_PAYMENT_OPTION_LABELS.get(option) || formatKeyLabel(option)).filter(Boolean)
+        : [];
+    const paymentMarkup = paymentOptions.length
+        ? `<div class="product-ad-details-tags">${paymentOptions.map(option => `<span>${escapeHtml(option)}</span>`).join('')}</div>`
+        : '<p class="product-ad-details-empty">No payment options were provided.</p>';
+
+    const paymentSubsection = accountType !== 'business'
+        ? `<div class="product-ad-details-subsection">
+                <strong>Payment Options</strong>
+                ${paymentMarkup}
+            </div>`
+        : '';
+
+    const sectionClass = extraClass ? `product-ad-details-section ${extraClass}` : 'product-ad-details-section';
+    return `
+        <section class="${sectionClass}">
+            <h4>Sales Details</h4>
+            ${renderProductAdDetailGrid(rows, 'Sales settings were not provided.')}
+            ${paymentSubsection}
+        </section>
+    `;
+}
+
+function renderProductAdDetailsShippingSection(request, { extraClass = '' } = {}) {
+    const shipping = request.shipping || {};
+    const pickupLabel = shipping.pickupOption
+        ? (PRODUCT_AD_REQUEST_PICKUP_OPTIONS.get(shipping.pickupOption) || formatKeyLabel(shipping.pickupOption))
+        : null;
+    const shippingLabels = Array.isArray(shipping.shippingOptions)
+        ? shipping.shippingOptions.map(option => PRODUCT_AD_REQUEST_SHIPPING_OPTIONS.get(option) || formatKeyLabel(option)).filter(Boolean)
+        : [];
+
+    const pickupMarkup = pickupLabel
+        ? `<div class="product-ad-details-tags"><span>${escapeHtml(pickupLabel)}</span></div>`
+        : '<p class="product-ad-details-empty">Not provided</p>';
+    const shippingMarkup = shippingLabels.length
+        ? `<div class="product-ad-details-tags">${shippingLabels.map(label => `<span>${escapeHtml(label)}</span>`).join('')}</div>`
+        : '<p class="product-ad-details-empty">Not provided</p>';
+
+    const sectionClass = extraClass ? `product-ad-details-section ${extraClass}` : 'product-ad-details-section';
+    return `
+        <section class="${sectionClass}">
+            <h4>Shipping</h4>
+            <div class="product-ad-details-grid product-ad-shipping-grid">
+                <div class="product-ad-details-subsection">
+                    <strong>Pick-up Option</strong>
+                    ${pickupMarkup}
+                </div>
+                <div class="product-ad-details-subsection">
+                    <strong>Shipping Options</strong>
+                    ${shippingMarkup}
+                </div>
+            </div>
+        </section>
+    `;
+}
+
+function resolveProductAdPackageBadges(pkgName = '') {
+    const name = typeof pkgName === 'string' ? pkgName.toLowerCase() : '';
+    const hasSmsCue = name.includes('sms');
+    return hasSmsCue ? ['SMS'] : ['Additional'];
+}
+
+function renderProductAdDetailsPackagesSection(request, { extraClass = '' } = {}) {
+    const packages = Array.isArray(request.packages) ? request.packages : [];
+    const sectionClass = extraClass ? `product-ad-details-section ${extraClass}` : 'product-ad-details-section';
+    if (!packages.length) {
+        return `
+            <section class="${sectionClass}">
+                <h4>Packages</h4>
+                <p class="product-ad-details-empty">No additional packages were selected.</p>
+            </section>
+        `;
+    }
+    const items = packages.map(pkg => {
+        const name = pkg && pkg.name ? escapeHtml(pkg.name) : 'Package';
+        const duration = pkg && pkg.duration ? escapeHtml(pkg.duration) : 'Custom duration';
+        const priceLabel = pkg && pkg.price !== null && pkg.price !== undefined
+            ? escapeHtml(formatCurrency(pkg.price || 0, 'SAR'))
+            : 'Custom price';
+        const badges = resolveProductAdPackageBadges(pkg && pkg.name)
+            .map(label => `<span class="product-ad-package-badge">${escapeHtml(label)}</span>`)
+            .join('');
+        return `
+            <div class="product-ad-package-item">
+                <div>
+                    <strong>${name}</strong>
+                    <div class="helper-text">${duration}</div>
+                </div>
+                <div class="product-ad-package-meta">
+                    <span class="product-ad-package-price">${priceLabel}</span>
+                    <div class="product-ad-package-badges">${badges}</div>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    return `
+        <section class="${sectionClass}">
+            <h4>Packages</h4>
+            <div class="product-ad-packages-list">
+                ${items}
+            </div>
+        </section>
+    `;
+}
+
 function openProductAdHistoryDrawer(adId) {
     const ad = (productAds || []).find(entry => entry && entry.id === adId);
     state.activeProductAdId = ad ? ad.id : null;
@@ -30857,11 +33464,80 @@ function closeProductAdHistoryDrawer() {
     updateProductAdsActionToolbarState();
 }
 
+function populateProductAdDetailsOverlay(ad) {
+    if (!ad) {
+        return false;
+    }
+    const metaEl = document.getElementById('productAdDetailsMeta');
+    const contentEl = document.getElementById('productAdDetailsContent');
+    if (!contentEl) {
+        return false;
+    }
+    let request = findProductAdRequestByAdId(ad.id);
+    if (!request) {
+        request = buildProductAdRequestFromListing(ad);
+    }
+    if (metaEl) {
+        const accountType = request && request.accountType ? request.accountType : resolveProductAdAccountType(ad) || 'individual';
+        const accountLabel = PRODUCT_AD_REQUEST_ACCOUNT_LABELS.get(accountType) || formatKeyLabel(accountType);
+        const statusLabel = getProductAdStatusLabel(ad.status);
+        const statusClass = getProductAdStatusClass(ad.status);
+        const idLabel = ad && ad.id ? ad.id : '';
+        const chips = [];
+        if (idLabel) {
+            chips.push(`<span class="product-ad-meta-chip product-ad-meta-chip--id">${escapeHtml(idLabel)}</span>`);
+        }
+        if (statusLabel) {
+            chips.push(`<span class="product-ad-meta-chip ${statusClass}">${escapeHtml(statusLabel)}</span>`);
+        }
+        if (accountLabel) {
+            chips.push(`<span class="product-ad-meta-chip product-ad-meta-chip--account">${escapeHtml(accountLabel)}</span>`);
+        }
+        metaEl.innerHTML = chips.length ? chips.join('') : '—';
+    }
+    contentEl.innerHTML = renderProductAdDetailsContent(ad, request);
+    return true;
+}
+
+function openProductAdDetailsOverlay(adId) {
+    const overlay = document.getElementById('productAdDetailsOverlay');
+    if (!overlay) {
+        return;
+    }
+    const ad = (productAds || []).find(entry => entry && entry.id === adId);
+    if (!ad) {
+        showNotification('warning', 'Unable to locate the selected listing.');
+        return;
+    }
+    if (!populateProductAdDetailsOverlay(ad)) {
+        return;
+    }
+    overlay.classList.remove('hidden');
+    state.productAdDetailsContext = { adId };
+}
+
+function refreshProductAdDetailsOverlay(ad) {
+    const overlay = document.getElementById('productAdDetailsOverlay');
+    if (!overlay || overlay.classList.contains('hidden')) {
+        return;
+    }
+    populateProductAdDetailsOverlay(ad);
+}
+
+function closeProductAdDetailsOverlay() {
+    const overlay = document.getElementById('productAdDetailsOverlay');
+    if (overlay) {
+        overlay.classList.add('hidden');
+    }
+    state.productAdDetailsContext = null;
+}
+
 function openProductAdDecisionOverlay(adId, action) {
     const overlay = document.getElementById('productAdDecisionOverlay');
     const titleEl = document.getElementById('productAdDecisionTitle');
     const messageEl = document.getElementById('productAdDecisionMessage');
     const textarea = document.getElementById('productAdDecisionReasonInput');
+    const confirmBtn = document.getElementById('productAdDecisionConfirmBtn');
     if (!overlay || !titleEl || !messageEl || !textarea) return;
 
     const ad = (productAds || []).find(entry => entry && entry.id === adId);
@@ -30870,26 +33546,87 @@ function openProductAdDecisionOverlay(adId, action) {
         return;
     }
 
+    // Resolve Arabic title for approve action
+    const arabicTitle = ad.titleAr && ad.titleAr.trim() ? ad.titleAr.trim() : (ad.title || 'Product Ad');
+
     const actionLabels = {
-        approve: 'Approve Ad',
+        approve: arabicTitle,
         reject: 'Reject Ad',
+        activate: 'Activate Ad',
+        deactivate: 'Deactivate Ad',
         suspend: 'Suspend Ad',
         reinstate: 'Reinstate Ad',
         delete: 'Delete Ad'
     };
 
     const promptMessages = {
-        approve: 'Share a note for the audit trail before approving this listing.',
+        approve: '',
         reject: 'Explain why this listing is being rejected.',
+        activate: 'Describe why this listing is being activated for visibility.',
+        deactivate: 'Clarify why this listing is being deactivated.',
         suspend: 'Document the reason for suspending this listing.',
         reinstate: 'Describe why this listing is being reinstated.',
         delete: 'Confirm why this listing should be removed from the marketplace.'
     };
 
+    const confirmButtonLabels = {
+        approve: 'Approve',
+        reject: 'Confirm',
+        activate: 'Confirm',
+        deactivate: 'Confirm',
+        suspend: 'Confirm',
+        reinstate: 'Confirm',
+        delete: 'Confirm'
+    };
+
+    const reasonLabels = {
+        approve: 'Approval Notes (Optional)',
+        reject: 'Moderator note',
+        activate: 'Moderator note',
+        deactivate: 'Moderator note',
+        suspend: 'Moderator note',
+        reinstate: 'Moderator note',
+        delete: 'Moderator note'
+    };
+
+    const placeholders = {
+        approve: 'Share why this ad is being approved',
+        reject: 'Capture the decision context for the audit trail',
+        activate: 'Capture the decision context for the audit trail',
+        deactivate: 'Capture the decision context for the audit trail',
+        suspend: 'Capture the decision context for the audit trail',
+        reinstate: 'Capture the decision context for the audit trail',
+        delete: 'Capture the decision context for the audit trail'
+    };
+
     titleEl.textContent = actionLabels[action] || 'Review Ad';
-    messageEl.textContent = promptMessages[action] || 'Provide a reason to proceed.';
+    const promptMessage = Object.prototype.hasOwnProperty.call(promptMessages, action) ? promptMessages[action] : 'Provide a reason to proceed.';
+    if (promptMessage) {
+        messageEl.textContent = promptMessage;
+        messageEl.style.display = '';
+    } else {
+        messageEl.textContent = '';
+        messageEl.style.display = 'none';
+    }
     textarea.value = '';
+    textarea.placeholder = placeholders[action] || 'Capture the decision context for the audit trail';
+
+    const reasonLabel = document.getElementById('productAdDecisionReasonLabel');
+    if (reasonLabel) {
+        reasonLabel.textContent = reasonLabels[action] || 'Moderator note';
+    }
+
     textarea.focus();
+
+    if (confirmBtn) {
+        const btnLabel = confirmButtonLabels[action] || 'Confirm';
+        const btnSpan = confirmBtn.querySelector('span');
+        if (btnSpan) {
+            btnSpan.textContent = btnLabel;
+        } else {
+            confirmBtn.innerHTML = `<i class="fas fa-circle-check"></i> ${btnLabel}`;
+        }
+    }
 
     state.productAdDecisionContext = { id: adId, action };
     overlay.classList.remove('hidden');
@@ -30907,43 +33644,168 @@ function closeProductAdDecisionOverlay() {
     }
 }
 
+function renderProductAdDetailsHero(ad, request) {
+    const lookup = request && ad && ad.id ? new Map([[ad.id, request]]) : null;
+    const heroPhoto = resolveProductAdPrimaryPhoto(ad, lookup);
+    const accountLookup = buildProductAdAutomationAccountLookup();
+    const accountReference = resolveProductAdAccountReference(ad, accountLookup);
+    const accountName = accountReference && (accountReference.label || accountReference.id)
+        ? (accountReference.label || accountReference.id)
+        : resolveProductAdAccountDisplayName(request, ad);
+    const categoryDisplay = resolveProductAdDetailsCategoryDisplay(request, ad);
+    const categoryCode = resolveProductAdDetailsCategoryCode(request, ad);
+    const categoryPath = resolveProductAdDetailsCategoryPath(request, ad);
+    const locationLabel = resolveProductAdDetailsLocationLabel(request, ad);
+    const submittedLabel = request && request.submittedAt
+        ? formatDateForDisplay(request.submittedAt, { includeTime: true })
+        : formatDateForDisplay(ad.createdAt, { includeTime: true });
+    const updatedLabel = formatDateForDisplay(ad.lastEditedAt || ad.updatedAt || ad.createdAt, { includeTime: true }) || '—';
+    const saleTypesArray = request && request.salesDetails && Array.isArray(request.salesDetails.types) 
+        ? request.salesDetails.types 
+        : (Array.isArray(ad.saleTypes) ? ad.saleTypes : []);
+    const salesTypeLabel = saleTypesArray.length 
+        ? saleTypesArray.map(t => PRODUCT_AD_REQUEST_SALES_TYPE_LABELS.get(t) || formatKeyLabel(t)).join(', ')
+        : '—';
+    // Approval-related display values
+    const isApproved = ad && (ad.status === 'approved' || ad.status === 'active');
+    const isRejected = ad && ad.status === 'rejected';
+    const isDeleted = ad && ad.status === 'deleted';
+
+    // Find approval/rejection/deletion info from ad fields or history entries (for backwards compatibility)
+    const findHistoryEntry = (actionTypes) => {
+        if (!ad || !Array.isArray(ad.history)) return null;
+        const types = Array.isArray(actionTypes) ? actionTypes : [actionTypes];
+        return ad.history.find(entry => entry && types.includes(entry.action));
+    };
+
+    const approvedHistoryEntry = findHistoryEntry(['approved', 'activated']);
+    const rejectedHistoryEntry = findHistoryEntry(['rejected']);
+    const deletedHistoryEntry = findHistoryEntry(['deleted']);
+
+    const approvedAtLabel = ad && ad.approvedAt
+        ? formatDateForDisplay(ad.approvedAt, { includeTime: true })
+        : (approvedHistoryEntry && approvedHistoryEntry.timestamp
+            ? formatDateForDisplay(approvedHistoryEntry.timestamp, { includeTime: true })
+            : '');
+    const approvalNotesValue = ad && ad.approvalNotes
+        ? ad.approvalNotes
+        : (approvedHistoryEntry && approvedHistoryEntry.context ? approvedHistoryEntry.context : '');
+    const rejectedAtLabel = ad && ad.rejectedAt
+        ? formatDateForDisplay(ad.rejectedAt, { includeTime: true })
+        : (rejectedHistoryEntry && rejectedHistoryEntry.timestamp
+            ? formatDateForDisplay(rejectedHistoryEntry.timestamp, { includeTime: true })
+            : '');
+    const rejectionNotesValue = ad && ad.rejectionNotes
+        ? ad.rejectionNotes
+        : (rejectedHistoryEntry && rejectedHistoryEntry.context ? rejectedHistoryEntry.context : '');
+    const deletedAtLabel = ad && ad.deletedAt
+        ? formatDateForDisplay(ad.deletedAt, { includeTime: true })
+        : (deletedHistoryEntry && deletedHistoryEntry.timestamp
+            ? formatDateForDisplay(deletedHistoryEntry.timestamp, { includeTime: true })
+            : '');
+
+    const metaRows = [
+        { label: 'Created', value: submittedLabel ? escapeHtml(submittedLabel) : '' },
+        { label: 'Updated', value: updatedLabel ? escapeHtml(updatedLabel) : '' },
+        { label: 'Account', value: escapeHtml(accountName), isChip: true, chipClass: 'product-ad-hero-value-chip--account' },
+        { label: 'Category', value: categoryPath && categoryPath !== 'Uncategorized' ? escapeHtml(categoryPath) : '', chipValue: categoryCode ? escapeHtml(categoryCode) : '', chipClass: 'helper-chip helper-chip-compact' },
+        // Approved At card (only for approved/active product ads)
+        ...(isApproved && approvedAtLabel ? [{ label: 'Approved At', value: escapeHtml(approvedAtLabel) }] : []),
+        // Approval Notes card (only for approved/active product ads with notes)
+        ...(isApproved && approvalNotesValue ? [{ label: 'Approval Notes', value: escapeHtml(approvalNotesValue), isNote: true }] : []),
+        // Rejected At card (only for rejected product ads)
+        ...(isRejected && rejectedAtLabel ? [{ label: 'Rejected At', value: escapeHtml(rejectedAtLabel) }] : []),
+        // Rejection Notes card (only for rejected product ads with notes)
+        ...(isRejected && rejectionNotesValue ? [{ label: 'Rejection Notes', value: escapeHtml(rejectionNotesValue), isNote: true }] : []),
+        // Deleted At card (only for deleted product ads)
+        ...(isDeleted && deletedAtLabel ? [{ label: 'Deleted At', value: escapeHtml(deletedAtLabel) }] : [])
+    ].filter(row => row.value || row.chipValue);
+
+    const metaMarkup = metaRows.length
+        ? `<div class="product-ad-hero-meta-grid">${metaRows.map(row => {
+            let content = '';
+            if (row.isChip && row.value) {
+                content = `<span class="${row.chipClass || 'product-ad-hero-value-chip'}">${row.value}</span>`;
+            } else if (row.chipValue) {
+                content = row.value ? `${row.value} <span class="${row.chipClass || 'product-ad-hero-value-chip'}">${row.chipValue}</span>` : `<span class="${row.chipClass || 'product-ad-hero-value-chip'}">${row.chipValue}</span>`;
+            } else {
+                content = row.value;
+            }
+            return `
+            <dl>
+                <dt>${row.label}</dt>
+                <dd>${content}</dd>
+            </dl>
+        `;
+        }).join('')}</div>`
+        : '';
+
+    return `
+        <section class="product-ad-details-hero">
+            <div class="product-ad-hero-info">
+                ${metaMarkup}
+            </div>
+        </section>
+    `;
+}
 function applyProductAdStatusChange(ad, action, reason) {
-    if (!ad) return 'No ad selected.';
-    const normalized = (action || '').toLowerCase();
-    const transitions = {
+    if (!ad) return 'Unable to update listing.';
+
+    const statusMap = {
         approve: 'approved',
         reject: 'rejected',
+        activate: 'active',
+        deactivate: 'inactive',
         suspend: 'suspended',
-        reinstate: 'pending'
+        reinstate: 'active'
     };
-    const nextStatus = transitions[normalized];
-    if (!nextStatus) {
-        return 'Unsupported action requested.';
+
+    const actionLabelsForHistory = {
+        approve: 'approved',
+        reject: 'rejected',
+        activate: 'activated',
+        deactivate: 'deactivated',
+        suspend: 'suspended',
+        reinstate: 'reinstated'
+    };
+
+    const newStatus = statusMap[action];
+    if (!newStatus) {
+        return 'Unknown action requested.';
     }
 
-    ad.status = nextStatus;
+    ad.status = newStatus;
     ad.lastEditedAt = new Date().toISOString();
-    appendProductAdHistory(ad, normalized, reason || `${resolveProductAdModeratorLabel()} ${normalized} the listing.`);
 
-    if (normalized === 'approve') {
-        ad.flags = ad.flags || {};
-        ad.flags.manualReview = false;
+    // Record approval/rejection timestamps and notes
+    if (action === 'approve') {
+        ad.approvedAt = new Date().toISOString();
+        ad.approvalNotes = reason || '';
+    } else if (action === 'reject') {
+        ad.rejectedAt = new Date().toISOString();
+        ad.rejectionNotes = reason || '';
     }
 
+    const historyAction = actionLabelsForHistory[action] || action;
+    appendProductAdHistory(ad, historyAction, reason || `Listing ${historyAction} by moderator.`);
     saveProductAdsToStorage();
     renderProductAdsTable(state.currentProductAdsPage);
-    if (state.activeProductAdId === ad.id) {
-        renderProductAdHistory(ad);
+
+    if (syncProductAdRequestForListing(ad, { persist: true })) {
+        renderProductAdRequestsBoard();
     }
 
-    const messages = {
-        approve: 'Listing approved successfully.',
-        reject: 'Listing rejected and audit trail updated.',
-        suspend: 'Listing suspended and flagged for compliance.',
-        reinstate: 'Listing reinstated for moderation review.'
+    const adTitle = ad.title || 'Untitled Listing';
+    const messageMap = {
+        approve: `The Product Ad: ${adTitle} has been Approved`,
+        reject: `The Product Ad: ${adTitle} has been Rejected`,
+        activate: `The Product Ad: ${adTitle} has been Activated`,
+        deactivate: `The Product Ad: ${adTitle} has been Deactivated`,
+        suspend: `The Product Ad: ${adTitle} has been Suspended`,
+        reinstate: `The Product Ad: ${adTitle} has been Reinstated`
     };
 
-    return messages[normalized] || 'Status updated.';
+    return messageMap[action] || `Listing status updated to ${newStatus}.`;
 }
 
 function deleteProductAd(ad, reason) {
@@ -30956,10 +33818,120 @@ function deleteProductAd(ad, reason) {
     productAds.splice(index, 1);
     saveProductAdsToStorage();
     renderProductAdsTable(1);
+    removeProductAdRequestByLinkedAdId(ad.id, { persist: true, refreshBoard: true });
     if (state.activeProductAdId === ad.id) {
         closeProductAdHistoryDrawer();
     }
+    if (state.productAdDetailsContext && state.productAdDetailsContext.adId === ad.id) {
+        closeProductAdDetailsOverlay();
+    }
     return 'Listing deleted successfully.';
+}
+
+async function handleProductAdsDeleteAllRequest() {
+    const totalAds = Array.isArray(productAds) ? productAds.length : 0;
+    if (!totalAds) {
+        showNotification('info', 'No product ads available to delete.');
+        return;
+    }
+
+    const confirmationMessage = `Delete all ${totalAds} product ad${totalAds === 1 ? '' : 's'}? This action cannot be undone.`;
+    const confirmOverlay = document.getElementById('userConfirmOverlay');
+    const overlayAvailable = Boolean(
+        confirmOverlay
+        && document.getElementById('userConfirmMessage')
+        && document.getElementById('userConfirmOk')
+        && document.getElementById('userConfirmCancel')
+    );
+
+    const confirmed = overlayAvailable
+        ? await showUserConfirm(confirmationMessage, 'Delete All', 'Cancel')
+        : window.confirm(confirmationMessage);
+
+    if (!confirmed) {
+        return;
+    }
+
+    deleteAllProductAds({ refresh: true });
+    showNotification('success', 'All product ads deleted.');
+}
+
+function deleteAllProductAds({ refresh = true } = {}) {
+    const deletedIds = new Set();
+    if (Array.isArray(productAds) && productAds.length) {
+        productAds.forEach(ad => {
+            if (ad && ad.id) {
+                deletedIds.add(ad.id);
+            }
+        });
+    }
+
+    productAds = [];
+    try {
+        localStorage.removeItem(PRODUCT_ADS_STORAGE_KEY);
+    } catch (error) {
+        console.warn('Unable to clear stored product ads:', error);
+    }
+    saveProductAdsToStorage();
+
+    if (deletedIds.size && Array.isArray(productAdRequests)) {
+        const originalLength = productAdRequests.length;
+        productAdRequests = productAdRequests.filter(request => {
+            if (!request || !request.linkedAdId) {
+                return true;
+            }
+            return !deletedIds.has(request.linkedAdId);
+        });
+        if (productAdRequests.length !== originalLength) {
+            saveProductAdRequestsToStorage();
+            renderProductAdRequestsBoard();
+        }
+    }
+
+    state.activeProductAdId = null;
+    state.productAdDecisionContext = null;
+    state.editingProductAdId = null;
+    state.currentProductAdsPage = 1;
+    state.productAdsFilters = {
+        search: '',
+        status: 'all',
+        category: 'all',
+        city: 'all',
+        account: 'all'
+    };
+
+    const searchInput = document.getElementById('productAdsSearchInput');
+    if (searchInput) {
+        searchInput.value = '';
+    }
+    const statusFilter = document.getElementById('productAdsStatusFilter');
+    if (statusFilter) {
+        statusFilter.value = 'all';
+    }
+    const categoryFilter = document.getElementById('productAdsCategoryFilter');
+    if (categoryFilter) {
+        categoryFilter.value = 'all';
+    }
+    const cityFilter = document.getElementById('productAdsCityFilter');
+    if (cityFilter) {
+        cityFilter.value = 'all';
+    }
+    const accountFilter = document.getElementById('productAdsAccountFilter');
+    if (accountFilter) {
+        accountFilter.value = 'all';
+    }
+
+    closeProductAdHistoryDrawer();
+    closeProductAdDecisionOverlay();
+    closeProductAdEditOverlay();
+    closeProductAdDetailsOverlay();
+
+    if (refresh) {
+        renderProductAdsTable(1);
+    } else {
+        updateProductAdsActionToolbarState();
+        updateProductAdsCount(0);
+    }
 }
 
 function confirmProductAdDecision() {
@@ -31082,6 +34054,9 @@ function handleProductAdEditSubmit(event) {
     if (state.activeProductAdId === ad.id) {
         renderProductAdHistory(ad);
     }
+    if (syncProductAdRequestForListing(ad, { persist: true })) {
+        renderProductAdRequestsBoard();
+    }
     showNotification('success', 'Listing updated successfully.');
     closeProductAdEditOverlay();
 }
@@ -31093,12 +34068,13 @@ function handleProductAdsTableClick(event) {
         if (!adId) {
             return;
         }
-        if (state.activeProductAdId !== adId) {
+        if (state.activeProductAdId === adId) {
+            state.activeProductAdId = null;
+        } else {
             state.activeProductAdId = adId;
-            refreshProductAdsSelectionStyles();
-            updateProductAdsActionToolbarState();
         }
-        openProductAdHistoryDrawer(adId);
+        refreshProductAdsSelectionStyles();
+        updateProductAdsActionToolbarState();
     }
 }
 
@@ -31289,6 +34265,102 @@ function buildProductAdAutomationAccountLookup() {
     });
 
     return lookup;
+}
+
+function resolveProductAdAutomationRuleForEmail(email) {
+    const normalized = normalizeEmail(email);
+    if (!normalized) {
+        return null;
+    }
+    if (!productAdAutomation || typeof productAdAutomation !== 'object') {
+        return null;
+    }
+
+    const listTypes = ['blacklist', 'manualReview', 'trusted'];
+    for (const listType of listTypes) {
+        const entries = Array.isArray(productAdAutomation[listType]) ? productAdAutomation[listType] : [];
+        const match = entries.find(entry => entry && normalizeEmail(entry.account) === normalized);
+        if (match) {
+            return { type: listType, entry: match };
+        }
+    }
+    return null;
+}
+
+function resolvePublishingListTypeFromLabel(label) {
+    if (typeof label !== 'string') {
+        return '';
+    }
+    const normalized = label.trim().toLowerCase();
+    if (!normalized) {
+        return '';
+    }
+    for (const [key, value] of Object.entries(PUBLISHING_LIST_LABELS)) {
+        if (typeof value === 'string' && value.trim().toLowerCase() === normalized) {
+            return key;
+        }
+    }
+    return '';
+}
+
+function resolvePublishingRuleForSeedOwner(owner) {
+    if (!owner || typeof owner !== 'object') {
+        return null;
+    }
+
+    const typeCandidates = [];
+    const labelCandidates = [];
+
+    if (owner.type === 'individual' && owner.record) {
+        const context = resolveIndividualAccountPublishingContext(owner.record);
+        if (context) {
+            typeCandidates.push(context.listType, context.normalizedListType);
+            if (context.label) {
+                labelCandidates.push(context.label);
+            }
+        }
+    } else if (owner.type === 'business' && owner.record) {
+        const context = resolveBusinessAccountPublishingContext(owner.record);
+        if (context) {
+            typeCandidates.push(context.listType, context.normalizedType);
+            if (context.label) {
+                labelCandidates.push(context.label);
+            }
+        }
+    }
+
+    for (const candidate of typeCandidates) {
+        const normalizedType = normalizePublishingListType(candidate || '');
+        if (normalizedType) {
+            return {
+                type: normalizedType,
+                label: PUBLISHING_LIST_LABELS[normalizedType] || formatKeyLabel(normalizedType)
+            };
+        }
+    }
+
+    for (const label of labelCandidates) {
+        const typeFromLabel = resolvePublishingListTypeFromLabel(label);
+        if (typeFromLabel) {
+            return {
+                type: typeFromLabel,
+                label: PUBLISHING_LIST_LABELS[typeFromLabel] || label
+            };
+        }
+    }
+
+    const automationRule = resolveProductAdAutomationRuleForEmail(owner.email);
+    if (automationRule && automationRule.type) {
+        const normalizedType = normalizePublishingListType(automationRule.type) || automationRule.type.toLowerCase();
+        if (normalizedType) {
+            return {
+                type: normalizedType,
+                label: PUBLISHING_LIST_LABELS[normalizedType] || formatKeyLabel(normalizedType)
+            };
+        }
+    }
+
+    return null;
 }
 
 function mapAutomationStatusTone(status) {
@@ -31677,11 +34749,9 @@ function transferProductAdAutomationEntries(sourceType, targetType, entryIds) {
             sourceSelection.delete(entryId);
         }
     });
-    movedIds.forEach(entryId => {
-        if (targetSelection instanceof Set) {
-            targetSelection.add(entryId);
-        }
-    });
+    if (targetSelection instanceof Set && movedIds.length) {
+        movedIds.forEach(entryId => targetSelection.delete(entryId));
+    }
 
     if (!movedIds.length) {
         if (skippedDuplicates.length) {
@@ -31738,6 +34808,22 @@ function handleProductAdAutomationTransferClick(event) {
     showNotification('success', result.message || 'Publishing list updated.');
 }
 
+function renderIndividualPublishingAccountEntries(entries) {
+    const container = document.getElementById('individualPublishingAccountContainer');
+    if (!container) {
+        return;
+    }
+    const normalized = Array.isArray(entries) && entries.length
+        ? entries
+        : [{ name: 'Individual Account', identifier: '' }];
+    container.innerHTML = normalized.map(entry => `
+        <div class="individual-publishing-account-entry">
+            <div class="account-name">${escapeHtml(entry.name || 'Account')}</div>
+            <div class="helper-text">${escapeHtml(entry.identifier || '')}</div>
+        </div>
+    `).join('');
+}
+
 function openProductAdAutomationTransferOverlay(sourceType, targetType, entryIds, triggerElement) {
     if (!sourceType || !targetType || sourceType === targetType) {
         return false;
@@ -31754,17 +34840,16 @@ function openProductAdAutomationTransferOverlay(sourceType, targetType, entryIds
         setupIndividualPublishingOverlay();
     }
 
-    const nameEl = document.getElementById('individualPublishingAccountLabel');
-    const identifierEl = document.getElementById('individualPublishingAccountIdentifier');
     const statusEl = document.getElementById('individualPublishingStatus');
     const listSelect = document.getElementById('individualPublishingListSelect');
     const notesInput = document.getElementById('individualPublishingNotesInput');
     const submitBtn = document.getElementById('individualPublishingSubmitBtn');
-    if (!nameEl || !identifierEl || !listSelect || !notesInput || !statusEl || !submitBtn) {
+    if (!listSelect || !notesInput || !statusEl || !submitBtn) {
         return false;
     }
 
     const sourceEntries = getProductAdAutomationEntries(sourceType);
+    const accountLookup = buildProductAdAutomationAccountLookup();
     const selectedEntries = ids
         .map(entryId => sourceEntries.find(entry => entry && entry.id === entryId))
         .filter(Boolean);
@@ -31776,17 +34861,38 @@ function openProductAdAutomationTransferOverlay(sourceType, targetType, entryIds
     const sourceLabel = getProductAdAutomationLabel(sourceType);
     const targetLabel = getProductAdAutomationLabel(targetType);
     const selectionCount = selectedEntries.length;
-    const pluralSuffix = selectionCount === 1 ? '' : 's';
-    const primaryLabel = selectionCount === 1
-        ? (selectedEntries[0].label || selectedEntries[0].account || 'Account')
-        : `${selectionCount} Accounts Selected`;
-    const identifierLabel = selectionCount === 1
-        ? `${sourceLabel} → ${targetLabel}`
-        : `Move ${selectionCount} account${pluralSuffix} from ${sourceLabel} to ${targetLabel}`;
+    const formatAutomationIdentifierLabel = entry => {
+        if (!entry || typeof entry !== 'object') {
+            return '';
+        }
+        const normalizedEmail = normalizeEmail(entry.account || '');
+        const context = normalizedEmail ? accountLookup.get(normalizedEmail) : null;
+        const accountId = context && context.id ? context.id : '';
+        const emailLabel = entry.account || '';
+        if (accountId && emailLabel) {
+            return `${accountId} • ${emailLabel}`;
+        }
+        return accountId || emailLabel || entry.label || '';
+    };
 
-    nameEl.textContent = primaryLabel;
-    identifierEl.textContent = identifierLabel;
-    statusEl.textContent = `Moving ${selectionCount === 1 ? 'this account' : 'these accounts'} from ${sourceLabel} to ${targetLabel}.`;
+    const buildAutomationEntryDisplay = entry => {
+        const context = resolveProductAdAutomationEntryContext(entry, sourceType, accountLookup);
+        const displayName = context && context.name
+            ? context.name
+            : (entry.label || entry.account || 'Account');
+        const identifier = formatAutomationIdentifierLabel(entry);
+        return {
+            name: displayName,
+            identifier
+        };
+    };
+
+    const accountEntries = selectionCount === 1
+        ? [buildAutomationEntryDisplay(selectedEntries[0])]
+        : selectedEntries.map(buildAutomationEntryDisplay);
+
+    renderIndividualPublishingAccountEntries(accountEntries);
+    statusEl.textContent = `Currently in the ${sourceLabel} list.`;
     statusEl.classList.remove('hidden');
 
     listSelect.value = targetType;
@@ -31943,6 +35049,10 @@ function findAutomationAccountByInput(value) {
         return null;
     }
 
+    const trimmedInput = typeof value === 'string' ? value.trim().toUpperCase() : '';
+    const prefersBusiness = trimmedInput.startsWith('BUS');
+    const prefersIndividual = !prefersBusiness && trimmedInput.startsWith('IND');
+
     const matchInCollection = (collection, accountType) => {
         const list = Array.isArray(collection) ? collection : [];
         for (const record of list) {
@@ -31957,8 +35067,21 @@ function findAutomationAccountByInput(value) {
         return null;
     };
 
-    return matchInCollection(individualAccounts, 'individual')
-        || matchInCollection(businessAccounts, 'business');
+    const searchOrder = prefersBusiness
+        ? ['business', 'individual']
+        : prefersIndividual
+            ? ['individual', 'business']
+            : ['individual', 'business'];
+
+    for (const type of searchOrder) {
+        const match = type === 'business'
+            ? matchInCollection(businessAccounts, 'business')
+            : matchInCollection(individualAccounts, 'individual');
+        if (match) {
+            return match;
+        }
+    }
+    return null;
 }
 
 function buildShadowIndividualFromBusinessAccount(account) {
@@ -31981,9 +35104,16 @@ function openPublishingListWindowForAccountContext(context, preferredListType) {
         showNotification('warning', 'Unable to locate the selected account.');
         return;
     }
-    const normalizedListType = typeof preferredListType === 'string' ? preferredListType : '';
+    const normalizedListType = typeof preferredListType === 'string' ? preferredListType.trim() : '';
+    const shouldLockListSelection = Boolean(normalizedListType);
     if (context.accountType === 'business') {
         const businessAccount = context.record;
+        const statusLabel = getBusinessAccountStatusLabel(businessAccount?.status) || 'Pending Review';
+        const normalizedStatusLabel = statusLabel.trim().toLowerCase();
+        if (normalizedStatusLabel === 'pending review' || normalizedStatusLabel === 'rejected') {
+            showNotification('warning', `The ${statusLabel} Business Account Cannot be Added to the Publishing List`);
+            return;
+        }
         const linkedIndividual = businessAccount.primaryIndividualId
             ? (individualAccounts || []).find(entry => entry && entry.id === businessAccount.primaryIndividualId)
             : null;
@@ -31996,13 +35126,15 @@ function openPublishingListWindowForAccountContext(context, preferredListType) {
             accountType: 'business',
             businessAccount,
             overrideIdentifier: context.identifier,
-            initialListType: normalizedListType
+            initialListType: normalizedListType,
+            lockListSelection: shouldLockListSelection
         });
         return;
     }
     openIndividualAccountPublishingListOverlay(context.record, {
         accountType: 'individual',
-        initialListType: normalizedListType
+        initialListType: normalizedListType,
+        lockListSelection: shouldLockListSelection
     });
 }
 
@@ -32065,6 +35197,21 @@ async function openProductAdAutomationPrompt(listType) {
                 existingListType: existingEntry.listType
             };
             return { valid: true, message: '', tooltip: '' };
+        }
+
+        if (matchedAccount.accountType === 'business') {
+            const statusLabel = getBusinessAccountStatusLabel(matchedAccount.record?.status) || 'Pending Review';
+            const normalizedStatusLabel = statusLabel.trim().toLowerCase();
+            if (normalizedStatusLabel === 'pending review' || normalizedStatusLabel === 'rejected') {
+                const message = `The ${statusLabel} Business Account Cannot be Added to the Publishing List`;
+                pendingAccountContext = null;
+                showNotification('warning', message);
+                return {
+                    valid: false,
+                    message,
+                    tooltip: 'Only approved or active business accounts can be added to publishing lists.'
+                };
+            }
         }
         pendingAccountContext = {
             accountType: matchedAccount.accountType,
@@ -32216,30 +35363,206 @@ function handleProductAdAutomationListKeydown(event) {
     selectProductAdAutomationEntry(listType, listItem.dataset.entryId);
 }
 
-function exportProductAds() {
+function getDefaultProductAdExportColumnIds() {
+    return PRODUCT_AD_EXPORT_COLUMNS.map(column => column.id);
+}
+
+function ensureProductAdExportSelection() {
+    const current = Array.isArray(state.productAdExportSelection) && state.productAdExportSelection.length
+        ? state.productAdExportSelection
+        : getDefaultProductAdExportColumnIds();
+    const locked = getProductAdExportLockedColumnIds();
+    const seen = new Set();
+    const normalized = [];
+    locked.forEach(id => {
+        if (!PRODUCT_AD_EXPORT_COLUMN_LOOKUP.has(id) || seen.has(id)) {
+            return;
+        }
+        normalized.push(id);
+        seen.add(id);
+    });
+    current.forEach(id => {
+        if (!PRODUCT_AD_EXPORT_COLUMN_LOOKUP.has(id) || seen.has(id)) {
+            return;
+        }
+        normalized.push(id);
+        seen.add(id);
+    });
+    state.productAdExportSelection = normalized;
+    return state.productAdExportSelection;
+}
+
+function setProductAdExportError(message = '') {
+    const errorEl = document.getElementById('productAdExportError');
+    if (!errorEl) {
+        return;
+    }
+    if (message) {
+        errorEl.textContent = message;
+        errorEl.classList.remove('hidden');
+    } else {
+        errorEl.textContent = '';
+        errorEl.classList.add('hidden');
+    }
+}
+
+function renderProductAdExportColumnPicker() {
+    const container = document.getElementById('productAdExportColumnsContainer');
+    if (!container) {
+        return;
+    }
+    const selection = new Set(ensureProductAdExportSelection());
+    const options = PRODUCT_AD_EXPORT_COLUMNS.map(column => {
+        const checkboxAttrs = [
+            'type="checkbox"',
+            `data-column-id="${escapeAttribute(column.id)}"`,
+            selection.has(column.id) ? 'checked' : '',
+            column.locked ? 'disabled' : '',
+            column.locked ? 'data-locked="true"' : ''
+        ].filter(Boolean).join(' ');
+        const extraClass = column.locked ? ' column-picker-option--locked' : '';
+        return `
+            <label class="column-picker-option${extraClass}">
+                <input ${checkboxAttrs}>
+                <span>${escapeHtml(column.label)}</span>
+            </label>
+        `;
+    }).join('');
+    container.innerHTML = options;
+}
+
+function handleProductAdExportColumnChange(event) {
+    const checkbox = event.target && event.target.closest('input[type="checkbox"][data-column-id]');
+    if (!checkbox) {
+        return;
+    }
+    const columnId = checkbox.dataset.columnId;
+    const column = PRODUCT_AD_EXPORT_COLUMN_LOOKUP.get(columnId);
+    if (!column) {
+        return;
+    }
+    if (column.locked) {
+        checkbox.checked = true;
+        return;
+    }
+    const selection = new Set(ensureProductAdExportSelection());
+    if (checkbox.checked) {
+        selection.add(columnId);
+    } else {
+        selection.delete(columnId);
+    }
+    state.productAdExportSelection = Array.from(selection);
+    if (selection.size) {
+        setProductAdExportError('');
+    }
+}
+
+function handleProductAdExportSelectAll(event) {
+    if (event) {
+        event.preventDefault();
+    }
+    state.productAdExportSelection = getDefaultProductAdExportColumnIds();
+    ensureProductAdExportSelection();
+    setProductAdExportError('');
+    renderProductAdExportColumnPicker();
+}
+
+function handleProductAdExportClearSelection(event) {
+    if (event) {
+        event.preventDefault();
+    }
+    state.productAdExportSelection = getProductAdExportLockedColumnIds();
+    renderProductAdExportColumnPicker();
+    setProductAdExportError('');
+}
+
+function openProductAdExportOverlay() {
     if (!productAds || !productAds.length) {
         showNotification('warning', 'There are no product ads to export.');
         return;
     }
-    const headers = ['ID', 'Title', 'Category', 'City', 'Account', 'Status', 'Views', 'Created At', 'Updated At', 'Auto Posting', 'Manual Review', 'Blacklisted', 'Notes'];
-    const rows = productAds.map(ad => [
-        ad.id || '',
-        ad.title || '',
-        ad.category || '',
-        ad.city || '',
-        ad.account || '',
-        getProductAdStatusLabel(ad.status),
-        Number.isFinite(ad.views) ? ad.views : 0,
-        formatDateForDisplay(ad.createdAt, { includeTime: true }) || '',
-        formatDateForDisplay(ad.lastEditedAt, { includeTime: true }) || '',
-        ad.flags && ad.flags.autoPosting ? 'Yes' : 'No',
-        ad.flags && ad.flags.manualReview ? 'Yes' : 'No',
-        ad.flags && ad.flags.blacklisted ? 'Yes' : 'No',
-        ad.notes || ''
-    ]);
+    ensureProductAdExportSelection();
+    renderProductAdExportColumnPicker();
+    setProductAdExportError('');
+    const overlay = document.getElementById('productAdExportOverlay');
+    if (!overlay) {
+        return;
+    }
+    overlay.classList.remove('hidden');
+    const confirmBtn = document.getElementById('productAdExportConfirmBtn');
+    if (confirmBtn) {
+        confirmBtn.focus();
+    }
+}
+
+function closeProductAdExportOverlay() {
+    const overlay = document.getElementById('productAdExportOverlay');
+    if (overlay) {
+        overlay.classList.add('hidden');
+    }
+}
+
+function getOrderedProductAdExportColumns(columnIds = []) {
+    const ids = Array.isArray(columnIds) && columnIds.length ? columnIds : getDefaultProductAdExportColumnIds();
+    const seen = new Set();
+    return ids.map(id => {
+        const normalized = typeof id === 'string' ? id.trim() : '';
+        if (!normalized || seen.has(normalized)) {
+            return null;
+        }
+        const column = PRODUCT_AD_EXPORT_COLUMN_LOOKUP.get(normalized);
+        if (!column) {
+            return null;
+        }
+        seen.add(normalized);
+        return column;
+    }).filter(Boolean);
+}
+
+function handleProductAdExportConfirm(event) {
+    if (event) {
+        event.preventDefault();
+    }
+    const selection = ensureProductAdExportSelection().filter(id => PRODUCT_AD_EXPORT_COLUMN_LOOKUP.has(id));
+    if (!selection.length) {
+        setProductAdExportError('Select at least one column to continue.');
+        return;
+    }
+    const exported = exportProductAds(selection);
+    if (exported) {
+        closeProductAdExportOverlay();
+    }
+}
+
+function exportProductAds(columnIds) {
+    if (!productAds || !productAds.length) {
+        showNotification('warning', 'There are no product ads to export.');
+        return false;
+    }
+    const columns = getOrderedProductAdExportColumns(columnIds);
+    if (!columns.length) {
+        showNotification('warning', 'Select at least one column to export.');
+        return false;
+    }
+    const requestLookup = buildProductAdRequestLookupByAdId();
+    const headers = columns.map(column => column.label);
+    const rows = productAds.map(ad => {
+        const request = resolveProductAdExportRequest(ad, requestLookup);
+        return columns.map(column => {
+            try {
+                return column.value(ad, request);
+            } catch (error) {
+                console.warn(`Unable to derive export value for column "${column.id}"`, error);
+                return '';
+            }
+        });
+    });
     const csv = buildCsvContent([headers, ...rows]);
-    triggerFileDownload(new Blob([csv], { type: 'text/csv;charset=utf-8;' }), 'product-ads.csv');
+    const timestamp = new Date();
+    const formattedDate = `${String(timestamp.getDate()).padStart(2, '0')}-${String(timestamp.getMonth() + 1).padStart(2, '0')}-${timestamp.getFullYear()}`;
+    triggerFileDownload(new Blob([csv], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=utf-8;' }), `Product-Ads_Export_${formattedDate}.xlsx`);
     showNotification('success', 'Product ads exported successfully.');
+    return true;
 }
 
 function updateProductAdsImportStatus(message, type = 'info') {
@@ -36565,7 +39888,7 @@ function handleIndividualAccountsSeedRequest() {
         renderIndividualAccountsTable(1);
         renderIndividualAccountDetail(primaryAccount);
         renderIndividualAccountSupportRequests();
-        showNotification('success', `${createdAccounts.length} Individual Accounts successfully seeded.`);
+        showNotification('success', `${createdAccounts.length} Individual Accounts Successfully Seeded`);
     } catch (error) {
         console.warn('Unable to seed individual accounts:', error);
         showNotification('error', 'Unable to seed individual accounts. Please try again.');
@@ -37874,10 +41197,6 @@ function bindMarketplaceEntryIdentifierClicks(root) {
                 return;
             }
             const adRecord = resolveProductAdRecordByIdentifier(reference);
-            if (adRecord && adRecord.id) {
-                openProductAdHistoryDrawer(adRecord.id);
-                return;
-            }
             const normalizedReference = reference.trim();
             if (!normalizedReference) {
                 return;
@@ -43543,6 +46862,7 @@ function openIndividualAccountPublishingListOverlay(account, options = {}) {
     const initialListType = typeof contextOptions.initialListType === 'string'
         ? contextOptions.initialListType.trim()
         : '';
+    const lockListSelection = contextOptions.lockListSelection === true;
 
     const identifierOverride = typeof contextOptions.overrideIdentifier === 'string'
         ? contextOptions.overrideIdentifier.trim()
@@ -43565,8 +46885,6 @@ function openIndividualAccountPublishingListOverlay(account, options = {}) {
     }
 
     const overlay = document.getElementById('individualPublishingOverlay');
-    const nameEl = document.getElementById('individualPublishingAccountLabel');
-    const identifierEl = document.getElementById('individualPublishingAccountIdentifier');
     const statusEl = document.getElementById('individualPublishingStatus');
     const listSelect = document.getElementById('individualPublishingListSelect');
     const notesInput = document.getElementById('individualPublishingNotesInput');
@@ -43581,7 +46899,7 @@ function openIndividualAccountPublishingListOverlay(account, options = {}) {
         setupIndividualPublishingOverlay();
     }
     
-    if (!nameEl || !identifierEl || !listSelect || !notesInput || !statusEl || !submitBtn) {
+    if (!listSelect || !notesInput || !statusEl || !submitBtn) {
         showNotification('warning', 'Publishing overlay unavailable.');
         return;
     }
@@ -43639,15 +46957,84 @@ function openIndividualAccountPublishingListOverlay(account, options = {}) {
         return numericCandidate !== undefined ? String(numericCandidate) : '';
     };
 
+    const resolveIndividualPublishingIdentifierLabel = (target, fallbackIdentifier) => {
+        if (!target || typeof target !== 'object') {
+            return fallbackIdentifier;
+        }
+        const idCandidates = [target.accountId, target.id, target.userId, target.identifier];
+        const normalizedId = idCandidates
+            .map(value => {
+                if (typeof value === 'string' && value.trim()) {
+                    return value.trim();
+                }
+                if (Number.isFinite(value)) {
+                    return String(value);
+                }
+                if (value && typeof value === 'object') {
+                    const nested = value.id;
+                    if (typeof nested === 'string' && nested.trim()) {
+                        return nested.trim();
+                    }
+                    if (Number.isFinite(nested)) {
+                        return String(nested);
+                    }
+                }
+                return '';
+            })
+            .find(Boolean);
+        const emailCandidates = [target.email, target.contactEmail, target.loginEmail];
+        const normalizedEmail = emailCandidates
+            .map(value => (typeof value === 'string' && value.trim() ? value.trim() : ''))
+            .find(Boolean);
+        if (normalizedId && normalizedEmail) {
+            return `${normalizedId} • ${normalizedEmail}`;
+        }
+        return normalizedEmail || normalizedId || fallbackIdentifier;
+    };
+
+    const resolveBusinessPublishingIdentifierLabel = (target, fallbackIdentifier) => {
+        if (!target || typeof target !== 'object') {
+            return fallbackIdentifier;
+        }
+        const idCandidates = [target.businessId, target.accountId, target.id, target.registrationNumber];
+        const normalizedId = idCandidates
+            .map(value => {
+                if (typeof value === 'string' && value.trim()) {
+                    return value.trim();
+                }
+                if (Number.isFinite(value)) {
+                    return String(value);
+                }
+                if (value && typeof value === 'object') {
+                    const nested = value.id;
+                    if (typeof nested === 'string' && nested.trim()) {
+                        return nested.trim();
+                    }
+                    if (Number.isFinite(nested)) {
+                        return String(nested);
+                    }
+                }
+                return '';
+            })
+            .find(Boolean);
+        const emailCandidates = [target.email, target.contactEmail, target.ownerEmail];
+        const normalizedEmail = emailCandidates
+            .map(value => (typeof value === 'string' && value.trim() ? value.trim() : ''))
+            .find(Boolean);
+        if (normalizedId && normalizedEmail) {
+            return `${normalizedId} • ${normalizedEmail}`;
+        }
+        return normalizedEmail || normalizedId || fallbackIdentifier;
+    };
+
     const displayName = businessAccount
         ? resolveBusinessDisplayName(businessAccount)
         : resolveIndividualAccountDisplayName(account);
     const identifierDisplay = businessAccount
-        ? resolveBusinessContactLabel(businessAccount) || identifier
-        : identifier;
+        ? resolveBusinessPublishingIdentifierLabel(businessAccount, resolveBusinessContactLabel(businessAccount) || identifier)
+        : resolveIndividualPublishingIdentifierLabel(account, identifier);
 
-    nameEl.textContent = displayName;
-    identifierEl.textContent = identifierDisplay;
+    renderIndividualPublishingAccountEntries([{ name: displayName, identifier: identifierDisplay }]);
 
     if (existingEntryDetails && existingEntryDetails.listType && PUBLISHING_LIST_LABELS[existingEntryDetails.listType]) {
         statusEl.textContent = `Currently in the ${PUBLISHING_LIST_LABELS[existingEntryDetails.listType]} list.`;
@@ -43661,6 +47048,12 @@ function openIndividualAccountPublishingListOverlay(account, options = {}) {
         ? existingEntryDetails.listType
         : initialListType;
     listSelect.value = resolvedListSelection || '';
+    if (lockListSelection && initialListType) {
+        listSelect.value = initialListType;
+        listSelect.disabled = true;
+        listSelect.setAttribute('aria-disabled', 'true');
+        listSelect.dataset.transferLocked = 'true';
+    }
     notesInput.value = defaultNotes;
     setIndividualPublishingFormError('');
     submitBtn.disabled = true;
@@ -43679,8 +47072,16 @@ function openIndividualAccountPublishingListOverlay(account, options = {}) {
 
     overlay.classList.remove('hidden');
     syncIndividualPublishingSubmitState();
+    const preferredFocusTarget = lockListSelection && initialListType ? notesInput : listSelect;
     setTimeout(() => {
-        listSelect.focus();
+        if (!preferredFocusTarget || typeof preferredFocusTarget.focus !== 'function') {
+            return;
+        }
+        try {
+            preferredFocusTarget.focus();
+        } catch (error) {
+            // focus fallback ignored
+        }
     }, 0);
 }
 
@@ -43723,8 +47124,6 @@ function closeIndividualAccountPublishingListOverlay() {
     if (!overlay) return;
     const form = document.getElementById('individualPublishingForm');
     const statusEl = document.getElementById('individualPublishingStatus');
-    const identifierEl = document.getElementById('individualPublishingAccountIdentifier');
-    const nameEl = document.getElementById('individualPublishingAccountLabel');
     const submitBtn = document.getElementById('individualPublishingSubmitBtn');
     const listSelect = document.getElementById('individualPublishingListSelect');
     if (form) {
@@ -43738,12 +47137,7 @@ function closeIndividualAccountPublishingListOverlay() {
         statusEl.textContent = '';
         statusEl.classList.add('hidden');
     }
-    if (identifierEl) {
-        identifierEl.textContent = '';
-    }
-    if (nameEl) {
-        nameEl.textContent = 'Individual Account';
-    }
+    renderIndividualPublishingAccountEntries(null);
     setIndividualPublishingFormError('');
     if (submitBtn) {
         submitBtn.disabled = true;
@@ -46319,8 +49713,13 @@ function renderBusinessRequestsSummary(dataset, filtered) {
     if (!summary) {
         return;
     }
+    const filters = ensureBusinessRequestsFiltersState();
+    const keywordFilter = typeof filters.search === 'string' ? filters.search.trim() : '';
+    const filteredCount = Array.isArray(filtered) ? filtered.length : dataset.length;
+    const filterCaption = keywordFilter
+        ? `Keyword: ${escapeHtml(keywordFilter)}`
+        : 'No keyword filter';
     const totalPending = dataset.length;
-    const filteredCount = filtered.length;
     const docsRequestedCount = dataset.filter(account => (account.status || '').toLowerCase() === 'docs-requested').length;
     const todayFilters = { period: 'today' };
     const todaysCount = filterBusinessRequestsByPeriod(dataset, todayFilters).length;
@@ -46358,13 +49757,18 @@ function renderBusinessRequestsSummary(dataset, filtered) {
         <div class="business-requests-summary-card">
             <span class="label">Pending queue</span>
             <span class="value">#${totalPending}</span>
-            ${docsCaptionMarkup ? `<span class="caption">${docsCaptionMarkup}</span>` : ''}
         </div>
     `);
     cards.push(`
         <div class="business-requests-summary-card">
             <span class="label">New today</span>
             <span class="value">#${todaysCount}</span>
+        </div>
+    `);
+    cards.push(`
+        <div class="business-requests-summary-card">
+            <span class="label">Active filter</span>
+            <span class="value">#${filteredCount}</span>
         </div>
     `);
     cards.push(`
@@ -50884,7 +54288,7 @@ function handleBusinessAccountsSeedRequest() {
 
     refreshBusinessRequestsWorkspace();
 
-    showNotification('success', 'Business Account successfully Seeded');
+    showNotification('success', 'Business Account Successfully Seeded');
 }
 
 async function handleBusinessAccountsDeleteAllRequest() {

@@ -5,7 +5,7 @@
 - `index.html` – admin shell that boots the control panel UI.
 - `login.html` / `complete-registration.html` – auth flows that reuse the same storage keys as the admin UI.
 - `assets/css/onruf-central-control-panel.css` – styling extracted from the original inline sheet.
-- `assets/js/onruf-central-control-panel.js` – ~38k LOC powering every admin workflow.
+- `assets/js/onruf-central-control-panel.js` – ~56k LOC powering every admin workflow.
 - `assets/js/onruf-auth.js` – login, OTP, and registration logic that shares seed data and storage config with the admin bundle.
 
 ## Running the UI
@@ -50,7 +50,7 @@ Override the endpoint via `TEST_INVITE_ENDPOINT` if you are targeting a remote A
 
 ## Development patterns
 
-- The admin bundle orchestrates everything through a global `state` object (see `assets/js/onruf-central-control-panel.js` around line 2137). Update `state` first, then call the matching `render*` helper.
+- The admin bundle orchestrates everything through a global `state` object (see `assets/js/onruf-central-control-panel.js` around line 2532). Update `state` first, then call the matching `render*` helper.
 - Persist mutations with the sequence `normalize*Payload()` → mutate in-memory arrays → `save*ToStorage()` → refresh any derived collections on `state` → `render*/sync*()`.
 - Event listeners guard on `dataset.bound === 'true'`; when re-rendering interactive blocks, clear that flag before rebinding to avoid duplicate handlers.
 - Shared overlay helpers (`setup*Overlay`, `open*Overlay`, `applyRequiredFieldIndicators()`) manage focus and required-field visuals. Reuse them when adding dialogs.

@@ -728,7 +728,7 @@
                                     <i class="fas fa-list-check"></i>
                                     <span>Update list</span>
                                 </button>
-                                <button type="button" class="btn btn-outline" id="individualAccountsResetFiltersBtn">
+                                <button type="button" class="btn btn-outline" id="individualAccountsResetFiltersBtn" data-action="reset-filters">
                                     <i class="fas fa-rotate-left"></i>
                                     Reset
                                 </button>
@@ -742,7 +742,7 @@
                                     <i class="fas fa-seedling"></i>
                                     Seed Account
                                 </button>
-                                <button type="button" class="btn btn-outline" id="exportIndividualAccountsBtn">
+                                <button type="button" class="btn btn-outline" id="exportIndividualAccountsBtn" data-action="export">
                                     <i class="fas fa-file-export"></i>
                                     Export
                                 </button>
@@ -964,7 +964,7 @@
                                     <i class="fas fa-list-check"></i>
                                     Update list
                                 </button>
-                                <button type="button" class="btn btn-outline" id="businessAccountsResetFiltersBtn">
+                                <button type="button" class="btn btn-outline" id="businessAccountsResetFiltersBtn" data-action="reset-filters">
                                     <i class="fas fa-rotate-left"></i>
                                     Reset
                                 </button>
@@ -978,7 +978,7 @@
                                     <i class="fas fa-seedling"></i>
                                     Seed Account
                                 </button>
-                                <button type="button" class="btn btn-outline" id="exportBusinessAccountsBtn">
+                                <button type="button" class="btn btn-outline" id="exportBusinessAccountsBtn" data-action="export">
                                     <i class="fas fa-file-export"></i>
                                     Export
                                 </button>
@@ -1197,7 +1197,7 @@
                             <div class="detail-controls directory-controls product-ads-controls">
                                 <div class="search-box">
                                     <i class="fas fa-search"></i>
-                                    <input type="text" id="productAdsSearchInput" placeholder="Search by listing title, ID, account, category, or city" />
+                                    <input type="text" id="productAdsSearchInput" placeholder="Search by Ad Title, or ID" />
                                 </div>
                                 <div class="detail-filters product-ads-filters">
                                     <label class="filter-control" for="productAdsStatusFilter">Status
@@ -1230,33 +1230,33 @@
                     <div class="detail-quick-actions product-ads-toolbar">
                         <div class="quick-action-group product-ads-actions" id="productAdsActionToolbar" role="group" aria-label="Product ad actions">
                             <div class="product-ads-actions-primary">
-                                <button type="button" class="btn btn-secondary btn-compact" id="productAdsHistoryBtn" disabled>
-                                    <i class="fas fa-clock-rotate-left"></i>
-                                    <span>History</span>
-                                </button>
-                                <button type="button" class="btn btn-secondary btn-compact" id="productAdsEditBtn" disabled>
-                                    <i class="fas fa-pen"></i>
-                                    <span>Edit</span>
-                                </button>
-                                <button type="button" class="btn btn-outline" id="productAdsApproveBtn" disabled>
+                                <button type="button" class="btn btn-outline product-ad-action-btn product-ad-action-activate" id="productAdsActivateBtn" data-action="activate" disabled>
                                     <i class="fas fa-circle-check"></i>
+                                    <span>Activate</span>
+                                </button>
+                                <button type="button" class="btn btn-outline product-ad-action-btn product-ad-action-deactivate" id="productAdsDeactivateBtn" data-action="deactivate" disabled>
+                                    <i class="fas fa-power-off"></i>
+                                    <span>Deactivate</span>
+                                </button>
+                                <button type="button" class="btn btn-outline product-ad-action-btn product-ad-action-approve" id="productAdsApproveBtn" data-action="approve" disabled>
+                                    <i class="fas fa-clipboard-check"></i>
                                     <span>Approve</span>
                                 </button>
-                                <button type="button" class="btn btn-outline" id="productAdsRejectBtn" disabled>
-                                    <i class="fas fa-circle-xmark"></i>
-                                    <span>Reject</span>
+                                <button type="button" class="btn btn-secondary" id="productAdDetailsBtn" data-action="details" disabled>
+                                    <i class="fas fa-clipboard-list"></i>
+                                    <span>Product Ad Details</span>
                                 </button>
-                                <button type="button" class="btn btn-outline" id="productAdsSuspendBtn" data-action="suspend" disabled>
-                                    <i class="fas fa-ban"></i>
-                                    <span class="action-label">Suspend</span>
+                                <button type="button" class="btn btn-secondary" id="productAdMarketplaceBtn" data-action="marketplace" disabled>
+                                    <i class="fas fa-store"></i>
+                                    <span>Marketplace Activity</span>
                                 </button>
-                                <button type="button" class="btn btn-outline" id="productAdsResetFiltersBtn">
+                                <button type="button" class="btn btn-outline" id="productAdsResetFiltersBtn" data-action="reset-filters">
                                     <i class="fas fa-rotate-left"></i>
                                     Reset
                                 </button>
-                                <button type="button" class="btn btn-outline" id="productAdsDeleteBtn" disabled>
+                                <button type="button" class="btn btn-outline" id="productAdsDeleteBtn" data-action="delete-all" disabled>
                                     <i class="fas fa-trash"></i>
-                                    <span>Delete All</span>
+                                    Delete All
                                 </button>
                             </div>
                             <div class="product-ads-actions-secondary">
@@ -1264,7 +1264,7 @@
                                     <i class="fas fa-seedling"></i>
                                     <span>Seed Product Ad</span>
                                 </button>
-                                <button type="button" class="btn btn-outline" id="exportProductAdsBtn">
+                                <button type="button" class="btn btn-outline" id="exportProductAdsBtn" data-action="export">
                                     <i class="fas fa-file-export"></i>
                                     Export
                                 </button>
@@ -1277,19 +1277,18 @@
                             <thead>
                                 <tr>
                                     <th>#</th>
-                                    <th>Listing</th>
+                                    <th>ID</th>
+                                    <th>Product</th>
                                     <th>Category</th>
-                                    <th>City</th>
                                     <th>Account</th>
                                     <th>Status</th>
-                                    <th>Views</th>
                                     <th>Created</th>
                                     <th>Updated</th>
                                 </tr>
                             </thead>
                             <tbody id="productAdsTableBody">
                                 <tr>
-                                    <td colspan="9">Use the filters above to load product listings.</td>
+                                    <td colspan="8">Use the filters above to load product listings.</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -1313,11 +1312,45 @@
                         </div>
                     </div>
 
+                    <div id="productAdDetailsOverlay" class="spec-detail-overlay product-ad-details-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="productAdDetailsHeading">
+                        <div class="spec-detail-modal product-ad-details-modal" role="document">
+                            <header>
+                                <div class="product-ad-details-header">
+                                    <h3 id="productAdDetailsHeading">Product Ad Details</h3>
+                                    <p class="section-subtitle" id="productAdDetailsMeta">—</p>
+                                </div>
+                                <button type="button" class="modal-close-btn" id="productAdDetailsCloseBtn" aria-label="Close product ad details">
+                                    <i class="fas fa-xmark"></i>
+                                </button>
+                            </header>
+                            <div class="spec-detail-content product-ad-details-content" id="productAdDetailsContent">
+                                <p class="empty-state">Select a product ad to view its submitted details.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="productAdMarketplaceOverlay" class="role-detail-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="productAdMarketplaceTitle">
+                        <div class="role-detail-modal" role="document">
+                            <header>
+                                <div>
+                                    <h3 id="productAdMarketplaceTitle">Marketplace Activity</h3>
+                                    <p class="section-subtitle" id="productAdMarketplaceSubtitle">Performance across ONRUF marketplace.</p>
+                                </div>
+                                <button type="button" class="modal-close-btn" id="productAdMarketplaceCloseBtn" aria-label="Close marketplace performance panel">
+                                    <i class="fas fa-xmark"></i>
+                                </button>
+                            </header>
+                            <div class="role-detail-content" id="productAdMarketplaceContent">
+                                <p class="empty-state">Select a product ad to review its marketplace performance.</p>
+                            </div>
+                        </div>
+                    </div>
+
                     <div id="productAdDecisionOverlay" class="confirm-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="productAdDecisionTitle">
                         <div class="confirm-dialog" role="document">
                             <h3 id="productAdDecisionTitle">Review Listing</h3>
                             <p class="helper-text" id="productAdDecisionMessage">Provide a reason before updating the listing status.</p>
-                            <label class="form-label" for="productAdDecisionReasonInput">Moderator note</label>
+                            <label class="form-label" id="productAdDecisionReasonLabel" for="productAdDecisionReasonInput">Moderator note</label>
                             <textarea id="productAdDecisionReasonInput" class="form-input" placeholder="Capture the decision context for the audit trail"></textarea>
                             <div class="confirm-actions">
                                 <button type="button" class="btn btn-outline" id="productAdDecisionCancelBtn">
@@ -1326,7 +1359,7 @@
                                 </button>
                                 <button type="button" class="btn btn-primary" id="productAdDecisionConfirmBtn">
                                     <i class="fas fa-circle-check"></i>
-                                    Confirm
+                                    <span>Confirm</span>
                                 </button>
                             </div>
                         </div>
@@ -1417,6 +1450,28 @@
                             </div>
                         </div>
                     </div>
+
+                    <div id="productAdExportOverlay" class="confirm-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="productAdExportTitle">
+                        <div class="confirm-dialog product-export-dialog" role="document">
+                            <h3 id="productAdExportTitle">Select File Columns</h3>
+                            <div class="column-picker-controls">
+                                <button type="button" class="btn btn-ghost" id="productAdExportSelectAllBtn">Select All</button>
+                                <button type="button" class="btn btn-ghost" id="productAdExportClearBtn">Clear All</button>
+                            </div>
+                            <div class="column-picker-grid" id="productAdExportColumnsContainer" role="group" aria-label="Export columns"></div>
+                            <p class="form-error-text hidden" id="productAdExportError" role="alert"></p>
+                            <div class="confirm-actions">
+                                <button type="button" class="btn btn-outline" id="productAdExportCancelBtn">
+                                    <i class="fas fa-xmark"></i>
+                                    Cancel
+                                </button>
+                                <button type="button" class="btn btn-primary" id="productAdExportConfirmBtn">
+                                    <i class="fas fa-file-export"></i>
+                                    Export
+                                </button>
+                            </div>
+                        </div>
+                    </div>
                     </div>
 
                     <div id="product-ads-requests" class="sub-app">
@@ -1425,7 +1480,6 @@
                                 <div class="header-stack">
                                     <h2 class="module-title" id="productAdRequestsModuleTitle">
                                         <span id="productAdRequestsModuleTitleText">Product Ads Requests</span>
-                                        <span class="count-badge" id="productAdRequestsCountLabel">#0 Requests</span>
                                     </h2>
                                 </div>
                             </div>
@@ -1450,8 +1504,15 @@
                                     <div class="product-ad-requests-controls business-requests-controls">
                                         <div class="product-ad-requests-search business-requests-search">
                                             <i class="fas fa-search"></i>
-                                            <input type="search" id="productAdRequestsSearchInput" placeholder="Search by Item Title, Account, City, or ID" autocomplete="off" />
+                                            <input type="search" id="productAdRequestsSearchInput" placeholder="Search by Ad Title, City, or ID" autocomplete="off" />
                                         </div>
+                                        <label class="filter-control" for="productAdRequestsAccountTypeFilter">Account Type
+                                            <select id="productAdRequestsAccountTypeFilter" class="filter-select">
+                                                <option value="all">All</option>
+                                                <option value="individual">Individual</option>
+                                                <option value="business">Business</option>
+                                            </select>
+                                        </label>
                                         <button type="button" class="btn btn-outline btn-compact" id="productAdRequestsResetBtn">
                                             <i class="fas fa-rotate-left"></i>
                                             Reset
@@ -1463,7 +1524,7 @@
                             <div class="product-ad-requests-summary business-requests-summary" id="productAdRequestsSummary"></div>
 
                             <div class="product-ad-requests-grid business-requests-grid" id="productAdRequestsGrid" aria-live="polite">
-                                <div class="empty-state" id="productAdRequestsEmptyState">Pending product ad submissions will appear here.</div>
+                                <div class="empty-state" id="productAdRequestsEmptyState">Product ad submissions that match the selected filters will appear here.</div>
                             </div>
                         </section>
 
@@ -1472,7 +1533,7 @@
                                 <h3 id="productAdRequestDecisionTitle">Review Product Ad</h3>
                                 <p class="helper-text" id="productAdRequestDecisionMessage">Add context for the approval or rejection before proceeding.</p>
                                 <label class="form-label" for="productAdRequestDecisionNoteInput">Decision note (optional)</label>
-                                <textarea id="productAdRequestDecisionNoteInput" class="form-input" placeholder="Explain the moderation decision"></textarea>
+                                <textarea id="productAdRequestDecisionNoteInput" class="form-input" placeholder="Share why this ad is being approved"></textarea>
                                 <div class="confirm-actions">
                                     <button type="button" class="btn btn-outline" id="productAdRequestDecisionCancelBtn">
                                         <i class="fas fa-xmark"></i>
@@ -1482,6 +1543,22 @@
                                         <i class="fas fa-circle-check"></i>
                                         Confirm
                                     </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="productAdRequestFeesOverlay" class="role-detail-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="productAdRequestFeesTitle">
+                            <div class="role-detail-modal" role="document">
+                                <header>
+                                    <div>
+                                        <h3 id="productAdRequestFeesTitle">Fees Details</h3>
+                                    </div>
+                                    <button type="button" class="modal-close-btn" id="productAdRequestFeesCloseBtn" aria-label="Close fees details">
+                                        <i class="fas fa-xmark"></i>
+                                    </button>
+                                </header>
+                                <div class="role-detail-content" id="productAdRequestFeesContent">
+                                    <p class="empty-state">Fees details will appear here.</p>
                                 </div>
                             </div>
                         </div>
@@ -2369,6 +2446,7 @@
                                             <h2 style="margin-top:0;font-size:20px;margin-bottom:16px;">Sub-Specifications</h2>
                                             <p style="margin-top:0;margin-bottom:16px;color:#4b5563;font-size:14px;">Capture localized labels for each sub-specification option.</p>
                                             <div id="subSpecificationRows" style="display:flex; flex-direction:column; gap:12px;"></div>
+                                            <p id="subSpecificationEmptyError" class="field-error hidden" style="color:#dc2626;font-size:13px;margin:8px 0 0;">Enter at Least One Sub-Specification for this Specification</p>
                                             <div class="modal-actions">
                                                 <button type="button" class="btn btn-outline" id="cancelSubSpecificationBtn">Cancel</button>
                                                 <button type="button" class="btn btn-primary" id="applySubSpecificationBtn">Apply</button>
@@ -2420,10 +2498,7 @@
                     <h3 id="individualPublishingOverlayTitle">Publishing List</h3>
                 </div>
             </div>
-            <div class="individual-publishing-account">
-                <div class="account-name" id="individualPublishingAccountLabel">Individual Account</div>
-                <div class="helper-text" id="individualPublishingAccountIdentifier"></div>
-            </div>
+            <div class="individual-publishing-account" id="individualPublishingAccountContainer"></div>
             <p class="helper-text hidden" id="individualPublishingStatus"></p>
             <form id="individualPublishingForm" novalidate>
                 <div class="form-group">
