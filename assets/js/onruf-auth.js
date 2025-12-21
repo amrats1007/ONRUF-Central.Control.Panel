@@ -4,7 +4,7 @@
     const USERS_STORAGE_KEY = 'onruf_users_v1';
     const SESSION_STORAGE_KEY = 'onruf_active_session_v1';
     const OTP_EXPIRY_MINUTES = 10;
-    const DATA_RESET_VERSION = '20251217-product-ads-arabic-v7';
+    const DATA_RESET_VERSION = '20251221-central-admin-name-v8';
     const DATA_RESET_KEY = 'onruf_data_reset_version';
     const INVITATION_SERVICE_ENDPOINT_DEFAULT = '/api/invitations/send';
     const INVITATION_VALIDITY_MS = 7 * 24 * 60 * 60 * 1000;
@@ -106,7 +106,7 @@
     const DEFAULT_USERS_SEED = [
         {
             id: 1,
-            name: 'Central Super Admin',
+            name: 'Central Admin',
             firstName: 'Central',
             lastName: 'Admin',
             email: 'superadmin@onruf.com',

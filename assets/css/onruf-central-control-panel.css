@@ -3062,7 +3062,6 @@ body.dark-mode .table-shell td .cell-secondary {
     padding: 12px 14px;
     overflow: hidden;
     text-overflow: ellipsis;
-    width: 192px;
 }
 
 #specificationsListView table td {
@@ -3077,7 +3076,7 @@ body.dark-mode .table-shell td .cell-secondary {
 
 #specificationsListView table th:nth-child(2),
 #specificationsListView table td:nth-child(2) {
-    width: 128px;
+    width: 130px;
 }
 
 #specificationsListView table th:nth-child(3),
@@ -3087,27 +3086,22 @@ body.dark-mode .table-shell td .cell-secondary {
 
 #specificationsListView table th:nth-child(4),
 #specificationsListView table td:nth-child(4) {
-    width: 299px;
+    width: 300px;
 }
 
-#specificationsListView table th:nth-child(7),
-#specificationsListView table td:nth-child(7) {
-    width: 233px;
+#specificationsListView table th:nth-child(5),
+#specificationsListView table td:nth-child(5) {
+    width: 135px;
+}
+
+#specificationsListView table th:nth-child(8),
+#specificationsListView table td:nth-child(8) {
+    width: 110px;
 }
 
 #specificationsListView table th:nth-child(9),
 #specificationsListView table td:nth-child(9) {
     width: 200px;
-}
-
-#specificationsListView table th:nth-child(10),
-#specificationsListView table td:nth-child(10) {
-    width: 180px;
-}
-
-#specificationsListView table th:nth-child(11),
-#specificationsListView table td:nth-child(11) {
-    width: 120px;
 }
 
 th {
@@ -3222,7 +3216,7 @@ body.dark-mode .user-meta {
 
 #usersListView table th:nth-child(5),
 #usersListView table td:nth-child(5) {
-    min-width: 113px;
+    width: 110px;
 }
 
 #usersListView table th:nth-child(6),
@@ -3415,12 +3409,6 @@ body.dark-mode .role-alt-name {
     flex-direction: column;
     gap: 4px;
     min-width: 0;
-}
-
-.created-date {
-    font-weight: 600;
-    font-size: 13px;
-    color: var(--text-primary, #0f172a);
 }
 
 body.dark-mode .created-date {
@@ -8648,8 +8636,20 @@ body.dark-mode .category-breadcrumb .breadcrumb-segment.active {
     box-shadow: 0 8px 22px rgba(16, 185, 129, 0.24);
 }
 
+.specification-action-delete {
+    background: rgba(239, 68, 68, 0.15);
+    color: var(--danger);
+    box-shadow: 0 4px 14px rgba(239, 68, 68, 0.18);
+}
+
+.specification-action-delete:not([disabled]):hover,
+.specification-action-delete:not([disabled]):focus-visible {
+    box-shadow: 0 8px 20px rgba(239, 68, 68, 0.24);
+}
+
 .specification-bulk-actions .btn[disabled].specification-action-deactivate,
-.specification-bulk-actions .btn[disabled].specification-action-activate {
+.specification-bulk-actions .btn[disabled].specification-action-activate,
+.specification-bulk-actions .btn[disabled].specification-action-delete {
     opacity: 0.45;
 }
 
@@ -8754,8 +8754,6 @@ body.dark-mode .category-breadcrumb .breadcrumb-segment.active {
 .user-bulk-actions .btn {
     gap: 6px;
     transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease, color 0.2s ease;
-    border: none;
-    font-weight: 600;
 }
 
 .user-bulk-actions .btn[disabled] {

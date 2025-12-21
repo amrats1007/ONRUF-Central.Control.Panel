@@ -2803,6 +2803,8 @@ const CATEGORY_EXPORT_COLUMNS = [
     { id: 'categoryStatus', label: 'Category Status', value: category => getCategoryStatusLabel(category.status) },
     { id: 'creationDate', label: 'Creation Date', value: category => formatDateForDisplay(category.createdAt) || '' },
     { id: 'createdBy', label: 'Created By', value: category => category.createdBy || category.owner || '' },
+    { id: 'lastUpdate', label: 'Last Update', value: category => formatCategoryActivityLabel(category) || '' },
+    { id: 'lastUpdatedBy', label: 'Last Updated By', value: category => category.lastUpdatedBy || '' },
     { id: 'adPublishingFeeDue', label: 'Ad Publishing Fees Due Date', value: category => formatCategoryFeeDueLabel(category.adPublishingFeeDue) },
     { id: 'adPublishingFeeType', label: 'Ad Publishing Fees Type', value: category => formatCategoryFeeTypeLabel(category.adPublishingFeeType) },
     { id: 'adPublishingFeeAmount', label: 'Ad Publishing Fees', value: category => formatCategoryNumericValue(category.adPublishingFeeAmount) },
@@ -3091,7 +3093,7 @@ function buildCategoryImportColumnIndex(header) {
     return { columnIndex, normalizedHeader, getIndex };
 }
 
-const CATEGORY_IMPORT_ALLOWED_STATUSES = new Set(['active', 'inactive']);
+const CATEGORY_IMPORT_ALLOWED_STATUSES = new Set(['draft', 'in-review', 'published', 'archived', 'active', 'inactive']);
 const CATEGORY_SORT_OVERRIDES_STORAGE_KEY = 'onruf_category_sort_overrides_v1';
 
 const categoryImportState = {
@@ -3702,7 +3704,7 @@ let roles = [];
 const defaultUsers = [
     {
         id: 1,
-        name: 'Central Super Admin',
+        name: 'Central Admin',
         firstName: 'Central',
         lastName: 'Admin',
         email: 'superadmin@onruf.com',
@@ -4564,7 +4566,7 @@ const BUSINESS_PACKAGES_STORAGE_KEY = 'onruf_business_packages_v1';
 const BUSINESS_SUBSCRIBERS_STORAGE_KEY = 'onruf_business_subscribers_v1';
 const FINANCE_TRANSACTIONS_STORAGE_KEY = 'onruf_finance_transactions_v1';
 const FINANCE_AUDIT_STORAGE_KEY = 'onruf_finance_audit_v1';
-const DATA_RESET_VERSION = '20251217-product-ads-arabic-v7';
+const DATA_RESET_VERSION = '20251221-central-admin-name-v8';
 const DATA_RESET_KEY = 'onruf_data_reset_version';
 const CATEGORY_RESET_VERSION = '20251021-delete-all-categories';
 const CATEGORY_RESET_KEY = 'onruf_category_reset_version';
@@ -5214,7 +5216,10 @@ function normalizeRolePayload(role) {
         createdBy: createdByLabel,
         createdById: Number.isInteger(createdById) ? createdById : null,
         createdByEmail,
-        lastUpdated: lastUpdatedValue
+        lastUpdated: lastUpdatedValue,
+        lastUpdatedById: Number.isInteger(role.lastUpdatedById) ? role.lastUpdatedById : null,
+        lastUpdatedBy: typeof role.lastUpdatedBy === 'string' ? role.lastUpdatedBy.trim() : '',
+        lastUpdatedByEmail: typeof role.lastUpdatedByEmail === 'string' ? role.lastUpdatedByEmail.trim() : ''
     };
 }
 
@@ -5325,6 +5330,8 @@ function normalizeUserPayload(user, index = 0) {
         invitation,
         auth,
         createdBy,
+        lastUpdated: user.lastUpdated || null,
+        lastUpdatedBy: user.lastUpdatedBy || null,
         lastEvent
     };
 }
@@ -5871,6 +5878,8 @@ function normalizeCategoryPayload(category, index = 0) {
         notifyOnStatusChange,
         syncAutomation,
         createdAt,
+        lastUpdated: category.lastUpdated || category.updatedAt || null,
+        lastUpdatedBy: category.lastUpdatedBy || category.updatedBy || null,
         productPriceType,
         productPublishPrice,
         adPublishingFeeType,
@@ -12892,6 +12901,7 @@ function setRoleBuilderMode(mode = 'create', role = null) {
 
     const submitIconEl = document.getElementById('roleFormSubmitIcon');
     const submitLabelEl = document.getElementById('roleFormSubmitLabel');
+    const idInput = document.getElementById('roleIdInput');
 
     if (mode === 'edit' && role) {
         if (submitIconEl) {
@@ -12900,12 +12910,18 @@ function setRoleBuilderMode(mode = 'create', role = null) {
         if (submitLabelEl) {
             submitLabelEl.textContent = 'Save';
         }
+        if (idInput) {
+            idInput.readOnly = true;
+        }
     } else {
         if (submitIconEl) {
             submitIconEl.className = 'fas fa-plus';
         }
         if (submitLabelEl) {
             submitLabelEl.textContent = 'Add';
+        }
+        if (idInput) {
+            idInput.readOnly = false;
         }
     }
 }
@@ -12919,7 +12935,6 @@ function populateRoleForm(role) {
 
     if (idInput) {
         idInput.value = role.id || '';
-        idInput.readOnly = true; // Prevent editing ID on edit
     }
     if (arabicInput) {
         arabicInput.value = role.nameArabic || '';
@@ -14902,7 +14917,7 @@ function setupEventListeners() {
 
     const specificationActivateBtn = document.getElementById('specificationActivateBtn');
     if (specificationActivateBtn && specificationActivateBtn.dataset.bound !== 'true') {
-        specificationActivateBtn.addEventListener('click', () => {
+        specificationActivateBtn.addEventListener('click', async () => {
             const selectedSpecification = getSelectedSpecification();
             if (!selectedSpecification) {
                 return;
@@ -14913,6 +14928,14 @@ function setupEventListeners() {
             if (normalizedStatus === 'active') {
                 return;
             }
+
+            const confirmed = await showSpecificationConfirm(
+                'Are You Sure You Want to Activate Specification Again?',
+                'OK',
+                'Cancel'
+            );
+            if (!confirmed) return;
+
             setSelectedSpecification(selectedSpecification.id, { toggle: false });
             toggleSpecificationStatus(selectedSpecification.id);
         });
@@ -14921,7 +14944,7 @@ function setupEventListeners() {
 
     const specificationDeactivateBtn = document.getElementById('specificationDeactivateBtn');
     if (specificationDeactivateBtn && specificationDeactivateBtn.dataset.bound !== 'true') {
-        specificationDeactivateBtn.addEventListener('click', () => {
+        specificationDeactivateBtn.addEventListener('click', async () => {
             const selectedSpecification = getSelectedSpecification();
             if (!selectedSpecification) {
                 return;
@@ -14932,10 +14955,30 @@ function setupEventListeners() {
             if (normalizedStatus === 'inactive') {
                 return;
             }
+
+            const confirmed = await showSpecificationConfirm(
+                'Are You Sure You Want to Deactivate the Specification?',
+                'OK',
+                'Cancel'
+            );
+            if (!confirmed) return;
+
             setSelectedSpecification(selectedSpecification.id, { toggle: false });
             toggleSpecificationStatus(selectedSpecification.id);
         });
         specificationDeactivateBtn.dataset.bound = 'true';
+    }
+
+    const specificationDeleteBtn = document.getElementById('specificationDeleteBtn');
+    if (specificationDeleteBtn && specificationDeleteBtn.dataset.bound !== 'true') {
+        specificationDeleteBtn.addEventListener('click', () => {
+            const selectedSpecification = getSelectedSpecification();
+            if (!selectedSpecification) {
+                return;
+            }
+            deleteSpecification(selectedSpecification.id);
+        });
+        specificationDeleteBtn.dataset.bound = 'true';
     }
 
     const productAdsSearchInput = document.getElementById('productAdsSearchInput');
@@ -16645,6 +16688,31 @@ function deleteAllSpecifications({ refresh = true } = {}) {
     }
 }
 
+async function deleteSpecification(id) {
+    const index = specifications.findIndex(s => s.id === id);
+    if (index === -1) return;
+
+    const confirmed = await showSpecificationConfirm(
+        'Are You Sure You Want to Delete the Specification?',
+        'OK',
+        'Cancel'
+    );
+
+    if (!confirmed) return;
+
+    specifications.splice(index, 1);
+    saveSpecificationsToStorage();
+    syncCategorySpecificationCounts({ persistCategories: true, refreshView: true });
+
+    if (state.selectedSpecificationId === id) {
+        state.selectedSpecificationId = null;
+    }
+
+    showNotification('success', 'Specification Deleted Successfully', 3000, 'specificationNotificationArea');
+    renderSpecificationList();
+    updateSpecificationControls();
+}
+
 function renderCategoriesTable() {
     refreshCategoryDirectoryView({ rebuildCaches: true, resetScroll: true });
 }
@@ -17186,10 +17254,13 @@ function resolveSpecificationCreator(specification) {
         creatorLabel = derived.fullName || creatorEmail.split('@')[0];
     }
 
+    const employeeId = (creatorRecord && (creatorRecord.employeeId || creatorRecord.code)) || '';
+
     return {
         id: Number.isInteger(creatorId) ? creatorId : null,
         label: creatorLabel ? creatorLabel.trim() : '',
-        email: creatorEmail ? creatorEmail.trim() : ''
+        email: creatorEmail ? creatorEmail.trim() : '',
+        employeeId: employeeId
     };
 }
 
@@ -17200,21 +17271,146 @@ function formatSpecificationCreatedMeta(specification) {
     const createdLabel = createdLabelSource || '—';
 
     const creatorInfo = resolveSpecificationCreator(specification);
+    const rawMethod = specification.createdMethod || specification.creationMethod || specification.createdVia || '';
+    const creationMethod = normalizeCategoryCreationMethod(rawMethod);
     const metaLines = [];
 
-    if (creatorInfo.label) {
+    if (creatorInfo.label && creationMethod) {
+        metaLines.push(`<div class="creator-name">${escapeHtml(`${creatorInfo.label} (${creationMethod})`)}</div>`);
+    } else if (creatorInfo.label) {
         metaLines.push(`<div class="creator-name">${escapeHtml(creatorInfo.label)}</div>`);
+    } else if (creationMethod) {
+        metaLines.push(`<div class="creator-name">${escapeHtml(creationMethod)}</div>`);
     }
 
-    if (creatorInfo.email) {
-        metaLines.push(`<div class="user-meta">${escapeHtml(creatorInfo.email)}</div>`);
+    const metaDisplay = creatorInfo.employeeId && creatorInfo.email
+        ? `${creatorInfo.employeeId} • ${creatorInfo.email}`
+        : (creatorInfo.email || creatorInfo.employeeId || '');
+
+    if (metaDisplay) {
+        metaLines.push(`<div class="user-meta">${escapeHtml(metaDisplay)}</div>`);
     }
 
     if (!metaLines.length) {
-        metaLines.push('<div class="creator-name">—</div>');
+        metaLines.push('<div class="user-meta">—</div>');
     }
 
     return `<div class="created-cell"><div class="created-date">${escapeHtml(createdLabel)}</div>${metaLines.join('')}</div>`;
+}
+
+function resolveSpecificationUpdater(specification) {
+    if (!specification || typeof specification !== 'object') {
+        return { id: null, label: '', email: '', employeeId: '' };
+    }
+
+    const idCandidates = [
+        specification.lastUpdatedBy,
+        specification.updatedBy,
+        specification.modifiedBy
+    ];
+
+    let updaterId = null;
+    for (const candidate of idCandidates) {
+        const parsedId = parseCreatorIdCandidate(candidate);
+        if (Number.isInteger(parsedId)) {
+            updaterId = parsedId;
+            break;
+        }
+    }
+
+    let updaterRecord = Number.isInteger(updaterId) && Array.isArray(users)
+        ? users.find(entry => entry && entry.id === updaterId)
+        : null;
+
+    const labelCandidates = [
+        specification.lastUpdatedByLabel,
+        specification.updatedByLabel,
+        specification.lastUpdatedByName,
+        specification.updatedByName,
+        specification.lastUpdatedBy,
+        specification.updatedBy,
+        specification.modifiedBy
+    ];
+
+    if (updaterRecord) {
+        labelCandidates.unshift(resolveUserDisplayName(updaterRecord));
+    }
+
+    let updaterLabel = labelCandidates
+        .map(extractNameCandidate)
+        .find(Boolean) || '';
+
+    if (!updaterRecord && updaterLabel) {
+        const normalizedLabel = updaterLabel.trim().toLowerCase();
+        if (normalizedLabel && Array.isArray(users)) {
+            const matchedRecord = users.find(entry => entry && resolveUserDisplayName(entry).trim().toLowerCase() === normalizedLabel);
+            if (matchedRecord) {
+                updaterRecord = matchedRecord;
+                if (!Number.isInteger(updaterId) && Number.isInteger(matchedRecord.id)) {
+                    updaterId = matchedRecord.id;
+                }
+            }
+        }
+    }
+
+    const emailCandidates = [
+        specification.lastUpdatedByEmail,
+        specification.updatedByEmail,
+        specification.lastUpdatedBy,
+        specification.updatedBy
+    ];
+
+    if (updaterRecord) {
+        emailCandidates.unshift(updaterRecord.email);
+    }
+
+    const updaterEmail = emailCandidates
+        .map(extractEmailAddress)
+        .find(Boolean) || '';
+
+    const employeeId = (updaterRecord && (updaterRecord.employeeId || updaterRecord.code)) || '';
+
+    return {
+        id: updaterId,
+        label: updaterLabel,
+        email: updaterEmail,
+        employeeId: employeeId
+    };
+}
+
+function formatSpecificationLastUpdateColumn(specification) {
+    const activityLabel = formatSpecificationActivityLabel(specification);
+    let updaterInfo = resolveSpecificationUpdater(specification);
+
+    if (!updaterInfo.label && !updaterInfo.email && !updaterInfo.employeeId) {
+        updaterInfo = resolveSpecificationCreator(specification);
+    }
+
+    const rawMethod = specification.createdMethod || specification.creationMethod || specification.createdVia || '';
+    const creationMethod = normalizeCategoryCreationMethod(rawMethod);
+    const metaLines = [];
+
+    if (updaterInfo.label && creationMethod) {
+        metaLines.push(`<div class="creator-name">${escapeHtml(`${updaterInfo.label} (${creationMethod})`)}</div>`);
+    } else if (updaterInfo.label) {
+        metaLines.push(`<div class="creator-name">${escapeHtml(updaterInfo.label)}</div>`);
+    } else if (creationMethod) {
+        metaLines.push(`<div class="creator-name">${escapeHtml(creationMethod)}</div>`);
+    }
+
+    const metaDisplay = updaterInfo.employeeId && updaterInfo.email
+        ? `${updaterInfo.employeeId} • ${updaterInfo.email}`
+        : (updaterInfo.email || updaterInfo.employeeId || '');
+
+    if (metaDisplay) {
+        metaLines.push(`<div class="user-meta">${escapeHtml(metaDisplay)}</div>`);
+    }
+
+    if (!metaLines.length) {
+        metaLines.push('<div class="user-meta">—</div>');
+    }
+
+    return `<div class="created-cell"><div class="created-date">${escapeHtml(activityLabel || '—')}</div>${metaLines.join('')}</div>`;
 }
 
 function formatSpecificationActivityLabel(specification) {
@@ -17679,16 +17875,10 @@ function renderSpecificationList(page = state.currentSpecificationPage) {
         const descriptionPreferred = entry.descriptionEnglish || entry.descriptionArabic || '';
         const descriptionInfo = formatTruncatedText(descriptionPreferred, 120);
         const descriptionTitleAttr = descriptionInfo.full ? ` title="${escapeAttribute(descriptionInfo.full)}"` : '';
-        const activityLabel = formatSpecificationActivityLabel(entry);
         const specificationCodeLabel = entry.specificationCode || entry.id || '';
-        const secondaryLines = [];
-        if (activityLabel) {
-            secondaryLines.push(`<span class="cell-secondary" aria-label="Last specification activity">${escapeHtml(activityLabel)}</span>`);
-        }
         const specificationNameCell = `
             <div class="cell-stack">
                 <span class="cell-primary">${escapeHtml(displayName)}</span>
-                ${secondaryLines.join('')}
             </div>
         `.trim();
         const subSummarySource = entry.subSpecificationSummary && entry.subSpecificationSummary.trim()
@@ -17708,7 +17898,6 @@ function renderSpecificationList(page = state.currentSpecificationPage) {
         const subSpecCountDisplay = subSpecifications.length === 1
             ? '1 sub-specification'
             : `${subSpecifications.length} sub-specifications`;
-        const createdMeta = formatSpecificationCreatedMeta(entry);
         const categoriesLabel = formatSpecificationCategories(entry);
         const categoryIds = Array.isArray(entry.categoryIds)
             ? entry.categoryIds.map(id => (typeof id === 'string' ? id.trim() : '')).filter(Boolean)
@@ -17757,7 +17946,7 @@ function renderSpecificationList(page = state.currentSpecificationPage) {
                     </div>
                 </td>
                 <td><span class="status-pill ${statusClass}">${escapeHtml(statusLabel)}</span></td>
-                <td>${createdMeta}</td>
+                <td>${formatSpecificationLastUpdateColumn(entry)}</td>
             </tr>
         `;
     }).join('');
@@ -17906,8 +18095,8 @@ function updateSpecificationStatus(specId, nextStatus) {
     saveSpecificationsToStorage();
     renderSpecificationList();
     const message = normalizedStatus === 'active'
-        ? 'Specification activated successfully.'
-        : 'Specification deactivated successfully.';
+        ? 'Specification Activated Successfully'
+        : 'Specification Deactivated Successfully';
     showNotification('success', message, 3000, 'specificationNotificationArea');
 }
 
@@ -19929,7 +20118,7 @@ function handleCategoryGridBodyScroll() {
 
 function resolveCategoryCreator(category) {
     if (!category || typeof category !== 'object') {
-        return { id: null, label: '', email: '' };
+        return { id: null, label: '', email: '', employeeId: '' };
     }
 
     const idCandidates = [
@@ -20025,10 +20214,115 @@ function resolveCategoryCreator(category) {
         creatorLabel = derived.fullName || creatorEmail.split('@')[0];
     }
 
+    let creatorEmployeeId = '';
+    if (creatorRecord && typeof creatorRecord.employeeId === 'string') {
+        creatorEmployeeId = creatorRecord.employeeId.trim();
+    }
+
     return {
         id: Number.isInteger(creatorId) ? creatorId : null,
         label: creatorLabel ? creatorLabel.trim() : '',
-        email: creatorEmail ? creatorEmail.trim() : ''
+        email: creatorEmail ? creatorEmail.trim() : '',
+        employeeId: creatorEmployeeId
+    };
+}
+
+function resolveCategoryUpdater(category) {
+    if (!category || typeof category !== 'object') {
+        return { id: null, label: '', email: '', employeeId: '' };
+    }
+
+    const idCandidates = [
+        category.lastUpdatedBy,
+        category.updatedBy,
+        category.modifiedBy
+    ];
+
+    let updaterId = null;
+    for (const candidate of idCandidates) {
+        const parsedId = parseCreatorIdCandidate(candidate);
+        if (Number.isInteger(parsedId)) {
+            updaterId = parsedId;
+            break;
+        }
+    }
+
+    let updaterRecord = Number.isInteger(updaterId) && Array.isArray(users)
+        ? users.find(entry => entry && entry.id === updaterId)
+        : null;
+
+    const labelCandidates = [
+        category.lastUpdatedByLabel,
+        category.updatedByLabel,
+        category.lastUpdatedByName,
+        category.updatedByName,
+        category.lastUpdatedBy,
+        category.updatedBy,
+        category.modifiedBy
+    ];
+
+    if (updaterRecord) {
+        labelCandidates.unshift(resolveUserDisplayName(updaterRecord));
+    }
+
+    let updaterLabel = labelCandidates
+        .map(extractNameCandidate)
+        .find(Boolean) || '';
+
+    if (!updaterRecord && updaterLabel) {
+        const normalizedLabel = updaterLabel.trim().toLowerCase();
+        if (normalizedLabel && Array.isArray(users)) {
+            const matchedRecord = users.find(entry => entry && resolveUserDisplayName(entry).trim().toLowerCase() === normalizedLabel);
+            if (matchedRecord) {
+                updaterRecord = matchedRecord;
+                if (!Number.isInteger(updaterId) && Number.isInteger(matchedRecord.id)) {
+                    updaterId = matchedRecord.id;
+                }
+            }
+        }
+    }
+
+    const emailCandidates = [
+        category.lastUpdatedByEmail,
+        category.updatedByEmail,
+        category.lastUpdatedByContact,
+        category.updatedByContact,
+        category.lastUpdatedBy,
+        category.updatedBy
+    ];
+
+    if (updaterRecord) {
+        emailCandidates.unshift(updaterRecord.email || '');
+    }
+
+    let updaterEmail = emailCandidates
+        .map(extractEmailAddress)
+        .find(Boolean) || '';
+
+    let updaterEmployeeId = '';
+
+    if (updaterRecord) {
+        if (!updaterLabel) {
+            updaterLabel = resolveUserDisplayName(updaterRecord);
+        }
+        if (!updaterEmail && typeof updaterRecord.email === 'string') {
+            updaterEmail = extractEmailAddress(updaterRecord.email);
+        }
+        if (typeof updaterRecord.employeeId === 'string') {
+            updaterEmployeeId = updaterRecord.employeeId.trim();
+        }
+    }
+
+    if (!updaterLabel && updaterEmail) {
+        const derived = deriveNamePartsFromEmail(updaterEmail);
+        updaterLabel = derived.fullName || updaterEmail.split('@')[0];
+    }
+
+    return {
+        id: updaterId,
+        label: updaterLabel ? updaterLabel.trim() : '',
+        email: updaterEmail ? updaterEmail.trim() : '',
+        employeeId: updaterEmployeeId
     };
 }
 
@@ -20042,15 +20336,19 @@ function formatCategoryCreatedMeta(category) {
     const metaLines = [];
 
     if (creatorInfo.label && creationMethod) {
-        metaLines.push(`<div class="user-meta">${escapeHtml(`${creatorInfo.label} (${creationMethod})`)}</div>`);
+        metaLines.push(`<div class="creator-name">${escapeHtml(`${creatorInfo.label} (${creationMethod})`)}</div>`);
     } else if (creatorInfo.label) {
-        metaLines.push(`<div class="user-meta">${escapeHtml(creatorInfo.label)}</div>`);
+        metaLines.push(`<div class="creator-name">${escapeHtml(creatorInfo.label)}</div>`);
     } else if (creationMethod) {
-        metaLines.push(`<div class="user-meta">${escapeHtml(creationMethod)}</div>`);
+        metaLines.push(`<div class="creator-name">${escapeHtml(creationMethod)}</div>`);
     }
 
-    if (creatorInfo.email) {
-        metaLines.push(`<div class="user-meta">${escapeHtml(creatorInfo.email)}</div>`);
+    const metaDisplay = creatorInfo.employeeId && creatorInfo.email
+        ? `${creatorInfo.employeeId} • ${creatorInfo.email}`
+        : (creatorInfo.email || creatorInfo.employeeId || '');
+
+    if (metaDisplay) {
+        metaLines.push(`<div class="user-meta">${escapeHtml(metaDisplay)}</div>`);
     }
 
     if (!metaLines.length) {
@@ -20058,6 +20356,79 @@ function formatCategoryCreatedMeta(category) {
     }
 
     return `<div class="created-cell"><div class="created-date">${escapeHtml(createdLabel)}</div>${metaLines.join('')}</div>`;
+}
+
+function formatCategoryLastUpdatedMeta(category) {
+    const lastUpdatedSource = category.lastUpdated || category.updatedAt;
+    const lastUpdatedLabel = lastUpdatedSource
+        ? formatDateForDisplay(lastUpdatedSource, { includeTime: true })
+        : '—';
+    let updaterInfo = resolveCategoryUpdater(category);
+
+    if (!updaterInfo.label && !updaterInfo.email && !updaterInfo.employeeId) {
+        updaterInfo = resolveCategoryCreator(category);
+    }
+
+    const rawMethod = category.createdMethod || category.creationMethod || category.createdVia || '';
+    const creationMethod = normalizeCategoryCreationMethod(rawMethod);
+    const metaLines = [];
+
+    if (updaterInfo.label && creationMethod) {
+        metaLines.push(`<div class="creator-name">${escapeHtml(`${updaterInfo.label} (${creationMethod})`)}</div>`);
+    } else if (updaterInfo.label) {
+        metaLines.push(`<div class="creator-name">${escapeHtml(updaterInfo.label)}</div>`);
+    } else if (creationMethod) {
+        metaLines.push(`<div class="creator-name">${escapeHtml(creationMethod)}</div>`);
+    }
+
+    const metaDisplay = updaterInfo.employeeId && updaterInfo.email
+        ? `${updaterInfo.employeeId} • ${updaterInfo.email}`
+        : (updaterInfo.email || updaterInfo.employeeId || '');
+
+    if (metaDisplay) {
+        metaLines.push(`<div class="user-meta">${escapeHtml(metaDisplay)}</div>`);
+    }
+
+    if (!metaLines.length) {
+        metaLines.push('<div class="user-meta">—</div>');
+    }
+
+    return `<div class="created-cell"><div class="created-date">${escapeHtml(lastUpdatedLabel)}</div>${metaLines.join('')}</div>`;
+}
+
+function formatCategoryLastUpdateColumn(category) {
+    const activityLabel = formatCategoryActivityLabel(category);
+    let updaterInfo = resolveCategoryUpdater(category);
+
+    if (!updaterInfo.label && !updaterInfo.email && !updaterInfo.employeeId) {
+        updaterInfo = resolveCategoryCreator(category);
+    }
+
+    const rawMethod = category.createdMethod || category.creationMethod || category.createdVia || '';
+    const creationMethod = normalizeCategoryCreationMethod(rawMethod);
+    const metaLines = [];
+
+    if (updaterInfo.label && creationMethod) {
+        metaLines.push(`<div class="creator-name">${escapeHtml(`${updaterInfo.label} (${creationMethod})`)}</div>`);
+    } else if (updaterInfo.label) {
+        metaLines.push(`<div class="creator-name">${escapeHtml(updaterInfo.label)}</div>`);
+    } else if (creationMethod) {
+        metaLines.push(`<div class="creator-name">${escapeHtml(creationMethod)}</div>`);
+    }
+
+    const metaDisplay = updaterInfo.employeeId && updaterInfo.email
+        ? `${updaterInfo.employeeId} • ${updaterInfo.email}`
+        : (updaterInfo.email || updaterInfo.employeeId || '');
+
+    if (metaDisplay) {
+        metaLines.push(`<div class="user-meta">${escapeHtml(metaDisplay)}</div>`);
+    }
+
+    if (!metaLines.length) {
+        metaLines.push('<div class="user-meta">—</div>');
+    }
+
+    return `<div class="created-cell"><div class="created-date">${escapeHtml(activityLabel || '—')}</div>${metaLines.join('')}</div>`;
 }
 
 function formatCategoryActivityLabel(category) {
@@ -20148,12 +20519,6 @@ function buildCategoryGridRow(category, displayIndex, relativeDepth) {
             <div class="grid-cell name" data-column="name">
                 <div class="cell-stack">
                     <span class="cell-primary">${escapeHtml(category.nameEnglish || '—')}</span>
-                    ${(() => {
-                        const activityLabel = formatCategoryActivityLabel(category);
-                        return activityLabel
-                            ? `<span class="cell-secondary" aria-label="Last category activity">${escapeHtml(activityLabel)}</span>`
-                            : '';
-                    })()}
                 </div>
             </div>
             <div class="grid-cell description" data-column="description">
@@ -20162,14 +20527,14 @@ function buildCategoryGridRow(category, displayIndex, relativeDepth) {
             <div class="grid-cell parent" data-column="parent">
                 <span>${escapeHtml(parentDisplay)}</span>
             </div>
-            <div class="grid-cell specifications" data-column="specifications">
-                <button type="button" class="spec-count-badge${specBadgeClass}" data-category-specs="${escapeAttribute(category.id)}" title="${escapeAttribute(specCountButtonTitle)}" aria-label="${escapeAttribute(specCountButtonTitle)}">${escapeHtml(specCountLabel)}</button>
-            </div>
             <div class="grid-cell status" data-column="status">
                 <span class="${statusClass}">${statusLabel}</span>
             </div>
-            <div class="grid-cell created" data-column="created">
-                ${formatCategoryCreatedMeta(category)}
+            <div class="grid-cell specifications" data-column="specifications">
+                <button type="button" class="spec-count-badge${specBadgeClass}" data-category-specs="${escapeAttribute(category.id)}" title="${escapeAttribute(specCountButtonTitle)}" aria-label="${escapeAttribute(specCountButtonTitle)}">${escapeHtml(specCountLabel)}</button>
+            </div>
+            <div class="grid-cell last-update" data-column="last-update">
+                ${formatCategoryLastUpdateColumn(category)}
             </div>
         </div>
     `;
@@ -21911,6 +22276,7 @@ function downloadCategoryImportTemplate() {
         'Category Name (English)',
         'Description (English)',
         'Parent Category',
+        'Status',
         'Ad Publishing Fees Due Date',
         'Ad Publishing Fees Type',
         'Ad Publishing Fees',
@@ -21940,6 +22306,7 @@ function downloadCategoryImportTemplate() {
             'Equipment Safety',
             'Routine safety inspections for field equipment',
             '1.2.',
+            'Active',
             'On Publish',
             'Fixed',
             '50',
@@ -21968,6 +22335,7 @@ function downloadCategoryImportTemplate() {
             'Elevator Maintenance',
             'Mandatory elevator upkeep and reporting',
             '1.5.',
+            'Active',
             'After Sales',
             'Percentage',
             '5%',
@@ -22327,6 +22695,7 @@ function buildCategoryImportRecord(cells, getIndex, lookup) {
     const descArabicText = toText(readCell('description (arabic)'));
     const descEnglishText = toText(readCell('description (english)'));
     const parentRawText = toText(readCell('parent category'));
+    const statusRaw = toText(readCell('status'));
     const feeDueRaw = readCell('ad publishing fees due date');
     const feeTypeRaw = readCell('ad publishing fees type');
     const feeAmountRaw = readCell('ad publishing fees');
@@ -22379,6 +22748,7 @@ function buildCategoryImportRecord(cells, getIndex, lookup) {
         arabicDescription: hasValue(descArabicText),
         englishDescription: hasValue(descEnglishText),
         parentCategoryId: hasValue(parentRawText),
+        status: hasValue(statusRaw),
         adPublishingFeeDue: hasValue(toText(feeDueRaw)),
         adPublishingFeeType: hasValue(toText(feeTypeRaw)),
         adPublishingFeeAmount: hasValue(toText(feeAmountRaw)),
@@ -22435,7 +22805,7 @@ function buildCategoryImportRecord(cells, getIndex, lookup) {
         showAtHome,
         isRealEstate,
         isService,
-        status: 'published',
+        status: statusRaw ? statusRaw.toLowerCase() : 'published',
         notifyOnStatusChange: true,
         syncAutomation: false,
         specificationCount: 0,
@@ -23041,6 +23411,21 @@ function setupCategorySortOverlay() {
         categorySortElements.cancelBtn.addEventListener('click', () => closeCategorySortOverlay());
         categorySortElements.cancelBtn.dataset.bound = 'true';
     }
+    if (categorySortElements.title && !categorySortElements.title.dataset.bound) {
+        categorySortElements.title.addEventListener('click', event => {
+            const btn = event.target.closest('[data-sort-breadcrumb-node]');
+            if (!btn || categorySortState.isSaving) return;
+            const nodeId = btn.dataset.sortBreadcrumbNode === 'root' ? CATEGORY_TREE_ROOT_ID : btn.dataset.sortBreadcrumbNode;
+            if (nodeId === categorySortState.activeParentId) return;
+
+            categorySortState.activeParentId = nodeId;
+            ensureCategorySortExpanded(nodeId);
+            renderCategorySortTree();
+            renderCategorySortGroup(nodeId);
+            focusCategorySortTreeNode(nodeId);
+        });
+        categorySortElements.title.dataset.bound = 'true';
+    }
     if (categorySortElements.saveBtn && !categorySortElements.saveBtn.dataset.bound) {
         categorySortElements.saveBtn.addEventListener('click', submitCategorySortChanges);
         categorySortElements.saveBtn.dataset.bound = 'true';
@@ -23270,12 +23655,31 @@ function renderCategorySortGroup(parentId) {
     }
 
     const entries = categorySortState.orderByParent.get(parentId) || [];
-    const parentCategory = parentId === CATEGORY_TREE_ROOT_ID ? null : categoryLookupById.get(parentId);
 
     if (categorySortElements.title) {
-        categorySortElements.title.textContent = parentCategory
-            ? `Subcategories of ${getCategoryDisplayName(parentCategory)}`
-            : 'Main Categories';
+        const path = [];
+        let currentId = parentId;
+        const guard = new Set();
+        while (currentId && !guard.has(currentId) && currentId !== CATEGORY_TREE_ROOT_ID) {
+            guard.add(currentId);
+            const category = categoryLookupById.get(currentId);
+            if (category) {
+                path.unshift({ id: category.id, label: getCategoryDisplayName(category) });
+            }
+            currentId = categoryParentLookup.get(currentId) || CATEGORY_TREE_ROOT_ID;
+        }
+
+        const breadcrumbHtml = [
+            `<button type="button" class="breadcrumb-segment${parentId === CATEGORY_TREE_ROOT_ID ? ' active' : ''}" data-sort-breadcrumb-node="root">All Categories</button>`,
+            ...path.map((segment, index) => {
+                const isLast = index === path.length - 1;
+                const classes = ['breadcrumb-segment'];
+                if (isLast) classes.push('active');
+                return `<button type="button" class="${classes.join(' ')}" data-sort-breadcrumb-node="${escapeAttribute(segment.id)}">${escapeHtml(segment.label)}</button>`;
+            })
+        ].join('<span class="breadcrumb-divider">&rsaquo;</span>');
+
+        categorySortElements.title.innerHTML = breadcrumbHtml;
     }
 
     if (!entries.length) {
@@ -24252,6 +24656,8 @@ async function activateCategoryEntry(category) {
 
     category.status = 'active';
     category.updatedAt = new Date().toISOString();
+    category.lastUpdated = category.updatedAt;
+    category.lastUpdatedBy = state.activeSession?.userId || null;
     category.isHidden = false;
 
     saveCategoriesToStorage();
@@ -24291,6 +24697,7 @@ async function deactivateCategoryEntry(category) {
     }
 
     const timestamp = new Date().toISOString();
+    const currentUserId = state.activeSession?.userId || null;
     const statusTargets = activeDescendants.length ? [category, ...descendants] : [category];
     statusTargets.forEach(entry => {
         if (!entry) {
@@ -24298,6 +24705,8 @@ async function deactivateCategoryEntry(category) {
         }
         entry.status = 'inactive';
         entry.updatedAt = timestamp;
+        entry.lastUpdated = timestamp;
+        entry.lastUpdatedBy = currentUserId;
     });
 
     if (hideSelection) {
@@ -25084,6 +25493,8 @@ async function handleCategoryFormSubmit(event) {
             }
         }
         existing.updatedAt = new Date().toISOString();
+        existing.lastUpdated = existing.updatedAt;
+        existing.lastUpdatedBy = state.activeSession?.userId || null;
         const becameTopLevel = previousParentId !== CATEGORY_TREE_ROOT_ID && currentParentId === CATEGORY_TREE_ROOT_ID;
         if (becameTopLevel) {
             promoteCategoryToTopLevel(existing, categories, { updatedAt: existing.updatedAt });
@@ -26278,6 +26689,7 @@ function updateSpecificationControls() {
     const editBtn = document.getElementById('specificationEditBtn');
     const activateBtn = document.getElementById('specificationActivateBtn');
     const deactivateBtn = document.getElementById('specificationDeactivateBtn');
+    const deleteBtn = document.getElementById('specificationDeleteBtn');
 
     const selectedSpecification = getSelectedSpecification();
     const hasSelection = Boolean(selectedSpecification);
@@ -26315,6 +26727,13 @@ function updateSpecificationControls() {
                 : 'Deactivate selected specification';
         deactivateBtn.setAttribute('aria-label', label);
         deactivateBtn.title = label;
+    }
+
+    if (deleteBtn) {
+        deleteBtn.disabled = !hasSelection;
+        const label = hasSelection ? 'Delete selected specification' : 'Select a specification to delete';
+        deleteBtn.setAttribute('aria-label', label);
+        deleteBtn.title = label;
     }
 }
 
@@ -26399,11 +26818,6 @@ function renderRolesTable(page = state.currentRolePage) {
             const rawDescription = role.description && role.description.trim() ? role.description.trim() : '—';
             const descriptionTitleAttr = rawDescription !== '—' ? ` title="${escapeAttribute(rawDescription)}"` : '';
             const lastUpdatedLabel = formatRoleLastUpdatedLabel(role.lastUpdated);
-            const createdLabel = formatRoleCreatedLabel(role.createdAt || role.created);
-            const createdDisplay = createdLabel ? escapeHtml(createdLabel) : '—';
-            const creatorInfo = resolveRoleCreator(role);
-            const creatorNameMarkup = creatorInfo.label ? `<div class="role-meta">${escapeHtml(creatorInfo.label)}</div>` : '';
-            const creatorEmailMarkup = creatorInfo.email ? `<div class="role-meta">${escapeHtml(creatorInfo.email)}</div>` : '';
             const isSelected = selectedRoleId && String(role.id) === selectedRoleId;
             const rowClassAttr = isSelected ? ' class="role-row selected"' : ' class="role-row"';
             return `
@@ -26411,10 +26825,7 @@ function renderRolesTable(page = state.currentRolePage) {
                 <td>${index++}</td>
                 <td>${role.id || ''}</td>
                 <td>
-                    <div>
-                        <div style="font-weight:600;">${role.name || role.nameEnglish || ''}</div>
-                        <div class="role-meta">${escapeHtml(lastUpdatedLabel)}</div>
-                    </div>
+                    <div style="font-weight:600;">${role.name || role.nameEnglish || ''}</div>
                 </td>
                 <td class="role-description-cell">
                     <div class="role-description-text"${descriptionTitleAttr}>${rawDescription}</div>
@@ -26439,10 +26850,17 @@ function renderRolesTable(page = state.currentRolePage) {
                     <span class="status-badge status-${role.status}">${role.status === 'active' ? 'Active' : 'Inactive'}</span>
                 </td>
                 <td>
-                    <div>
-                        <div>${createdDisplay}</div>
-                        ${creatorNameMarkup}
-                        ${creatorEmailMarkup}
+                    <div class="created-cell">
+                        <div class="created-date">${escapeHtml(lastUpdatedLabel)}</div>
+                        ${(() => {
+                            const updaterInfo = resolveRoleUpdater(role);
+                            const updaterNameMarkup = updaterInfo.label ? `<div class="creator-name">${escapeHtml(updaterInfo.label)}</div>` : '';
+                            const updaterEmailDisplay = updaterInfo.employeeId && updaterInfo.email
+                                ? `${updaterInfo.employeeId} • ${updaterInfo.email}`
+                                : (updaterInfo.email || updaterInfo.employeeId || '');
+                            const updaterEmailMarkup = updaterEmailDisplay ? `<div class="user-meta">${escapeHtml(updaterEmailDisplay)}</div>` : '';
+                            return `${updaterNameMarkup}${updaterEmailMarkup}`;
+                        })()}
                     </div>
                 </td>
             </tr>
@@ -26838,30 +27256,57 @@ function resolveUserDisplayName(user) {
 
 function resolveUserCreator(user) {
     if (!user || typeof user !== 'object') {
-        return { label: '—', email: '' };
+        return { label: '—', email: '', employeeId: '' };
     }
 
     const creatorId = Number.isInteger(user.createdBy) ? user.createdBy : null;
     if (!creatorId) {
-        return { label: '—', email: '' };
+        return { label: '—', email: '', employeeId: '' };
     }
 
     const creatorRecord = users.find(candidate => candidate && candidate.id === creatorId) || null;
     if (!creatorRecord) {
-        return { label: `User #${creatorId}`, email: '' };
+        return { label: `User #${creatorId}`, email: '', employeeId: '' };
     }
 
     const creatorName = resolveUserDisplayName(creatorRecord);
     const creatorEmail = typeof creatorRecord.email === 'string' ? creatorRecord.email.trim() : '';
+    const creatorEmployeeId = typeof creatorRecord.employeeId === 'string' ? creatorRecord.employeeId.trim() : '';
     return {
         label: creatorName,
-        email: creatorEmail
+        email: creatorEmail,
+        employeeId: creatorEmployeeId
+    };
+}
+
+function resolveUserUpdater(user) {
+    if (!user || typeof user !== 'object') {
+        return { label: '—', email: '', employeeId: '' };
+    }
+
+    const updaterId = Number.isInteger(user.lastUpdatedBy) ? user.lastUpdatedBy : null;
+    if (!updaterId) {
+        return { label: '—', email: '', employeeId: '' };
+    }
+
+    const updaterRecord = users.find(candidate => candidate && candidate.id === updaterId) || null;
+    if (!updaterRecord) {
+        return { label: `User #${updaterId}`, email: '', employeeId: '' };
+    }
+
+    const updaterName = resolveUserDisplayName(updaterRecord);
+    const updaterEmail = typeof updaterRecord.email === 'string' ? updaterRecord.email.trim() : '';
+    const updaterEmployeeId = typeof updaterRecord.employeeId === 'string' ? updaterRecord.employeeId.trim() : '';
+    return {
+        label: updaterName,
+        email: updaterEmail,
+        employeeId: updaterEmployeeId
     };
 }
 
 function resolveRoleCreator(role) {
     if (!role || typeof role !== 'object') {
-        return { id: null, label: '', email: '' };
+        return { id: null, label: '', email: '', employeeId: '' };
     }
 
     const idCandidates = [
@@ -26905,6 +27350,7 @@ function resolveRoleCreator(role) {
     }
 
     let creatorEmail = typeof role.createdByEmail === 'string' ? role.createdByEmail.trim() : '';
+    let creatorEmployeeId = '';
 
     if (Number.isInteger(creatorId)) {
         const creatorRecord = Array.isArray(users) ? users.find(entry => entry && entry.id === creatorId) : null;
@@ -26914,6 +27360,9 @@ function resolveRoleCreator(role) {
             }
             if (!creatorEmail && typeof creatorRecord.email === 'string') {
                 creatorEmail = creatorRecord.email.trim();
+            }
+            if (typeof creatorRecord.employeeId === 'string' || typeof creatorRecord.employeeId === 'number') {
+                creatorEmployeeId = String(creatorRecord.employeeId).trim();
             }
         } else if (!creatorLabel) {
             creatorLabel = `User #${creatorId}`;
@@ -26927,14 +27376,90 @@ function resolveRoleCreator(role) {
         }
     }
 
-    if (!creatorLabel && !creatorEmail) {
-        return { id: Number.isInteger(creatorId) ? creatorId : null, label: '', email: '' };
+    if (!creatorLabel && !creatorEmail && !creatorEmployeeId) {
+        return { id: Number.isInteger(creatorId) ? creatorId : null, label: '', email: '', employeeId: '' };
     }
 
     return {
         id: Number.isInteger(creatorId) ? creatorId : null,
         label: creatorLabel,
-        email: creatorEmail
+        email: creatorEmail,
+        employeeId: creatorEmployeeId
+    };
+}
+
+function resolveRoleUpdater(role) {
+    if (!role || typeof role !== 'object') {
+        return { id: null, label: '', email: '', employeeId: '' };
+    }
+
+    const idCandidates = [
+        role.lastUpdatedById,
+        role.updatedById,
+        role.modifiedById
+    ];
+
+    let updaterId = null;
+    for (const candidate of idCandidates) {
+        const parsed = parseCreatorIdCandidate(candidate);
+        if (Number.isInteger(parsed)) {
+            updaterId = parsed;
+            break;
+        }
+    }
+
+    const stringCandidates = [
+        role.lastUpdatedBy,
+        role.updatedBy,
+        role.modifiedBy
+    ];
+
+    let updaterLabel = '';
+    for (const candidate of stringCandidates) {
+        if (typeof candidate !== 'string') {
+            continue;
+        }
+        const trimmed = candidate.trim();
+        if (!trimmed || /^\d+$/.test(trimmed)) {
+            continue;
+        }
+        updaterLabel = trimmed;
+        break;
+    }
+
+    let updaterEmail = typeof role.lastUpdatedByEmail === 'string' ? role.lastUpdatedByEmail.trim() : '';
+    let updaterEmployeeId = '';
+
+    if (Number.isInteger(updaterId)) {
+        const updaterRecord = Array.isArray(users) ? users.find(entry => entry && entry.id === updaterId) : null;
+        if (updaterRecord) {
+            if (!updaterLabel) {
+                updaterLabel = resolveUserDisplayName(updaterRecord);
+            }
+            if (!updaterEmail && typeof updaterRecord.email === 'string') {
+                updaterEmail = updaterRecord.email.trim();
+            }
+            if (typeof updaterRecord.employeeId === 'string' || typeof updaterRecord.employeeId === 'number') {
+                updaterEmployeeId = String(updaterRecord.employeeId).trim();
+            }
+        } else if (!updaterLabel) {
+            updaterLabel = `User #${updaterId}`;
+        }
+    }
+
+    if (!updaterLabel && !updaterEmail && !updaterEmployeeId) {
+        // Fallback to creator if no updater info and it was just created
+        if (role.lastUpdated && role.lastUpdated.startsWith('Created')) {
+            return resolveRoleCreator(role);
+        }
+        return { id: Number.isInteger(updaterId) ? updaterId : null, label: '', email: '', employeeId: '' };
+    }
+
+    return {
+        id: Number.isInteger(updaterId) ? updaterId : null,
+        label: updaterLabel,
+        email: updaterEmail,
+        employeeId: updaterEmployeeId
     };
 }
 
@@ -29808,6 +30333,10 @@ async function handleUserFormSubmit(event) {
             user.passwordUpdatedAt = updatedAt;
         }
 
+        const currentUserId = state.activeSession?.userId || null;
+        user.lastUpdated = new Date().toISOString();
+        user.lastUpdatedBy = currentUserId;
+
         const lastEventPrefix = draft.password ? 'Password Updated' : 'Updated';
         updateUserLastEvent(user, lastEventPrefix);
 
@@ -30752,7 +31281,12 @@ async function toggleRoleStatus(roleId) {
         }
 
     role.status = 'inactive';
+    const updaterUser = getActiveSessionUser();
+    const updaterId = getActiveSessionUserId();
     role.lastUpdated = buildRoleStatusLabel('Deactivated');
+    role.lastUpdatedById = Number.isInteger(updaterId) ? updaterId : null;
+    role.lastUpdatedBy = updaterUser ? resolveUserDisplayName(updaterUser) : '';
+    role.lastUpdatedByEmail = updaterUser && typeof updaterUser.email === 'string' ? updaterUser.email.trim() : '';
         updateRoleUserCount(role);
 
         saveRolesToStorage();
@@ -30771,7 +31305,12 @@ async function toggleRoleStatus(roleId) {
         );
         if (!confirmed) return;
     role.status = 'active';
+    const updaterUser = getActiveSessionUser();
+    const updaterId = getActiveSessionUserId();
     role.lastUpdated = buildRoleStatusLabel('Reactivated');
+    role.lastUpdatedById = Number.isInteger(updaterId) ? updaterId : null;
+    role.lastUpdatedBy = updaterUser ? resolveUserDisplayName(updaterUser) : '';
+    role.lastUpdatedByEmail = updaterUser && typeof updaterUser.email === 'string' ? updaterUser.email.trim() : '';
         updateRoleUserCount(role);
         saveRolesToStorage();
         updateUserRolesCount();
@@ -30870,6 +31409,9 @@ async function toggleUserStatus(userId) {
         );
         if (!confirmed) return;
         user.status = 'Inactive';
+        const currentUserId = state.activeSession?.userId || null;
+        user.lastUpdated = new Date().toISOString();
+        user.lastUpdatedBy = currentUserId;
         updateUserLastEvent(user, 'Deactivated');
         saveUsersToStorage();
         renderUsersTable(activeSearch, state.currentUserPage);
@@ -30899,6 +31441,9 @@ async function toggleUserStatus(userId) {
         }
 
         user.status = 'Active';
+        const currentUserId = state.activeSession?.userId || null;
+        user.lastUpdated = new Date().toISOString();
+        user.lastUpdatedBy = currentUserId;
         updateUserLastEvent(user, 'Reactivated');
         saveUsersToStorage();
         renderUsersTable(activeSearch, state.currentUserPage);
@@ -31155,7 +31700,14 @@ function handleRoleSubmit(event) {
         role.nameArabic = nameArabic;
         role.description = description;
         role.permissions = permissions;
-    role.lastUpdated = buildRoleStatusLabel('Updated');
+        
+        const updaterUser = getActiveSessionUser();
+        const updaterId = getActiveSessionUserId();
+        role.lastUpdated = buildRoleStatusLabel('Updated');
+        role.lastUpdatedById = Number.isInteger(updaterId) ? updaterId : null;
+        role.lastUpdatedBy = updaterUser ? resolveUserDisplayName(updaterUser) : '';
+        role.lastUpdatedByEmail = updaterUser && typeof updaterUser.email === 'string' ? updaterUser.email.trim() : '';
+
         updateRoleUserCount(role);
 
         saveRolesToStorage();
@@ -31185,7 +31737,10 @@ function handleRoleSubmit(event) {
         createdById: Number.isInteger(creatorId) ? creatorId : null,
         createdBy: creatorLabel,
         createdByEmail: creatorEmail,
-        lastUpdated: buildRoleStatusLabel('Created', createdIso)
+        lastUpdated: buildRoleStatusLabel('Created', createdIso),
+        lastUpdatedById: Number.isInteger(creatorId) ? creatorId : null,
+        lastUpdatedBy: creatorLabel,
+        lastUpdatedByEmail: creatorEmail
     };
 
     roles.unshift(newRole);
@@ -56151,17 +56706,37 @@ function renderUsersTable(searchTerm = state.userSearchTerm, page = state.curren
         const creatorNameMarkup = creatorInfo && creatorInfo.label
             ? `<div class="creator-name">${escapeHtml(creatorInfo.label)}</div>`
             : '';
-        const creatorEmailMarkup = creatorInfo && creatorInfo.email
-            ? `<div class="user-meta">${escapeHtml(creatorInfo.email)}</div>`
+        const creatorMetaDisplay = creatorInfo.employeeId && creatorInfo.email
+            ? `${creatorInfo.employeeId} • ${creatorInfo.email}`
+            : (creatorInfo.email || creatorInfo.employeeId || '');
+        const creatorMetaMarkup = creatorMetaDisplay
+            ? `<div class="user-meta">${escapeHtml(creatorMetaDisplay)}</div>`
             : '';
-        const creatorMarkup = creatorNameMarkup || creatorEmailMarkup
-            ? `<div class="creator-cell">${creatorNameMarkup}${creatorEmailMarkup}</div>`
+        const creatorMarkup = creatorNameMarkup || creatorMetaMarkup
+            ? `<div class="creator-cell">${creatorNameMarkup}${creatorMetaMarkup}</div>`
             : '<div class="creator-cell"><div class="creator-name">—</div></div>';
 
         const createdSource = user.createdAt || user.created;
         const createdLabel = formatUserCreatedLabel(createdSource);
         const createdDisplay = createdLabel ? escapeHtml(createdLabel) : '—';
         const createdDetailsMarkup = `<div class="created-cell"><div class="created-date">${createdDisplay}</div>${creatorMarkup}</div>`;
+
+        const updaterInfo = resolveUserUpdater(user);
+        const updaterNameMarkup = updaterInfo && updaterInfo.label
+            ? `<div class="creator-name">${escapeHtml(updaterInfo.label)}</div>`
+            : '';
+        const updaterMetaDisplay = updaterInfo.employeeId && updaterInfo.email
+            ? `${updaterInfo.employeeId} • ${updaterInfo.email}`
+            : (updaterInfo.email || updaterInfo.employeeId || '');
+        const updaterMetaMarkup = updaterMetaDisplay
+            ? `<div class="user-meta">${escapeHtml(updaterMetaDisplay)}</div>`
+            : '';
+        const updaterMarkup = updaterNameMarkup || updaterMetaMarkup
+            ? `<div class="creator-cell">${updaterNameMarkup}${updaterMetaMarkup}</div>`
+            : '<div class="creator-cell"><div class="creator-name">—</div></div>';
+
+        const lastUpdatedDisplay = lastEventLabel ? escapeHtml(lastEventLabel) : '—';
+        const lastUpdatedDetailsMarkup = `<div class="created-cell"><div class="created-date">${lastUpdatedDisplay}</div>${updaterMarkup}</div>`;
 
         const expirationLabel = user.expiresOn
             ? formatDateForDisplay(user.expiresOn, { includeTime: true })
@@ -56191,19 +56766,17 @@ function renderUsersTable(searchTerm = state.userSearchTerm, page = state.curren
                                 <span class="user-name">${escapeHtml(displayName)}</span>
                                 ${accountTypeTag}
                             </div>
-                            <div class="user-meta user-email">${escapeHtml(user.email || '—')}</div>
                             <div class="user-meta user-phone">${escapeHtml(phoneDisplay)}</div>
-                            <div class="user-meta user-employee-id">Code: ${escapeHtml(employeeIdDisplay)}</div>
-                            ${lastEventMarkup}
+                            <div class="user-meta user-id-email">${escapeHtml(employeeIdDisplay)} • ${escapeHtml(user.email || '—')}</div>
                         </div>
                     </div>
                 </td>
                 <td>${escapeHtml(displayRole)}</td>
                 <td>${escapeHtml(user.department || '—')}</td>
                 <td><span class="status-badge status-${statusClass}">${displayStatus}</span></td>
-                <td>${lastLoginMarkup}</td>
-                <td>${createdDetailsMarkup}</td>
                 <td>${expirationMarkup}</td>
+                <td>${lastLoginMarkup}</td>
+                <td>${lastUpdatedDetailsMarkup}</td>
             </tr>
         `;
     }).join('');

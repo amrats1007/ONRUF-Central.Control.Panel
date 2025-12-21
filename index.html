@@ -157,7 +157,7 @@
                                             <th>Permissions</th>
                                             <th>Users</th>
                                             <th>Status</th>
-                                            <th>Created</th>
+                                            <th>Last Update</th>
                                         </tr>
                                     </thead>
                                     <tbody id="rolesTableBody">
@@ -341,9 +341,9 @@
                                             <th>Role</th>
                                             <th>Department</th>
                                             <th>Status</th>
-                                            <th>Last Login</th>
-                                            <th>Created</th>
                                             <th>Expiration</th>
+                                            <th>Last Login</th>
+                                            <th>Last Update</th>
                                         </tr>
                                     </thead>
                                     <tbody id="usersTableBody">
@@ -1805,7 +1805,7 @@
                                             <div class="grid-cell parent" data-column="parent">Parent</div>
                                             <div class="grid-cell specification-count" data-column="specifications">Specifications</div>
                                             <div class="grid-cell status" data-column="status">Status</div>
-                                            <div class="grid-cell created" data-column="created">Created</div>
+                                            <div class="grid-cell last-update" data-column="last-update">Last Update</div>
                                         </div>
                                         <div class="category-grid-body" id="categoryGridBody" role="rowgroup" tabindex="0"></div>
                                     </div>
@@ -1863,7 +1863,7 @@
                                     </aside>
                                     <section class="category-sort-panel" aria-live="polite">
                                         <header>
-                                            <h4 id="categorySortGroupTitle">Main Categories</h4>
+                                            <div id="categorySortGroupTitle" class="category-breadcrumb">Main Categories</div>
                                             <p id="categorySortGroupHint">Select a category to review its subcategories.</p>
                                         </header>
                                         <div id="categorySortList" class="category-sort-list" role="list"></div>
@@ -2253,6 +2253,10 @@
                                         <i class="fas fa-power-off"></i>
                                         Deactivate
                                     </button>
+                                    <button type="button" class="btn btn-outline specification-action-btn specification-action-delete" id="specificationDeleteBtn" disabled>
+                                        <i class="fas fa-trash-can"></i>
+                                        Delete
+                                    </button>
                                     <button type="button" class="btn btn-outline" id="specificationResetBtn" title="Reset filters and search">
                                         <i class="fas fa-rotate-left"></i>
                                         Reset
@@ -2289,7 +2293,7 @@
                                             <th>Sub-Specifications</th>
                                             <th>Categories</th>
                                             <th>Status</th>
-                                            <th>Created</th>
+                                            <th>Last Update</th>
                                         </tr>
                                     </thead>
                                     <tbody id="specificationsTableBody"></tbody>
