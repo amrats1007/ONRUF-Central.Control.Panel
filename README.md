@@ -4,7 +4,8 @@
 
 - `index.html` – admin shell that boots the control panel UI.
 - `login.html` / `complete-registration.html` – auth flows that reuse the same storage keys as the admin UI.
-- `assets/css/onruf-central-control-panel.css` – styling extracted from the original inline sheet.
+- `assets/css/onruf-central-control-panel.css` – styling for the main admin dashboard.
+- `assets/css/onruf-auth.css` – styling for the login and registration flows.
 - `assets/js/onruf-central-control-panel.js` – ~56k LOC powering every admin workflow.
 - `assets/js/onruf-auth.js` – login, OTP, and registration logic that shares seed data and storage config with the admin bundle.
 
@@ -14,14 +15,7 @@
 2. Sign in with the default credentials after the seed reset completes:
 	 - Email: `superadmin@onruf.com`
 	 - Password: `Admin@123`
-3. For real invitation emails, start the optional Node service located in `server/`:
-	 ```powershell
-	 cd "server"
-	 npm install
-	 npm start
-	 ```
-	 The service serves the static files on `http://localhost:4000` and exposes `/api/invitations/send` for `deliverInvitationEmail()`.
-4. If the UI is hosted elsewhere, configure the API endpoint before loading the scripts:
+3. If the UI is hosted elsewhere, configure the API endpoint before loading the scripts:
 	 ```html
 	 <script>
 		 window.__ONRUF_CONFIG__ = {
@@ -30,17 +24,6 @@
 	 </script>
 	 <script src="assets/js/onruf-central-control-panel.js" defer></script>
 	 ```
-
-### Test harness for invitations
-
-After starting the Node service you can issue a manual test email:
-
-```powershell
-cd "server"
-npm run test:send your.email@example.com
-```
-
-Override the endpoint via `TEST_INVITE_ENDPOINT` if you are targeting a remote API.
 
 ## State & storage
 
