@@ -16447,6 +16447,8 @@ function activateSubApp(sectionId, subAppId) {
         if (subAppId !== 'onruf-users-business') {
             closeBusinessAccountDetailDrawer();
             closeBusinessAccountDecisionOverlay();
+        } else {
+            renderBusinessAccountsTable();
         }
         if (subAppId === 'onruf-users-business-requests') {
             refreshBusinessRequestsWorkspace();
@@ -39670,6 +39672,7 @@ function removeIndividualAccount(accountId) {
         renderIndividualAccountMarketplaceOverlay(null);
     }
     renderIndividualAccountSupportRequests();
+    renderBusinessAccountsTable(state.currentBusinessAccountsPage || 1);
     showNotification('success', 'Individual account deleted.');
 }
 
@@ -40443,6 +40446,7 @@ function handleIndividualAccountsSeedRequest() {
         renderIndividualAccountsTable(1);
         renderIndividualAccountDetail(primaryAccount);
         renderIndividualAccountSupportRequests();
+        renderBusinessAccountsTable(state.currentBusinessAccountsPage || 1);
         showNotification('success', `${createdAccounts.length} Individual Accounts Successfully Seeded`);
     } catch (error) {
         console.warn('Unable to seed individual accounts:', error);
@@ -40525,6 +40529,8 @@ function deleteAllIndividualAccounts({ refresh = true } = {}) {
             const pluralized = removedBusinessCount === 1 ? '' : 's';
             showNotification('info', `${removedBusinessCount} linked business account${pluralized} deleted.`);
         }
+    } else {
+        renderBusinessAccountsTable(state.currentBusinessAccountsPage || 1);
     }
 }
 
